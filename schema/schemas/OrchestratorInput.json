@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/OrchestratorInput.json",
+  "$ref": "#/$defs/OrchestratorInput",
+  "$defs": {
+    "Decision": {
+      "oneOf": [
+        {
+          "const": "RESUME"
+        },
+        {
+          "const": "END"
+        }
+      ]
+    },
+    "FrontendMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "SESSION_START"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "UTTERANCE"
+            },
+            "utterance": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind",
+            "utterance"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "SESSION_END"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "InterventionDecision": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "decision": {
+          "$ref": "#/$defs/Decision"
+        }
+      },
+      "required": [
+        "session_id",
+        "decision"
+      ],
+      "additionalProperties": false
+    },
+    "OrchestratorInput": {
+      "type": "object",
+      "properties": {
+        "frontend_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrontendMessage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionDecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_found": {
+          "type": "boolean"
+        },
+        "session_question_bank_version": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_question_bank_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "frontend_input",
+        "intervention_decision",
+        "session_found",
+        "session_question_bank_version",
+        "session_status",
+        "latest_question_bank_version"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "frontend_input": {
+                  "not": {
+                    "enum": [
+                      null
+                    ]
+                  }
+                },
+                "intervention_decision": {
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "frontend_input": {
+                  "enum": [
+                    null
+                  ]
+                },
+                "intervention_decision": {
+                  "not": {
+                    "enum": [
+                      null
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "properties": {
+              "session_found": {
+                "enum": [
+                  false
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "session_status": {
+                "enum": [
+                  null
+                ]
+              },
+              "session_question_bank_version": {
+                "enum": [
+                  null
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "session_status": {
+                "not": {
+                  "enum": [
+                    null
+                  ]
+                }
+              },
+              "session_question_bank_version": {
+                "not": {
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SessionStatus": {
+      "oneOf": [
+        {
+          "const": "IN_PROGRESS"
+        },
+        {
+          "const": "PAUSED_RISK"
+        },
+        {
+          "const": "ENDED_COMPLETE"
+        },
+        {
+          "const": "ENDED_STAFF"
+        },
+        {
+          "const": "ENDED_LEFT"
+        },
+        {
+          "const": "ENDED_USER_STOP"
+        }
+      ]
+    }
+  }
+}

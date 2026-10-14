@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/StaffConsoleInput.json",
+  "$ref": "#/$defs/StaffConsoleInput",
+  "$defs": {
+    "AlertKind": {
+      "oneOf": [
+        {
+          "const": "RISK"
+        },
+        {
+          "const": "CALL_STAFF"
+        },
+        {
+          "const": "USER_CALLED_STAFF"
+        }
+      ]
+    },
+    "CodedValue": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "InterventionResult": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "result": {
+          "oneOf": [
+            {
+              "const": "APPLIED"
+            },
+            {
+              "const": "IGNORED"
+            },
+            {
+              "const": "FAILED"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SlotRef": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "repeat_key": {
+          "type": "string"
+        },
+        "slot_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "question_id",
+        "repeat_key",
+        "slot_id"
+      ],
+      "additionalProperties": false
+    },
+    "SourceText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "StaffAlert": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AlertKind"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StaffAlertReason"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "reasons"
+      ],
+      "additionalProperties": false
+    },
+    "StaffAlertReason": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_SIGNAL"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceText"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_RULE"
+            },
+            "target": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "slot": {
+                    "$ref": "#/$defs/SlotRef"
+                  },
+                  "question_name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "value": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "required": [
+                  "slot",
+                  "question_name",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "target"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "USER_CALLED_STAFF"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceText"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "evidence"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "StaffConsoleInput": {
+      "type": "object",
+      "properties": {
+        "staff_alert": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "session_id": {
+                  "$ref": "#/$defs/SessionId"
+                },
+                "staff_alert": {
+                  "$ref": "#/$defs/StaffAlert"
+                }
+              },
+              "required": [
+                "session_id",
+                "staff_alert"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_failure_signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnFailureSignal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "staff_alert",
+        "turn_failure_signal",
+        "intervention_result"
+      ],
+      "additionalProperties": false
+    },
+    "TurnFailureSignal": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "write_committed": {
+          "oneOf": [
+            {
+              "const": "COMMITTED"
+            },
+            {
+              "const": "NOT_COMMITTED"
+            }
+          ]
+        },
+        "staff_alert": {
+          "oneOf": [
+            {
+              "const": "NONE"
+            },
+            {
+              "const": "DELIVERED"
+            },
+            {
+              "const": "DELIVERY_FAILED"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "write_committed",
+        "staff_alert"
+      ],
+      "additionalProperties": false
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unit_code": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "amount",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/CodedValue"
+        }
+      ]
+    }
+  }
+}

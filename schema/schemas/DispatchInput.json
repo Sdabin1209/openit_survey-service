@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/DispatchInput.json",
+  "$ref": "#/$defs/DispatchInput",
+  "$defs": {
+    "CodedValue": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "CurrentValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "answer": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "answer"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "const": "UNKNOWN_RECORD"
+        },
+        {
+          "const": "REFUSAL_RECORD"
+        },
+        {
+          "const": "NONE"
+        }
+      ]
+    },
+    "DispatchInput": {
+      "type": "object",
+      "properties": {
+        "session_info": {
+          "$ref": "#/$defs/SessionInfo"
+        },
+        "answer_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRecord"
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkipEntry"
+          }
+        },
+        "confirm_stopped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "session_status": {
+          "$ref": "#/$defs/SessionStatus"
+        },
+        "pause_history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PauseEntry"
+          }
+        }
+      },
+      "required": [
+        "session_info",
+        "answer_records",
+        "skipped",
+        "confirm_stopped",
+        "session_status",
+        "pause_history"
+      ],
+      "additionalProperties": false
+    },
+    "Evidence": {
+      "type": "object",
+      "properties": {
+        "turn_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset_unit": {
+          "type": "string",
+          "enum": [
+            "unicode_code_point",
+            "utf16_code_unit",
+            "utf8_byte"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "turn_index",
+        "start",
+        "end",
+        "offset_unit",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryEntry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Value"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/Value"
+            },
+            "value_metadata": {
+              "$ref": "#/$defs/ValueMetadata"
+            }
+          },
+          "required": [
+            "value",
+            "value_metadata"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PauseEntry": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PauseKind"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PauseReason"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "reasons"
+      ],
+      "additionalProperties": false
+    },
+    "PauseKind": {
+      "oneOf": [
+        {
+          "const": "PAUSE"
+        },
+        {
+          "const": "RESUME"
+        }
+      ]
+    },
+    "PauseReason": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_SIGNAL"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceText"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_RULE"
+            },
+            "target": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "target"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PendingId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "PendingRecord": {
+      "type": "object",
+      "properties": {
+        "pending_id": {
+          "$ref": "#/$defs/PendingId"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "risk_mark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "pending_id",
+        "value",
+        "risk_mark"
+      ],
+      "additionalProperties": false
+    },
+    "Precision": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "approximate",
+        "unspecified"
+      ]
+    },
+    "QuestionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "RiskResponse": {
+      "oneOf": [
+        {
+          "const": "IMMEDIATE"
+        },
+        {
+          "const": "ON_RESULT"
+        }
+      ]
+    },
+    "SessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SessionInfo": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "question_bank_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "session_id",
+        "question_bank_version"
+      ],
+      "additionalProperties": false
+    },
+    "SessionStatus": {
+      "oneOf": [
+        {
+          "const": "IN_PROGRESS"
+        },
+        {
+          "const": "PAUSED_RISK"
+        },
+        {
+          "const": "ENDED_COMPLETE"
+        },
+        {
+          "const": "ENDED_STAFF"
+        },
+        {
+          "const": "ENDED_LEFT"
+        },
+        {
+          "const": "ENDED_USER_STOP"
+        }
+      ]
+    },
+    "SkipEntry": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "reason": {
+          "$ref": "#/$defs/SkipReason"
+        }
+      },
+      "required": [
+        "question_id",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "SkipReason": {
+      "oneOf": [
+        {
+          "const": "UNKNOWN_ACCEPTED"
+        },
+        {
+          "const": "REFUSAL_ACCEPTED"
+        },
+        {
+          "const": "ATTEMPTS_EXCEEDED"
+        }
+      ]
+    },
+    "SlotRecord": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotRef"
+        },
+        "current_value": {
+          "$ref": "#/$defs/CurrentValue"
+        },
+        "risk_mark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HistoryEntry"
+          }
+        },
+        "pending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "slot",
+        "current_value",
+        "risk_mark",
+        "history",
+        "pending"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "value_metadata"
+            ],
+            "properties": {
+              "value_metadata": {
+                "properties": {
+                  "precision": {
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current_value": {
+                "type": "object",
+                "required": [
+                  "answer"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SlotRef": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "repeat_key": {
+          "type": "string"
+        },
+        "slot_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "question_id",
+        "repeat_key",
+        "slot_id"
+      ],
+      "additionalProperties": false
+    },
+    "SourceText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unit_code": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "amount",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/CodedValue"
+        }
+      ]
+    },
+    "ValueMetadata": {
+      "type": "object",
+      "properties": {
+        "precision": {
+          "$ref": "#/$defs/Precision"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          }
+        }
+      },
+      "required": [
+        "precision",
+        "evidence"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

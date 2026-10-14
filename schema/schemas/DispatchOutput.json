@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/DispatchOutput.json",
+  "$ref": "#/$defs/DispatchOutput",
+  "$defs": {
+    "DispatchOutput": {
+      "type": "object",
+      "properties": {
+        "dispatch_record": {
+          "$ref": "#/$defs/DispatchRecord"
+        }
+      },
+      "required": [
+        "dispatch_record"
+      ],
+      "additionalProperties": false
+    },
+    "DispatchRecord": {
+      "type": "object",
+      "properties": {
+        "succeeded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "succeeded"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/FrontendInput.json",
+  "$ref": "#/$defs/FrontendInput",
+  "$defs": {
+    "FrontendInput": {
+      "type": "object",
+      "properties": {
+        "response_text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_failure_signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnFailureSignal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "response_text",
+        "turn_failure_signal"
+      ],
+      "additionalProperties": false
+    },
+    "SessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "TurnFailureSignal": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "write_committed": {
+          "oneOf": [
+            {
+              "const": "COMMITTED"
+            },
+            {
+              "const": "NOT_COMMITTED"
+            }
+          ]
+        },
+        "staff_alert": {
+          "oneOf": [
+            {
+              "const": "NONE"
+            },
+            {
+              "const": "DELIVERED"
+            },
+            {
+              "const": "DELIVERY_FAILED"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "write_committed",
+        "staff_alert"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

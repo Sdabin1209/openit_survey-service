@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/FrontendMessage.json",
+  "$ref": "#/$defs/FrontendMessage",
+  "$defs": {
+    "FrontendMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "SESSION_START"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "UTTERANCE"
+            },
+            "utterance": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind",
+            "utterance"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "SESSION_END"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SessionId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

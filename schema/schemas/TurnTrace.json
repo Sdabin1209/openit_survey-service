@@ -1,0 +1,5058 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/TurnTrace.json",
+  "$ref": "#/$defs/TurnTrace",
+  "$defs": {
+    "Action": {
+      "oneOf": [
+        {
+          "const": "ASK_NEXT"
+        },
+        {
+          "const": "ASK_MISSING"
+        },
+        {
+          "const": "ASK_CLARIFY"
+        },
+        {
+          "const": "ASK_CONFIRM"
+        },
+        {
+          "const": "ASK_AFTER_UNKNOWN"
+        },
+        {
+          "const": "ASK_AFTER_REFUSAL"
+        },
+        {
+          "const": "ASK_CORRECTION_TARGET"
+        },
+        {
+          "const": "ASK_FINISH"
+        },
+        {
+          "const": "ASK_STOP"
+        },
+        {
+          "const": "ASK_REPEAT"
+        },
+        {
+          "const": "CALL_STAFF"
+        },
+        {
+          "const": "REDIRECT"
+        },
+        {
+          "const": "RISK_NOTICE"
+        },
+        {
+          "const": "WAIT_NOTICE"
+        },
+        {
+          "const": "STAFF_NOTICE"
+        },
+        {
+          "const": "FAREWELL"
+        }
+      ]
+    },
+    "AlertKind": {
+      "oneOf": [
+        {
+          "const": "RISK"
+        },
+        {
+          "const": "CALL_STAFF"
+        },
+        {
+          "const": "USER_CALLED_STAFF"
+        }
+      ]
+    },
+    "AnswerJudgeInput": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Item"
+          }
+        },
+        "item_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ItemCheck"
+          }
+        },
+        "missing_required_slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "utterance": {
+          "type": "string"
+        },
+        "risk_phrases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "last_directive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Directive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pendings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pending_id": {
+                "$ref": "#/$defs/PendingId"
+              },
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              }
+            },
+            "required": [
+              "pending_id",
+              "slot"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "affected_followups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "followups": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/QuestionId"
+                }
+              }
+            },
+            "required": [
+              "question_id",
+              "followups"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "question_slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "slot_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "question_id",
+              "slot_ids"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "items",
+        "item_checks",
+        "missing_required_slots",
+        "utterance",
+        "risk_phrases",
+        "last_directive",
+        "pendings",
+        "affected_followups",
+        "question_slots"
+      ],
+      "additionalProperties": false
+    },
+    "AnswerNormalizerInput": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Item"
+          }
+        },
+        "related_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionDef"
+          }
+        },
+        "current_values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "current_value": {
+                "$ref": "#/$defs/CurrentValue"
+              },
+              "value_metadata": {
+                "$ref": "#/$defs/ValueMetadata"
+              }
+            },
+            "required": [
+              "slot",
+              "current_value"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "pendings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pending_id": {
+                "$ref": "#/$defs/PendingId"
+              },
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "value": {
+                "$ref": "#/$defs/Value"
+              },
+              "value_metadata": {
+                "$ref": "#/$defs/ValueMetadata"
+              }
+            },
+            "required": [
+              "pending_id",
+              "slot",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "awaiting": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "$ref": "#/$defs/AskAction"
+                },
+                "targets": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Target"
+                  }
+                },
+                "target_pending_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/PendingId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "action",
+                "targets",
+                "target_pending_id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "items",
+        "related_questions",
+        "current_values",
+        "pendings",
+        "awaiting"
+      ],
+      "additionalProperties": false
+    },
+    "AskAction": {
+      "oneOf": [
+        {
+          "const": "ASK_NEXT"
+        },
+        {
+          "const": "ASK_MISSING"
+        },
+        {
+          "const": "ASK_CLARIFY"
+        },
+        {
+          "const": "ASK_CONFIRM"
+        },
+        {
+          "const": "ASK_AFTER_UNKNOWN"
+        },
+        {
+          "const": "ASK_AFTER_REFUSAL"
+        },
+        {
+          "const": "ASK_CORRECTION_TARGET"
+        },
+        {
+          "const": "ASK_FINISH"
+        },
+        {
+          "const": "ASK_STOP"
+        }
+      ]
+    },
+    "AskDirective": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/AskAction"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Target"
+          }
+        },
+        "target_pending_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "say_values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SayValue"
+          }
+        }
+      },
+      "required": [
+        "action",
+        "targets",
+        "target_pending_id",
+        "say_values"
+      ],
+      "additionalProperties": false
+    },
+    "AskSubject": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Target"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "untargeted": {
+              "oneOf": [
+                {
+                  "const": "ASK_FINISH"
+                },
+                {
+                  "const": "ASK_STOP"
+                },
+                {
+                  "const": "ASK_CORRECTION_TARGET"
+                }
+              ]
+            }
+          },
+          "required": [
+            "untargeted"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ChangedSlot": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotRef"
+        },
+        "previous_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "new_value": {
+          "$ref": "#/$defs/Value"
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "const": "FIRST_ANSWER"
+            },
+            {
+              "const": "CORRECTION"
+            }
+          ]
+        }
+      },
+      "required": [
+        "slot",
+        "previous_value",
+        "new_value",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "ChoiceDef": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "synonyms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "code",
+        "label",
+        "synonyms"
+      ],
+      "additionalProperties": false
+    },
+    "CodedValue": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "CurrentValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "answer": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "answer"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "const": "UNKNOWN_RECORD"
+        },
+        {
+          "const": "REFUSAL_RECORD"
+        },
+        {
+          "const": "NONE"
+        }
+      ]
+    },
+    "Decision": {
+      "oneOf": [
+        {
+          "const": "RESUME"
+        },
+        {
+          "const": "END"
+        }
+      ]
+    },
+    "DialoguePlannerInput": {
+      "type": "object",
+      "properties": {
+        "turn_kind": {
+          "$ref": "#/$defs/TurnKind"
+        },
+        "utterance_judgment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtteranceJudgment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judgments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Judgment"
+          }
+        },
+        "store_summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoreSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answer_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRecord"
+          }
+        },
+        "last_directive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Directive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkipEntry"
+          }
+        },
+        "confirm_stopped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "open_requests": {
+          "$ref": "#/$defs/OpenRequests"
+        },
+        "planner_record": {
+          "$ref": "#/$defs/PlannerRecord"
+        },
+        "question_bank": {
+          "$ref": "#/$defs/QuestionBank"
+        }
+      },
+      "required": [
+        "turn_kind",
+        "utterance_judgment",
+        "judgments",
+        "store_summary",
+        "answer_records",
+        "last_directive",
+        "skipped",
+        "confirm_stopped",
+        "open_requests",
+        "planner_record",
+        "question_bank"
+      ],
+      "additionalProperties": false
+    },
+    "Directive": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Target"
+          }
+        },
+        "target_pending_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "awaiting": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AskDirective"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "say_values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SayValue"
+          }
+        },
+        "reask_reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Reason"
+          },
+          "uniqueItems": true
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Notice"
+          }
+        },
+        "sentence_materials": {
+          "$ref": "#/$defs/SentenceMaterials"
+        }
+      },
+      "required": [
+        "action",
+        "targets",
+        "target_pending_id",
+        "awaiting",
+        "say_values",
+        "reask_reasons",
+        "notices",
+        "sentence_materials"
+      ],
+      "additionalProperties": false
+    },
+    "DispatchInput": {
+      "type": "object",
+      "properties": {
+        "session_info": {
+          "$ref": "#/$defs/SessionInfo"
+        },
+        "answer_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRecord"
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkipEntry"
+          }
+        },
+        "confirm_stopped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "session_status": {
+          "$ref": "#/$defs/SessionStatus"
+        },
+        "pause_history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PauseEntry"
+          }
+        }
+      },
+      "required": [
+        "session_info",
+        "answer_records",
+        "skipped",
+        "confirm_stopped",
+        "session_status",
+        "pause_history"
+      ],
+      "additionalProperties": false
+    },
+    "DispatchOutput": {
+      "type": "object",
+      "properties": {
+        "dispatch_record": {
+          "$ref": "#/$defs/DispatchRecord"
+        }
+      },
+      "required": [
+        "dispatch_record"
+      ],
+      "additionalProperties": false
+    },
+    "DispatchRecord": {
+      "type": "object",
+      "properties": {
+        "succeeded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "succeeded"
+      ],
+      "additionalProperties": false
+    },
+    "Evidence": {
+      "type": "object",
+      "properties": {
+        "turn_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset_unit": {
+          "type": "string",
+          "enum": [
+            "unicode_code_point",
+            "utf16_code_unit",
+            "utf8_byte"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "turn_index",
+        "start",
+        "end",
+        "offset_unit",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "FailedStep": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "oneOf": [
+            {
+              "const": "BEFORE_COMMIT"
+            },
+            {
+              "const": "AFTER_COMMIT"
+            }
+          ]
+        },
+        "step": {
+          "oneOf": [
+            {
+              "const": "LoRA-A"
+            },
+            {
+              "const": "NORMALIZE"
+            },
+            {
+              "const": "JUDGE"
+            },
+            {
+              "const": "RECORD_WRITE"
+            },
+            {
+              "const": "PLAN"
+            },
+            {
+              "const": "COMMIT"
+            },
+            {
+              "const": "DELIVER_STAFF"
+            },
+            {
+              "const": "LoRA-B"
+            },
+            {
+              "const": "DELIVER_FRONT"
+            }
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "step"
+      ],
+      "additionalProperties": false
+    },
+    "FillValue": {
+      "oneOf": [
+        {
+          "const": "REMAINING_COUNT"
+        }
+      ]
+    },
+    "FixedSentence": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/FixedSentenceKey"
+        },
+        "sentence": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "key",
+        "sentence"
+      ],
+      "additionalProperties": false
+    },
+    "FixedSentenceKey": {
+      "oneOf": [
+        {
+          "const": "ASK_REPEAT"
+        },
+        {
+          "const": "OOS_NOTICE"
+        },
+        {
+          "const": "CALL_STAFF"
+        },
+        {
+          "const": "FAREWELL"
+        },
+        {
+          "const": "ASK_CONFIRM"
+        },
+        {
+          "const": "ASK_CORRECTION_TARGET"
+        },
+        {
+          "const": "ASK_FINISH"
+        },
+        {
+          "const": "RISK_NOTICE"
+        },
+        {
+          "const": "RESUME"
+        },
+        {
+          "const": "SURVEY_STOPPED"
+        },
+        {
+          "const": "WAIT_NOTICE"
+        },
+        {
+          "const": "ASK_STOP"
+        },
+        {
+          "const": "STAFF_NOTICE"
+        },
+        {
+          "const": "DEFERRED"
+        }
+      ]
+    },
+    "Flow": {
+      "oneOf": [
+        {
+          "const": "CONTINUE"
+        },
+        {
+          "const": "END"
+        }
+      ]
+    },
+    "FrontendInput": {
+      "type": "object",
+      "properties": {
+        "response_text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_failure_signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnFailureSignal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "response_text",
+        "turn_failure_signal"
+      ],
+      "additionalProperties": false
+    },
+    "FrontendMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "SESSION_START"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "UTTERANCE"
+            },
+            "utterance": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind",
+            "utterance"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "kind": {
+              "const": "SESSION_END"
+            }
+          },
+          "required": [
+            "session_id",
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "GeneratorOutput": {
+      "type": "object",
+      "properties": {
+        "response_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "is_fallback": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "response_text",
+        "is_fallback"
+      ],
+      "additionalProperties": false
+    },
+    "GuideItem": {
+      "type": "object",
+      "properties": {
+        "guide_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selection_criterion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "per_question": {
+          "type": "boolean"
+        },
+        "sentence": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fill_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FillValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "guide_id",
+        "selection_criterion",
+        "per_question",
+        "sentence",
+        "fill_value"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryEntry": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Value"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/Value"
+            },
+            "value_metadata": {
+              "$ref": "#/$defs/ValueMetadata"
+            }
+          },
+          "required": [
+            "value",
+            "value_metadata"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "InputKind": {
+      "oneOf": [
+        {
+          "const": "SESSION_START"
+        },
+        {
+          "const": "UTTERANCE"
+        },
+        {
+          "const": "INTERVENTION"
+        },
+        {
+          "const": "SESSION_END"
+        }
+      ]
+    },
+    "Intent": {
+      "oneOf": [
+        {
+          "const": "ANSWERED_INTENT"
+        },
+        {
+          "const": "CORRECTION_MARKED"
+        },
+        {
+          "const": "CONFIRM_YES"
+        },
+        {
+          "const": "CONFIRM_NO"
+        },
+        {
+          "const": "SAYS_UNKNOWN"
+        },
+        {
+          "const": "SAYS_REFUSAL"
+        },
+        {
+          "const": "PROGRESS_OP"
+        },
+        {
+          "const": "GUIDE_REQUEST"
+        },
+        {
+          "const": "USER_CALLED_STAFF"
+        },
+        {
+          "const": "OUT_OF_SCOPE"
+        },
+        {
+          "const": "UNRECOGNIZED"
+        },
+        {
+          "const": "RISK_SIGNAL"
+        }
+      ]
+    },
+    "InterventionDecision": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "decision": {
+          "$ref": "#/$defs/Decision"
+        }
+      },
+      "required": [
+        "session_id",
+        "decision"
+      ],
+      "additionalProperties": false
+    },
+    "InterventionResult": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "result": {
+          "oneOf": [
+            {
+              "const": "APPLIED"
+            },
+            {
+              "const": "IGNORED"
+            },
+            {
+              "const": "FAILED"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "Item": {
+      "type": "object",
+      "properties": {
+        "item_no": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_text": {
+          "$ref": "#/$defs/SourceText"
+        },
+        "intent": {
+          "$ref": "#/$defs/Intent"
+        },
+        "progress_op": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProgressOp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "guide_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TextSpan"
+          }
+        }
+      },
+      "required": [
+        "item_no",
+        "target",
+        "value",
+        "source_text",
+        "intent",
+        "progress_op",
+        "guide_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "intent": {
+                "enum": [
+                  "ANSWERED_INTENT"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "not": {
+                  "enum": [
+                    null
+                  ]
+                }
+              },
+              "value": {
+                "not": {
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ItemCheck": {
+      "type": "object",
+      "properties": {
+        "item_no": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "standard_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Problem"
+          },
+          "uniqueItems": true
+        },
+        "mismatched_slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "vs_current": {
+          "oneOf": [
+            {
+              "const": "EQUAL"
+            },
+            {
+              "const": "DIFFERENT"
+            },
+            {
+              "const": "NO_CURRENT"
+            },
+            {
+              "const": "NOT_APPLICABLE"
+            }
+          ]
+        },
+        "vs_pending": {
+          "oneOf": [
+            {
+              "const": "EQUAL"
+            },
+            {
+              "const": "DIFFERENT"
+            },
+            {
+              "const": "NO_PENDING"
+            },
+            {
+              "const": "NOT_APPLICABLE"
+            }
+          ]
+        },
+        "risk_rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prerequisite_unmet": {
+          "type": "boolean"
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        },
+        "problem_details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProblemDetail"
+          }
+        }
+      },
+      "required": [
+        "item_no",
+        "standard_value",
+        "problems",
+        "mismatched_slots",
+        "vs_current",
+        "vs_pending",
+        "risk_rule",
+        "prerequisite_unmet"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "value_metadata"
+            ],
+            "properties": {
+              "value_metadata": {
+                "properties": {
+                  "precision": {
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "standard_value": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "JudgeOutput": {
+      "type": "object",
+      "properties": {
+        "judgments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Judgment"
+          }
+        },
+        "invalidated_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          },
+          "uniqueItems": true
+        },
+        "utterance_judgment": {
+          "$ref": "#/$defs/UtteranceJudgment"
+        }
+      },
+      "required": [
+        "judgments",
+        "invalidated_questions",
+        "utterance_judgment"
+      ],
+      "additionalProperties": false
+    },
+    "Judgment": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgmentStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Reason"
+          },
+          "uniqueItems": true
+        },
+        "value_now": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "said_value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pending_handling": {
+          "oneOf": [
+            {
+              "const": "CREATE"
+            },
+            {
+              "const": "ACCEPT"
+            },
+            {
+              "const": "DROP"
+            },
+            {
+              "const": "NONE"
+            }
+          ]
+        },
+        "target_pending_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PendingId"
+          }
+        },
+        "mismatched_slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "risk_rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        },
+        "problem_details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProblemDetail"
+          }
+        }
+      },
+      "required": [
+        "target",
+        "status",
+        "reasons",
+        "value_now",
+        "said_value",
+        "pending_handling",
+        "target_pending_ids",
+        "mismatched_slots",
+        "risk_rule"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "value_metadata"
+            ],
+            "properties": {
+              "value_metadata": {
+                "properties": {
+                  "precision": {
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value_now": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "JudgmentStatus": {
+      "oneOf": [
+        {
+          "const": "ANSWERED"
+        },
+        {
+          "const": "MISSING"
+        },
+        {
+          "const": "UNCLEAR"
+        },
+        {
+          "const": "CONFLICT"
+        },
+        {
+          "const": "CORRECTION"
+        },
+        {
+          "const": "UNKNOWN"
+        },
+        {
+          "const": "REJECTED"
+        },
+        {
+          "const": "PREREQUISITE_UNMET"
+        }
+      ]
+    },
+    "LogEntry": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/InputKind"
+            },
+            "utterance": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "intervention_decision": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Decision"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "utterance",
+            "intervention_decision"
+          ],
+          "additionalProperties": false
+        },
+        "handling": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "handled": {
+                  "$ref": "#/$defs/TurnKind"
+                }
+              },
+              "required": [
+                "handled"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "const": "IGNORED"
+            }
+          ]
+        },
+        "question_bank_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "turn_result": {
+          "oneOf": [
+            {
+              "const": "COMMITTED"
+            },
+            {
+              "const": "NOT_APPLICABLE"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "failed_steps": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/FailedStep"
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "failed_steps"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "parser_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParserOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NormalizerOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judge_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgeOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record_writer_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoreResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Directive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Flow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "progress_record_update": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProgressRecordUpdate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "staff_alert": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StaffAlert"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response_text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "staff_alert_delivery": {
+          "oneOf": [
+            {
+              "const": "SUCCESS"
+            },
+            {
+              "const": "FAILURE"
+            },
+            {
+              "const": "NOT_APPLICABLE"
+            }
+          ]
+        },
+        "turn_failure_signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnFailureSignal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "input",
+        "handling",
+        "question_bank_version",
+        "turn_result",
+        "parser_output",
+        "normalizer_output",
+        "judge_output",
+        "record_writer_output",
+        "directive",
+        "flow",
+        "progress_record_update",
+        "staff_alert",
+        "response_text",
+        "staff_alert_delivery",
+        "turn_failure_signal",
+        "intervention_result"
+      ],
+      "additionalProperties": false
+    },
+    "NormalizerOutput": {
+      "type": "object",
+      "properties": {
+        "item_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ItemCheck"
+          }
+        },
+        "missing_required_slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        }
+      },
+      "required": [
+        "item_checks",
+        "missing_required_slots"
+      ],
+      "additionalProperties": false
+    },
+    "Notice": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/NoticeKind"
+        },
+        "guide_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuestionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlotRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        },
+        "previous_value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "kind",
+        "guide_id",
+        "question_id",
+        "question_name",
+        "slot",
+        "previous_value",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "NoticeKind": {
+      "oneOf": [
+        {
+          "const": "CORRECTION_ACK"
+        },
+        {
+          "const": "KEPT_PREVIOUS"
+        },
+        {
+          "const": "RESUME"
+        },
+        {
+          "const": "SURVEY_STOPPED"
+        },
+        {
+          "const": "GUIDE"
+        },
+        {
+          "const": "DEFERRED"
+        }
+      ]
+    },
+    "OpenRequests": {
+      "type": "object",
+      "properties": {
+        "correction_requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Target"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "stop_requested": {
+          "type": "boolean"
+        },
+        "deferred": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "oneOf": [
+                  {
+                    "const": "QUESTION"
+                  },
+                  {
+                    "const": "PENDING"
+                  },
+                  {
+                    "const": "CORRECTION_REQUEST"
+                  }
+                ]
+              },
+              "target": {
+                "$ref": "#/$defs/Target"
+              }
+            },
+            "required": [
+              "kind",
+              "target"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "correction_requests",
+        "stop_requested",
+        "deferred"
+      ],
+      "additionalProperties": false
+    },
+    "OrchestratorInput": {
+      "type": "object",
+      "properties": {
+        "frontend_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrontendMessage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionDecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_found": {
+          "type": "boolean"
+        },
+        "session_question_bank_version": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_question_bank_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "frontend_input",
+        "intervention_decision",
+        "session_found",
+        "session_question_bank_version",
+        "session_status",
+        "latest_question_bank_version"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "frontend_input": {
+                  "not": {
+                    "enum": [
+                      null
+                    ]
+                  }
+                },
+                "intervention_decision": {
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "frontend_input": {
+                  "enum": [
+                    null
+                  ]
+                },
+                "intervention_decision": {
+                  "not": {
+                    "enum": [
+                      null
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "properties": {
+              "session_found": {
+                "enum": [
+                  false
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "session_status": {
+                "enum": [
+                  null
+                ]
+              },
+              "session_question_bank_version": {
+                "enum": [
+                  null
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "session_status": {
+                "not": {
+                  "enum": [
+                    null
+                  ]
+                }
+              },
+              "session_question_bank_version": {
+                "not": {
+                  "enum": [
+                    null
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OrchestratorOutput": {
+      "type": "object",
+      "properties": {
+        "turn_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_info_created": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "log_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_failure_signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnFailureSignal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispatch_called": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "turn_kind",
+        "session_info_created",
+        "log_entry",
+        "turn_failure_signal",
+        "intervention_result",
+        "dispatch_called"
+      ],
+      "additionalProperties": false
+    },
+    "ParserOutput": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Item"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "PauseEntry": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PauseKind"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PauseReason"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "reasons"
+      ],
+      "additionalProperties": false
+    },
+    "PauseKind": {
+      "oneOf": [
+        {
+          "const": "PAUSE"
+        },
+        {
+          "const": "RESUME"
+        }
+      ]
+    },
+    "PauseReason": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_SIGNAL"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceText"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_RULE"
+            },
+            "target": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "target"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PendingId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "PendingRecord": {
+      "type": "object",
+      "properties": {
+        "pending_id": {
+          "$ref": "#/$defs/PendingId"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "risk_mark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "pending_id",
+        "value",
+        "risk_mark"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerOutput": {
+      "type": "object",
+      "properties": {
+        "directive": {
+          "$ref": "#/$defs/Directive"
+        },
+        "flow": {
+          "$ref": "#/$defs/Flow"
+        },
+        "staff_alert": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StaffAlert"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "progress_record_update": {
+          "$ref": "#/$defs/ProgressRecordUpdate"
+        },
+        "planner_record_update": {
+          "$ref": "#/$defs/PlannerRecord"
+        }
+      },
+      "required": [
+        "directive",
+        "flow",
+        "staff_alert",
+        "progress_record_update",
+        "planner_record_update"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerRecord": {
+      "type": "object",
+      "properties": {
+        "attempt_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "question_id",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "confirm_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "slot",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "unknown_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "question_id",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "refusal_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "question_id",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "unrecognized_streak": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ask_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "$ref": "#/$defs/AskSubject"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "subject",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "attempt_counts",
+        "confirm_counts",
+        "unknown_counts",
+        "refusal_counts",
+        "unrecognized_streak",
+        "ask_counts"
+      ],
+      "additionalProperties": false
+    },
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "question_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unknown_accept_after": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "refusal_accept_after": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "question_limit",
+        "unknown_accept_after",
+        "refusal_accept_after"
+      ],
+      "additionalProperties": false
+    },
+    "Precision": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "approximate",
+        "unspecified"
+      ]
+    },
+    "Prerequisite": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotRef"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "slot",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "Problem": {
+      "oneOf": [
+        {
+          "const": "NO_UNIT"
+        },
+        {
+          "const": "OUT_OF_RANGE"
+        },
+        {
+          "const": "AMBIGUOUS"
+        },
+        {
+          "const": "MISMATCH"
+        },
+        {
+          "const": "UNKNOWN_TARGET"
+        }
+      ]
+    },
+    "ProblemDetail": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/Problem"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "category",
+        "code",
+        "refs",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "ProgressOp": {
+      "oneOf": [
+        {
+          "const": "REPEAT"
+        },
+        {
+          "const": "WAIT"
+        },
+        {
+          "const": "LATER"
+        },
+        {
+          "const": "STOP"
+        }
+      ]
+    },
+    "ProgressRecord": {
+      "type": "object",
+      "properties": {
+        "last_directive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Directive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "open_requests": {
+          "$ref": "#/$defs/OpenRequests"
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkipEntry"
+          }
+        },
+        "confirm_stopped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "session_status": {
+          "$ref": "#/$defs/SessionStatus"
+        },
+        "pause_history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PauseEntry"
+          }
+        }
+      },
+      "required": [
+        "last_directive",
+        "open_requests",
+        "skipped",
+        "confirm_stopped",
+        "session_status",
+        "pause_history"
+      ],
+      "additionalProperties": false
+    },
+    "ProgressRecordUpdate": {
+      "type": "object",
+      "properties": {
+        "last_directive": {
+          "$ref": "#/$defs/Directive"
+        },
+        "open_requests": {
+          "$ref": "#/$defs/OpenRequests"
+        },
+        "skipped_add": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkipEntry"
+          }
+        },
+        "skipped_remove": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          },
+          "uniqueItems": true
+        },
+        "confirm_stopped_add": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "confirm_stopped_remove": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "session_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pause_history_add": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PauseEntry"
+          }
+        }
+      },
+      "required": [
+        "last_directive",
+        "open_requests",
+        "skipped_add",
+        "skipped_remove",
+        "confirm_stopped_add",
+        "confirm_stopped_remove",
+        "session_status",
+        "pause_history_add"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionBank": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionDef"
+          },
+          "minItems": 1
+        },
+        "session_settings": {
+          "$ref": "#/$defs/SessionSettings"
+        }
+      },
+      "required": [
+        "version",
+        "questions",
+        "session_settings"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionDef": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "prerequisite": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Prerequisite"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question_sentence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refusal_explanation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guide_sentences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionGuideSentence"
+          }
+        },
+        "affected_followups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          },
+          "uniqueItems": true
+        },
+        "policy": {
+          "$ref": "#/$defs/Policy"
+        },
+        "repeat_keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotDef"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "question_id",
+        "name",
+        "order",
+        "prerequisite",
+        "question_sentence",
+        "refusal_explanation",
+        "guide_sentences",
+        "affected_followups",
+        "policy",
+        "repeat_keys",
+        "slots"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionGuideSentence": {
+      "type": "object",
+      "properties": {
+        "guide_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sentence": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "guide_id",
+        "sentence"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Reason": {
+      "oneOf": [
+        {
+          "const": "NO_UNIT"
+        },
+        {
+          "const": "OUT_OF_RANGE"
+        },
+        {
+          "const": "AMBIGUOUS"
+        },
+        {
+          "const": "MISMATCH"
+        },
+        {
+          "const": "UNRECOGNIZED"
+        },
+        {
+          "const": "MISSING_SLOT"
+        }
+      ]
+    },
+    "RecordWriterInput": {
+      "type": "object",
+      "properties": {
+        "judgments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Judgment"
+          }
+        },
+        "invalidated_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          }
+        },
+        "question_slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "slot_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "question_id",
+              "slot_ids"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "target_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "current_value": {
+                "$ref": "#/$defs/CurrentValue"
+              },
+              "pending": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/PendingRecord"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "slot",
+              "current_value",
+              "pending"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "judgments",
+        "invalidated_questions",
+        "question_slots",
+        "target_records"
+      ],
+      "additionalProperties": false
+    },
+    "Request": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RequestKind"
+        },
+        "guide_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_question_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuestionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_text": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceText"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "kind",
+        "guide_id",
+        "target_question_id",
+        "source_text"
+      ],
+      "additionalProperties": false
+    },
+    "RequestKind": {
+      "oneOf": [
+        {
+          "const": "REPEAT"
+        },
+        {
+          "const": "WAIT"
+        },
+        {
+          "const": "LATER"
+        },
+        {
+          "const": "STOP"
+        },
+        {
+          "const": "GUIDE"
+        },
+        {
+          "const": "STAFF_REQUEST"
+        }
+      ]
+    },
+    "ResponseGeneratorInput": {
+      "type": "object",
+      "properties": {
+        "directive": {
+          "$ref": "#/$defs/Directive"
+        },
+        "utterance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "directive",
+        "utterance"
+      ],
+      "additionalProperties": false
+    },
+    "RevisionToken": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "RiskResponse": {
+      "oneOf": [
+        {
+          "const": "IMMEDIATE"
+        },
+        {
+          "const": "ON_RESULT"
+        }
+      ]
+    },
+    "RiskRule": {
+      "type": "object",
+      "properties": {
+        "operator": {
+          "oneOf": [
+            {
+              "const": "="
+            },
+            {
+              "const": ">="
+            }
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "response": {
+          "$ref": "#/$defs/RiskResponse"
+        }
+      },
+      "required": [
+        "operator",
+        "value",
+        "response"
+      ],
+      "additionalProperties": false
+    },
+    "SayValue": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotRef"
+        },
+        "question_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        },
+        "role": {
+          "oneOf": [
+            {
+              "const": "CURRENT"
+            },
+            {
+              "const": "PENDING"
+            },
+            {
+              "const": "JUST_SAVED"
+            },
+            {
+              "const": "SAID"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "slot",
+        "question_name",
+        "value",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "SentenceMaterials": {
+      "type": "object",
+      "properties": {
+        "question_sentences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "sentence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "question_id",
+              "sentence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "refusal_explanations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "sentence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "question_id",
+              "sentence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "reask_sentences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "sentence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slot",
+              "sentence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "slot",
+              "choices"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "guide_sentences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "guide_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "question_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/QuestionId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sentence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "guide_id",
+              "question_id",
+              "sentence"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "fixed_sentences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "$ref": "#/$defs/FixedSentenceKey"
+              },
+              "sentence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "key",
+              "sentence"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "question_sentences",
+        "refusal_explanations",
+        "reask_sentences",
+        "choices",
+        "guide_sentences",
+        "fixed_sentences"
+      ],
+      "additionalProperties": false
+    },
+    "SessionCommitRequest": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "expected_revision": {
+          "$ref": "#/$defs/RevisionToken"
+        },
+        "writes": {
+          "$ref": "#/$defs/TurnWriteSet"
+        }
+      },
+      "required": [
+        "session_id",
+        "expected_revision",
+        "writes"
+      ],
+      "additionalProperties": false
+    },
+    "SessionCommitResult": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "REVISION_CONFLICT",
+            "DB_ERROR"
+          ]
+        },
+        "write_outcome": {
+          "type": "string",
+          "enum": [
+            "APPLIED",
+            "NOT_APPLIED",
+            "UNKNOWN"
+          ]
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevisionToken"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "status",
+        "write_outcome",
+        "revision",
+        "detail"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "OK"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "write_outcome": {
+                "const": "APPLIED"
+              },
+              "revision": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "REVISION_CONFLICT"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "write_outcome": {
+                "const": "NOT_APPLIED"
+              },
+              "revision": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "DB_ERROR"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "write_outcome": {
+                "enum": [
+                  "NOT_APPLIED",
+                  "UNKNOWN"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SessionInfo": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "question_bank_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "session_id",
+        "question_bank_version"
+      ],
+      "additionalProperties": false
+    },
+    "SessionLoadRequest": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "additionalProperties": false
+    },
+    "SessionLoadResult": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OK",
+            "NOT_FOUND",
+            "DB_ERROR"
+          ]
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevisionToken"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionStore"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "status",
+        "revision",
+        "state"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "OK"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "revision": {
+                "not": {
+                  "type": "null"
+                }
+              },
+              "state": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "revision": {
+                "type": "null"
+              },
+              "state": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SessionSettings": {
+      "type": "object",
+      "properties": {
+        "risk_phrases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "confirm_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unrecognized_streak_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ask_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fixed_sentences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixedSentence"
+          }
+        },
+        "guide_list": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GuideItem"
+          }
+        }
+      },
+      "required": [
+        "risk_phrases",
+        "confirm_limit",
+        "unrecognized_streak_limit",
+        "ask_limit",
+        "fixed_sentences",
+        "guide_list"
+      ],
+      "additionalProperties": false
+    },
+    "SessionStatus": {
+      "oneOf": [
+        {
+          "const": "IN_PROGRESS"
+        },
+        {
+          "const": "PAUSED_RISK"
+        },
+        {
+          "const": "ENDED_COMPLETE"
+        },
+        {
+          "const": "ENDED_STAFF"
+        },
+        {
+          "const": "ENDED_LEFT"
+        },
+        {
+          "const": "ENDED_USER_STOP"
+        }
+      ]
+    },
+    "SessionStore": {
+      "type": "object",
+      "properties": {
+        "session_info": {
+          "$ref": "#/$defs/SessionInfo"
+        },
+        "answer_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRecord"
+          }
+        },
+        "progress_record": {
+          "$ref": "#/$defs/ProgressRecord"
+        },
+        "planner_record": {
+          "$ref": "#/$defs/PlannerRecord"
+        },
+        "dialogue_log": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LogEntry"
+          }
+        },
+        "dispatch_log": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DispatchRecord"
+          }
+        },
+        "revision": {
+          "$ref": "#/$defs/RevisionToken"
+        }
+      },
+      "required": [
+        "session_info",
+        "answer_records",
+        "progress_record",
+        "planner_record",
+        "dialogue_log",
+        "dispatch_log"
+      ],
+      "additionalProperties": false
+    },
+    "SkipEntry": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "reason": {
+          "$ref": "#/$defs/SkipReason"
+        }
+      },
+      "required": [
+        "question_id",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "SkipReason": {
+      "oneOf": [
+        {
+          "const": "UNKNOWN_ACCEPTED"
+        },
+        {
+          "const": "REFUSAL_ACCEPTED"
+        },
+        {
+          "const": "ATTEMPTS_EXCEEDED"
+        }
+      ]
+    },
+    "SlotDef": {
+      "type": "object",
+      "properties": {
+        "slot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UnitDef"
+          }
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "yes_no_map": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "yes": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "no": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "yes",
+                "no"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "reask_sentence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk_rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskRule"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "choice_catalog": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChoiceDef"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "slot_id",
+        "units",
+        "choices",
+        "yes_no_map",
+        "required",
+        "reask_sentence",
+        "risk_rule"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "choice_catalog"
+            ]
+          },
+          "then": {
+            "properties": {
+              "choices": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SlotRecord": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotRef"
+        },
+        "current_value": {
+          "$ref": "#/$defs/CurrentValue"
+        },
+        "risk_mark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HistoryEntry"
+          }
+        },
+        "pending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "slot",
+        "current_value",
+        "risk_mark",
+        "history",
+        "pending"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "value_metadata"
+            ],
+            "properties": {
+              "value_metadata": {
+                "properties": {
+                  "precision": {
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current_value": {
+                "type": "object",
+                "required": [
+                  "answer"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SlotRef": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "repeat_key": {
+          "type": "string"
+        },
+        "slot_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "question_id",
+        "repeat_key",
+        "slot_id"
+      ],
+      "additionalProperties": false
+    },
+    "SourceText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "StaffAlert": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AlertKind"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StaffAlertReason"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "reasons"
+      ],
+      "additionalProperties": false
+    },
+    "StaffAlertReason": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_SIGNAL"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceText"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "RISK_RULE"
+            },
+            "target": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "slot": {
+                    "$ref": "#/$defs/SlotRef"
+                  },
+                  "question_name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "value": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "required": [
+                  "slot",
+                  "question_name",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "target"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "USER_CALLED_STAFF"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceText"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "evidence"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "StaffConsoleInput": {
+      "type": "object",
+      "properties": {
+        "staff_alert": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "session_id": {
+                  "$ref": "#/$defs/SessionId"
+                },
+                "staff_alert": {
+                  "$ref": "#/$defs/StaffAlert"
+                }
+              },
+              "required": [
+                "session_id",
+                "staff_alert"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_failure_signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnFailureSignal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "staff_alert",
+        "turn_failure_signal",
+        "intervention_result"
+      ],
+      "additionalProperties": false
+    },
+    "StoreAction": {
+      "oneOf": [
+        {
+          "const": "FIRST_WRITE"
+        },
+        {
+          "const": "NEW_REVISION"
+        },
+        {
+          "const": "RECORD_UNKNOWN"
+        },
+        {
+          "const": "RECORD_REFUSAL"
+        },
+        {
+          "const": "SET_PENDING"
+        },
+        {
+          "const": "ACCEPT_PENDING"
+        },
+        {
+          "const": "DROP_PENDING"
+        },
+        {
+          "const": "INVALIDATE"
+        }
+      ]
+    },
+    "StoreDecision": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotRef"
+        },
+        "action": {
+          "$ref": "#/$defs/StoreAction"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pending_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "risk_mark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        }
+      },
+      "required": [
+        "slot",
+        "action",
+        "value",
+        "pending_id",
+        "risk_mark"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "value_metadata"
+            ],
+            "properties": {
+              "value_metadata": {
+                "properties": {
+                  "precision": {
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StoreResult": {
+      "type": "object",
+      "properties": {
+        "store_decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoreDecision"
+          }
+        },
+        "store_summary": {
+          "$ref": "#/$defs/StoreSummary"
+        }
+      },
+      "required": [
+        "store_decisions",
+        "store_summary"
+      ],
+      "additionalProperties": false
+    },
+    "StoreSummary": {
+      "type": "object",
+      "properties": {
+        "changed_slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangedSlot"
+          }
+        },
+        "unknown_refused_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "record": {
+                "oneOf": [
+                  {
+                    "const": "UNKNOWN_RECORD"
+                  },
+                  {
+                    "const": "REFUSAL_RECORD"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "slot",
+              "record"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "created_pendings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              }
+            },
+            "required": [
+              "slot"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "resolved_pendings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "handling": {
+                "oneOf": [
+                  {
+                    "const": "ACCEPT"
+                  },
+                  {
+                    "const": "DROP"
+                  },
+                  {
+                    "const": "REPLACE"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "slot",
+              "handling"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "invalidated_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "changed_slots",
+        "unknown_refused_records",
+        "created_pendings",
+        "resolved_pendings",
+        "invalidated_questions"
+      ],
+      "additionalProperties": false
+    },
+    "Target": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SlotRef"
+        },
+        {
+          "$ref": "#/$defs/WholeQuestion"
+        }
+      ]
+    },
+    "TextSpan": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset_unit": {
+          "type": "string",
+          "enum": [
+            "unicode_code_point",
+            "utf16_code_unit",
+            "utf8_byte"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "offset_unit",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "TurnFailureSignal": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "write_committed": {
+          "oneOf": [
+            {
+              "const": "COMMITTED"
+            },
+            {
+              "const": "NOT_COMMITTED"
+            }
+          ]
+        },
+        "staff_alert": {
+          "oneOf": [
+            {
+              "const": "NONE"
+            },
+            {
+              "const": "DELIVERED"
+            },
+            {
+              "const": "DELIVERY_FAILED"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "write_committed",
+        "staff_alert"
+      ],
+      "additionalProperties": false
+    },
+    "TurnKind": {
+      "oneOf": [
+        {
+          "const": "SESSION_START"
+        },
+        {
+          "const": "UTTERANCE"
+        },
+        {
+          "const": "RESUME"
+        },
+        {
+          "const": "INTERVENTION_END"
+        },
+        {
+          "const": "END_LEFT"
+        }
+      ]
+    },
+    "TurnTrace": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "turn_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frontend_message": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrontendMessage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intervention_decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterventionDecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "orchestrator_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestratorInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parser_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtteranceParserInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parser_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParserOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnswerNormalizerInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NormalizerOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judge_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnswerJudgeInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judge_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgeOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record_writer_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecordWriterInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record_writer_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StoreResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "planner_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DialoguePlannerInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "planner_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlannerOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generator_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseGeneratorInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generator_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeneratorOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frontend_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrontendInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "staff_console_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StaffConsoleInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispatch_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DispatchInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispatch_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DispatchOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "orchestrator_output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrchestratorOutput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionStore"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionStore"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "log_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "persistence_load_request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionLoadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persistence_load_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionLoadResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persistence_commit_request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionCommitRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persistence_commit_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionCommitResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "turn_id",
+        "contract_version",
+        "frontend_message",
+        "intervention_decision",
+        "orchestrator_input",
+        "parser_input",
+        "parser_output",
+        "normalizer_input",
+        "normalizer_output",
+        "judge_input",
+        "judge_output",
+        "record_writer_input",
+        "record_writer_output",
+        "planner_input",
+        "planner_output",
+        "generator_input",
+        "generator_output",
+        "frontend_input",
+        "staff_console_input",
+        "dispatch_input",
+        "dispatch_output",
+        "orchestrator_output",
+        "session_before",
+        "session_after",
+        "log_entry",
+        "persistence_load_request",
+        "persistence_load_result",
+        "persistence_commit_request",
+        "persistence_commit_result"
+      ],
+      "additionalProperties": false
+    },
+    "TurnWriteSet": {
+      "type": "object",
+      "properties": {
+        "store_result": {
+          "$ref": "#/$defs/StoreResult"
+        },
+        "progress_record_update": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProgressRecordUpdate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "planner_record_update": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlannerRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "store_result",
+        "progress_record_update",
+        "planner_record_update"
+      ],
+      "additionalProperties": false
+    },
+    "UnitDef": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "synonyms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "range": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "convert_to": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "unit": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "factor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unit_code": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "unit",
+                "factor"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "synonyms",
+        "range",
+        "convert_to"
+      ],
+      "additionalProperties": false
+    },
+    "UtteranceJudgment": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/$defs/UtteranceResult"
+        },
+        "valueless_correction_requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ValuelessCorrection"
+          }
+        },
+        "confirmation": {
+          "oneOf": [
+            {
+              "const": "YES"
+            },
+            {
+              "const": "NO"
+            },
+            {
+              "const": "NONE"
+            }
+          ]
+        },
+        "requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Request"
+          }
+        },
+        "risk_signal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SourceText"
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "evidence"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "result",
+        "valueless_correction_requests",
+        "confirmation",
+        "requests",
+        "risk_signal"
+      ],
+      "additionalProperties": false
+    },
+    "UtteranceParserInput": {
+      "type": "object",
+      "properties": {
+        "utterance": {
+          "type": "string"
+        },
+        "last_directive": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Directive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "awaiting_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionDef"
+          }
+        },
+        "question_names": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question_id": {
+                "$ref": "#/$defs/QuestionId"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "slots": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "question_id",
+              "name",
+              "slots"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "answered_slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "slot": {
+                "$ref": "#/$defs/SlotRef"
+              },
+              "value": {
+                "$ref": "#/$defs/Value"
+              },
+              "value_metadata": {
+                "$ref": "#/$defs/ValueMetadata"
+              }
+            },
+            "required": [
+              "slot",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "guide_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "guide_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "selection_criterion": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "guide_id",
+              "selection_criterion"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "utterance",
+        "last_directive",
+        "awaiting_questions",
+        "question_names",
+        "answered_slots",
+        "guide_list"
+      ],
+      "additionalProperties": false
+    },
+    "UtteranceResult": {
+      "oneOf": [
+        {
+          "const": "HAS_ANSWER"
+        },
+        {
+          "const": "REQUEST_ONLY"
+        },
+        {
+          "const": "OUT_OF_SCOPE_ONLY"
+        },
+        {
+          "const": "UNRECOGNIZED_TURN"
+        }
+      ]
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unit_code": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "amount",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/CodedValue"
+        }
+      ]
+    },
+    "ValueMetadata": {
+      "type": "object",
+      "properties": {
+        "precision": {
+          "$ref": "#/$defs/Precision"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          }
+        }
+      },
+      "required": [
+        "precision",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "ValuelessCorrection": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "WholeQuestion": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "whole_question": {
+          "const": true
+        }
+      },
+      "required": [
+        "question_id",
+        "whole_question"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

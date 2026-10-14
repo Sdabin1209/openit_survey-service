@@ -1,0 +1,620 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/JudgeOutput.json",
+  "$ref": "#/$defs/JudgeOutput",
+  "$defs": {
+    "CodedValue": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "Evidence": {
+      "type": "object",
+      "properties": {
+        "turn_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offset_unit": {
+          "type": "string",
+          "enum": [
+            "unicode_code_point",
+            "utf16_code_unit",
+            "utf8_byte"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "turn_index",
+        "start",
+        "end",
+        "offset_unit",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "JudgeOutput": {
+      "type": "object",
+      "properties": {
+        "judgments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Judgment"
+          }
+        },
+        "invalidated_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          },
+          "uniqueItems": true
+        },
+        "utterance_judgment": {
+          "$ref": "#/$defs/UtteranceJudgment"
+        }
+      },
+      "required": [
+        "judgments",
+        "invalidated_questions",
+        "utterance_judgment"
+      ],
+      "additionalProperties": false
+    },
+    "Judgment": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgmentStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Reason"
+          },
+          "uniqueItems": true
+        },
+        "value_now": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "said_value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pending_handling": {
+          "oneOf": [
+            {
+              "const": "CREATE"
+            },
+            {
+              "const": "ACCEPT"
+            },
+            {
+              "const": "DROP"
+            },
+            {
+              "const": "NONE"
+            }
+          ]
+        },
+        "target_pending_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PendingId"
+          }
+        },
+        "mismatched_slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "risk_rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskResponse"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_metadata": {
+          "$ref": "#/$defs/ValueMetadata"
+        },
+        "problem_details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProblemDetail"
+          }
+        }
+      },
+      "required": [
+        "target",
+        "status",
+        "reasons",
+        "value_now",
+        "said_value",
+        "pending_handling",
+        "target_pending_ids",
+        "mismatched_slots",
+        "risk_rule"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "value_metadata"
+            ],
+            "properties": {
+              "value_metadata": {
+                "properties": {
+                  "precision": {
+                    "enum": [
+                      "exact",
+                      "approximate"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value_now": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "JudgmentStatus": {
+      "oneOf": [
+        {
+          "const": "ANSWERED"
+        },
+        {
+          "const": "MISSING"
+        },
+        {
+          "const": "UNCLEAR"
+        },
+        {
+          "const": "CONFLICT"
+        },
+        {
+          "const": "CORRECTION"
+        },
+        {
+          "const": "UNKNOWN"
+        },
+        {
+          "const": "REJECTED"
+        },
+        {
+          "const": "PREREQUISITE_UNMET"
+        }
+      ]
+    },
+    "PendingId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Precision": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "approximate",
+        "unspecified"
+      ]
+    },
+    "Problem": {
+      "oneOf": [
+        {
+          "const": "NO_UNIT"
+        },
+        {
+          "const": "OUT_OF_RANGE"
+        },
+        {
+          "const": "AMBIGUOUS"
+        },
+        {
+          "const": "MISMATCH"
+        },
+        {
+          "const": "UNKNOWN_TARGET"
+        }
+      ]
+    },
+    "ProblemDetail": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/Problem"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotRef"
+          }
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "category",
+        "code",
+        "refs",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Reason": {
+      "oneOf": [
+        {
+          "const": "NO_UNIT"
+        },
+        {
+          "const": "OUT_OF_RANGE"
+        },
+        {
+          "const": "AMBIGUOUS"
+        },
+        {
+          "const": "MISMATCH"
+        },
+        {
+          "const": "UNRECOGNIZED"
+        },
+        {
+          "const": "MISSING_SLOT"
+        }
+      ]
+    },
+    "Request": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RequestKind"
+        },
+        "guide_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_question_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuestionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_text": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceText"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "kind",
+        "guide_id",
+        "target_question_id",
+        "source_text"
+      ],
+      "additionalProperties": false
+    },
+    "RequestKind": {
+      "oneOf": [
+        {
+          "const": "REPEAT"
+        },
+        {
+          "const": "WAIT"
+        },
+        {
+          "const": "LATER"
+        },
+        {
+          "const": "STOP"
+        },
+        {
+          "const": "GUIDE"
+        },
+        {
+          "const": "STAFF_REQUEST"
+        }
+      ]
+    },
+    "RiskResponse": {
+      "oneOf": [
+        {
+          "const": "IMMEDIATE"
+        },
+        {
+          "const": "ON_RESULT"
+        }
+      ]
+    },
+    "SlotRef": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "repeat_key": {
+          "type": "string"
+        },
+        "slot_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "question_id",
+        "repeat_key",
+        "slot_id"
+      ],
+      "additionalProperties": false
+    },
+    "SourceText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Target": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SlotRef"
+        },
+        {
+          "$ref": "#/$defs/WholeQuestion"
+        }
+      ]
+    },
+    "UtteranceJudgment": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/$defs/UtteranceResult"
+        },
+        "valueless_correction_requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ValuelessCorrection"
+          }
+        },
+        "confirmation": {
+          "oneOf": [
+            {
+              "const": "YES"
+            },
+            {
+              "const": "NO"
+            },
+            {
+              "const": "NONE"
+            }
+          ]
+        },
+        "requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Request"
+          }
+        },
+        "risk_signal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SourceText"
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "evidence"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "result",
+        "valueless_correction_requests",
+        "confirmation",
+        "requests",
+        "risk_signal"
+      ],
+      "additionalProperties": false
+    },
+    "UtteranceResult": {
+      "oneOf": [
+        {
+          "const": "HAS_ANSWER"
+        },
+        {
+          "const": "REQUEST_ONLY"
+        },
+        {
+          "const": "OUT_OF_SCOPE_ONLY"
+        },
+        {
+          "const": "UNRECOGNIZED_TURN"
+        }
+      ]
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unit_code": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "amount",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/CodedValue"
+        }
+      ]
+    },
+    "ValueMetadata": {
+      "type": "object",
+      "properties": {
+        "precision": {
+          "$ref": "#/$defs/Precision"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          }
+        }
+      },
+      "required": [
+        "precision",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "ValuelessCorrection": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "WholeQuestion": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/QuestionId"
+        },
+        "whole_question": {
+          "const": true
+        }
+      },
+      "required": [
+        "question_id",
+        "whole_question"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
