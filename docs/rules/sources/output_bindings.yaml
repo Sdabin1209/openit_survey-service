@@ -1,0 +1,47 @@
+version: 1
+scope: declarative_output_destinations
+component_execution: false
+bindings:
+- source_contract: StoreResult
+  target_contract: SessionStore
+  source_field: store_decisions
+  target_field: answer_records
+  mode: write_decisions
+  description: 슬롯별 저장 결정 자료를 응답 기록 반영의 입력으로 전달한다. 값의 직접 복사 관계가 아니며 이 프로젝트에서 반영 동작을
+    실행하지 않는다.
+  evidence: work/contracts/components/session_store/state.fields.yaml#/nodes/~1properties~1answer_records
+- source_contract: PlannerOutput
+  target_contract: SessionStore
+  source_field: progress_record_update
+  target_field: progress_record
+  mode: write_update
+  description: 진행 기록 갱신 자료를 전달한다. 실제 상태 변경을 계산하지 않는다.
+  evidence: work/contracts/components/session_store/state.fields.yaml#/nodes/~1properties~1progress_record
+- source_contract: PlannerOutput
+  target_contract: SessionStore
+  source_field: planner_record_update
+  target_field: planner_record
+  mode: write_update
+  description: 계획 기록 갱신 자료를 전달한다.
+  evidence: work/contracts/components/session_store/state.fields.yaml#/nodes/~1properties~1planner_record
+- source_contract: OrchestratorOutput
+  target_contract: SessionStore
+  source_field: session_info_created
+  target_field: session_info
+  mode: create_record
+  description: 세션 정보 생성 자료를 전달한다. nullable 출력은 생성 자료가 없는 경우를 표현한다.
+  evidence: work/contracts/components/session_store/state.fields.yaml#/nodes/~1properties~1session_info
+- source_contract: OrchestratorOutput
+  target_contract: SessionStore
+  source_field: log_entry
+  target_field: dialogue_log
+  mode: append_record
+  description: 턴 로그 항목을 대화 로그에 기록하기 위한 자료로 전달한다.
+  evidence: work/contracts/components/session_store/state.fields.yaml#/nodes/~1properties~1dialogue_log
+- source_contract: DispatchOutput
+  target_contract: SessionStore
+  source_field: dispatch_record
+  target_field: dispatch_log
+  mode: append_record
+  description: 결과 전달 기록 항목을 전달 로그에 기록하기 위한 자료로 전달한다.
+  evidence: work/contracts/components/session_store/state.fields.yaml#/nodes/~1properties~1dispatch_log
