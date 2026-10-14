@@ -139,14 +139,28 @@ def test_model_runtime_refusal_keeps_previous(env):
     assert r.action == "REJECTED" and r.code == "ServingConfigMismatch" and reg.active_id() == "rel-1"
 
 
-def test_different_serving_config_per_role_rejected(env):
+def test_different_serving_config_per_role_is_loaded(env):
     reader, reg, loader = env
     cfg = model_runtime.fake_serving_config()
-    cfg_b = dict(cfg, max_attempts=2)
-    add(reader, "rel-1", serving_config_b=cfg_b)
+    add(reader, "rel-1", serving_config_b=dict(cfg, max_attempts=2))
     reader.set_pointer("rel-1")
+    assert loader.poll_once().action == "LOADED" and reg.active_id() == "rel-1"
+    assert reg.active().session.serving_config_hashes["LORA_A"] != reg.active().session.serving_config_hashes["LORA_B"]
+
+
+@pytest.mark.parametrize("role", ["LORA_A", "LORA_B"])
+def test_single_role_hash_mismatch_is_rejected(env, role):
+    reader, reg, loader = env
+    add(reader, "rel-1")
+    reader.set_pointer("rel-1"); loader.poll_once()
+    add(reader, "rel-2", serving_config_b=dict(model_runtime.fake_serving_config(), max_attempts=2))
+    from boundary_contracts import canonical
+    m = reader.manifests["rel-2"]
+    m["adapters"][role]["serving_config_hash"] = "sha256:" + "2" * 64
+    m["content_hash"] = canonical.content_hash({k: v for k, v in m.items() if k != "content_hash"})
+    reader.set_pointer("rel-2")
     r = loader.poll_once()
-    assert r.action == "REJECTED" and r.code == "SERVING_CONFIG_DIFFERS_BY_ROLE"
+    assert r.action == "REJECTED" and r.code == "ServingConfigMismatch" and reg.active_id() == "rel-1"
 
 
 def _bump(v, part):

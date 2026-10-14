@@ -132,7 +132,7 @@
 
 - [결정] 현재 구성은 서비스 프로세스 안에서 `ModelSession`을 릴리스마다 하나 들고 있는 `InferenceServer`다. Orchestrator는 `parse(input)`/`generate(input)`을 가진 `ModelSession` Protocol만 안다.
 - 브리프 §5는 추론 서버를 GPU를 쓰는 별도 컨테이너로 둔다. 그 컨테이너와 서비스 사이의 통신 방식은 이 영역 안의 일이지만 **지금은 만들 수 없다**: model-runtime에 실제 백엔드가 없고(`FakeBackend`뿐), GPU가 없는 환경이라 통신 프로토콜을 검증할 수 없다. `ModelSession` Protocol 뒤에 원격 구현을 끼우는 것으로 남긴다 [미정].
-- 역할별 serving_config [확인: 헤드 결정 D46, CR-006]: I9 `load`가 역할별 설정(`serving_configs`, `expected_serving_config_hashes` 맵)을 받도록 model-runtime 0.3.0에서 바뀐다. 그때까지 현재의 `SERVING_CONFIG_DIFFERS_BY_ROLE` 거부를 유지한다. 두 역할의 설정을 다루는 곳은 `inference.role_configs`(매니페스트에서 역할별로 꺼냄)와 `single_config`(0.2.0용 합침) 둘뿐이라 0.3.0이 태그로 나오면 `single_config`를 지우고 맵을 그대로 넘기면 된다.
+- 역할별 serving_config [확인: 헤드 결정 D46, CR-006, model-runtime v0.3.0]: `ReleaseManifest.adapters[role]`의 `serving_config`·`serving_config_hash`를 역할별로 I9 `load(adapters, serving_configs, expected_serving_config_hashes)`에 그대로 넘긴다(`inference.role_configs`). 한 역할의 해시만 어긋나도 model-runtime이 `ServingConfigMismatch`(역할 표시)로 거부하고 이전 릴리스를 유지한다. 두 역할은 한 백엔드를 공유한다. 기반 모델이 다른 두 어댑터는 백엔드 구현 때 정해진다 [미정]. 이전의 `SERVING_CONFIG_DIFFERS_BY_ROLE` 거부는 없앴다.
 - 백엔드 선택: `SURVEY_MODEL_BACKEND`. 지금 구현된 값은 `fake`(개발·스모크 전용, 운영 거부 표시)뿐이다. 값이 없으면 시작하지 않는다.
 
 ## 8. 서비스와 설정

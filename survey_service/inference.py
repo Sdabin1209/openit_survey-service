@@ -25,18 +25,10 @@ KNOWN_BACKENDS = ("fake",)
 
 
 def role_configs(manifest: Mapping) -> tuple[dict, dict]:
-    """역할별 serving_config와 해시. 매니페스트가 역할마다 가진 그대로 다룬다."""
+    """역할별 serving_config와 해시. 매니페스트가 역할마다 가진 그대로 I9 load(0.3.0)에 넘긴다(D45)."""
     ad = manifest["adapters"]
     return ({r: ad[r]["serving_config"] for r in ("LORA_A", "LORA_B")},
             {r: ad[r]["serving_config_hash"] for r in ("LORA_A", "LORA_B")})
-
-
-def single_config(configs: Mapping, hashes: Mapping) -> tuple[dict, str]:
-    """model-runtime 0.2.0의 load는 serving_config 하나만 받는다. 역할별로 다르면 거부한다.
-    model-runtime 0.3.0이 역할별 맵(serving_configs, expected_serving_config_hashes)을 받으면 이 함수만 바꾼다(CR-006)."""
-    if configs["LORA_A"] != configs["LORA_B"] or hashes["LORA_A"] != hashes["LORA_B"]:
-        raise InferenceLoadError("SERVING_CONFIG_DIFFERS_BY_ROLE", "LORA_A와 LORA_B의 serving_config가 다르다(I9 load는 하나만 받는다)")
-    return configs["LORA_A"], hashes["LORA_A"]
 
 
 class InferenceServer:
@@ -58,15 +50,14 @@ class InferenceServer:
     def load(self, manifest: Mapping, adapters: Mapping[str, Path], *, contract_version: Optional[int] = None):
         """ReleaseManifest와 풀어 둔 어댑터로 ModelSession을 만든다.
 
-        I9 load는 serving_config 하나를 받는다. 매니페스트는 역할마다 가지므로 둘이 같을 때만 적재한다(CR-006).
+        I9 load(model-runtime 0.3.0)는 역할별 serving_configs와 기대 해시를 받는다. 한 역할만 어긋나도 model-runtime이 거부한다.
         model-runtime의 거부(ServingConfigMismatch 등)는 InferenceLoadError로 감싸 이전 릴리스를 유지하게 한다.
         """
         configs, hashes = role_configs(manifest)
-        serving_config, expected_hash = single_config(configs, hashes)
         ver = contract_version or self.contract_version
         try:
-            return model_runtime.load(dict(adapters), serving_config, schema_dir=survey_schema.schema_dir(ver),
-                                      expected_serving_config_hash=expected_hash, backend=self._new_backend())
+            return model_runtime.load(dict(adapters), configs, schema_dir=survey_schema.schema_dir(ver),
+                                      expected_serving_config_hashes=hashes, backend=self._new_backend())
         except model_runtime.ModelRuntimeError as e:
             raise InferenceLoadError(type(e).__name__, "model-runtime이 적재를 거부했다") from e
         except Exception as e:  # ContractViolation 등. 값은 담지 않는다.

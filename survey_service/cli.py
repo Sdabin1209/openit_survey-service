@@ -43,8 +43,9 @@ def build(bank: dict, db: str, items: list):
 
     backend = model_runtime.FakeBackend(responder)
     cfg = model_runtime.fake_serving_config(backend)
-    session = model_runtime.FakeModelSession(cfg, schema_dir=survey_schema.schema_dir(survey_schema.current_version()),
-                                             expected_serving_config_hash=model_runtime.serving_config_hash(cfg), backend=backend)
+    session = model_runtime.FakeModelSession({"LORA_A": cfg, "LORA_B": cfg}, schema_dir=survey_schema.schema_dir(survey_schema.current_version()),
+                                             expected_serving_config_hashes={r: model_runtime.serving_config_hash(cfg) for r in ("LORA_A", "LORA_B")},
+                                             backend=backend)
     reg = ReleaseRegistry()
     reg.register(LoadedRelease("rel-dev", {}, bank, session), activate=True)
     return Orchestrator(SqliteSessionStore(db), reg, staff_console=_Console(), dispatcher=_Dispatcher())

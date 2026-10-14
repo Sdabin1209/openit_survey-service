@@ -23,7 +23,7 @@
 | `session_db` | 세션 DB를 열 수 없다 | 볼륨, 디스크, 권한 |
 | `outbox_db` | outbox를 열 수 없다 | 같음 |
 
-`release_loader.rejections[].code`: `UNSUPPORTED_VERSION`(릴리스의 계약 버전을 이 이미지가 지원하지 않음: 맞는 이미지로 올리거나 릴리스를 롤백), `NO_APPROVAL`(게이트 승인 기록 없음·다른 조합), `VERSION_MISMATCH`(릴리스의 turn-engine·model-runtime MAJOR.MINOR가 이미지와 다름: 맞는 이미지로 올리거나 릴리스를 롤백. PATCH 차이는 경고만), `INTEGRITY_ERROR`(해시 불일치), `INVALID_RECORD`(스키마 위반), `SERVING_CONFIG_DIFFERS_BY_ROLE`(CR-006), `ServingConfigMismatch`·`UnsupportedServingConfig`·`ContractVersionMismatch`·`BackendNotAvailable`(model-runtime 거부). 거부된 포인터 버전은 다시 시도하지 않는다. 새 포인터(수정한 릴리스 또는 롤백)가 오면 다시 본다. `release_loader.unavailable_releases`는 진행 중 세션이 쓰는데 적재하지 못한 릴리스다(그 세션의 턴은 첫 단계 실패).
+`release_loader.rejections[].code`: `UNSUPPORTED_VERSION`(릴리스의 계약 버전을 이 이미지가 지원하지 않음: 맞는 이미지로 올리거나 릴리스를 롤백), `NO_APPROVAL`(게이트 승인 기록 없음·다른 조합), `VERSION_MISMATCH`(릴리스의 turn-engine·model-runtime MAJOR.MINOR가 이미지와 다름: 맞는 이미지로 올리거나 릴리스를 롤백. PATCH 차이는 경고만), `INTEGRITY_ERROR`(해시 불일치), `INVALID_RECORD`(스키마 위반), `ServingConfigMismatch`·`UnsupportedServingConfig`·`ContractVersionMismatch`·`BackendNotAvailable`(model-runtime 거부). 거부된 포인터 버전은 다시 시도하지 않는다. 새 포인터(수정한 릴리스 또는 롤백)가 오면 다시 본다. `release_loader.unavailable_releases`는 진행 중 세션이 쓰는데 적재하지 못한 릴리스다(그 세션의 턴은 첫 단계 실패).
 
 ## 3. Trace 전송
 

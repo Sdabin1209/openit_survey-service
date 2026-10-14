@@ -27,7 +27,6 @@
 
 - 스키마 패키지 Git 태그(헤드가 붙임).
 - CR-001: 스키마 v2 후보 3건(헤드가 모아 한 번에 올릴 때까지 보류).
-- model-runtime v0.3.0 태그 알림(CR-006 맞춤).
 - O06: 공개 API, 턴 ID 발급, 프론트 전달 실패의 뜻.
 
 ## 다음에 할 일
@@ -42,7 +41,7 @@
 - CR-004 해결: `docs/rules/sources/bindings.yaml`과 필드 단위 대조(`tests/test_bindings.py`). 차이 1건(판정기 `affected_followups`)을 고쳤고, 표가 정하지 않은 선택 정책은 design.md 3.1에 근거와 함께 적었다.
 - CR-005 결정 반영: 릴리스의 turn-engine·model-runtime MAJOR.MINOR 불일치는 적재 거부(`VERSION_MISMATCH`, `/readyz`에 사유), PATCH는 경고.
 - CR-007 결정 반영: 외부 세션·턴 ID는 `Id` 형식이 아니면 `x-`+SHA-256 앞 32자로 봉투에 넣는다(Trace를 잃지 않는다).
-- CR-006: 결정 D46 확인. model-runtime v0.3.0 태그를 기다린다. 그동안 `SERVING_CONFIG_DIFFERS_BY_ROLE` 거부 유지, 역할별 처리는 `inference.role_configs`/`single_config`로 분리해 두었다.
+- CR-006 반영: model-runtime v0.3.0으로 올림(requirements, wheel 태그, 이미지 라벨). 로더가 역할별 설정·해시를 그대로 넘기고 `SERVING_CONFIG_DIFFERS_BY_ROLE` 거부는 없앴다.
 - CR-001은 "스키마 v2 후보 목록"으로 보류(적용 안 함), CR-002는 닫음, CR-003 유지.
 - 시험: `.venv/bin/python -m pytest` 168 통과(골든 대조 포함, 1220쌍 중 1215 일치, 5건 (c)). 스모크 SMOKE OK(아래 커밋 뒤 다시 돌림).
 - 남은 일: model-runtime v0.3.0 맞춤(헤드 알림 대기), 실제 I4·I6 통합, 실제 백엔드, O06 이후 어댑터.

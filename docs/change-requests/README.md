@@ -9,6 +9,6 @@
 | CR-003 | 공개 API(O06) 대기 목록 | 정보 | 없음 |
 | CR-004 | 컴포넌트 입력의 저장소 조회 범위 | 해결(bindings.yaml 대조) | 없음 |
 | CR-005 | 릴리스의 엔진·런타임 버전이 설치본과 다를 때 | 결정·반영(MAJOR.MINOR 불일치 거부, PATCH 경고) | 없음 |
-| CR-006 | ReleaseManifest의 역할별 serving_config와 I9 load | 결정(model-runtime 0.3.0에서 역할별 맵), 태그 대기 | 없음 |
+| CR-006 | ReleaseManifest의 역할별 serving_config와 I9 load | 해결(model-runtime v0.3.0 반영) | 없음 |
 | CR-007 | 세션 ID·턴 ID 형식 차이 | 결정·반영(`x-` 해시 변환) | 없음 |
 | CR-008 | 골든 예시와 구현 출력의 차이 분류(예시 오류 5건) | 정보 | 없음 |

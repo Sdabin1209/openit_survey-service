@@ -41,7 +41,8 @@ class ScriptedModel:
 def make_session(model: ScriptedModel):
     backend = FakeBackend(model.responder)
     cfg = fake_serving_config(backend)
-    return FakeModelSession(cfg, schema_dir=survey_schema.schema_dir(1), expected_serving_config_hash=serving_config_hash(cfg),
+    return FakeModelSession({"LORA_A": cfg, "LORA_B": cfg}, schema_dir=survey_schema.schema_dir(1),
+                            expected_serving_config_hashes={r: serving_config_hash(cfg) for r in ("LORA_A", "LORA_B")},
                             backend=backend)
 
 

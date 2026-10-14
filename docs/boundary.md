@@ -25,7 +25,7 @@
 | I4 ReleaseReader | `get_active_pointer`(폴링), `get_release`, `get_decision`, `load_bundle`. 턴 처리 중에는 부르지 않는다 |
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
 | I8 turn-engine | **v0.2.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `normalize`, `judge`, `write_record`, `plan` |
-| I9 model-runtime | **v0.2.0** (같은 규칙. 0.3.0의 역할별 설정은 태그가 나오면 맞춘다) `load`, `parse`, `generate`, `last_call_info` |
+| I9 model-runtime | **v0.3.0** (같은 규칙. `load`는 역할별 `serving_configs`·`expected_serving_config_hashes`) `load`, `parse`, `generate`, `last_call_info` |
 
 버전 고정: Git 태그(`requirements.txt`), 서드파티는 `requirements.lock`, 이미지는 `git archive <태그>`로 만든 wheel. 이미지 라벨: `org.opencontainers.image.revision`(커밋), `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`.
 

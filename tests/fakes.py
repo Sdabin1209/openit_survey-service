@@ -103,10 +103,13 @@ class FakeReleaseReader:
                 raise e
 
     def add_release(self, release_id: str, bank: dict, *, runtime_contract_version: int = 1, decision_result: str = "PASS",
-                    serving_config_b: Optional[dict] = None, turn_engine_version: str = "0.2.0", model_runtime_version: str = "0.2.0",
+                    serving_config_b: Optional[dict] = None, turn_engine_version: Optional[str] = None, model_runtime_version: Optional[str] = None,
                     decision_subject_swap: bool = False, tamper_bank: bool = False) -> dict:
         from boundary_contracts import canonical
         import model_runtime
+        import turn_engine
+        turn_engine_version = turn_engine_version or turn_engine.ENGINE_VERSION
+        model_runtime_version = model_runtime_version or model_runtime.RUNTIME_VERSION
         cfg = model_runtime.fake_serving_config()
         dirs = {}
         for role in ("LORA_A", "LORA_B"):

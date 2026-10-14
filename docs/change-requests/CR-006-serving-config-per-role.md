@@ -1,6 +1,6 @@
 # CR-006 ReleaseManifest의 역할별 serving_config와 I9 load의 단일 serving_config
 
-> **상태: 결정(D46). I9 load가 역할별 설정(serving_configs, expected_serving_config_hashes 맵)을 받도록 model-runtime 0.3.0에서 바뀐다. 태그가 나오면 헤드가 알린다. 그때까지 SERVING_CONFIG_DIFFERS_BY_ROLE 거부를 유지하고 처리는 inference.role_configs/single_config로 분리했다.**
+> **상태: 결정(D46). I9 load가 역할별 설정(serving_configs, expected_serving_config_hashes 맵)을 받도록 model-runtime 0.3.0에서 바뀐다. v0.3.0 반영 완료: 매니페스트의 역할별 설정·해시를 그대로 넘기고 SERVING_CONFIG_DIFFERS_BY_ROLE 거부는 없앴다.**
 
 
 - 상태: 확인 요청. 현재는 가장 보수적으로 처리했다.
