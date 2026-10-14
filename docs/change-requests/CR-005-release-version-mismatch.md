@@ -1,5 +1,8 @@
 # CR-005 릴리스의 엔진·런타임 버전이 설치본과 다를 때
 
+> **상태: 결정·반영(D45). 릴리스의 turn_engine_version 또는 model_runtime_version의 MAJOR.MINOR가 설치본과 다르면 적재 거부(이전 릴리스 유지, 사유는 /readyz), PATCH 차이는 경고만 하고 적재.**
+
+
 - 상태: 질문. 규칙이 없어 정책을 만들지 않고 가장 약한 동작을 골랐다.
 - 사실: `ReleaseManifest`에 `turn_engine_version`, `model_runtime_version`이 기록된다(게이트가 평가에 쓴 버전). 서비스 이미지는 자기 버전의 turn-engine·model-runtime을 설치한다. INTERFACES는 거부해야 하는 경우로 `runtime_contract_version` 불일치만 적는다.
 - 현재 동작: 다르면 경고 로그와 상태(`/readyz`의 본문)에 기록하고 적재한다.

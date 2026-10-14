@@ -18,7 +18,7 @@
 
 - **실제 이웃과의 통합**: release-gate(I4)·ops-feedback(I6)의 배포된 SDK가 없어 `boundary_contracts.sdk` Protocol을 따르는 대역(`tests/fakes.py`)으로만 시험했다. 실제 SDK가 나오면 팩토리 설정으로 꽂고 같은 시험을 실제 구현으로 돌려야 한다.
 - **실제 모델**: GPU·실제 백엔드가 없어 FakeModelSession만 썼다. 추론 서버를 별도 GPU 컨테이너로 나누는 일, 모델 출력 품질은 확인하지 못했다.
-- **골든의 한계**: 골든에 문항 세트와 모델·엔진 입력이 없어 실제 turn-engine을 골든 입력으로 돌린 비교는 하지 못했다. Orchestrator는 컴포넌트 출력을 재생해 비교했다(CR-002). 입력 조립 범위는 이 영역의 해석이다(CR-004).
+- **골든의 한계**: 골든에 문항 세트와 모델·엔진 입력이 없어 실제 turn-engine을 골든 입력으로 돌린 비교는 하지 못했다. Orchestrator는 컴포넌트 출력을 재생해 비교했다(CR-002는 닫음). 입력 조립은 bindings.yaml과 대조했다.
 - `docker.exe` 경로(`wslpath`)는 실행해 보지 못했다(이 환경은 docker가 직접 된다).
 - CI, digest 게시, deploy 제출은 없다(D24).
 - 부하·동시성(여러 프로세스), 세션 문서 암호화·보존 기간 없음.
@@ -26,9 +26,8 @@
 ## 막힌 것 / 헤드에게 필요한 것
 
 - 스키마 패키지 Git 태그(헤드가 붙임).
-- CR-001: 스키마 변경 후보 3건의 정수 버전 상승 여부와 시점(D21).
-- CR-006: `ReleaseManifest`의 역할별 serving_config vs I9 `load`.
-- CR-005: 릴리스의 엔진·런타임 버전이 설치본과 다를 때 정책(지금은 경고만).
+- CR-001: 스키마 v2 후보 3건(헤드가 모아 한 번에 올릴 때까지 보류).
+- model-runtime v0.3.0 태그 알림(CR-006 맞춤).
 - O06: 공개 API, 턴 ID 발급, 프론트 전달 실패의 뜻.
 
 ## 다음에 할 일
@@ -37,3 +36,13 @@
 2. 실제 백엔드가 생기면 `InferenceServer`에 추가하고, 분리 배포가 필요하면 `ModelSession` 원격 구현.
 3. 직원 콘솔·결과 전달·프론트 전달 어댑터(O06 후).
 4. 골든 보강본(CR-002)이 오면 실제 turn-engine 대조 추가.
+
+## 후속 구간 (헤드 답변 반영)
+
+- CR-004 해결: `docs/rules/sources/bindings.yaml`과 필드 단위 대조(`tests/test_bindings.py`). 차이 1건(판정기 `affected_followups`)을 고쳤고, 표가 정하지 않은 선택 정책은 design.md 3.1에 근거와 함께 적었다.
+- CR-005 결정 반영: 릴리스의 turn-engine·model-runtime MAJOR.MINOR 불일치는 적재 거부(`VERSION_MISMATCH`, `/readyz`에 사유), PATCH는 경고.
+- CR-007 결정 반영: 외부 세션·턴 ID는 `Id` 형식이 아니면 `x-`+SHA-256 앞 32자로 봉투에 넣는다(Trace를 잃지 않는다).
+- CR-006: 결정 D46 확인. model-runtime v0.3.0 태그를 기다린다. 그동안 `SERVING_CONFIG_DIFFERS_BY_ROLE` 거부 유지, 역할별 처리는 `inference.role_configs`/`single_config`로 분리해 두었다.
+- CR-001은 "스키마 v2 후보 목록"으로 보류(적용 안 함), CR-002는 닫음, CR-003 유지.
+- 시험: `.venv/bin/python -m pytest` 168 통과(골든 대조 포함, 1220쌍 중 1215 일치, 5건 (c)). 스모크 SMOKE OK(아래 커밋 뒤 다시 돌림).
+- 남은 일: model-runtime v0.3.0 맞춤(헤드 알림 대기), 실제 I4·I6 통합, 실제 백엔드, O06 이후 어댑터.

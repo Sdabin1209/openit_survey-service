@@ -23,14 +23,14 @@
 | `session_db` | 세션 DB를 열 수 없다 | 볼륨, 디스크, 권한 |
 | `outbox_db` | outbox를 열 수 없다 | 같음 |
 
-`release_loader.rejections[].code`: `UNSUPPORTED_VERSION`(릴리스의 계약 버전을 이 이미지가 지원하지 않음: 맞는 이미지로 올리거나 릴리스를 롤백), `NO_APPROVAL`(게이트 승인 기록 없음·다른 조합), `INTEGRITY_ERROR`(해시 불일치), `INVALID_RECORD`(스키마 위반), `SERVING_CONFIG_DIFFERS_BY_ROLE`(CR-006), `ServingConfigMismatch`·`UnsupportedServingConfig`·`ContractVersionMismatch`·`BackendNotAvailable`(model-runtime 거부). 거부된 포인터 버전은 다시 시도하지 않는다. 새 포인터(수정한 릴리스 또는 롤백)가 오면 다시 본다. `release_loader.unavailable_releases`는 진행 중 세션이 쓰는데 적재하지 못한 릴리스다(그 세션의 턴은 첫 단계 실패).
+`release_loader.rejections[].code`: `UNSUPPORTED_VERSION`(릴리스의 계약 버전을 이 이미지가 지원하지 않음: 맞는 이미지로 올리거나 릴리스를 롤백), `NO_APPROVAL`(게이트 승인 기록 없음·다른 조합), `VERSION_MISMATCH`(릴리스의 turn-engine·model-runtime MAJOR.MINOR가 이미지와 다름: 맞는 이미지로 올리거나 릴리스를 롤백. PATCH 차이는 경고만), `INTEGRITY_ERROR`(해시 불일치), `INVALID_RECORD`(스키마 위반), `SERVING_CONFIG_DIFFERS_BY_ROLE`(CR-006), `ServingConfigMismatch`·`UnsupportedServingConfig`·`ContractVersionMismatch`·`BackendNotAvailable`(model-runtime 거부). 거부된 포인터 버전은 다시 시도하지 않는다. 새 포인터(수정한 릴리스 또는 롤백)가 오면 다시 본다. `release_loader.unavailable_releases`는 진행 중 세션이 쓰는데 적재하지 못한 릴리스다(그 세션의 턴은 첫 단계 실패).
 
 ## 3. Trace 전송
 
 `trace_outbox`: `pending`(보낼 것), `sent`, `dead`(재시도하지 않는 실패), `oldest_pending_age_seconds`, `consecutive_unavailable`.
 
 - pending이 늘고 `last_error`가 `UNAVAILABLE`이면 수집(ops-feedback)이 내려가 있다. 턴에는 영향이 없고 복구되면 자동으로 보낸다.
-- dead 확인: `sqlite3 $SURVEY_OUTBOX_DB "SELECT session_id, turn_id, last_error FROM outbox WHERE state='DEAD'"`. `LOCAL_INVALID`는 이 서비스가 만든 봉투가 스키마를 어긴 것(주로 세션 ID 형식, CR-007). `INVALID_RECORD` 등은 수집이 거부한 것이다. 고친 뒤 다시 보내려면 해당 행을 `state='PENDING', next_attempt_at=0, attempts=0`으로 되돌린다.
+- dead 확인: `sqlite3 $SURVEY_OUTBOX_DB "SELECT session_id, turn_id, last_error FROM outbox WHERE state='DEAD'"`. `LOCAL_INVALID`는 이 서비스가 만든 봉투가 스키마를 어긴 것(결함이다. 세션·턴 ID는 `x-` 변환으로 막혀 있다). `INVALID_RECORD` 등은 수집이 거부한 것이다. 고친 뒤 다시 보내려면 해당 행을 `state='PENDING', next_attempt_at=0, attempts=0`으로 되돌린다.
 - 전달 완료 행은 `SURVEY_OUTBOX_KEEP_SENT_HOURS` 뒤에 지운다.
 
 ## 4. 한 턴이 실패했을 때

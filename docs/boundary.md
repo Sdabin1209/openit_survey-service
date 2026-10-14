@@ -24,15 +24,15 @@
 | 경계 계약 | `boundary-contracts` **v1.1.0**(`pipeline_schema_version` "1.1"). 같은 MAJOR의 모르는 필드는 보존(`ext`)하고 판단에 쓰지 않는다 |
 | I4 ReleaseReader | `get_active_pointer`(폴링), `get_release`, `get_decision`, `load_bundle`. 턴 처리 중에는 부르지 않는다 |
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
-| I8 turn-engine | **v0.2.0** `normalize`, `judge`, `write_record`, `plan` |
-| I9 model-runtime | **v0.2.0** `load`, `parse`, `generate`, `last_call_info` |
+| I8 turn-engine | **v0.2.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `normalize`, `judge`, `write_record`, `plan` |
+| I9 model-runtime | **v0.2.0** (같은 규칙. 0.3.0의 역할별 설정은 태그가 나오면 맞춘다) `load`, `parse`, `generate`, `last_call_info` |
 
 버전 고정: Git 태그(`requirements.txt`), 서드파티는 `requirements.lock`, 이미지는 `git archive <태그>`로 만든 wheel. 이미지 라벨: `org.opencontainers.image.revision`(커밋), `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`.
 
 ## 4. 이 영역이 이웃에게 지키는 것
 
 - 포인터가 바뀌면 **새 세션부터** 새 릴리스를 쓴다. 진행 중 세션은 자기 릴리스로 끝까지 간다.
-- 지원하지 않는 `runtime_contract_version`, 승인(PASS) 기록이 없거나 이 조합을 가리키지 않는 판정, 해시 불일치, 모델 적재 거부는 적재하지 않고 이전 릴리스를 유지한다.
+- 지원하지 않는 `runtime_contract_version`, 라이브러리 MAJOR.MINOR 불일치, 승인(PASS) 기록이 없거나 이 조합을 가리키지 않는 판정, 해시 불일치, 모델 적재 거부는 적재하지 않고 이전 릴리스를 유지한다.
 - Trace: 턴마다 `TraceEnvelope`(릴리스 ID, 계약 버전 포함) 한 건. 전송은 턴 처리와 분리, `UNAVAILABLE`일 때만 재시도, 최소 1회 전달. 같은 (세션, 턴)은 한 번만 넣는다.
 - 같은 (세션 ID, 턴 ID)의 재전송은 같은 결과(이중 저장 없음). 같은 턴 ID에 다른 입력이면 `TurnIdConflict`.
 - 한 턴 동안 문항 저작·합성 데이터·모델 개발·게이트를 호출하지 않는다.
@@ -63,6 +63,6 @@
 
 | 이웃 | 메모 |
 |---|---|
-| release-gate | 활성 포인터는 값싸게 자주 읽힌다(기본 5초). 매니페스트 `content_hash`와 `question_set.content_hash`를 서비스가 다시 계산해 검증한다. `adapters.LORA_A/B.serving_config`가 달라지면 거부된다(CR-006). |
-| ops-feedback | 봉투의 `release_id`는 세션이 묶인 릴리스다. 세션 ID는 가공하지 않는다(CR-007). 같은 (세션, 턴)이 두 번 올 수 있다(최소 1회). |
+| release-gate | 활성 포인터는 값싸게 자주 읽힌다(기본 5초). 매니페스트 `content_hash`와 `question_set.content_hash`를 서비스가 다시 계산해 검증한다. `adapters.LORA_A/B.serving_config`가 달라지면 거부된다(model-runtime 0.3.0 전까지, CR-006). `turn_engine_version`·`model_runtime_version`은 이미지에 설치된 것과 MAJOR.MINOR가 같아야 한다. |
+| ops-feedback | 봉투의 `release_id`는 세션이 묶인 릴리스다. `Id` 형식이 아닌 세션 ID·턴 ID는 `x-`+SHA-256 앞 32자로 바꿔 봉투에 넣는다(CONVENTIONS 10절). 원본은 `trace` 본문에 있다. 같은 (세션, 턴)이 두 번 올 수 있다(최소 1회). |
 | 다른 영역의 문진 스키마 소비 | `openit-survey-schema`를 설치한다. 정수 버전을 여러 개 지원하면 `load_schema(name, version=N)`. |

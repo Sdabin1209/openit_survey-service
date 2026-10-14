@@ -7,4 +7,5 @@
 - 의존: boundary-contracts v1.1.0, turn-engine v0.2.0, model-runtime v0.2.0.
 - 컨테이너: Dockerfile, `scripts/build_wheels.sh`, `scripts/smoke.sh`.
 - 골든 대조: 226 케이스, 비교 1220쌍 중 1215 일치, 5건은 예시 오류(CR-008).
+- 헤드 결정 반영: bindings.yaml 대조(`tests/test_bindings.py`), 라이브러리 MAJOR.MINOR 불일치 거부, 외부 ID `x-` 변환, 역할별 serving_config 처리 분리.
 - 변경 요청: CR-001(스키마 변경 후보, 적용 안 함) ~ CR-008.
