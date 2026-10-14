@@ -3,6 +3,7 @@
 > **계약 상태.** 영역 사이 계약은 `../boundary-contracts`(헤드 소유)에 있고, 이 브리프의 계약 이름은 `head/docs/STRUCTURE.md`의 제안이다. 초안이 있는 것은 ReleaseManifest, GateDecision, TraceEnvelope뿐이고 나머지 필드는 헤드가 사용자와 논의해 확정 중이다. 확정 전에는 **계약에 의존하지 않는 부분**(내부 설계, 도메인 모델, 테스트 틀)만 진행한다. 계약이 부족하다고 느끼면 임의로 가정하지 말고 `docs/change-requests/`에 쓴다.
 > **읽기.** `../boundary-contracts`는 읽기 전용이다. `schema/`는 이 영역이 소유하는 문진 스키마(스키마만 남긴 최소 구성)이며 구현이 가져가는 계약은 `schema/schemas/<계약명>.json`, 컴포넌트별 입출력 대응은 `schema/COMPONENTS.yaml`, 정수 버전은 `schema/CONTRACT_VERSION`이다.
 > **버전(D14, D19).** 문진 스키마는 정수 버전(`CONTRACT_VERSION`, 현재 1)에 정확히 일치해야 한다. 경계 계약은 `MAJOR.MINOR`이며 값은 `boundary-contracts`가 정한다. 불변 산출물은 `ArtifactRef`(id, version, content_hash)로 가리킨다.
+> **업무 규칙.** 이 영역이 구현하거나 의존하는 업무 요구는 `docs/rules/`에 있다(헤드가 전달, 출처는 `docs/rules/SOURCE.md`). 규칙 문서에 없는 정책은 임의로 만들지 말고 `docs/change-requests/`에 쓴다.
 
 ## 1. 목적과 범위
 
