@@ -1,0 +1,17 @@
+version: 1
+files:
+- README.md
+- principles.md
+- preconditions.md
+- timing.md
+- mapping.md
+- utterance_parser.md
+- answer_normalizer.md
+- answer_judge.md
+- record_writer.md
+- dialogue_planner.md
+- response_generator.md
+- orchestrator.md
+- session_store.md
+- verification.md
+- trace_contract.md
