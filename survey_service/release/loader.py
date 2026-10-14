@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -132,7 +133,7 @@ class ReleaseLoader:
         bundle = self.reader.load_bundle(rid, dest=dest)      # 해시 검증, PASS가 아니면 FAILED_PRECONDITION(BoundaryError)
         bank = bundle.question_bank
         self._check_bank(manifest, bank)
-        warnings = self._version_warnings(manifest)
+        warnings = self._check_library_versions(manifest)
         try:
             session = self.inference.load(manifest, bundle.adapters, contract_version=manifest["runtime_contract_version"])
         except InferenceLoadError as e:
@@ -177,10 +178,25 @@ class ReleaseLoader:
         if str(bank["version"]) != str(manifest["question_set"]["version"]):
             raise LoadRejected("INVALID_RECORD", "문항 세트 버전이 ArtifactRef와 다르다")
 
-    def _version_warnings(self, manifest: dict) -> list:
+    def _check_library_versions(self, manifest: dict) -> list:
+        """게이트가 승인한 동작과 서비스 동작이 달라지지 않게(I4): turn-engine·model-runtime의 MAJOR.MINOR가 설치본과 다르면 거부,
+        PATCH 차이는 경고만 하고 적재한다(헤드 결정, CR-005)."""
         out = []
         for key, name in (("turn_engine_version", "turn-engine"), ("model_runtime_version", "model-runtime")):
             have = self.installed.get(key)
-            if have and manifest[key] != have:
-                out.append(f"{name} 버전이 다르다(릴리스 {manifest[key]}, 설치 {have}). 정책은 CR-005 대기")
+            if not have:
+                continue
+            want = manifest[key]
+            hm, wm = _major_minor(have), _major_minor(want)
+            if hm is None or wm is None:
+                raise LoadRejected("VERSION_MISMATCH", f"{name} 버전을 해석할 수 없다(릴리스 {want}, 설치 {have})")
+            if hm != wm:
+                raise LoadRejected("VERSION_MISMATCH", f"{name} MAJOR.MINOR가 다르다(릴리스 {want}, 설치 {have})")
+            if want != have:
+                out.append(f"{name} PATCH가 다르다(릴리스 {want}, 설치 {have})")
         return out
+
+
+def _major_minor(v: str):
+    m = re.match(r"^(\d+)\.(\d+)(?:\.\d+)?", str(v))
+    return (int(m.group(1)), int(m.group(2))) if m else None

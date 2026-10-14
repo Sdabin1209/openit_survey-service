@@ -1,6 +1,7 @@
 """컴포넌트 입력 조립. 저장소 문서와 문항 세트에서 정해진 범위를 '고르기만' 한다(판단 없음).
 
-범위는 docs/design.md 3.1의 표이고, 원본 출처 표가 없어 이 영역이 정한 해석이다(CR-004). 바꿀 일이 생기면 이 파일만 바꾼다.
+필드별 원천·시점·전달 방식은 docs/rules/sources/bindings.yaml이 정하고(tests/test_bindings.py가 대조한다),
+표가 정하지 않은 '어느 행·어느 문항을 고르는가'만 이 영역의 선택 정책이다(docs/design.md 3.1).
 """
 from __future__ import annotations
 
@@ -124,7 +125,7 @@ def judge_input(items: list, normalizer_output: Mapping, utterance: str, doc: Ma
         "pendings": [{"pending_id": r["pending"]["pending_id"], "slot": copy.deepcopy(r["slot"])}
                      for r in doc["answer_records"] if r["pending"]],
         "affected_followups": [{"question_id": q["question_id"], "followups": list(q["affected_followups"])}
-                               for q in bank.questions if q["affected_followups"]],
+                               for q in bank.questions],
         "question_slots": bank.question_slots(),
     }
 

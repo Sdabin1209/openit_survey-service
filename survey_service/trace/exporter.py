@@ -6,7 +6,9 @@
 """
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -23,6 +25,17 @@ from .outbox import Outbox
 log = logging.getLogger("survey_service.trace")
 
 
+_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+
+
+def envelope_id(raw: str) -> str:
+    """바깥(Frontend)이 정한 세션 ID·턴 ID를 봉투의 Id 형식으로. 형식에 맞으면 그대로, 아니면 'x-' + 원본 UTF-8 SHA-256 앞 32자
+    (소문자 16진). 결정적이라 멱등이다. 원본은 trace 본문에 있다(CONVENTIONS 10절)."""
+    if len(raw) <= 128 and _ID.match(raw):
+        return raw
+    return "x-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
 def _iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -35,8 +48,8 @@ class OutboxTraceSink:
     def submit(self, release_id: str, trace: dict) -> None:
         now = self.clock()
         envelope = {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id,
-                    "runtime_contract_version": trace["contract_version"], "session_id": trace["session_id"],
-                    "turn_id": trace["turn_id"], "sent_at": _iso(now), "trace": trace}
+                    "runtime_contract_version": trace["contract_version"], "session_id": envelope_id(trace["session_id"]),
+                    "turn_id": envelope_id(trace["turn_id"]), "sent_at": _iso(now), "trace": trace}
         self.outbox.enqueue(envelope, now)
 
 

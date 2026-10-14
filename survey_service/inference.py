@@ -24,6 +24,21 @@ class InferenceLoadError(SurveyServiceError):
 KNOWN_BACKENDS = ("fake",)
 
 
+def role_configs(manifest: Mapping) -> tuple[dict, dict]:
+    """역할별 serving_config와 해시. 매니페스트가 역할마다 가진 그대로 다룬다."""
+    ad = manifest["adapters"]
+    return ({r: ad[r]["serving_config"] for r in ("LORA_A", "LORA_B")},
+            {r: ad[r]["serving_config_hash"] for r in ("LORA_A", "LORA_B")})
+
+
+def single_config(configs: Mapping, hashes: Mapping) -> tuple[dict, str]:
+    """model-runtime 0.2.0의 load는 serving_config 하나만 받는다. 역할별로 다르면 거부한다.
+    model-runtime 0.3.0이 역할별 맵(serving_configs, expected_serving_config_hashes)을 받으면 이 함수만 바꾼다(CR-006)."""
+    if configs["LORA_A"] != configs["LORA_B"] or hashes["LORA_A"] != hashes["LORA_B"]:
+        raise InferenceLoadError("SERVING_CONFIG_DIFFERS_BY_ROLE", "LORA_A와 LORA_B의 serving_config가 다르다(I9 load는 하나만 받는다)")
+    return configs["LORA_A"], hashes["LORA_A"]
+
+
 class InferenceServer:
     def __init__(self, backend: str, *, contract_version: int = 1, backend_factory: Optional[Callable[[], Any]] = None) -> None:
         if backend not in KNOWN_BACKENDS and backend_factory is None:
@@ -46,13 +61,12 @@ class InferenceServer:
         I9 load는 serving_config 하나를 받는다. 매니페스트는 역할마다 가지므로 둘이 같을 때만 적재한다(CR-006).
         model-runtime의 거부(ServingConfigMismatch 등)는 InferenceLoadError로 감싸 이전 릴리스를 유지하게 한다.
         """
-        a, b = manifest["adapters"]["LORA_A"], manifest["adapters"]["LORA_B"]
-        if a["serving_config"] != b["serving_config"] or a["serving_config_hash"] != b["serving_config_hash"]:
-            raise InferenceLoadError("SERVING_CONFIG_DIFFERS_BY_ROLE", "LORA_A와 LORA_B의 serving_config가 다르다(I9 load는 하나만 받는다)")
+        configs, hashes = role_configs(manifest)
+        serving_config, expected_hash = single_config(configs, hashes)
         ver = contract_version or self.contract_version
         try:
-            return model_runtime.load(dict(adapters), a["serving_config"], schema_dir=survey_schema.schema_dir(ver),
-                                      expected_serving_config_hash=a["serving_config_hash"], backend=self._new_backend())
+            return model_runtime.load(dict(adapters), serving_config, schema_dir=survey_schema.schema_dir(ver),
+                                      expected_serving_config_hash=expected_hash, backend=self._new_backend())
         except model_runtime.ModelRuntimeError as e:
             raise InferenceLoadError(type(e).__name__, "model-runtime이 적재를 거부했다") from e
         except Exception as e:  # ContractViolation 등. 값은 담지 않는다.

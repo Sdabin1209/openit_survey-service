@@ -149,12 +149,42 @@ def test_different_serving_config_per_role_rejected(env):
     assert r.action == "REJECTED" and r.code == "SERVING_CONFIG_DIFFERS_BY_ROLE"
 
 
-def test_version_mismatch_with_installed_only_warns(env):
+def _bump(v, part):
+    a, b, c = (int(x) for x in v.split(".")[:3])
+    return {"major": f"{a + 1}.{b}.{c}", "minor": f"{a}.{b + 1}.{c}", "patch": f"{a}.{b}.{c + 1}"}[part]
+
+
+@pytest.mark.parametrize("lib", ["turn_engine_version", "model_runtime_version"])
+@pytest.mark.parametrize("part", ["major", "minor"])
+def test_library_major_minor_mismatch_is_rejected_and_previous_kept(env, lib, part):
     reader, reg, loader = env
-    reader.add_release("rel-1", sample_bank(), turn_engine_version="0.0.1", model_runtime_version=INSTALLED["model_runtime_version"])
+    add(reader, "rel-1")
+    reader.set_pointer("rel-1"); loader.poll_once()
+    kw = {"turn_engine_version": INSTALLED["turn_engine_version"], "model_runtime_version": INSTALLED["model_runtime_version"]}
+    kw[lib] = _bump(INSTALLED[lib], part)
+    reader.add_release("rel-2", sample_bank(2), **kw)
+    reader.set_pointer("rel-2")
+    r = loader.poll_once()
+    assert r.action == "REJECTED" and r.code == "VERSION_MISMATCH" and reg.active_id() == "rel-1"
+    assert "MAJOR.MINOR" in loader.status.rejections[-1]["detail"]
+
+
+@pytest.mark.parametrize("lib", ["turn_engine_version", "model_runtime_version"])
+def test_library_patch_mismatch_only_warns(env, lib):
+    reader, reg, loader = env
+    kw = {"turn_engine_version": INSTALLED["turn_engine_version"], "model_runtime_version": INSTALLED["model_runtime_version"]}
+    kw[lib] = _bump(INSTALLED[lib], "patch")
+    reader.add_release("rel-1", sample_bank(), **kw)
     reader.set_pointer("rel-1")
-    assert loader.poll_once().action == "LOADED"
-    assert "turn-engine" in loader.status.warnings[-1]["warning"] and reg.active().warnings
+    assert loader.poll_once().action == "LOADED" and reg.active_id() == "rel-1"
+    assert "PATCH" in loader.status.warnings[-1]["warning"] and reg.active().warnings
+
+
+def test_unparsable_library_version_rejected(env):
+    reader, reg, loader = env
+    reader.add_release("rel-1", sample_bank(), turn_engine_version="latest", model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.set_pointer("rel-1")
+    assert loader.poll_once().code == "VERSION_MISMATCH"
 
 
 def test_rollback_to_loaded_release_reactivates_without_reload(env):

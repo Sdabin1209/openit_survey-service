@@ -199,3 +199,40 @@ def test_stats(parts):
     clock.t += 5
     s = ex.stats()
     assert s["pending"] == 2 and s["oldest_pending_age_seconds"] == 5.0
+
+
+# ---------------------------------------------------------------- 외부 ID를 봉투의 Id 형식으로 (CONVENTIONS 10절)
+import hashlib
+import re
+
+from survey_service.trace import envelope_id
+
+
+def test_envelope_id_keeps_valid_ids_and_hashes_others():
+    for ok in ["S-TEST", "a", "A.b_c:d-e", "x" * 128]:
+        assert envelope_id(ok) == ok
+    for bad in ["세션 1", "has space", "-leading", "", "x" * 129, "a/b", "é"]:
+        out = envelope_id(bad)
+        assert out == "x-" + hashlib.sha256(bad.encode("utf-8")).hexdigest()[:32]
+        assert re.fullmatch(r"x-[0-9a-f]{32}", out) and out == envelope_id(bad)
+
+
+def test_non_id_session_and_turn_ids_are_delivered_not_lost(parts):
+    clock, ob, ing, ex, sink = parts
+    rig = Rig(trace_sink=sink)
+    rig.say(kind="SESSION_START", sid="세션 하나", turn_id="턴 1")
+    rig.say(kind="SESSION_END", sid="세션 하나", turn_id="turn-2")
+    r = ex.flush_once()
+    assert r.sent == 2 and r.dead == 0 and ob.counts() == {"PENDING": 0, "SENT": 2, "DEAD": 0}
+    sid = envelope_id("세션 하나")
+    env = ing.received[(sid, envelope_id("턴 1"))]
+    assert env["session_id"] == sid and sid.startswith("x-")
+    assert env["trace"]["session_id"] == "세션 하나" and env["trace"]["turn_id"] == "턴 1"   # 원본은 본문에 남는다
+    assert (sid, "turn-2") in ing.received                                                  # 맞는 ID는 그대로
+
+
+def test_converted_ids_keep_idempotency(parts):
+    clock, ob, ing, ex, sink = parts
+    sink.submit("rel-1", {"session_id": "세션", "turn_id": "턴", "contract_version": 1})
+    sink.submit("rel-1", {"session_id": "세션", "turn_id": "턴", "contract_version": 1})
+    assert ob.counts()["PENDING"] == 1
