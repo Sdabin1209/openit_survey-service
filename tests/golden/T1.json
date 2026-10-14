@@ -1,0 +1,1 @@
+{"case":"T1","specimens":[{"id":"input","turn":1,"contract":"FrontendMessage","role":"input","data":{"session_id":"S-TEST","kind":"UTTERANCE","utterance":"소주 두 병쯤 마셔요"}}]}

@@ -1,0 +1,1 @@
+{"case":"T4","specimens":[{"id":"input","turn":1,"contract":"FrontendMessage","role":"input","data":{"session_id":"S-TEST","kind":"UTTERANCE","utterance":"표시 이름 예시"}}]}
