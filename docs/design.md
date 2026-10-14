@@ -128,7 +128,8 @@
   3. 문항 세트가 `QuestionBank` 스키마를 통과하고 `manifest.question_set.content_hash`와 해시가 같은지, `manifest.content_hash`가 맞는지 확인한다(기준 구현 `boundary_contracts.canonical`).
   4. `manifest.turn_engine_version`, `model_runtime_version`이 설치된 값과 다르면 **경고만 하고 적재한다** [제안: 규칙이 거부하라고 하지 않았다. 재현성 위험은 CR-005에 적는다].
   5. `model_runtime.load`가 거부하면(`ServingConfigMismatch`, `UnsupportedServingConfig`, `ContractVersionMismatch`, 백엔드 없음) 적재 실패로 보고 이전 릴리스를 유지한다.
-- 성공하면 레지스트리에 넣고 활성 릴리스를 바꾼다. **새 세션만** 새 릴리스에 묶인다. 진행 중인 세션은 자기 릴리스로 끝까지 처리한다(세션은 `release_id`를 가진다). 서비스를 다시 띄우면 세션이 가리키는 릴리스를 `load_bundle`로 다시 적재한다. 못 하면 그 세션의 턴은 첫 단계 실패(`BEFORE_COMMIT/LoRA-A`)로 처리한다 [제안].
+- 성공하면 레지스트리에 넣고 활성 릴리스를 바꾼다. **새 세션만** 새 릴리스에 묶인다. 진행 중인 세션은 자기 릴리스로 끝까지 처리한다(세션은 `release_id`를 가진다).
+- **턴을 처리하는 동안 이웃(I4)을 부르지 않는다** [확인: brief §4]. 그래서 서비스를 다시 띄운 뒤 진행 중 세션이 가리키는 릴리스는 시작할 때와 폴링 주기마다 턴 밖에서 `ensure_loaded`로 미리 적재한다. 적재하지 못한 릴리스는 `/readyz`의 `release_loader.unavailable_releases`에 나오고, 그 세션의 턴은 첫 단계 실패(`BEFORE_COMMIT/LoRA-A`)로 처리한다 [제안]. 새 세션을 받는 능력(준비 여부)에는 영향이 없다.
 - 열린 세션이 없고 활성이 아닌 릴리스는 최근 `SURVEY_KEEP_RELEASES`개를 남기고 내린다.
 - 상태: 활성 릴리스 ID, 마지막 포인터 버전, 거부 목록(사유 코드, 포인터 버전). `/readyz`와 런북에서 본다.
 - 첫 활성 포인터가 없으면(`None`) 서비스는 살아 있으나 준비되지 않았다(`/readyz` 503).
@@ -141,6 +142,7 @@
 - 재시도 [확인: I6, CONVENTIONS 4]: `BoundaryError`의 `retryable`(UNAVAILABLE)일 때만 지수 백오프로 재시도한다. `ACCEPTED`와 `DUPLICATE`는 둘 다 전달 완료로 본다(최소 1회 전달, 수집이 키로 멱등). 재시도 불가 오류(예: `INVALID_RECORD`, `UNSUPPORTED_VERSION`)는 `DEAD`로 옮겨 재시도하지 않고 개수를 상태에 낸다. `BoundaryError`가 아닌 예외는 선언된 실패가 아니므로 `UNAVAILABLE`처럼 보류하되 `unexpected`로 표시한다 [제안].
 - outbox 쓰기 실패는 턴을 실패시키지 않는다. 표준 오류로 알리고 카운터를 올린다(그 Trace는 잃는다. 이 경우 최소 1회 보장은 깨진다. 디스크 오류와 같은 급이라 비보증으로 둔다 [제안]).
 - 보존: 전달 완료 행은 `SURVEY_OUTBOX_KEEP_SENT_HOURS` 뒤에 지운다.
+- 크기 [미정]: `session_before`/`session_after`/`persistence_load_result`가 세션 문서 전체(대화 로그 포함)를 담아 한 세션 안에서 턴이 늘수록 Trace가 커진다(턴 수에 거의 비례). 스키마가 정한 필드라 줄이지 않았다. 문제가 되면 ops-feedback과 협의해 문서에서 대화 로그를 뺀 형태를 변경 요청으로 낸다. 발화 원문이 Trace에 들어가므로 비식별은 수집 쪽(D15)이 한다.
 
 ## 7. 추론 서버
 
@@ -174,7 +176,7 @@
 
 ## 10. 골든 예시와의 대조
 
-방법은 `tests/test_golden.py`와 `tests/golden_known.json`에 있다. 요약: 골든에는 문항 세트와 모델·엔진 입력이 없고(오케스트레이터 계약만 있다) 로그 항목 안에 컴포넌트 **출력**이 있다. 그래서 컴포넌트 출력을 재생하는 엔진·모델 대역으로 Orchestrator 자체(입력 조립, 처리 표, 저장 반영, 진행 기록, 로그, 실패 처리, 직원 알림, 결과 전달)를 비교한다. 실제 turn-engine을 골든 입력으로 돌리는 비교는 문항 세트가 없어 못 한다(CR-002).
+방법은 `tests/golden_replay.py`, `tests/test_golden.py`, `tests/golden_known.json`에 있다. 결과: 226 케이스, 처리한 턴 234(형식·표현 예시 13턴은 스키마 검증만), 비교한 쌍 1220(OrchestratorInput, OrchestratorOutput, FrontendInput, 세션 저장소의 처리 시작·최종 상태, StaffConsoleInput, DispatchInput/Output) 중 1215 일치, 5 불일치(모두 (c) 예시 오류). 골든 표본 1704개는 모두 자기 계약 스키마를 통과한다. 요약: 골든에는 문항 세트와 모델·엔진 입력이 없고(오케스트레이터 계약만 있다) 로그 항목 안에 컴포넌트 **출력**이 있다. 그래서 컴포넌트 출력을 재생하는 엔진·모델 대역으로 Orchestrator 자체(입력 조립, 처리 표, 저장 반영, 진행 기록, 로그, 실패 처리, 직원 알림, 결과 전달)를 비교한다. 실제 turn-engine을 골든 입력으로 돌리는 비교는 문항 세트가 없어 못 한다(CR-002).
 
 ## 11. O06 대기 목록
 
@@ -184,3 +186,25 @@
 - 개입 결정(`InterventionDecision`)을 서비스가 어떻게 받는지(직원 콘솔 → 서비스 경로).
 - 문진 대상 참조와 개인정보 보존.
 - 상태 확인 동작이 돌려줄 내용.
+
+## 12. 수용 기준과 시험의 대응
+
+| 기준 (brief §4) | 확인하는 시험 |
+|---|---|
+| 게이트가 승인한 묶음만 적재, 승인 기록 없는 묶음 거부 | `test_release_loader.py::test_unapproved_or_tampered_bundle_rejected`, `test_missing_decision_rejected` |
+| 같은 세션 ID·턴 ID 재전송이 같은 결과(이중 저장 없음) | `test_orchestrator.py::test_same_turn_id_returns_same_result_without_second_write`, `test_conversation_on_sqlite_survives_restart` |
+| 턴 처리 중 다른 영역 호출 없음 | `test_release_loader.py::test_registry_never_calls_the_reader_during_a_turn` |
+| 모든 턴이 TurnTrace를 남기고 봉투에 릴리스 ID·계약 버전 | `test_orchestrator.py::test_trace_is_schema_valid_and_complete`, `test_trace_export.py::test_envelope_carries_release_and_contract_version` |
+| 모델은 해석과 문장만, 판정·저장 결정은 코드 | 구조: Orchestrator는 판단하지 않고 `Engine`(turn-engine)을 부른다. `effects.py`는 판단 없이 효과만 적용(`test_effects.py`) |
+| 새 릴리스는 새 세션부터 | `test_orchestrator.py::test_new_release_applies_to_new_sessions_only`, `test_release_loader.py::test_pointer_change_switches_active_new_sessions_only` |
+| 지원하지 않는 계약 버전은 거부하고 이전 릴리스 유지 | `test_release_loader.py::test_unsupported_contract_version_is_rejected_and_previous_kept` |
+| Trace는 영속 버퍼, UNAVAILABLE일 때만 재시도, 최소 1회 | `test_trace_export.py` 전체 |
+| 컨테이너(D22) | `scripts/smoke.sh` |
+
+## 13. 구현하지 않은 것 (정직하게)
+
+- 실제 추론 백엔드(GPU)와 별도 추론 컨테이너: model-runtime에 실제 백엔드가 없다(§7).
+- 직원 콘솔, 결과 전달(Result Dispatcher), 프론트 전달의 실제 연동: 접점 Protocol만 있고 기본값은 "설정되지 않음"이라 실패로 기록된다. 팩토리(`SURVEY_STAFF_CONSOLE`, `SURVEY_RESULT_DISPATCHER`)로 꽂는다.
+- 공개 API(I10): O06 대기.
+- 실제 release-gate(I4)·ops-feedback(I6) SDK와의 통합: 배포된 SDK가 없어 `boundary_contracts.sdk`의 Protocol을 따르는 시험용 대역(`tests/fakes.py`)으로만 시험했다. 팩토리 설정(`SURVEY_RELEASE_READER`, `SURVEY_TRACE_INGEST`)으로 실제 구현을 꽂는다.
+- 세션 문서 암호화, 보존 기간, 다중 프로세스 부하 시험.

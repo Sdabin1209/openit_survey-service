@@ -58,7 +58,6 @@ class App:
             self.reader, self.registry, self.inference, workdir=Path(settings.work_dir), keep_releases=settings.keep_releases,
             installed_versions={"turn_engine_version": turn_engine.ENGINE_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION},
             open_release_ids=self.store.open_release_ids)
-        self.registry._resolver = self.loader.resolve
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,
                                       max_delay=settings.export_backoff_max_seconds)
         console = staff_console if staff_console is not None else (load_factory(settings.staff_console)() if settings.staff_console else None)
@@ -71,6 +70,7 @@ class App:
     # ------------------------------------------------------------------ 수명
     def start(self) -> None:
         self.loader.poll_once()                                   # 첫 활성 릴리스를 가능하면 바로 적재한다
+        self.loader.ensure_loaded(self.store.open_release_ids())  # 다시 띄운 뒤 진행 중 세션의 릴리스(턴 밖에서)
         self.exporter.start(self.settings.export_interval_seconds)
 
         def poll():
@@ -78,6 +78,8 @@ class App:
             while not self._stop.wait(self.settings.release_poll_seconds):
                 try:
                     self.loader.poll_once()
+                    if self.loader.status.unavailable_releases:
+                        self.loader.ensure_loaded(self.store.open_release_ids())
                     n += 1
                     if n % 60 == 0:
                         self.outbox.purge_sent(time.time() - self.settings.outbox_keep_sent_hours * 3600)
@@ -114,7 +116,8 @@ class App:
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
-            "release_loader": {"last_pointer_version": self.loader.status.last_pointer_version,
+            "release_loader": {"unavailable_releases": self.loader.status.unavailable_releases,
+                               "last_pointer_version": self.loader.status.last_pointer_version,
                                "last_poll_error": self.loader.status.last_poll_error,
                                "rejections": self.loader.status.rejections[-5:], "warnings": self.loader.status.warnings[-5:]},
             "trace_outbox": self.exporter.stats(),

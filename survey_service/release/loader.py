@@ -45,6 +45,7 @@ class LoaderStatus:
     rejections: list = field(default_factory=list)       # {pointer_version, release_id, code, detail}
     warnings: list = field(default_factory=list)
     last_poll_error: Optional[str] = None
+    unavailable_releases: list = field(default_factory=list)   # 진행 중 세션이 쓰는데 적재하지 못한 릴리스
 
 
 class ReleaseLoader:
@@ -104,14 +105,23 @@ class ReleaseLoader:
         return PollResult("REJECTED", ptr["release_id"], e.code)
 
     # ------------------------------------------------------------------ 적재
-    def resolve(self, release_id: str) -> LoadedRelease:
-        """서비스를 다시 띄운 뒤 진행 중 세션이 가리키는 릴리스를 다시 적재한다(ReleaseRegistry의 resolver)."""
-        with self._lock:
-            try:
-                return self._load(release_id)
-            except LoadRejected as e:
-                from ..errors import ReleaseUnavailable
-                raise ReleaseUnavailable(e.code) from e
+    def ensure_loaded(self, release_ids: Iterable[str]) -> list[str]:
+        """진행 중 세션이 묶인 릴리스를 적재해 둔다(서비스를 다시 띄운 뒤). 턴 밖에서 부른다. 적재하지 못한 ID를 돌려준다."""
+        missing = []
+        for rid in release_ids:
+            if rid in self.registry.loaded_ids():
+                continue
+            with self._lock:
+                try:
+                    self.registry.register(self._load(rid))
+                except LoadRejected as e:
+                    log.error("진행 중 세션의 릴리스를 적재하지 못했다 release=%s code=%s", rid, e.code)
+                    missing.append(rid)
+                except BoundaryError as e:
+                    log.error("진행 중 세션의 릴리스를 읽지 못했다 release=%s code=%s", rid, e.code)
+                    missing.append(rid)
+        self.status.unavailable_releases = missing
+        return missing
 
     def _load(self, rid: str) -> LoadedRelease:
         manifest = self.reader.get_release(rid)

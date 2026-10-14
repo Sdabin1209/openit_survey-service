@@ -21,7 +21,6 @@ def env(tmp_path):
     reader = FakeReleaseReader(tmp_path / "gate")
     reg = ReleaseRegistry()
     loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED)
-    reg._resolver = loader.resolve
     return reader, reg, loader
 
 
@@ -181,13 +180,27 @@ def test_gc_keeps_releases_used_by_open_sessions(env):
     assert set(reg.loaded_ids()) == {"rel-1", "rel-3"}          # rel-2는 쓰는 세션이 없어 내렸다
 
 
-def test_restart_reloads_release_of_open_session(env):
+def test_registry_never_calls_the_reader_during_a_turn(env):
+    reader, reg, loader = env
+    add(reader, "rel-1", 1)
+    reader.set_pointer("rel-1"); loader.poll_once()
+    orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole())
+    before = dict(reader.calls)
+    for i in range(3):
+        orch.handle_turn(turn_id=f"t{i}", frontend_message={"session_id": f"S{i}", "kind": "SESSION_START"})
+    assert reader.calls == before                                    # 턴 처리 중에는 게이트(I4)를 부르지 않는다
+    with pytest.raises(ReleaseUnavailable):
+        reg.get("rel-unknown")
+
+
+def test_restart_preloads_release_of_open_session_outside_turns(env):
     reader, reg, loader = env
     add(reader, "rel-1", 1)
     add(reader, "rel-2", 2)
     reader.set_pointer("rel-2"); loader.poll_once()
-    assert reg.get("rel-1").bank["version"] == 1                 # resolver로 다시 적재
-    reader.manifests.pop("rel-1"); reg._loaded.pop("rel-1")
+    assert loader.ensure_loaded({"rel-1", "rel-2"}) == [] and reg.get("rel-1").bank["version"] == 1
+    reg._loaded.pop("rel-1"); reader.manifests.pop("rel-1")
+    assert loader.ensure_loaded({"rel-1"}) == ["rel-1"] and loader.status.unavailable_releases == ["rel-1"]
     with pytest.raises(ReleaseUnavailable):
         reg.get("rel-1")
 

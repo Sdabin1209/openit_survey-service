@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable, Iterable, Optional
+from typing import Iterable, Optional
 
 from ..errors import ReleaseUnavailable
 from ..ports import LoadedRelease
 
 
 class ReleaseRegistry:
-    def __init__(self, resolver: Optional[Callable[[str], LoadedRelease]] = None) -> None:
-        """resolver: 레지스트리에 없는 릴리스를 다시 적재하는 함수(서비스를 다시 띄운 뒤 진행 중 세션용)."""
+    def __init__(self) -> None:
+        """턴을 처리하는 동안에는 이웃(I4)을 부르지 않는다: 여기에 없는 릴리스는 ReleaseUnavailable이다.
+        다시 띄운 뒤 진행 중 세션의 릴리스는 ReleaseLoader.ensure_loaded가 턴 밖에서 미리 적재한다."""
         self._lock = threading.RLock()
         self._loaded: dict[str, LoadedRelease] = {}
         self._active: Optional[str] = None
-        self._resolver = resolver
 
     def register(self, release: LoadedRelease, *, activate: bool = False) -> None:
         with self._lock:
@@ -43,18 +43,8 @@ class ReleaseRegistry:
     def get(self, release_id: str) -> LoadedRelease:
         with self._lock:
             rel = self._loaded.get(release_id)
-        if rel is not None:
-            return rel
-        if self._resolver is None:
+        if rel is None:
             raise ReleaseUnavailable("릴리스가 적재되어 있지 않다")
-        try:
-            rel = self._resolver(release_id)
-        except ReleaseUnavailable:
-            raise
-        except Exception as e:
-            raise ReleaseUnavailable(f"릴리스를 다시 적재하지 못했다: {type(e).__name__}") from e
-        with self._lock:
-            self._loaded[release_id] = rel
         return rel
 
     def gc(self, in_use: Iterable[str], keep: int) -> list[str]:
