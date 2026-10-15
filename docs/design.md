@@ -193,3 +193,67 @@
 - 공개 API(I10): O06 대기.
 - 실제 release-gate(I4)·ops-feedback(I6) SDK와의 통합: 배포된 SDK가 없어 `boundary_contracts.sdk`의 Protocol을 따르는 시험용 대역(`tests/fakes.py`)으로만 시험했다. 팩토리 설정(`SURVEY_RELEASE_READER`, `SURVEY_TRACE_INGEST`)으로 실제 구현을 꽂는다.
 - 세션 문서 암호화, 보존 기간, 다중 프로세스 부하 시험.
+
+## 14. LangGraph 오케스트레이션 (D62)
+
+사용자 지시로 한 턴의 오케스트레이션을 LangGraph `StateGraph`로 옮긴다. **동작은 바꾸지 않는다**: 기존 시험(228+), 골든 대조, 스모크가 회귀 기준이다. turn-engine은 수정하지 않고 노드가 그대로 호출한다(순수 라이브러리).
+
+### 14.1 그래프 (노드와 조건부 간선)
+
+```
+                         +--> fail_no_session ------------------------------------------+
+                         |    (조회 실패, 세션 정보 생성 실패, 활성 릴리스 없음)            |
+ START -> load_session --+--> col_none ----+                                              |
+          (OrchestratorInput  col_progress -+--(route 없음 = 처리 안 함)--> ignore --------+--> END
+           조립)              col_paused ---+                                              |
+                              col_ended ----+--(route 있음)--> bind_release --+            |
+                                                                              |            |
+        bind_release: 릴리스 결정, 세션 정보 생성 ---(실패)--> finalize --------+            |
+              |  (발화: full)                  (plan만)                                      |
+              v                                  |                                          |
+   parse -> normalize -> judge -> write_record -> plan -> commit --(실패)--> finalize -------+
+     |          |          |          |            |
+     +----------+----------+----------+------------+--(단계 실패)--> finalize
+                                                    commit --(확정)--> deliver_staff
+                                                      deliver_staff --(flow=END)--> dispatch_result --> generate
+                                                      deliver_staff --(그 밖)-------------------------> generate
+                                                      generate -> finalize -> END
+```
+
+- **처리 표 9-1의 대응**: 열(세션 상태) = `load_session` 뒤의 조건부 간선(`col_none` / `col_progress` / `col_paused` / `col_ended`), 행(이벤트 종류) = 각 열 노드 안의 표 한 열(`Route`: 턴 종류, 세션 생성 여부, 전체 흐름 여부, 처리 안 함일 때 로그 여부). 열 노드 뒤의 간선이 `route 없음 -> ignore`, `route 있음 -> bind_release`다. "전체 흐름"은 `bind_release` 뒤의 간선(`parse` 또는 `plan`), "Plan만"은 `plan`으로 바로 간다.
+- **단계별 실패**: `parse`~`commit` 노드는 예외를 잡아 `failed`에 `BEFORE_COMMIT/<단계>`를 더하고, 다음 간선이 `failed`가 비어 있지 않으면 `finalize`로 보낸다(규칙 4: 앞 단계로 돌아가지 않고, 쓰기 확정이 실패하면 확정 뒤의 일은 하지 않는다). 확정 뒤 노드(`deliver_staff`, `dispatch_result`, `generate`)는 서로의 성패와 무관하게 이어진다(`AFTER_COMMIT` 실패를 더할 뿐).
+- **LangGraph가 분기하는 것**: 처리 표, 흐름 종료(`flow == END`일 때 결과 전달), 턴 실패, 그리고 규칙 문서 9-1 2항이 말하는 대로 판정 상태·행동 종류로는 분기하지 않는다.
+
+### 14.2 상태 (직렬화 가능)
+
+`TurnState`(TypedDict)의 값은 모두 JSON으로 직렬화되는 dict·list·문자열·수·bool·None이다. 모델 세션, 저장소, 엔진 같은 **자원은 상태에 두지 않고** `Orchestrator`가 가진다(릴리스 객체만 호출마다 `config["configurable"]["ctx"]`로 노드에 건넨다).
+
+| 필드 | 뜻 |
+|---|---|
+| `session_id`, `turn_id`, `input_hash`, `message`, `decision`, `input_kind`, `in_kind`, `utterance` | 입력 |
+| `loaded`, `found`, `status` | 턴 맨 앞 조회 결과 |
+| `route` | 처리 표의 한 칸 `{turn_kind, create, full, keep_log}` |
+| `release_id`, `state_doc`, `revision`, `created` | 릴리스 결정, 턴 시작 문서, 낙관적 revision, 세션 정보 생성 결과 |
+| `parser_out`, `norm_out`, `judge_out`, `writer_out`, `records_after`, `plan_out` | 컴포넌트 출력과 저장 결정 반영 뒤 기록(timing 0-2) |
+| `committed`, `commit_unknown`, `post_doc` | 쓰기 확정 결과와 확정 뒤 문서 |
+| `failed`(더하기 reducer), `staff_status`, `staff_delivery`, `response_text`, `signal`, `intervention_result`, `dispatch_called`, `console`, `console_delivered`, `console_calls`(더하기) | 확정 뒤의 일과 실패 신호 |
+| `trace`(병합 reducer) | TurnTrace 재료. 노드가 채운 칸만 병합 |
+| `fatal`, `orchestrator_output`, `frontend_input`, `console_input`, `out_release_id`, `cacheable` | 종료 노드의 결과 |
+
+### 14.3 그래프 밖에서 유지하는 것
+
+- **세션별 직렬화(락), turn_id 멱등(저장된 결과 재생), 입력 검증**: `handle_turn`이 그래프를 부르기 전·후에 한다.
+- **한 턴의 쓰기 확정**: `commit` 노드가 저장소의 한 번의 `commit`(SQLite 한 트랜잭션)을 부른다. LangGraph의 체크포인터·`Send`·병렬 가지를 쓰지 않는다. **체크포인터를 쓰지 않고** 컴파일한다(`compile()`에 checkpointer 없음). 세션 저장소는 이 영역의 Session Store 하나다.
+- **Trace outbox**: 그래프가 끝난 뒤 `handle_turn`이 outbox에 넣는다.
+- **출력 보호(D36)**: 모델 세션(model-runtime, 또는 추론 서버) 안에서 일어난다. 그래프는 보호가 끝난 출력을 받는다.
+
+### 14.4 위험과 결정
+
+| 위험·결정 | 대응 |
+|---|---|
+| 동작이 바뀐다 | 기존 시험 전체와 골든 대조를 그대로 통과해야 한다. 노드는 기존 함수 본문을 옮긴 것이고 로그·Trace의 필드 순서와 값이 같다 |
+| 의존이 크게 늘어난다(langgraph가 langchain-core, pydantic 등을 끌어온다) | 버전을 잠금 파일에 고정하고 이미지에 반영한다. 라벨 `io.openit.langgraph`를 더해 버전을 기록한다. 이 라벨은 공통 규칙의 6개 키 밖의 **추가** 키다(CR-011) |
+| **외부 전송(추적)**: LangChain 생태계는 환경 변수로 LangSmith 추적을 켤 수 있다. 문진 발화가 밖으로 나가면 안 된다 | 이미지에 `LANGSMITH_TRACING=false`, `LANGCHAIN_TRACING_V2=false`를 고정하고 API 키를 두지 않는다. 시험이 그래프 실행 중 외부 연결이 없음을 확인한다(소켓 차단) |
+| 스택 깊이·성능 | 노드 약 20개, 턴당 한 번 호출. 시험으로 지연이 늘지 않음을 확인한다 |
+| 상태가 직렬화되어야 한다 | 시험이 최종 상태를 `json.dumps`로 확인한다 |
+| 처리 표를 코드 표와 그래프 간선 둘로 두면 어긋난다 | 표는 열(세션 상태)마다 한 곳(`COLUMNS`)에만 두고 `route()`는 그 표를 읽는 얇은 함수다. 기존 표 시험이 그대로 걸린다 |
