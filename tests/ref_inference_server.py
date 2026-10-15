@@ -49,6 +49,12 @@ class InferenceHttp:
         self._lock = threading.Lock()
         self._state: dict[str, dict] = {}      # rid -> {"state", "error"}
 
+    def _hashes(self) -> dict:
+        for rid in self.registry.loaded_ids():
+            m = self.registry.get(rid).manifest
+            return {r: m["adapters"][r]["serving_config_hash"] for r in ("LORA_A", "LORA_B")}
+        return {}
+
     # ---- 적재 ----
     def _load(self, rid: str) -> None:
         if self.load_delay:
@@ -68,7 +74,8 @@ class InferenceHttp:
             return err("PERMISSION_DENIED", "토큰이 없거나 틀리다")
         if method == "GET" and path == "/v1/info":
             return 200, {"service": "ref-inference-server", "runtime_version": model_runtime.RUNTIME_VERSION,
-                         "supported_contract_versions": [1], "backend": "fake", "loaded": self.registry.loaded_ids()}, {}
+                         "supported_contract_versions": [1], "backend": "fake", "loaded": self.registry.loaded_ids(),
+                         "serving_config_hash": self._hashes()}, {}
         m = re.fullmatch(r"/v1/releases/([^/]+)(|/parse|/generate)", path)
         if not m:
             return err("NOT_FOUND", "경로가 없다")
@@ -117,6 +124,9 @@ class InferenceHttp:
                 return err("UNAVAILABLE", "추론에 실패했다")
             info = getattr(rel.session, "last_call_info", None)
             hdr = {"X-Openit-Outcome": getattr(info, "outcome", "ok"), "X-Openit-Attempts": str(getattr(info, "attempts", 1))}
+            prot = ",".join(f"{n}:{c}" for n, c in (getattr(info, "protections", ()) or ()))
+            if prot:
+                hdr["X-Openit-Protections"] = prot
             return 200, out, hdr
         return err("NOT_FOUND", "경로가 없다")
 

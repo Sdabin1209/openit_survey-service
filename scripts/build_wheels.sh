@@ -17,10 +17,13 @@ done
 $PIP wheel -q --no-deps --no-build-isolation -w build/wheels ./schema
 $PIP wheel -q --no-deps --no-build-isolation -w build/wheels .
 SCHEMA_INT=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)
+LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
+[ -n "$LANGGRAPH_VERSION" ] || { echo "requirements.lock에 langgraph== 고정이 없다"; exit 1; }
 cat > build/wheels/VERSIONS.env <<EOF
 BOUNDARY_TAG=$BOUNDARY_TAG
 TURN_ENGINE_TAG=$TURN_ENGINE_TAG
 MODEL_RUNTIME_TAG=$MODEL_RUNTIME_TAG
 SCHEMA_CONTRACT_VERSION=$SCHEMA_INT
+LANGGRAPH_VERSION=$LANGGRAPH_VERSION
 EOF
 ls build/wheels

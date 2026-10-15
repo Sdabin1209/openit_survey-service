@@ -15,7 +15,7 @@ bash scripts/build_wheels.sh >/dev/null
 source build/wheels/VERSIONS.env
 $DOCKER build -q -t "$IMG" --build-arg COMMIT="$COMMIT" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" \
   --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" --build-arg TURN_ENGINE_TAG="$TURN_ENGINE_TAG" \
-  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" . >/dev/null
+  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" . >/dev/null
 trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true' EXIT
 
 fail() { echo "SMOKE FAIL: $1"; $DOCKER logs "$NAME" 2>&1 | tail -20; exit 1; }
@@ -49,7 +49,7 @@ echo "$READY" | grep -q '"contract_version": 1' || fail "계약 버전"
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")
 echo "labels:  $LABELS"
 for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" "io.openit.turn-engine\":\"$TURN_ENGINE_TAG" \
-            "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SCHEMA_CONTRACT_VERSION"; do
+            "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SCHEMA_CONTRACT_VERSION" "io.openit.langgraph\":\"$LANGGRAPH_VERSION"; do
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://127.0.0.1:$PORT/v1/turns")
@@ -89,7 +89,7 @@ R=$(cat /tmp/smoke-$$.body); echo "api resume: $R"; echo "$R" | grep -q '"respon
 [ "$(rk smoke-3 "x" r-2)" = 409 ] || fail "직원이 끝낸 세션이 409가 아니다"
 rm -f /tmp/smoke-$$.body
 # 이미지 안에서 실제 turn-engine, model-runtime(fake), 문진 스키마 패키지로 한 턴(개발 하네스)
-$DOCKER exec "$NAME" python - <<'PY' || fail "이미지 안의 한 턴"
+$DOCKER exec -e EXPECT_LANGGRAPH="$LANGGRAPH_VERSION" "$NAME" python - <<'PY' || fail "이미지 안의 한 턴"
 import json, tempfile, os, subprocess, sys
 sys.path.insert(0, "/mnt")
 from tests.sample_bank import sample_bank
@@ -100,6 +100,9 @@ out = subprocess.run([sys.executable, "-m", "survey_service.cli", "--bank", d + 
 assert out.returncode == 0, out.stderr
 r = json.loads(out.stdout)
 assert r["orchestrator_output"]["log_entry"]["directive"]["action"] == "ASK_NEXT", r
+import importlib.metadata as md, os
+assert md.version("langgraph") == os.environ.get("EXPECT_LANGGRAPH", md.version("langgraph")), "langgraph 버전이 잠금과 다르다"
+assert os.environ.get("LANGSMITH_TRACING") == "false" and os.environ.get("LANGCHAIN_TRACING_V2") == "false", "외부 추적이 꺼져 있지 않다"
 print("in-image turn:", r["orchestrator_output"]["log_entry"]["directive"]["action"])
 PY
 # SIGTERM으로 제때 멈춘다

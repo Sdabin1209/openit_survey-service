@@ -1,5 +1,7 @@
 # 추론 서버 규약 (survey-service <-> 모델 서빙 컨테이너)
 
+> **기준은 `boundary-contracts/HTTP.md`의 'I9 ModelRuntime 추론 서버' 절이다(D62).** 이 문서는 그 절의 근거와 서비스 쪽 실패 처리(5절)를 담고, 어긋나면 HTTP.md에 맞춘다. 보호 헤더는 `X-Openit-Outcome`, `X-Openit-Attempts`, `X-Openit-Protections`(규칙 코드:건수, 예 `P1:1,G5:1`)다. `/v1/info`에는 `serving_config_hash`(역할별)가 더해졌다.
+
 상태: survey-service가 정한 제안 규약 v1(헤드 확인 요청, CR-010). 구현은 **model-runtime 영역이 만드는 추론 서버 이미지**(vLLM, 서빙 서버 RTX 4090)이고, 서비스 쪽은 `survey_service/remote.py`의 HTTP 클라이언트뿐이다. 서비스는 모델을 직접 적재하거나 호출하지 않는다(`SURVEY_INFERENCE_URL`이 있으면). 참조 구현(모델 없는 가짜 경로)과 클라이언트 시험은 `tests/ref_inference_server.py`, `tests/test_inference_client.py`에 있고, 실제 서버는 같은 시험의 HTTP 부분(`test_spec_endpoints_over_raw_http`)과 5절의 동작을 만족해야 한다.
 
 ## 1. 책임
@@ -27,7 +29,7 @@
 | `POST /v1/releases/{release_id}/generate` 본문 `ResponseGeneratorInput` | `200 GeneratorOutput` |
 | `GET /v1/info` (선택, 점검용) | `200 {"service", "runtime_version", "supported_contract_versions": [1], "backend", "loaded": [release_id...]}` |
 
-- parse·generate 응답 헤더(권장): `X-Openit-Outcome: ok|repaired|fallback`(출력 보호 결과, `last_call_info.outcome`), `X-Openit-Attempts: <시도 횟수>`. 서비스는 값을 세기만 하고 `/readyz`에 건수로 낸다(원문 없음).
+- parse·generate 응답 헤더: `X-Openit-Outcome: ok|repaired|fallback`(출력 보호 결과, `last_call_info.outcome`), `X-Openit-Attempts: <시도 횟수>`, `X-Openit-Protections: P1:1,G5:1`(규칙 코드별 건수). 서비스는 값을 세기만 하고 `/readyz`의 `inference`에 `outcome_*`와 규칙별 `protections`로 낸다(원문 없음).
 - 적재되지 않은 릴리스에 parse/generate가 오면 **404 NOT_FOUND**(서버가 재시작해 잊은 경우 포함). 서비스는 한 번 `PUT`으로 적재를 요청하고, 200 LOADED면 호출을 다시 하고 202면 그 턴을 실패시킨다(기다리지 않는다).
 - 적재 신호는 서비스가 새 릴리스를 적재할 때(`PUT`, 202면 `GET`을 0.5초 간격으로 `SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS`(기본 600초)까지 확인)와 진행 중 세션이 쓰는 릴리스를 다시 올릴 때 보낸다. 같은 서버에 서로 다른 릴리스 여러 개를 동시에 올려 둘 수 있어야 한다(진행 중 세션은 자기 릴리스로 끝난다).
 - 서로 다른 세션의 호출은 동시에 들어온다. 서버는 병렬로 처리하거나 짧은 대기열 뒤에서 처리하되, 대기가 호출 타임아웃(기본 4초)을 넘을 것 같으면 **큐에 쌓지 말고 503**으로 거절한다(재시도 가능).

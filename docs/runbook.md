@@ -69,7 +69,7 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 
 ## 6-1. 이미지 조합과 릴리스 정책 (D46)
 
-릴리스의 `turn_engine_version`·`model_runtime_version`은 MAJOR.MINOR가 이미지에 설치된 것과 같아야 적재된다(PATCH 차이는 경고). model-runtime이 0.3→0.4로 MAJOR.MINOR가 바뀌었으므로, **게이트가 평가에 쓴 이미지(릴리스 매니페스트에 기록된 버전)와 같은 라이브러리 조합의 survey-service 이미지**를 배포해야 한다. 조합이 어긋난 릴리스는 `VERSION_MISMATCH`로 거부되고 이전 릴리스가 유지된다. 이미지 라벨은 6개다: `io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`(D50). 현재 조합: boundary-contracts v1.2.0, turn-engine v0.2.0, model-runtime v0.4.0(기본 백엔드는 fake. vLLM 백엔드와 어댑터 사전 검사는 이 서비스에 아직 연결하지 않았다).
+릴리스의 `turn_engine_version`·`model_runtime_version`은 MAJOR.MINOR가 이미지에 설치된 것과 같아야 적재된다(PATCH 차이는 경고). model-runtime이 0.3→0.4로 MAJOR.MINOR가 바뀌었으므로, **게이트가 평가에 쓴 이미지(릴리스 매니페스트에 기록된 버전)와 같은 라이브러리 조합의 survey-service 이미지**를 배포해야 한다. 조합이 어긋난 릴리스는 `VERSION_MISMATCH`로 거부되고 이전 릴리스가 유지된다. 이미지 라벨은 공통 6개(`io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`, D50)에 `io.openit.langgraph`가 더해진다(CR-011). 오케스트레이션은 LangGraph이고 버전은 `requirements.lock`에 고정되어 있다. 이미지는 LangSmith 추적을 끈 채(`LANGSMITH_TRACING=false`) 나가야 하며, 환경 변수로 켜지 않는다(발화가 외부로 나간다). 현재 조합: boundary-contracts v1.2.0, turn-engine v0.2.0, model-runtime v0.4.0(기본 백엔드는 fake. vLLM 백엔드와 어댑터 사전 검사는 이 서비스에 아직 연결하지 않았다).
 
 ## 7. 스키마 패키지 릴리스
 

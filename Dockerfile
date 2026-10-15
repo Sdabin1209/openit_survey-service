@@ -12,16 +12,22 @@ ARG BOUNDARY_TAG=unknown
 ARG SCHEMA_CONTRACT_VERSION=unknown
 ARG TURN_ENGINE_TAG=unknown
 ARG MODEL_RUNTIME_TAG=unknown
+ARG LANGGRAPH_VERSION=unknown
 LABEL io.openit.service=survey-service \
       io.openit.revision=$COMMIT \
       io.openit.contracts.boundary=$BOUNDARY_TAG \
       io.openit.contracts.survey-schema=$SCHEMA_CONTRACT_VERSION \
       io.openit.turn-engine=$TURN_ENGINE_TAG \
-      io.openit.model-runtime=$MODEL_RUNTIME_TAG
+      io.openit.model-runtime=$MODEL_RUNTIME_TAG \
+      io.openit.langgraph=$LANGGRAPH_VERSION
 COPY --from=build /install /usr/local
 RUN useradd --system --uid 10001 --no-create-home app && mkdir /data && chown app /data
 USER app
-ENV PYTHONUNBUFFERED=1 \
+# LangChain 계열의 외부 추적(LangSmith)을 끈다: 문진 발화가 밖으로 나가면 안 된다. API 키는 이미지에 없다.
+ENV LANGSMITH_TRACING=false \
+    LANGCHAIN_TRACING_V2=false \
+    LANGCHAIN_TRACING=false \
+    PYTHONUNBUFFERED=1 \
     SURVEY_PORT=8080 \
     SURVEY_SESSION_DB=/data/sessions.db \
     SURVEY_OUTBOX_DB=/data/outbox.db \

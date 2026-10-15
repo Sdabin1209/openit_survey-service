@@ -292,3 +292,31 @@ def test_spec_endpoints_over_raw_http(env):
     assert raw("POST", "/v1/releases/nope/parse", {})[0] == 404
     code, body, _ = raw("PUT", "/v1/releases/rel-1", token="bad")
     assert code == 403 and body["code"] == "PERMISSION_DENIED" and body["retryable"] is False
+
+
+def test_protection_counts_per_rule_are_exposed(tmp_path):
+    """X-Openit-Protections의 규칙별 건수가 /readyz inference.protections로 나간다(모델이 깨진 출력을 내는 서버)."""
+    def garbage(req):
+        return "JSON 아님" if req.role == "LORA_A" else json.dumps({"response_text": "응답입니다."})
+    e = Env(tmp_path, inference=InferenceServer("fake", backend_factory=lambda: model_runtime.FakeBackend(garbage)))
+    try:
+        e.loader.poll_once()
+        e.start(); e.turn(); e.turn()
+        snap = e.client.stats.snapshot()
+        assert snap["outcome_fallback"] >= 2 and snap["protections"] and all(v >= 1 for v in snap["protections"].values())
+        assert all(k[0] in "PG" for k in snap["protections"])            # 규칙 코드(P1~P6, G1·G4·G5)
+    finally:
+        e.close()
+
+
+def test_protections_header_parsing_ignores_garbage():
+    from survey_service.remote import Stats
+    s = Stats()
+    s.add_protections("P1:2, G5:1,bad,P1:x,:3")
+    s.add_protections("P1:1")
+    assert s.snapshot()["protections"] == {"P1": 3, "G5": 1}
+
+
+def test_info_reports_serving_config_hash_per_role(env):
+    code, body, _ = env.inf.handle("GET", "/v1/info", f"Bearer {TOKEN}", b"")
+    assert code == 200 and set(body["serving_config_hash"]) == {"LORA_A", "LORA_B"}

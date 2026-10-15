@@ -81,14 +81,23 @@ class Stats:
         self._lock = threading.Lock()
         self.data = {"calls": 0, "failures": 0, "retries": 0, "timeouts": 0, "invalid_outputs": 0, "reloads": 0,
                      "outcome_repaired": 0, "outcome_fallback": 0}
+        self.protections: dict[str, int] = {}      # 출력 보호 규칙 코드별 건수(P1, G5 ...). 원문 없음
 
     def add(self, key: str, n: int = 1) -> None:
         with self._lock:
             self.data[key] += n
 
+    def add_protections(self, header: str) -> None:
+        """X-Openit-Protections: `P1:1,G5:1` 형식(규칙 코드:건수). 읽을 수 없는 조각은 건너뛴다."""
+        with self._lock:
+            for part in header.split(","):
+                code, _, n = part.strip().partition(":")
+                if code.isalnum() and n.isdigit():
+                    self.protections[code] = self.protections.get(code, 0) + int(n)
+
     def snapshot(self) -> dict:
         with self._lock:
-            return dict(self.data)
+            return {**self.data, "protections": dict(self.protections)}
 
 
 class RemoteModelSession:
@@ -144,6 +153,9 @@ class RemoteModelSession:
         outcome = headers.get("X-Openit-Outcome") if headers is not None else None
         if outcome in ("repaired", "fallback"):
             self.stats.add("outcome_" + outcome)          # 출력 보호가 적용됐다(서버가 알린다). 건수만 센다
+        prot = headers.get("X-Openit-Protections") if headers is not None else None
+        if prot:
+            self.stats.add_protections(prot)
         return out
 
     def parse(self, input: Mapping) -> dict:

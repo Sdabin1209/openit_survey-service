@@ -15,7 +15,7 @@ bash scripts/build_wheels.sh >/dev/null
 source build/wheels/VERSIONS.env
 $DOCKER build -q -t "$SERVICE_IMAGE" --build-arg COMMIT="$COMMIT" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" \
   --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" --build-arg TURN_ENGINE_TAG="$TURN_ENGINE_TAG" \
-  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" . >/dev/null
+  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" . >/dev/null
 rm -rf build/fake-ctx && mkdir -p build/fake-ctx
 cp -r build/wheels build/fake-ctx/wheels && cp requirements.lock build/fake-ctx/ && cp tests/compose/Dockerfile.fake build/fake-ctx/Dockerfile
 mkdir build/fake-ctx/tests && (cd tests && cp *.py build/../../build/fake-ctx/tests/ 2>/dev/null || cp *.py ../build/fake-ctx/tests/)
@@ -49,7 +49,8 @@ FAILED_BODY=$(cat /tmp/smoke-compose-$$.body)
 curl -fsS "$API/healthz" >/dev/null || fail "추론 서버가 죽었다고 서비스가 죽었다"
 $COMPOSE start inference >/dev/null 2>&1
 for i in $(seq 1 30); do
-  c=$(turn "다시 안녕" t-3); grep -q '"write_committed": "COMMITTED"' /tmp/smoke-compose-$$.body && [ "$c" = 200 ] && break; sleep 1
+  c=$(turn "다시 안녕" "t-3-$i");  # 실패한 턴도 같은 turn_id로는 같은 결과라 시도마다 새 turn_id를 쓴다
+  grep -q '"write_committed": "COMMITTED"' /tmp/smoke-compose-$$.body && [ "$c" = 200 ] && break; sleep 1
 done
 grep -q '"write_committed": "COMMITTED"' /tmp/smoke-compose-$$.body || fail "추론 서버가 다시 떠도 복구하지 않는다: $(cat /tmp/smoke-compose-$$.body)"
 [ "$(post /v1/sessions/cs-1/end '{"session_id":"cs-1","kind":"SESSION_END"}')" = 200 ] || fail "종료"

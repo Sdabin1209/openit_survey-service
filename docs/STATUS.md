@@ -71,3 +71,9 @@
 - 서비스 안의 추론 서버를 서비스 패키지에서 빼고 시험 대역(`tests/ref_inference_server.py`)으로 옮겼다. 서비스는 `SURVEY_INFERENCE_URL`로 HTTP 호출만 한다. 규약은 `docs/inference-server-spec.md`, 요청은 CR-010.
 - 호출 실패·지연·잘못된 출력 처리(타임아웃 4초, 연결 실패·5xx 1회 재시도, 읽기 타임아웃·400·잘못된 출력은 재시도 없음, 404 재적재, 202 적재 폴링)와 시험(`tests/test_inference_client.py`).
 - `scripts/smoke_compose.sh`: 서비스 + 가짜 추론 + 가짜 게이트 compose 스모크(추론 중단·복구 포함).
+
+## 후속 구간 6 (D62 LangGraph 전환, 추론 서버 I9 정렬)
+
+- 오케스트레이터를 LangGraph로 전환(설계 14절). 회귀: `pytest` 전체 통과(골든 1220쌍 중 1215 일치, 5건 (c)), 스모크 SMOKE OK, compose 스모크 SMOKE(compose) OK.
+- 추론 클라이언트·시험 대역을 HTTP.md I9 절에 맞춤: `X-Openit-Protections` 규칙별 건수를 `/readyz`의 `inference.protections`로 노출, `/v1/info`의 `serving_config_hash`.
+- 남은 일: model-runtime의 실제 서버 이미지가 I9 절에 맞게 나오면 compose의 `inference` 이미지 교체, 실제 모델 연결, CR-011(라벨) 회신.

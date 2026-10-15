@@ -12,3 +12,8 @@
 - 골든 대조: 226 케이스, 비교 1220쌍 중 1215 일치, 5건은 예시 오류(CR-008).
 - 헤드 결정 반영: bindings.yaml 대조(`tests/test_bindings.py`), 라이브러리 MAJOR.MINOR 불일치 거부, 외부 ID `x-` 변환, 역할별 serving_config 처리 분리.
 - 변경 요청: CR-001(스키마 변경 후보, 적용 안 함) ~ CR-008.
+
+## 후속 (D62)
+
+- 오케스트레이터를 LangGraph `StateGraph`로 전환(`survey_service/graph.py`). 처리 표 9-1의 열은 조건부 간선, 행은 열 노드의 표. 동작 불변(기존 시험·골든·스모크 통과). 상태는 직렬화 가능, 체크포인터 없음. langgraph 1.2.15 잠금 고정, 이미지 라벨 `io.openit.langgraph`, 외부 추적 끔.
+- 추론 서버 규약(`docs/inference-server-spec.md`, 기준은 boundary-contracts HTTP.md I9), 서비스 안의 추론 서버를 시험 대역으로 이동, 실패·지연 처리, 보호 건수(규칙별) 노출, `scripts/smoke_compose.sh`.

@@ -24,6 +24,7 @@
 | 경계 계약 | `boundary-contracts` **v1.3.1**(`pipeline_schema_version` "1.3"). 영역 사이 호출은 HTTP(`HTTP.md`), 클라이언트는 `boundary_contracts.clients`. 같은 MAJOR의 모르는 필드는 보존(`ext`)하고 판단에 쓰지 않는다 |
 | I4 ReleaseReader | `get_active_pointer`(폴링), `get_release`, `get_decision`, `load_bundle`. 턴 처리 중에는 부르지 않는다 |
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
+| 오케스트레이션 | LangGraph **1.2.15**(잠금 파일에 고정, 이미지 라벨 `io.openit.langgraph`). 외부 추적(LangSmith)은 이미지에서 끈다 |
 | I8 turn-engine | **v0.2.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `normalize`, `judge`, `write_record`, `plan` |
 | I9 model-runtime | **v0.3.0** (같은 규칙. `load`는 역할별 `serving_configs`·`expected_serving_config_hashes`) `load`, `parse`, `generate`, `last_call_info` |
 

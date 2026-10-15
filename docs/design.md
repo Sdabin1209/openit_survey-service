@@ -257,3 +257,9 @@
 | 스택 깊이·성능 | 노드 약 20개, 턴당 한 번 호출. 시험으로 지연이 늘지 않음을 확인한다 |
 | 상태가 직렬화되어야 한다 | 시험이 최종 상태를 `json.dumps`로 확인한다 |
 | 처리 표를 코드 표와 그래프 간선 둘로 두면 어긋난다 | 표는 열(세션 상태)마다 한 곳(`COLUMNS`)에만 두고 `route()`는 그 표를 읽는 얇은 함수다. 기존 표 시험이 그대로 걸린다 |
+
+### 14.5 구현 (survey_service/graph.py)
+
+- 노드는 `TurnGraph`의 `n_<이름>` 메서드이고 이전 `_Turn` 기반 함수 본문을 옮긴 것이다(필드 순서·값·직원 콘솔 호출 순서 불변). 열 표는 `COLUMNS`, `route()`는 그 표를 읽는 얇은 함수다. 상태는 `TurnState`, 시작 상태는 `initial_state()`, 호출마다 건네는 자원(릴리스, 문항 세트 보조 객체)은 `TurnCtx`다. `Orchestrator.handle_turn`은 락, 검증, 멱등, 결과 저장, Trace outbox를 그래프 밖에서 한다.
+- 회귀: 기존 시험 전체와 골든 대조(1220쌍 중 1215 일치, 5건 예시 오류)가 그대로 통과한다. `tests/test_graph.py`가 간선 구성, 되돌아가는 간선이 없음, 체크포인터 없음, 표와 `route()`의 일치, 모든 경로의 최종 상태가 JSON 직렬화 가능함, 턴 처리 중 네트워크 연결 없음, 추적 환경 변수가 꺼져 있음, 잠금 파일의 langgraph 고정과 설치본 일치를 확인한다.
+- 의존: `langgraph` 1.2.15(잠금 파일에 정확히 고정, `pyproject.toml`은 `>=1.2,<1.3`). langchain-core, pydantic, langsmith 등 43개 패키지가 잠금에 들어온다(이전 6개). 이미지 라벨 `io.openit.langgraph`(CR-011), 이미지 환경에 `LANGSMITH_TRACING=false`, `LANGCHAIN_TRACING_V2=false`.
