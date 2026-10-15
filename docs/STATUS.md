@@ -77,3 +77,5 @@
 - 오케스트레이터를 LangGraph로 전환(설계 14절). 회귀: `pytest` 전체 통과(골든 1220쌍 중 1215 일치, 5건 (c)), 스모크 SMOKE OK, compose 스모크 SMOKE(compose) OK.
 - 추론 클라이언트·시험 대역을 HTTP.md I9 절에 맞춤: `X-Openit-Protections` 규칙별 건수를 `/readyz`의 `inference.protections`로 노출, `/v1/info`의 `serving_config_hash`.
 - 남은 일: model-runtime의 실제 서버 이미지가 I9 절에 맞게 나오면 compose의 `inference` 이미지 교체, 실제 모델 연결, CR-011(라벨) 회신.
+
+- CR-011 승인(D63). model-runtime 서버가 I9에 맞춰지면 compose의 추론 이미지를 실제 서버로 바꾼다(헤드가 다시 부른다). 지금은 대기.
