@@ -13,7 +13,7 @@
 |---|---|
 | 문진 스키마 패키지 | 배포 이름 `openit-survey-schema`, import `survey_schema`. `load_schema(name, version=1)`, `schema_dir(version=1)`(model-runtime `load(schema_dir=...)`에 넘기는 `<계약명>.json`이 있는 디렉터리), `contract_version_dir`, `available_versions`, `current_version`, `list_schemas`. 정수 버전별 디렉터리 `survey_schema/v1/`. 설치: Git 태그 + `#subdirectory=schema`(태그는 헤드가 붙인다). |
 | SDK 인터페이스 | **없다**(brief §2). 이웃이 서비스의 내부 저장소를 읽지 않는다. 따라서 이 영역의 메모리 구현(가짜 SDK)도 없다. 이웃이 이 영역을 흉내 낼 일은 공개 API(I10)가 정해진 뒤의 몫이다. |
-| 공개 API(I10) | `boundary-contracts/PUBLIC_API.md`(D55): `POST /v1/sessions`, `POST /v1/sessions/{id}/turns`, `POST /v1/sessions/{id}/end`, `GET /healthz`, `/readyz`. Bearer 토큰. 해석은 CR-009 |
+| 공개 API(I10) | `boundary-contracts/PUBLIC_API.md`(D55): `POST /v1/sessions`, `POST /v1/sessions/{id}/turns`, `POST /v1/sessions/{id}/end`, `POST /v1/sessions/{id}/intervention`(역할 staff 토큰, 직원 콘솔용, 멈춘 세션만), `GET /healthz`, `/readyz`. Bearer 토큰(키오스크/직원 두 개). 해석은 CR-009 |
 | 개발용 CLI | `python -m survey_service.cli`(공개 API가 아니다) |
 
 ## 3. 소비하는 것과 지원 버전
@@ -21,7 +21,7 @@
 | 소비 | 지원 |
 |---|---|
 | 문진 스키마(자기 `schema/`) | 정수 버전 **1** 한 값. `ReleaseManifest.runtime_contract_version`이 이 집합 밖이면 적재를 거부하고 이전 릴리스를 유지 |
-| 경계 계약 | `boundary-contracts` **v1.3.0**(`pipeline_schema_version` "1.3"). 영역 사이 호출은 HTTP(`HTTP.md`), 클라이언트는 `boundary_contracts.clients`. 같은 MAJOR의 모르는 필드는 보존(`ext`)하고 판단에 쓰지 않는다 |
+| 경계 계약 | `boundary-contracts` **v1.3.1**(`pipeline_schema_version` "1.3"). 영역 사이 호출은 HTTP(`HTTP.md`), 클라이언트는 `boundary_contracts.clients`. 같은 MAJOR의 모르는 필드는 보존(`ext`)하고 판단에 쓰지 않는다 |
 | I4 ReleaseReader | `get_active_pointer`(폴링), `get_release`, `get_decision`, `load_bundle`. 턴 처리 중에는 부르지 않는다 |
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
 | I8 turn-engine | **v0.2.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `normalize`, `judge`, `write_record`, `plan` |
@@ -39,7 +39,7 @@
 
 ## 5. 이웃이 이 영역에 기대해서는 안 되는 것
 
-- 직원의 개입 결정(재개·종료)을 서비스가 받는 경로(없다. 위험으로 멈춘 세션은 이 경로 전에는 풀 수 없다). 쓰기 반영 여부를 알 수 없는 커밋(`write_outcome: UNKNOWN`)은 결과를 고정하지 않으므로 같은 턴 ID 재시도가 다시 처리될 수 있다.
+- 직원 개입은 위험으로 멈춘 세션에만 된다. 쓰기 반영 여부를 알 수 없는 커밋(`write_outcome: UNKNOWN`)은 결과를 고정하지 않으므로 같은 턴 ID 재시도가 다시 처리될 수 있다.
 - 실패한 턴(`NOT_COMMITTED`)의 결과도 같은 턴 ID로는 같게 돌아온다. 다시 시도하려면 새 턴 ID가 필요하다 [제안, CR-003의 `turn_id` 항목과 함께 O06에서 확정].
 - 직원 콘솔, 결과 전달, 프론트 전달의 실제 연동(접점 Protocol만 있다).
 

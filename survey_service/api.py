@@ -3,6 +3,7 @@
 POST /v1/sessions                    세션 시작   본문 {session_id, kind: SESSION_START}
 POST /v1/sessions/{id}/turns         환자 발화   본문 {session_id, kind: UTTERANCE, utterance, turn_id}  (turn_id 멱등)
 POST /v1/sessions/{id}/end           세션 종료   본문 {session_id, kind: SESSION_END}
+POST /v1/sessions/{id}/intervention  직원 개입  본문 {session_id, decision: RESUME|END, turn_id}  (역할 staff 토큰, 멈춘 세션만)
 응답은 FrontendInput. 오류는 BoundaryError 본문과 상태 코드. 문서가 정하지 않은 점의 해석은 docs/change-requests/CR-009.
 
 이 모듈은 HTTP를 모른다(handle이 상태 코드와 본문을 돌려준다). 연결은 service.py가 한다.
@@ -40,10 +41,13 @@ def _err(code: str, message: str, status: Optional[int] = None, headers: Optiona
 
 
 class PublicApi:
-    def __init__(self, orchestrator: Orchestrator, token: str, *, max_inflight: int = 32, max_utterance_chars: int = 1000) -> None:
+    def __init__(self, orchestrator: Orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
+                 max_utterance_chars: int = 1000) -> None:
         if not token:
             raise ValueError("공개 API 토큰이 비어 있다")
-        self.orch, self.token = orchestrator, token
+        if staff_token is not None and (not staff_token or hmac.compare_digest(staff_token.encode(), token.encode())):
+            raise ValueError("직원 토큰은 비어 있지 않고 키오스크 토큰과 달라야 한다")
+        self.orch, self.token, self.staff_token = orchestrator, token, staff_token
         self.max_chars = max_utterance_chars
         self._slots = threading.BoundedSemaphore(max_inflight)
         self._msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
@@ -55,8 +59,11 @@ class PublicApi:
         route = self._route(method, path)
         if route is None:
             return _err("NOT_FOUND", "경로가 없다")
-        if not (auth.startswith("Bearer ") and hmac.compare_digest(auth[7:].encode(), self.token.encode())):
+        role = self._role(auth)
+        if role is None:
             return _err("PERMISSION_DENIED", "토큰이 없거나 틀리다", 401, {"WWW-Authenticate": "Bearer"})
+        if (route[0] == "intervention") != (role == "staff"):         # 직원 경로는 staff만, 키오스크 경로는 kiosk만
+            return _err("PERMISSION_DENIED", "이 토큰의 역할로는 호출할 수 없다", 403)
         if len(raw) > MAX_BODY:
             return _err("INVALID_RECORD", "본문이 너무 크다")
         try:
@@ -72,14 +79,22 @@ class PublicApi:
         finally:
             self._slots.release()
 
+    def _role(self, auth: str) -> Optional[str]:
+        if not auth.startswith("Bearer "):
+            return None
+        tok = auth[7:].encode()
+        kiosk = hmac.compare_digest(tok, self.token.encode())
+        staff = self.staff_token is not None and hmac.compare_digest(tok, self.staff_token.encode())
+        return "kiosk" if kiosk else ("staff" if staff else None)
+
     @staticmethod
     def _route(method: str, path: str):
         path = path.split("?", 1)[0]
         if method == "POST" and path == "/v1/sessions":
             return ("start", None)
-        m = re.fullmatch(r"/v1/sessions/([^/]+)/(turns|end)", path)
+        m = re.fullmatch(r"/v1/sessions/([^/]+)/(turns|end|intervention)", path)
         if method == "POST" and m:
-            return ("turn" if m.group(2) == "turns" else "end", m.group(1))
+            return ({"turns": "turn", "end": "end", "intervention": "intervention"}[m.group(2)], m.group(1))
         return None
 
     # ------------------------------------------------------------------ 검증
@@ -173,6 +188,34 @@ class PublicApi:
             if status.startswith("ENDED"):                 # 이미 끝난 세션의 종료는 같은 결과(말할 것 없음)
                 return 200, {"response_text": None, "turn_failure_signal": None}, {}
         return self._run(sid, END_TURN_ID, msg)
+
+    def _intervention(self, body: Mapping, path_sid: str):
+        unknown = set(body) - {"session_id", "decision", "turn_id"}
+        if unknown:
+            return _err("INVALID_RECORD", f"알 수 없는 필드: {sorted(unknown)}")
+        sid, decision, turn_id = body.get("session_id"), body.get("decision"), body.get("turn_id")
+        if not isinstance(sid, str) or not SESSION_ID.match(sid):
+            return _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
+        if sid != path_sid:
+            return _err("INVALID_RECORD", "경로의 세션 ID와 본문의 session_id가 다르다")
+        if decision not in ("RESUME", "END"):
+            return _err("INVALID_RECORD", "decision은 RESUME 또는 END여야 한다")
+        if not isinstance(turn_id, str) or not TURN_ID.match(turn_id) or turn_id in (START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID):
+            return _err("INVALID_RECORD", "turn_id는 예약 값이 아닌 영문·숫자 등 1~128자 문자열이어야 한다")
+        decision_rec = {"session_id": sid, "decision": decision}
+        if not self._replayed(sid, turn_id):
+            status, _ = self._state(sid)
+            if status == "ERROR":
+                return _err("UNAVAILABLE", "지금은 처리할 수 없다")
+            if status is None:
+                return _err("NOT_FOUND", "모르는 세션이다")
+            if status != "PAUSED_RISK":
+                return _err("CONFLICT", "멈춘 세션이 아니다")
+        try:
+            out = self.orch.handle_turn(turn_id=turn_id, intervention_decision=decision_rec)
+        except TurnIdConflict:
+            return _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다")
+        return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
 
     def _replayed(self, sid: str, turn_id: str) -> bool:
         try:

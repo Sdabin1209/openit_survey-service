@@ -83,7 +83,12 @@ class App:
         api_token = os.environ.get(settings.api_token_env, "")
         if not api_token:
             raise ConfigError(f"공개 API 토큰이 환경 변수 {settings.api_token_env}에 없다")
-        self.api = PublicApi(self.orchestrator, api_token, max_inflight=settings.api_max_inflight,
+        staff_token = os.environ.get(settings.staff_api_token_env, "")
+        if not staff_token:
+            raise ConfigError(f"직원 개입 토큰이 환경 변수 {settings.staff_api_token_env}에 없다")
+        if staff_token == api_token:
+            raise ConfigError("직원 개입 토큰은 키오스크 토큰과 달라야 한다")
+        self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, max_inflight=settings.api_max_inflight,
                              max_utterance_chars=settings.api_max_utterance_chars)
         self._stop = threading.Event()
         self._threads: list = []

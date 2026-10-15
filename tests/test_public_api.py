@@ -359,3 +359,109 @@ def test_inference_server_auth_and_errors(remote):
     assert inf.handle("POST", "/v1/releases/rel-1/parse", "Bearer inf-tok", b"x")[0] == 400
     assert inf.handle("POST", "/v1/releases/rel-1/parse", "Bearer inf-tok", b'{"utterance": 1}')[0] == 400    # 계약 위반 입력
     assert inf.handle("POST", "/v1/other", "Bearer inf-tok", b"{}")[0] == 404
+
+
+# ---------------------------------------------------------------- 직원 개입 (PUBLIC_API.md 직원 콘솔)
+STAFF = "Bearer stok"
+
+
+@pytest.fixture
+def paused():
+    rig = Rig()
+    api = PublicApi(rig.orch, "tok", staff_token="stok")
+    start(api)
+    rig.model.parse_queue.append([other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")])
+    say(api, "숨이 안 쉬어져요", "t-risk")
+    assert rig.doc("K1")["progress_record"]["session_status"] == "PAUSED_RISK"
+    return rig, api
+
+
+def intervene(api, decision, tid, sid="K1", auth=STAFF, **extra):
+    return call(api, "POST", f"/v1/sessions/{sid}/intervention", {"session_id": sid, "decision": decision, "turn_id": tid, **extra}, auth=auth)
+
+
+def test_staff_resumes_paused_session_and_conversation_continues(paused):
+    rig, api = paused
+    code, body, _ = intervene(api, "RESUME", "i-1")
+    assert code == 200 and body["response_text"] and body["turn_failure_signal"] is None and not list(FI.iter_errors(body))
+    assert rig.doc("K1")["progress_record"]["session_status"] == "IN_PROGRESS"
+    assert rig.console.inputs[-1]["intervention_result"] == {"session_id": "K1", "result": "APPLIED"}
+    rig.model.parse_queue.append([item(0, "Q1", "상태", "안 피움", "안 피움")])
+    assert say(api, "안 피움", "t-after")[0] == 200
+    assert rig.doc("K1")["answer_records"][0]["current_value"] == {"answer": "안 피움"}
+
+
+def test_staff_ends_paused_session(paused):
+    rig, api = paused
+    code, body, _ = intervene(api, "END", "i-1")
+    assert code == 200 and rig.doc("K1")["progress_record"]["session_status"] == "ENDED_STAFF" and len(rig.dispatcher.inputs) == 1
+    assert say(api, "x", "t-x")[0] == 409
+
+
+def test_intervention_is_idempotent_and_conflicts_on_different_input(paused):
+    rig, api = paused
+    a = intervene(api, "RESUME", "i-1")
+    n = len(rig.doc("K1")["dialogue_log"])
+    b = intervene(api, "RESUME", "i-1")                      # 이미 풀렸지만 같은 turn_id는 같은 응답
+    assert a[:2] == b[:2] and len(rig.doc("K1")["dialogue_log"]) == n
+    code, body, _ = intervene(api, "END", "i-1")
+    assert code == 409 and body["code"] == "CONFLICT"
+
+
+def test_roles_are_separated(paused):
+    rig, api = paused
+    assert intervene(api, "RESUME", "i-1", auth=AUTH)[0] == 403                # 키오스크 토큰
+    assert intervene(api, "RESUME", "i-1", auth="Bearer nope")[0] == 401
+    assert intervene(api, "RESUME", "i-1", auth="")[0] == 401
+    assert rig.doc("K1")["progress_record"]["session_status"] == "PAUSED_RISK"
+    for method, path, body in [("POST", "/v1/sessions", {"session_id": "K9", "kind": "SESSION_START"}),
+                               ("POST", "/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "t"}),
+                               ("POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})]:
+        code, rec, _ = call(api, method, path, body, auth=STAFF)                # 직원 토큰으로 키오스크 경로
+        assert code == 403 and rec["code"] == "PERMISSION_DENIED"
+    assert rig.store.load("K9")["status"] == "NOT_FOUND"
+
+
+def test_intervention_state_checks(rig_api):
+    rig, _ = rig_api
+    api = PublicApi(rig.orch, "tok", staff_token="stok")
+    assert intervene(api, "RESUME", "i-1")[0] == 404                           # 모르는 세션
+    start(api)
+    code, body, _ = intervene(api, "RESUME", "i-2")                            # 멈추지 않은 세션
+    assert code == 409 and body["code"] == "CONFLICT" and rig.doc("K1")["progress_record"]["session_status"] == "IN_PROGRESS"
+    assert intervene(api, "END", "i-3")[0] == 409
+    call(api, "POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})
+    assert intervene(api, "RESUME", "i-4")[0] == 409                           # 끝난 세션
+
+
+@pytest.mark.parametrize("body", [
+    {"session_id": "K1", "decision": "PAUSE", "turn_id": "i"}, {"session_id": "K1", "turn_id": "i"},
+    {"session_id": "K1", "decision": "RESUME"}, {"session_id": "K1", "decision": "RESUME", "turn_id": "end"},
+    {"session_id": "K1", "decision": "RESUME", "turn_id": "bad id"}, {"session_id": "K2", "decision": "RESUME", "turn_id": "i"},
+    {"session_id": "K1", "decision": "RESUME", "turn_id": "i", "x": 1}, {"decision": "RESUME", "turn_id": "i"},
+])
+def test_intervention_bad_requests(paused, body):
+    rig, api = paused
+    snap = rig.doc("K1")
+    code, rec, _ = call(api, "POST", "/v1/sessions/K1/intervention", body, auth=STAFF)
+    assert code == 400 and rec["code"] == "INVALID_RECORD" and rig.doc("K1") == snap
+
+
+def test_tokens_must_differ():
+    rig = Rig()
+    with pytest.raises(ValueError):
+        PublicApi(rig.orch, "same", staff_token="same")
+    with pytest.raises(ValueError):
+        PublicApi(rig.orch, "tok", staff_token="")
+
+
+def test_app_requires_distinct_staff_token(tmp_path, monkeypatch):
+    from survey_service.settings import ConfigError
+    s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"),
+                 release_reader="x:y", trace_ingest="x:y", model_backend="fake")
+    monkeypatch.delenv("SURVEY_STAFF_API_TOKEN")
+    with pytest.raises(ConfigError):
+        App(s, reader=object(), ingest=object())
+    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "test-api-token")
+    with pytest.raises(ConfigError):
+        App(s, reader=object(), ingest=object())

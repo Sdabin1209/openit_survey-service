@@ -28,7 +28,7 @@ code=$($DOCKER run --rm "$IMG" python -m survey_service >/dev/null 2>&1; echo $?
 $DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -e PYTHONPATH=/mnt \
   -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest \
   -e SURVEY_STAFF_CONSOLE=tests.smoke_fakes:console -e SURVEY_RESULT_DISPATCHER=tests.smoke_fakes:dispatcher \
-  -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
+  -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_STAFF_API_TOKEN=smoke-staff-token -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
 PORT=$($DOCKER port "$NAME" 8080/tcp | head -1 | tr -d '\r' | sed 's/.*://')
 echo "host port: $PORT"
 for i in $(seq 1 30); do
@@ -69,6 +69,24 @@ A=$(cat /tmp/smoke-$$.body); echo "api turn:  $A"
 [ "$(post /v1/sessions/nope/turns '{"session_id":"nope","kind":"UTTERANCE","utterance":"x","turn_id":"t-1"}' smoke-api-token)" = 404 ] || fail "모르는 세션이 404가 아니다"
 [ "$(post /v1/sessions/smoke-1/end '{"session_id":"smoke-1","kind":"SESSION_END"}' smoke-api-token)" = 200 ] || fail "세션 종료"
 [ "$(post /v1/sessions/smoke-1/turns '{"session_id":"smoke-1","kind":"UTTERANCE","utterance":"x","turn_id":"t-2"}' smoke-api-token)" = 409 ] || fail "끝난 세션이 409가 아니다"
+# 위험으로 멈춘 세션을 직원이 풀어 이어가는 한 바퀴(위험 표현은 문항 세트의 risk_phrases가 잡는다), 직원이 끝내는 경우, 역할 분리
+rk() { post "/v1/sessions/$1/turns" "{\"session_id\":\"$1\",\"kind\":\"UTTERANCE\",\"utterance\":\"$2\",\"turn_id\":\"$3\"}" smoke-api-token; }
+iv() { post "/v1/sessions/$1/intervention" "{\"session_id\":\"$1\",\"decision\":\"$2\",\"turn_id\":\"$3\"}" "$4"; }
+[ "$(post /v1/sessions '{"session_id":"smoke-2","kind":"SESSION_START"}' smoke-api-token)" = 200 ] || fail "세션 2 시작"
+[ "$(rk smoke-2 "숨이 안 쉬어져요" r-1)" = 200 ] || fail "위험 발화 턴"
+grep -q '"response_text": "' /tmp/smoke-$$.body || fail "위험 안내 문장이 없다"
+[ "$(rk smoke-2 "언제 와요" r-2)" = 200 ] && grep -q '"response_text": null' /tmp/smoke-$$.body || fail "멈춘 세션은 할 말이 없어야 한다: $(cat /tmp/smoke-$$.body)"
+[ "$(iv smoke-2 RESUME i-0 smoke-api-token)" = 403 ] || fail "키오스크 토큰으로 개입이 허용됐다"
+[ "$(iv smoke-2 RESUME i-0 wrong)" = 401 ] || fail "틀린 토큰이 401이 아니다"
+[ "$(iv smoke-2 RESUME i-1 smoke-staff-token)" = 200 ] || fail "직원 재개"
+R=$(cat /tmp/smoke-$$.body); echo "api resume: $R"; echo "$R" | grep -q '"response_text": "' || fail "재개 응답에 문장이 없다"
+[ "$(iv smoke-2 RESUME i-1 smoke-staff-token)" = 200 ] && [ "$(cat /tmp/smoke-$$.body)" = "$R" ] || fail "같은 turn_id의 개입이 같은 응답이 아니다"
+[ "$(iv smoke-2 RESUME i-2 smoke-staff-token)" = 409 ] || fail "멈추지 않은 세션의 개입이 409가 아니다"
+[ "$(rk smoke-2 "안녕하세요" r-3)" = 200 ] || fail "재개 뒤 발화가 이어지지 않는다"
+[ "$(post /v1/sessions '{"session_id":"smoke-3","kind":"SESSION_START"}' smoke-api-token)" = 200 ] || fail "세션 3 시작"
+[ "$(rk smoke-3 "가슴이 너무 아파" r-1)" = 200 ] || fail "위험 발화 턴 3"
+[ "$(iv smoke-3 END i-1 smoke-staff-token)" = 200 ] || fail "직원 종료"
+[ "$(rk smoke-3 "x" r-2)" = 409 ] || fail "직원이 끝낸 세션이 409가 아니다"
 rm -f /tmp/smoke-$$.body
 # 이미지 안에서 실제 turn-engine, model-runtime(fake), 문진 스키마 패키지로 한 턴(개발 하네스)
 $DOCKER exec "$NAME" python - <<'PY' || fail "이미지 안의 한 턴"

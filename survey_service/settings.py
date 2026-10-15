@@ -57,6 +57,7 @@ class Settings:
     http_timeout_seconds: float = 10.0
     # 공개 API(키오스크 프론트, PUBLIC_API.md). 토큰은 값이 아니라 '환경 변수 이름'으로 받는다
     api_token_env: str = "SURVEY_API_TOKEN"
+    staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
     api_max_inflight: int = 32
     api_max_utterance_chars: int = 1000
     session_idle_seconds: int = 300          # 0이면 유휴 만료를 하지 않는다
@@ -84,6 +85,7 @@ class Settings:
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),
             trace_ingest_token_env=env.get("SURVEY_TRACE_INGEST_TOKEN_ENV", "SURVEY_TRACE_INGEST_TOKEN"),
             api_token_env=env.get("SURVEY_API_TOKEN_ENV", "SURVEY_API_TOKEN"),
+            staff_api_token_env=env.get("SURVEY_STAFF_API_TOKEN_ENV", "SURVEY_STAFF_API_TOKEN"),
             api_max_inflight=_int(env, "SURVEY_API_MAX_INFLIGHT", 32, 1),
             api_max_utterance_chars=_int(env, "SURVEY_API_MAX_UTTERANCE_CHARS", 1000, 1),
             session_idle_seconds=_int(env, "SURVEY_SESSION_IDLE_SECONDS", 300, 0),
