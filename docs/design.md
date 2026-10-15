@@ -6,7 +6,7 @@
 
 - 하는 일 [확인: brief §1]: 한 턴을 처리하는 Orchestrator, Session Store, 릴리스 로더, Trace 내보내기, 추론 서버, 문진 스키마 패키지(`schema/`).
 - 하지 않는 일 [확인]: 판단 로직(turn-engine), 모델 로딩·프롬프트·디코딩(model-runtime), 문항·모델 승인(게이트), Frontend 화면.
-- **공개 API(I10)는 설계하지 않는다 [O06 대기].** 턴 처리는 라이브러리 함수 `handle_turn`과 개발용 CLI(`python -m survey_service.cli`)로만 노출한다. HTTP 서비스에는 `/healthz`, `/readyz`만 둔다. 인증, 전송 방식, 문진 대상 참조, 타임아웃, 프론트 전달 실패 신호의 의미(`DELIVER_FRONT`)는 O06이 닫힌 뒤에 정한다. `handle_turn`에는 전달 단계를 꽂는 자리(`FrontendSink`)만 있고 기본값은 "전달 안 함(성공)"이다.
+- **공개 API(I10)** [확인: D55, `boundary-contracts/PUBLIC_API.md`]: 키오스크 프론트가 부르는 HTTP/JSON. `POST /v1/sessions`(시작), `POST /v1/sessions/{id}/turns`(발화, `turn_id` 멱등), `POST /v1/sessions/{id}/end`(종료), `GET /healthz`, `/readyz`. Bearer 토큰(환경 변수의 이름으로 지정, `SURVEY_API_TOKEN_ENV`). 구현은 `survey_service/api.py`가 기존 `handle_turn`(엔진·기록·직원 호출·결과 전달·Trace)에 그대로 연결하고, 문서가 정하지 않은 점의 해석은 CR-009에 적었다. 요청은 `FrontendMessage`로 검증하고 응답은 `FrontendInput`이다. 상태 코드: 400/401/404/409/429/503. 세션 유휴 만료(기본 300초, `SURVEY_SESSION_IDLE_SECONDS`)는 이탈 종료로 닫는다. 개발용 CLI(`python -m survey_service.cli`)는 그대로 있다. 직원 개입 결정을 받는 경로는 아직 없다 [미정, CR-003/CR-009].
 
 ## 2. 컴포넌트 지도
 
@@ -130,6 +130,8 @@
 - 크기 [미정]: `session_before`/`session_after`/`persistence_load_result`가 세션 문서 전체(대화 로그 포함)를 담아 한 세션 안에서 턴이 늘수록 Trace가 커진다(턴 수에 거의 비례). 스키마가 정한 필드라 줄이지 않았다. 문제가 되면 ops-feedback과 협의해 문서에서 대화 로그를 뺀 형태를 변경 요청으로 낸다. 발화 원문이 Trace에 들어가므로 비식별은 수집 쪽(D15)이 한다.
 
 ## 7. 추론 서버
+
+- **HTTP 경계** [결정, D55 후속]: `SURVEY_INFERENCE_URL`을 주면 서비스는 모델을 프로세스 안에서 적재하지 않고 추론 서버(`python -m survey_service.inference_server`, 서빙 서버의 추론 컨테이너로 분리할 대상)를 HTTP로 부른다(`survey_service/remote.py`). 규약은 이 영역 안의 내부 규약이다: `PUT /v1/releases/{id}`(적재, 멱등), `POST /v1/releases/{id}/parse|generate`(입출력은 `UtteranceParserInput`→`ParserOutput`, `ResponseGeneratorInput`→`GeneratorOutput`), Bearer 토큰(`SURVEY_INFERENCE_TOKEN_ENV`가 가리키는 환경 변수). 추론 서버는 서비스의 로더와 같은 검사(승인·해시·계약 버전·라이브러리 버전)로 릴리스를 직접 읽어 적재한다(어댑터는 추론 서버 쪽 디스크에 있어야 하므로). 추론 서버가 릴리스를 잊으면(재시작) 클라이언트가 `NOT_FOUND`를 받고 한 번 다시 적재해 재시도한다. 추론 호출 실패는 그 턴의 `LoRA-A`/`LoRA-B` 단계 실패다. 지금은 `fake` 백엔드로만 시험했다(`tests/test_public_api.py`). 서비스 쪽 로더도 번들(어댑터 포함)을 받는다 [미정: 서비스 쪽에서 어댑터를 받지 않는 최적화는 I4에 질문지만 받는 호출이 생기면].
 
 - [결정] 현재 구성은 서비스 프로세스 안에서 `ModelSession`을 릴리스마다 하나 들고 있는 `InferenceServer`다. Orchestrator는 `parse(input)`/`generate(input)`을 가진 `ModelSession` Protocol만 안다.
 - 브리프 §5는 추론 서버를 GPU를 쓰는 별도 컨테이너로 둔다. 그 컨테이너와 서비스 사이의 통신 방식은 이 영역 안의 일이지만 **지금은 만들 수 없다**: model-runtime에 실제 백엔드가 없고(`FakeBackend`뿐), GPU가 없는 환경이라 통신 프로토콜을 검증할 수 없다. `ModelSession` Protocol 뒤에 원격 구현을 끼우는 것으로 남긴다 [미정].

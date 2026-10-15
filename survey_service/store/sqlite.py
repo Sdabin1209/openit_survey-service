@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import time
 from typing import Optional
 
 from ..errors import StoreEffectError, StoreError
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   revision   INTEGER NOT NULL,
   release_id TEXT NOT NULL,
   status     TEXT NOT NULL,
-  doc        TEXT NOT NULL
+  doc        TEXT NOT NULL,
+  updated_at REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS sessions_status ON sessions(status);
 CREATE TABLE IF NOT EXISTS turns (
@@ -41,14 +43,19 @@ def _dump(o) -> str:
 
 
 class SqliteSessionStore:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, clock=time.time) -> None:
         self._path = path
+        self._clock = clock
         self._lock = threading.RLock()
         try:
             self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=FULL")
             self._db.executescript(_SCHEMA)
+            cols = [r[1] for r in self._db.execute("PRAGMA table_info(sessions)").fetchall()]
+            if "updated_at" not in cols:                       # 이전 파일 이행
+                self._db.execute("ALTER TABLE sessions ADD COLUMN updated_at REAL NOT NULL DEFAULT 0")
+            self._db.execute("CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(status, updated_at)")
         except sqlite3.Error as e:
             raise StoreError(f"세션 DB를 열 수 없다: {type(e).__name__}") from e
 
@@ -76,8 +83,8 @@ class SqliteSessionStore:
     def create(self, session_id: str, release_id: str, state: dict) -> int:
         with self._lock:
             try:
-                self._db.execute("INSERT INTO sessions(session_id, revision, release_id, status, doc) VALUES (?,?,?,?,?)",
-                                 (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state)))
+                self._db.execute("INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at) VALUES (?,?,?,?,?,?)",
+                                 (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state), self._clock()))
             except sqlite3.Error as e:
                 raise StoreError(f"세션을 만들 수 없다: {type(e).__name__}") from e
         return 1
@@ -105,8 +112,8 @@ class SqliteSessionStore:
                     self._db.execute("ROLLBACK")
                     return result("DB_ERROR", "NOT_APPLIED", detail=f"반영할 수 없는 쓰기: {e}")
                 rev = row[0] + 1
-                self._db.execute("UPDATE sessions SET revision=?, status=?, doc=? WHERE session_id=?",
-                                 (rev, new_doc["progress_record"]["session_status"], _dump(new_doc), sid))
+                self._db.execute("UPDATE sessions SET revision=?, status=?, doc=?, updated_at=? WHERE session_id=?",
+                                 (rev, new_doc["progress_record"]["session_status"], _dump(new_doc), self._clock(), sid))
                 self._db.execute(
                     "INSERT INTO turns(session_id, turn_id, input_hash, committed) VALUES (?,?,?,1) "
                     "ON CONFLICT(session_id, turn_id) DO UPDATE SET committed=1, input_hash=excluded.input_hash",
@@ -133,7 +140,7 @@ class SqliteSessionStore:
                     raise StoreError("세션이 없다")
                 doc = json.loads(row[1])
                 doc[key].append(item)
-                self._db.execute("UPDATE sessions SET revision=?, doc=? WHERE session_id=?", (row[0] + 1, _dump(doc), session_id))
+                self._db.execute("UPDATE sessions SET revision=?, doc=?, updated_at=? WHERE session_id=?", (row[0] + 1, _dump(doc), self._clock(), session_id))
                 self._db.execute("COMMIT")
             except sqlite3.Error as e:
                 try:
@@ -170,6 +177,13 @@ class SqliteSessionStore:
                     (session_id, turn_id, input_hash, _dump(result)))
             except sqlite3.Error as e:
                 raise StoreError(f"턴 결과를 남길 수 없다: {type(e).__name__}") from e
+
+    def list_idle(self, before: float) -> list[str]:
+        """마지막 기록이 before보다 오래된 진행 중(IN_PROGRESS) 세션. 멈춘(PAUSED_RISK) 세션은 직원이 정하므로 넣지 않는다."""
+        with self._lock:
+            rows = self._db.execute("SELECT session_id FROM sessions WHERE status='IN_PROGRESS' AND updated_at<? ORDER BY updated_at",
+                                    (before,)).fetchall()
+        return [r[0] for r in rows]
 
     def open_release_ids(self) -> set[str]:
         with self._lock:

@@ -55,6 +55,15 @@ class Settings:
     trace_ingest_url: str = ""
     trace_ingest_token_env: str = "SURVEY_TRACE_INGEST_TOKEN"
     http_timeout_seconds: float = 10.0
+    # 공개 API(키오스크 프론트, PUBLIC_API.md). 토큰은 값이 아니라 '환경 변수 이름'으로 받는다
+    api_token_env: str = "SURVEY_API_TOKEN"
+    api_max_inflight: int = 32
+    api_max_utterance_chars: int = 1000
+    session_idle_seconds: int = 300          # 0이면 유휴 만료를 하지 않는다
+    # 모델 런타임을 HTTP 경계 뒤에 둘 때(추론 컨테이너): 비우면 프로세스 안에서 적재한다
+    inference_url: str = ""
+    inference_token_env: str = "SURVEY_INFERENCE_TOKEN"
+    inference_timeout_seconds: float = 30.0
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
@@ -74,6 +83,13 @@ class Settings:
             release_reader_token_env=env.get("SURVEY_RELEASE_READER_TOKEN_ENV", "SURVEY_RELEASE_READER_TOKEN"),
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),
             trace_ingest_token_env=env.get("SURVEY_TRACE_INGEST_TOKEN_ENV", "SURVEY_TRACE_INGEST_TOKEN"),
+            api_token_env=env.get("SURVEY_API_TOKEN_ENV", "SURVEY_API_TOKEN"),
+            api_max_inflight=_int(env, "SURVEY_API_MAX_INFLIGHT", 32, 1),
+            api_max_utterance_chars=_int(env, "SURVEY_API_MAX_UTTERANCE_CHARS", 1000, 1),
+            session_idle_seconds=_int(env, "SURVEY_SESSION_IDLE_SECONDS", 300, 0),
+            inference_url=env.get("SURVEY_INFERENCE_URL", ""),
+            inference_token_env=env.get("SURVEY_INFERENCE_TOKEN_ENV", "SURVEY_INFERENCE_TOKEN"),
+            inference_timeout_seconds=_float(env, "SURVEY_INFERENCE_TIMEOUT_SECONDS", 30.0),
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),

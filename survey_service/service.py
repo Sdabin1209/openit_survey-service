@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import signal
 import sys
 import threading
@@ -17,7 +18,9 @@ import survey_schema
 from boundary_contracts import PIPELINE_SCHEMA_VERSION
 
 from . import SERVICE_VERSION
+from .api import PublicApi
 from .inference import InferenceServer
+from .remote import RemoteInference
 from .orchestrator import Orchestrator
 from .release import ReleaseLoader, ReleaseRegistry
 from .settings import ConfigError, Settings, load_factory
@@ -58,7 +61,13 @@ class App:
         self.store = SqliteSessionStore(settings.session_db)
         self.outbox = Outbox(settings.outbox_db)
         self.registry = ReleaseRegistry()
-        self.inference = InferenceServer(settings.model_backend)
+        if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
+            tok = os.environ.get(settings.inference_token_env, "")
+            if not tok:
+                raise ConfigError(f"추론 서버 토큰이 환경 변수 {settings.inference_token_env}에 없다")
+            self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds)
+        else:
+            self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
         self.ingest = ingest if ingest is not None else load_factory(_spec(settings.trace_ingest, 'trace'))()
         self.loader = ReleaseLoader(
@@ -71,6 +80,11 @@ class App:
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
         self.orchestrator = Orchestrator(self.store, self.registry, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox))
+        api_token = os.environ.get(settings.api_token_env, "")
+        if not api_token:
+            raise ConfigError(f"공개 API 토큰이 환경 변수 {settings.api_token_env}에 없다")
+        self.api = PublicApi(self.orchestrator, api_token, max_inflight=settings.api_max_inflight,
+                             max_utterance_chars=settings.api_max_utterance_chars)
         self._stop = threading.Event()
         self._threads: list = []
 
@@ -95,6 +109,18 @@ class App:
         t = threading.Thread(target=poll, name="release-poller", daemon=True)
         t.start()
         self._threads.append(t)
+        if self.settings.session_idle_seconds > 0:
+            idle = self.settings.session_idle_seconds
+
+            def sweep():
+                while not self._stop.wait(max(1.0, min(30.0, idle / 4))):
+                    try:
+                        self.api.expire_idle(self.store.list_idle(time.time() - idle))
+                    except Exception as e:
+                        log.error("유휴 만료 주기 실패 error=%s", type(e).__name__)
+            t2 = threading.Thread(target=sweep, name="idle-sweeper", daemon=True)
+            t2.start()
+            self._threads.append(t2)
 
     def stop(self) -> None:
         self._stop.set()
@@ -122,6 +148,7 @@ class App:
             "ready": not problems, "problems": problems, "service_version": SERVICE_VERSION,
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
+            "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
             "release_loader": {"unavailable_releases": self.loader.status.unavailable_releases,
                                "last_pointer_version": self.loader.status.last_pointer_version,
@@ -147,6 +174,19 @@ def make_handler(app: App):
             self.end_headers()
             self.wfile.write(raw)
 
+        def _api(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(n) if 0 < n <= 1_000_000 else b""
+            code, body, hdr = app.api.handle(self.command, self.path, self.headers.get("Authorization", ""), raw)
+            out = json.dumps(body, ensure_ascii=False).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(out)))
+            for k, v in hdr.items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(out)
+
         def do_GET(self):
             if self.path == "/healthz":
                 self._send(200, {"status": "ok"})
@@ -157,8 +197,9 @@ def make_handler(app: App):
                 self._send(404, {"error": "not found"})
 
         def _other(self):
-            self._send(404, {"error": "not found"})            # 공개 API는 O06 대기: 다른 경로·메서드는 없다
-        do_POST = do_PUT = do_DELETE = do_PATCH = _other
+            self._send(404, {"error": "not found"})            # 공개 API 밖의 경로·메서드는 없다
+        do_POST = _api
+        do_PUT = do_DELETE = do_PATCH = _other
     return Handler
 
 

@@ -40,5 +40,8 @@ class SessionStorePort(Protocol):
     def save_turn_result(self, session_id: str, turn_id: str, input_hash: str, result: dict) -> None:
         """턴 결과를 멱등 기록에 남긴다(세션이 없어도 남길 수 있다)."""
 
+    def list_idle(self, before: float) -> list[str]:
+        """마지막 기록이 before(epoch 초)보다 오래된 IN_PROGRESS 세션 ID. 유휴 만료에 쓴다."""
+
     def open_release_ids(self) -> set[str]:
         """아직 끝나지 않은(진행 중·일시 중지) 세션이 묶인 릴리스 ID 집합."""

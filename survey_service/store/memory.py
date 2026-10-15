@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import threading
+import time
 from typing import Optional
 
 from ..errors import StoreEffectError, StoreError
@@ -13,7 +14,8 @@ OPEN_STATUSES = ("IN_PROGRESS", "PAUSED_RISK")
 
 
 class MemorySessionStore:
-    def __init__(self) -> None:
+    def __init__(self, clock=time.time) -> None:
+        self._clock = clock
         self._lock = threading.RLock()
         self._sessions: dict[str, dict] = {}   # id -> {doc, revision, release_id}
         self._turns: dict[tuple, TurnRecord] = {}
@@ -32,7 +34,7 @@ class MemorySessionStore:
         with self._lock:
             if session_id in self._sessions:
                 raise StoreError("세션이 이미 있다")
-            self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id}
+            self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id, "updated_at": self._clock()}
             return 1
 
     def commit(self, request: dict, *, turn_id: str, input_hash: str) -> dict:
@@ -52,6 +54,7 @@ class MemorySessionStore:
                         "detail": f"반영할 수 없는 쓰기: {e}"}
             s["doc"] = new_doc
             s["revision"] += 1
+            s["updated_at"] = self._clock()
             self._turns[(sid, turn_id)] = TurnRecord(input_hash, True, None)
             return {"session_id": sid, "status": "OK", "write_outcome": "APPLIED", "revision": s["revision"],
                     "detail": None}
@@ -63,6 +66,7 @@ class MemorySessionStore:
                 raise StoreError("세션이 없다")
             s["doc"][key].append(copy.deepcopy(item))
             s["revision"] += 1
+            s["updated_at"] = self._clock()
 
     def append_log(self, session_id: str, entry: dict) -> None:
         self._append(session_id, "dialogue_log", entry)
@@ -84,6 +88,11 @@ class MemorySessionStore:
         with self._lock:
             prev = self._turns.get((session_id, turn_id))
             self._turns[(session_id, turn_id)] = TurnRecord(input_hash, bool(prev and prev.committed), copy.deepcopy(result))
+
+    def list_idle(self, before: float) -> list[str]:
+        with self._lock:
+            return [k for k, s in sorted(self._sessions.items(), key=lambda kv: kv[1]["updated_at"])
+                    if s["doc"]["progress_record"]["session_status"] == "IN_PROGRESS" and s["updated_at"] < before]
 
     def open_release_ids(self) -> set[str]:
         with self._lock:

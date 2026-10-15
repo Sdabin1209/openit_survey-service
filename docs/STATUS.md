@@ -53,3 +53,9 @@
 - 통합 시험: 참조 서버(`tests/ref_servers.py`, boundary-contracts conformance/servers.py 복사)로 번들 수신·적재, 포인터 전환·롤백, UNAVAILABLE/INTEGRITY_ERROR 처리, Trace 전송(재시도·DUPLICATE·DEAD·ID 변환). 스모크도 이미지 안에서 같은 HTTP 경로를 쓴다.
 - `pytest` 180 통과, `scripts/smoke.sh` SMOKE OK.
 - 한계: 실제 release-gate·ops-feedback 서버와의 E2E는 deploy 몫. model-runtime의 vLLM 백엔드와 어댑터 사전 검사는 서비스에 아직 연결하지 않았다(`SURVEY_MODEL_BACKEND`는 fake만).
+
+## 후속 구간 3 (D55 공개 API)
+
+- 공개 API 구현(`survey_service/api.py`), 계약 v1.3.0으로 상향(requirements, wheel, 라벨), 유휴 만료, 추론 HTTP 경계(`remote.py`, `inference_server.py`).
+- `pytest` 213 통과. `scripts/smoke.sh` SMOKE OK(공개 API 한 턴: 401, 시작, 발화, 같은 turn_id 재시도 동일 응답, 404, 종료, 409 포함).
+- 한계/남은 일: 직원 개입 결정을 받는 경로 없음(CR-009, 운영 전 필요), 추론 컨테이너는 fake 백엔드로만 시험(별도 컨테이너로 띄운 스모크는 하지 않음), 실제 모델(RTX 4090)·vLLM 연결 안 함, TLS·토큰 회전은 배포 담당.

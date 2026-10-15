@@ -12,6 +12,8 @@
 
 HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_READER_URL`, `SURVEY_TRACE_INGEST_URL`(base URL), `SURVEY_RELEASE_READER_TOKEN_ENV`, `SURVEY_TRACE_INGEST_TOKEN_ENV`(토큰이 들어 있는 **환경 변수의 이름**, 기본 `SURVEY_RELEASE_READER_TOKEN`, `SURVEY_TRACE_INGEST_TOKEN`), `SURVEY_HTTP_TIMEOUT_SECONDS`(10). 토큰 값은 환경 변수로만 받고 이미지·리포지토리·로그에 넣지 않는다. 클라이언트가 던지는 `BoundaryError`는 로더와 outbox 규칙으로 처리된다: UNAVAILABLE이면 로더는 이전 릴리스를 유지한 채 다음 주기에 같은 포인터를 다시 보고, outbox는 UNAVAILABLE일 때만 재시도한다. 그 밖의 오류(INTEGRITY_ERROR, UNSUPPORTED_VERSION, FAILED_PRECONDITION 등)는 릴리스 거부 또는 Trace DEAD다.
 
+공개 API: `SURVEY_API_TOKEN_ENV`(토큰이 든 환경 변수의 이름, 기본 `SURVEY_API_TOKEN`. **토큰이 없으면 시작하지 않는다**), `SURVEY_SESSION_IDLE_SECONDS`(300, 0이면 유휴 만료 끔), `SURVEY_API_MAX_INFLIGHT`(32), `SURVEY_API_MAX_UTTERANCE_CHARS`(1000). 프론트에는 `https://<서비스>/v1/sessions...`와 토큰을 운영 배포 때 전달한다(TLS는 앞단). 모델을 추론 컨테이너로 분리하려면 `SURVEY_INFERENCE_URL`, `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_INFERENCE_TIMEOUT_SECONDS`(30)를 주고, 추론 컨테이너는 같은 이미지에서 `python -m survey_service.inference_server`(`SURVEY_INFERENCE_PORT` 8081, `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_MODEL_BACKEND`, `SURVEY_RELEASE_READER`와 URL·토큰)로 띄운다. 추론 서버는 어댑터를 자기 디스크에 받는다.
+
 선택: `SURVEY_STAFF_CONSOLE`, `SURVEY_RESULT_DISPATCHER`(팩토리, 없으면 알림·결과 전달은 실패로 기록), `SURVEY_PORT`(8080), `SURVEY_SESSION_DB`, `SURVEY_OUTBOX_DB`, `SURVEY_WORK_DIR`(`/data/...`), `SURVEY_RELEASE_POLL_SECONDS`(5), `SURVEY_KEEP_RELEASES`(2), `SURVEY_EXPORT_INTERVAL_SECONDS`(1), `SURVEY_EXPORT_BACKOFF_MAX_SECONDS`(60), `SURVEY_OUTBOX_KEEP_SENT_HOURS`(24), `SURVEY_LOG_LEVEL`. 토큰은 I4·I6 구현이 자기 환경 변수로 받는다. `/data`는 볼륨으로 둔다.
 
 ## 2. 상태 보기

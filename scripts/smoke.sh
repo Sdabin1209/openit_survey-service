@@ -28,7 +28,7 @@ code=$($DOCKER run --rm "$IMG" python -m survey_service >/dev/null 2>&1; echo $?
 $DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -e PYTHONPATH=/mnt \
   -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest \
   -e SURVEY_STAFF_CONSOLE=tests.smoke_fakes:console -e SURVEY_RESULT_DISPATCHER=tests.smoke_fakes:dispatcher \
-  -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
+  -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
 PORT=$($DOCKER port "$NAME" 8080/tcp | head -1 | tr -d '\r' | sed 's/.*://')
 echo "host port: $PORT"
 for i in $(seq 1 30); do
@@ -53,8 +53,23 @@ for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMM
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://127.0.0.1:$PORT/v1/turns")
-[ "$code" = 404 ] || fail "공개 API가 없어야 한다(O06 대기): $code"
+[ "$code" = 404 ] || fail "공개 API 밖의 경로는 404여야 한다: $code"
 
+# 공개 API 한 턴(PUBLIC_API.md): 시작, 발화(같은 turn_id 재시도는 같은 응답), 종료, 인증·404·409
+API="http://127.0.0.1:$PORT"
+post() { curl -sS -o /tmp/smoke-$$.body -w '%{http_code}' -X POST -H "Content-Type: application/json" ${3:+-H "Authorization: Bearer $3"} -d "$2" "$API$1"; }
+[ "$(post /v1/sessions '{"session_id":"smoke-1","kind":"SESSION_START"}')" = 401 ] || fail "토큰 없는 시작이 거부되지 않음"
+[ "$(post /v1/sessions '{"session_id":"smoke-1","kind":"SESSION_START"}' smoke-api-token)" = 200 ] || fail "세션 시작"
+grep -q '"response_text": "' /tmp/smoke-$$.body || fail "시작 응답에 문장이 없다: $(cat /tmp/smoke-$$.body)"
+echo "api start: $(cat /tmp/smoke-$$.body)"
+TURN='{"session_id":"smoke-1","kind":"UTTERANCE","utterance":"안녕하세요","turn_id":"t-1"}'
+[ "$(post /v1/sessions/smoke-1/turns "$TURN" smoke-api-token)" = 200 ] || fail "발화 턴"
+A=$(cat /tmp/smoke-$$.body); echo "api turn:  $A"
+[ "$(post /v1/sessions/smoke-1/turns "$TURN" smoke-api-token)" = 200 ] && [ "$(cat /tmp/smoke-$$.body)" = "$A" ] || fail "같은 turn_id가 같은 응답이 아니다"
+[ "$(post /v1/sessions/nope/turns '{"session_id":"nope","kind":"UTTERANCE","utterance":"x","turn_id":"t-1"}' smoke-api-token)" = 404 ] || fail "모르는 세션이 404가 아니다"
+[ "$(post /v1/sessions/smoke-1/end '{"session_id":"smoke-1","kind":"SESSION_END"}' smoke-api-token)" = 200 ] || fail "세션 종료"
+[ "$(post /v1/sessions/smoke-1/turns '{"session_id":"smoke-1","kind":"UTTERANCE","utterance":"x","turn_id":"t-2"}' smoke-api-token)" = 409 ] || fail "끝난 세션이 409가 아니다"
+rm -f /tmp/smoke-$$.body
 # 이미지 안에서 실제 turn-engine, model-runtime(fake), 문진 스키마 패키지로 한 턴(개발 하네스)
 $DOCKER exec "$NAME" python - <<'PY' || fail "이미지 안의 한 턴"
 import json, tempfile, os, subprocess, sys
