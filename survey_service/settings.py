@@ -57,6 +57,14 @@ class Settings:
     http_timeout_seconds: float = 10.0
     # 공개 API(키오스크 프론트, PUBLIC_API.md). 토큰은 값이 아니라 '환경 변수 이름'으로 받는다
     api_token_env: str = "SURVEY_API_TOKEN"
+    alert_db: str = ""                                 # 직원 알림 영속 저장(SQLite). 비우면 세션 DB와 같은 디렉터리의 alerts.db
+    vapid_private_key_env: str = "SURVEY_VAPID_PRIVATE_KEY"   # 웹 푸시 VAPID 비밀키가 든 환경 변수의 이름(없으면 푸시 없이 SSE만)
+    vapid_subject: str = ""                            # mailto:... 또는 https://... (비밀 아님)
+    push_timeout_seconds: float = 3.0
+    sse_heartbeat_seconds: float = 15.0          # ': ping' 주석을 보내는 간격
+    retry_after_seconds: int = 1                 # 429·503 응답의 Retry-After(초)
+    state_poll_min_interval_seconds: float = 0.5  # 세션 상태 폴링 빈도 상한(세션마다, 0이면 끔)
+    max_push_subscriptions: int = 100
     staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
     api_max_inflight: int = 32
     api_max_utterance_chars: int = 1000
@@ -87,6 +95,14 @@ class Settings:
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),
             trace_ingest_token_env=env.get("SURVEY_TRACE_INGEST_TOKEN_ENV", "SURVEY_TRACE_INGEST_TOKEN"),
             api_token_env=env.get("SURVEY_API_TOKEN_ENV", "SURVEY_API_TOKEN"),
+            alert_db=env.get("SURVEY_ALERT_DB", ""),
+            vapid_private_key_env=env.get("SURVEY_VAPID_PRIVATE_KEY_ENV", "SURVEY_VAPID_PRIVATE_KEY"),
+            vapid_subject=env.get("SURVEY_VAPID_SUBJECT", ""),
+            push_timeout_seconds=_float(env, "SURVEY_PUSH_TIMEOUT_SECONDS", 3.0),
+            retry_after_seconds=_int(env, "SURVEY_RETRY_AFTER_SECONDS", 1, 1),
+            state_poll_min_interval_seconds=float(env.get("SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS", "0.5")),
+            sse_heartbeat_seconds=_float(env, "SURVEY_SSE_HEARTBEAT_SECONDS", 15.0),
+            max_push_subscriptions=_int(env, "SURVEY_MAX_PUSH_SUBSCRIPTIONS", 100, 1),
             staff_api_token_env=env.get("SURVEY_STAFF_API_TOKEN_ENV", "SURVEY_STAFF_API_TOKEN"),
             api_max_inflight=_int(env, "SURVEY_API_MAX_INFLIGHT", 32, 1),
             api_max_utterance_chars=_int(env, "SURVEY_API_MAX_UTTERANCE_CHARS", 1000, 1),

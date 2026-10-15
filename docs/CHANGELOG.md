@@ -17,3 +17,8 @@
 
 - 오케스트레이터를 LangGraph `StateGraph`로 전환(`survey_service/graph.py`). 처리 표 9-1의 열은 조건부 간선, 행은 열 노드의 표. 동작 불변(기존 시험·골든·스모크 통과). 상태는 직렬화 가능, 체크포인터 없음. langgraph 1.2.15 잠금 고정, 이미지 라벨 `io.openit.langgraph`, 외부 추적 끔.
 - 추론 서버 규약(`docs/inference-server-spec.md`, 기준은 boundary-contracts HTTP.md I9), 서비스 안의 추론 서버를 시험 대역으로 이동, 실패·지연 처리, 보호 건수(규칙별) 노출, `scripts/smoke_compose.sh`.
+
+## 후속 (D64, D66)
+
+- 직원 알림: 영속 저장(SQLite), 목록, SSE(이벤트 순번으로 이어 받기), 웹 푸시(pywebpush, VAPID 환경 변수, 없으면 SSE만), 구독 등록·해지(멱등), 개입 시 해결 표시, 전달 판정(DELIVERED/DELIVERY_FAILED). `StaffConsole` 접점의 기본 구현으로 정리(교체 가능).
+- 공개 API 보완(boundary-contracts v1.3.2): 세션 상태(`resume_text`), 푸시 설정, 오류 코드 표, Retry-After, turn_id 봉투, 폴링 빈도 상한. 응답을 boundary-contracts의 StaffAlert/StaffAlertPage/SessionState/PushConfig/BoundaryError 스키마로 검증하는 시험.

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import signal
 import sys
 import threading
@@ -18,6 +19,7 @@ import survey_schema
 from boundary_contracts import PIPELINE_SCHEMA_VERSION
 
 from . import SERVICE_VERSION
+from .alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, WebPushSender
 from .api import PublicApi
 from .inference import InferenceServer
 from .remote import RemoteInference
@@ -60,6 +62,17 @@ class App:
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
         self.store = SqliteSessionStore(settings.session_db)
         self.outbox = Outbox(settings.outbox_db)
+        self.alert_store = AlertStore(settings.alert_db or os.path.join(os.path.dirname(settings.session_db) or ".", "alerts.db"))
+        push = None
+        vapid_key = os.environ.get(settings.vapid_private_key_env, "")
+        if vapid_key:                                       # 키가 없으면 푸시 없이 SSE만 동작한다
+            if not settings.vapid_subject:
+                raise ConfigError("VAPID 비밀키가 있는데 SURVEY_VAPID_SUBJECT(mailto: 또는 https://)가 없다")
+            try:
+                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds)
+            except ValueError as e:
+                raise ConfigError(str(e)) from None
+        self.alerts = AlertService(self.alert_store, AlertHub(), push, settings.push_timeout_seconds)
         self.registry = ReleaseRegistry()
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
             tok = os.environ.get(settings.inference_token_env, "")
@@ -79,6 +92,8 @@ class App:
                                       max_delay=settings.export_backoff_max_seconds)
         console = staff_console if staff_console is not None else (load_factory(settings.staff_console)() if settings.staff_console else None)
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
+        if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다
+            console = AlertStaffConsole(self.alerts)
         self.orchestrator = Orchestrator(self.store, self.registry, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox))
         api_token = os.environ.get(settings.api_token_env, "")
@@ -89,7 +104,9 @@ class App:
             raise ConfigError(f"직원 개입 토큰이 환경 변수 {settings.staff_api_token_env}에 없다")
         if staff_token == api_token:
             raise ConfigError("직원 개입 토큰은 키오스크 토큰과 달라야 한다")
-        self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, max_inflight=settings.api_max_inflight,
+        self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
+                             retry_after_seconds=settings.retry_after_seconds, state_poll_min_interval=settings.state_poll_min_interval_seconds,
+                             max_inflight=settings.api_max_inflight,
                              max_utterance_chars=settings.api_max_utterance_chars)
         self._stop = threading.Event()
         self._threads: list = []
@@ -135,6 +152,7 @@ class App:
             t.join(timeout=5)
         self.store.close()
         self.outbox.close()
+        self.alert_store.close()
 
     # ------------------------------------------------------------------ 상태
     def readiness(self) -> tuple[bool, dict]:
@@ -147,6 +165,10 @@ class App:
             self.outbox.ping()
         except Exception:
             problems.append("outbox_db")
+        try:
+            self.alert_store.ping()
+        except Exception:
+            problems.append("alert_db")
         active = self.registry.active_id()
         if active is None:
             problems.append("no_active_release")
@@ -155,6 +177,7 @@ class App:
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
+            "staff_alerts": self.alerts.status(),
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
             "release_loader": {"unavailable_releases": self.loader.status.unavailable_releases,
@@ -194,8 +217,62 @@ def make_handler(app: App):
             self.end_headers()
             self.wfile.write(out)
 
+        def _stream(self):
+            """GET /v1/staff/alerts/stream: SSE. Last-Event-ID가 있으면 그 뒤 이벤트부터 이어 받는다."""
+            err = app.api.stream_auth_error(self.headers.get("Authorization", ""))
+            if err:
+                code, body, hdr = err
+                out = json.dumps(body, ensure_ascii=False).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(out)))
+                for k, v in hdr.items():
+                    self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(out)
+                return
+            hub, store = app.alerts.hub, app.alert_store
+            last = (self.headers.get("Last-Event-ID") or "").strip()
+            q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+                self.wfile.write(b"retry: 3000\n\n")
+                self.wfile.flush()
+                sent = -1
+                if last.isdigit():                               # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
+                    sent = int(last)
+                    for ev in store.events_after(sent):
+                        self._sse(ev)
+                        sent = ev["id"]
+                while not app._stop.is_set() and not getattr(q, "overflowed", False):
+                    try:
+                        ev = q.get(timeout=app.settings.sse_heartbeat_seconds)
+                    except queue.Empty:
+                        self.wfile.write(b": ping\n\n")
+                        self.wfile.flush()
+                        continue
+                    if ev["id"] > sent:                          # 이어 받기 구간과 겹치는 이벤트는 건너뛴다
+                        self._sse(ev)
+                        sent = ev["id"]
+            except OSError:                                    # 클라이언트가 끊었다
+                pass
+            finally:
+                hub.unsubscribe(q)
+
+        def _sse(self, ev: dict) -> None:
+            self.wfile.write(f"id: {ev['id']}\nevent: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode())
+            self.wfile.flush()
+
         def do_GET(self):
-            if self.path == "/healthz":
+            if self.path.split("?", 1)[0] == "/v1/staff/alerts/stream":
+                self._stream()
+            elif self.path.startswith("/v1/"):
+                self._api()
+            elif self.path == "/healthz":
                 self._send(200, {"status": "ok"})
             elif self.path == "/readyz":
                 ok, body = app.readiness()
@@ -205,8 +282,8 @@ def make_handler(app: App):
 
         def _other(self):
             self._send(404, {"error": "not found"})            # 공개 API 밖의 경로·메서드는 없다
-        do_POST = _api
-        do_PUT = do_DELETE = do_PATCH = _other
+        do_POST = do_DELETE = _api
+        do_PUT = do_PATCH = _other
     return Handler
 
 

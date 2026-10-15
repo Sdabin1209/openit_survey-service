@@ -1,5 +1,7 @@
 # CR-009 공개 API(PUBLIC_API.md) 문서의 부족한 점과 이 영역의 해석
 
+> **D66(v1.3.2) 반영**: 429·503은 UNAVAILABLE + `Retry-After`, `turn_id`는 봉투 필드(시작·종료에서는 선택), 구독 한도 초과는 409(재시도 무의미라 429가 아니다), `GET /v1/sessions/{id}/state`와 `GET /v1/staff/push-config` 구현. 상세는 design 15절.
+
 > **회신(D58, v1.3.1)**: 해석 1~8 승인(401=토큰 없음·틀림, 403=권한 없음). 직원 개입 경로는 PUBLIC_API.md '직원 콘솔' 절대로 구현했다(`POST /v1/sessions/{id}/intervention`, 역할 staff 토큰, 키오스크 토큰은 403, 멈추지 않은 세션은 409, 같은 turn_id 멱등). 아래 '구현하지 않은 것'의 첫 항목은 해결되었다.
 
 - 상태: 확인 요청. 아래 해석으로 구현했다(`survey_service/api.py`, `tests/test_public_api.py`). 헤드/프론트가 다르게 정하면 한 곳을 바꾼다.
