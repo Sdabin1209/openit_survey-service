@@ -11,7 +11,7 @@ import pytest
 
 import survey_schema
 from survey_service.api import PublicApi
-from survey_service.inference_server import InferenceHttp, build, make_server
+from .ref_inference_server import InferenceHttp, build, make_server
 from survey_service.inference import InferenceLoadError
 from survey_service.orchestrator import Orchestrator
 from survey_service.release import ReleaseLoader, ReleaseRegistry

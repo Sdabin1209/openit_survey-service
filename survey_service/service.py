@@ -65,7 +65,8 @@ class App:
             tok = os.environ.get(settings.inference_token_env, "")
             if not tok:
                 raise ConfigError(f"추론 서버 토큰이 환경 변수 {settings.inference_token_env}에 없다")
-            self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds)
+            self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds,
+                                         load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries)
         else:
             self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
@@ -154,6 +155,7 @@ class App:
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
+            "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
             "release_loader": {"unavailable_releases": self.loader.status.unavailable_releases,
                                "last_pointer_version": self.loader.status.last_pointer_version,

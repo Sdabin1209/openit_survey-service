@@ -12,7 +12,7 @@
 
 HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_READER_URL`, `SURVEY_TRACE_INGEST_URL`(base URL), `SURVEY_RELEASE_READER_TOKEN_ENV`, `SURVEY_TRACE_INGEST_TOKEN_ENV`(토큰이 들어 있는 **환경 변수의 이름**, 기본 `SURVEY_RELEASE_READER_TOKEN`, `SURVEY_TRACE_INGEST_TOKEN`), `SURVEY_HTTP_TIMEOUT_SECONDS`(10). 토큰 값은 환경 변수로만 받고 이미지·리포지토리·로그에 넣지 않는다. 클라이언트가 던지는 `BoundaryError`는 로더와 outbox 규칙으로 처리된다: UNAVAILABLE이면 로더는 이전 릴리스를 유지한 채 다음 주기에 같은 포인터를 다시 보고, outbox는 UNAVAILABLE일 때만 재시도한다. 그 밖의 오류(INTEGRITY_ERROR, UNSUPPORTED_VERSION, FAILED_PRECONDITION 등)는 릴리스 거부 또는 Trace DEAD다.
 
-공개 API: `SURVEY_API_TOKEN_ENV`(토큰이 든 환경 변수의 이름, 기본 `SURVEY_API_TOKEN`. **토큰이 없으면 시작하지 않는다**), `SURVEY_STAFF_API_TOKEN_ENV`(직원 개입용 토큰이 든 환경 변수의 이름, 기본 `SURVEY_STAFF_API_TOKEN`. 키오스크 토큰과 달라야 하고 없으면 시작하지 않는다), `SURVEY_SESSION_IDLE_SECONDS`(300, 0이면 유휴 만료 끔), `SURVEY_API_MAX_INFLIGHT`(32), `SURVEY_API_MAX_UTTERANCE_CHARS`(1000). 프론트에는 `https://<서비스>/v1/sessions...`와 토큰을 운영 배포 때 전달한다(TLS는 앞단). 모델을 추론 컨테이너로 분리하려면 `SURVEY_INFERENCE_URL`, `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_INFERENCE_TIMEOUT_SECONDS`(30)를 주고, 추론 컨테이너는 같은 이미지에서 `python -m survey_service.inference_server`(`SURVEY_INFERENCE_PORT` 8081, `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_MODEL_BACKEND`, `SURVEY_RELEASE_READER`와 URL·토큰)로 띄운다. 추론 서버는 어댑터를 자기 디스크에 받는다.
+공개 API: `SURVEY_API_TOKEN_ENV`(토큰이 든 환경 변수의 이름, 기본 `SURVEY_API_TOKEN`. **토큰이 없으면 시작하지 않는다**), `SURVEY_STAFF_API_TOKEN_ENV`(직원 개입용 토큰이 든 환경 변수의 이름, 기본 `SURVEY_STAFF_API_TOKEN`. 키오스크 토큰과 달라야 하고 없으면 시작하지 않는다), `SURVEY_SESSION_IDLE_SECONDS`(300, 0이면 유휴 만료 끔), `SURVEY_API_MAX_INFLIGHT`(32), `SURVEY_API_MAX_UTTERANCE_CHARS`(1000). 프론트에는 `https://<서비스>/v1/sessions...`와 토큰을 운영 배포 때 전달한다(TLS는 앞단). 모델을 추론 컨테이너로 분리하려면 `SURVEY_INFERENCE_URL`, `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_INFERENCE_TIMEOUT_SECONDS`(호출 하나, 4), `SURVEY_INFERENCE_RETRIES`(1), `SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS`(600)를 준다(`SURVEY_MODEL_BACKEND`는 비워도 된다). 추론 서버는 model-runtime 영역의 서빙 이미지이고 규약은 `docs/inference-server-spec.md`다. `/readyz`의 `inference`로 호출 실패·재시도·타임아웃·보호 건수를 본다(타임아웃이 늘면 추론 서버 부하, `outcome_fallback`이 늘면 모델 품질 문제).
 
 선택: `SURVEY_STAFF_CONSOLE`, `SURVEY_RESULT_DISPATCHER`(팩토리, 없으면 알림·결과 전달은 실패로 기록), `SURVEY_PORT`(8080), `SURVEY_SESSION_DB`, `SURVEY_OUTBOX_DB`, `SURVEY_WORK_DIR`(`/data/...`), `SURVEY_RELEASE_POLL_SECONDS`(5), `SURVEY_KEEP_RELEASES`(2), `SURVEY_EXPORT_INTERVAL_SECONDS`(1), `SURVEY_EXPORT_BACKOFF_MAX_SECONDS`(60), `SURVEY_OUTBOX_KEEP_SENT_HOURS`(24), `SURVEY_LOG_LEVEL`. 토큰은 I4·I6 구현이 자기 환경 변수로 받는다. `/data`는 볼륨으로 둔다.
 
@@ -74,3 +74,8 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 ## 7. 스키마 패키지 릴리스
 
 태그는 헤드가 붙인다. 검증: `python -m pytest tests/test_schema_package.py`. 새 정수 버전: `schema/vN/`(schemas, CONTRACT_VERSION)를 만들면 같은 wheel에 함께 들어간다. 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다.
+
+
+## 8. compose 스모크 (서비스 + 추론 + 가짜 게이트)
+
+`bash scripts/smoke_compose.sh`: 서비스 이미지, 가짜 추론 이미지(model-runtime의 FakeModelSession 경로, 모델 없음), 가짜 게이트/수집 서버를 `tests/compose/compose.smoke.yaml`로 같이 띄운다(호스트 포트는 Docker가 배정, `docker compose port`). 공개 API 한 턴이 HTTP 추론 경계를 거치는지, 추론 컨테이너를 멈췄을 때 그 턴만 `NOT_COMMITTED`로 실패하고 서비스는 살아 있는지, 다시 띄우면 복구(404 → 재적재)하는지, 같은 `turn_id` 재시도가 처음 응답을 돌려주는지 확인한다. 실제 서빙 이미지가 나오면 compose의 `inference` 이미지만 바꾼다.

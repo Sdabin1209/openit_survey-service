@@ -64,7 +64,9 @@ class Settings:
     # 모델 런타임을 HTTP 경계 뒤에 둘 때(추론 컨테이너): 비우면 프로세스 안에서 적재한다
     inference_url: str = ""
     inference_token_env: str = "SURVEY_INFERENCE_TOKEN"
-    inference_timeout_seconds: float = 30.0
+    inference_timeout_seconds: float = 4.0      # 호출 하나(parse 또는 generate)의 읽기 타임아웃. 프론트 타임아웃 10초 안에 두 호출이 들어가게
+    inference_load_timeout_seconds: float = 600.0   # 릴리스 적재(모델 로딩)를 기다리는 시간
+    inference_retries: int = 1
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
@@ -91,14 +93,16 @@ class Settings:
             session_idle_seconds=_int(env, "SURVEY_SESSION_IDLE_SECONDS", 300, 0),
             inference_url=env.get("SURVEY_INFERENCE_URL", ""),
             inference_token_env=env.get("SURVEY_INFERENCE_TOKEN_ENV", "SURVEY_INFERENCE_TOKEN"),
-            inference_timeout_seconds=_float(env, "SURVEY_INFERENCE_TIMEOUT_SECONDS", 30.0),
+            inference_timeout_seconds=_float(env, "SURVEY_INFERENCE_TIMEOUT_SECONDS", 4.0),
+            inference_load_timeout_seconds=_float(env, "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS", 600.0),
+            inference_retries=_int(env, "SURVEY_INFERENCE_RETRIES", 1, 0),
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),
             export_backoff_max_seconds=_float(env, "SURVEY_EXPORT_BACKOFF_MAX_SECONDS", 60.0),
             outbox_keep_sent_hours=_int(env, "SURVEY_OUTBOX_KEEP_SENT_HOURS", 24, 1), log_level=env.get("SURVEY_LOG_LEVEL", "INFO").upper())
         missing = [n for n, v in (("SURVEY_RELEASE_READER", s.release_reader), ("SURVEY_TRACE_INGEST", s.trace_ingest),
-                                  ("SURVEY_MODEL_BACKEND", s.model_backend)) if not v]
+                                  ("SURVEY_MODEL_BACKEND", s.model_backend or s.inference_url)) if not v]
         for name, spec, url in (("SURVEY_RELEASE_READER", s.release_reader, s.release_reader_url),
                                 ("SURVEY_TRACE_INGEST", s.trace_ingest, s.trace_ingest_url)):
             if spec == "http" and not url:

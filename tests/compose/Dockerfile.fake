@@ -1,0 +1,10 @@
+# 가짜 이웃 이미지(시험 전용, 모델 없음): 참조 추론 서버(model-runtime의 FakeModelSession 경로)와 가짜 게이트/수집 서버.
+# 서비스 이미지와 같은 wheel로 라이브러리를 설치하고 tests/ 를 붙인다. scripts/smoke_compose.sh가 컨텍스트(build/fake-ctx)를 만든다.
+FROM python:3.12-slim
+COPY wheels /wheels
+COPY requirements.lock /requirements.lock
+RUN pip install --no-cache-dir -r /requirements.lock && pip install --no-cache-dir --no-deps /wheels/*.whl
+COPY tests /opt/tests
+RUN useradd --system --uid 10002 --no-create-home fake && mkdir /data && chown fake /data
+USER fake
+ENV PYTHONUNBUFFERED=1 PYTHONPATH=/opt

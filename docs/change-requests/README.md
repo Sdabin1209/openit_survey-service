@@ -12,4 +12,5 @@
 | CR-006 | ReleaseManifest의 역할별 serving_config와 I9 load | 해결(model-runtime v0.3.0 반영) | 없음 |
 | CR-007 | 세션 ID·턴 ID 형식 차이 | 결정·반영(`x-` 해시 변환) | 없음 |
 | CR-009 | 공개 API 문서의 부족한 점과 해석(시작·종료의 turn_id, 상태 코드, 개입 결정 경로 없음) | 확인 요청 | 없음 |
+| CR-010 | 추론 서버 규약(model-runtime이 구현할 HTTP 서빙 서버) | 확인 요청 | 없음 |
 | CR-008 | 골든 예시와 구현 출력의 차이 분류(예시 오류 5건) | 정보 | 없음 |

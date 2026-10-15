@@ -65,3 +65,9 @@
 - 직원 개입 경로 구현, boundary-contracts v1.3.1로 상향. CR-009 해석 1~8 승인됨(401/403 유지).
 - `pytest` 228 통과. 스모크에 멈춘 세션 재개·직원 종료·역할 분리·멱등·409 포함.
 - 남은 일: 직원 콘솔 쪽 호출자(직원 토큰 전달은 배포 담당), 추론 컨테이너 분리 스모크, 실제 모델 연결.
+
+## 후속 구간 5 (D62 모델 서빙 연결)
+
+- 서비스 안의 추론 서버를 서비스 패키지에서 빼고 시험 대역(`tests/ref_inference_server.py`)으로 옮겼다. 서비스는 `SURVEY_INFERENCE_URL`로 HTTP 호출만 한다. 규약은 `docs/inference-server-spec.md`, 요청은 CR-010.
+- 호출 실패·지연·잘못된 출력 처리(타임아웃 4초, 연결 실패·5xx 1회 재시도, 읽기 타임아웃·400·잘못된 출력은 재시도 없음, 404 재적재, 202 적재 폴링)와 시험(`tests/test_inference_client.py`).
+- `scripts/smoke_compose.sh`: 서비스 + 가짜 추론 + 가짜 게이트 compose 스모크(추론 중단·복구 포함).
