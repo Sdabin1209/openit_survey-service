@@ -49,6 +49,12 @@ class Settings:
     staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
     result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
     release_poll_seconds: float = 5.0
+    # HTTP 클라이언트(release_reader/trace_ingest가 'http'일 때): 토큰은 값이 아니라 '환경 변수 이름'으로 받는다
+    release_reader_url: str = ""
+    release_reader_token_env: str = "SURVEY_RELEASE_READER_TOKEN"
+    trace_ingest_url: str = ""
+    trace_ingest_token_env: str = "SURVEY_TRACE_INGEST_TOKEN"
+    http_timeout_seconds: float = 10.0
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
@@ -64,19 +70,31 @@ class Settings:
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
             result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""),
+            release_reader_url=env.get("SURVEY_RELEASE_READER_URL", ""),
+            release_reader_token_env=env.get("SURVEY_RELEASE_READER_TOKEN_ENV", "SURVEY_RELEASE_READER_TOKEN"),
+            trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),
+            trace_ingest_token_env=env.get("SURVEY_TRACE_INGEST_TOKEN_ENV", "SURVEY_TRACE_INGEST_TOKEN"),
+            http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),
             export_backoff_max_seconds=_float(env, "SURVEY_EXPORT_BACKOFF_MAX_SECONDS", 60.0),
             outbox_keep_sent_hours=_int(env, "SURVEY_OUTBOX_KEEP_SENT_HOURS", 24, 1), log_level=env.get("SURVEY_LOG_LEVEL", "INFO").upper())
         missing = [n for n, v in (("SURVEY_RELEASE_READER", s.release_reader), ("SURVEY_TRACE_INGEST", s.trace_ingest),
                                   ("SURVEY_MODEL_BACKEND", s.model_backend)) if not v]
+        for name, spec, url in (("SURVEY_RELEASE_READER", s.release_reader, s.release_reader_url),
+                                ("SURVEY_TRACE_INGEST", s.trace_ingest, s.trace_ingest_url)):
+            if spec == "http" and not url:
+                missing.append(name + "_URL")
         if missing:
             raise ConfigError("필수 환경 변수가 없다: " + ", ".join(missing))
         return s
 
 
 def load_factory(spec: str) -> Callable[[], Any]:
-    """'모듈:함수' 문자열을 함수로. 이웃 영역이 배포하는 SDK의 팩토리를 설정으로 꽂는다."""
+    """'모듈:함수' 문자열을 함수로. 'http'는 boundary_contracts의 HTTP 클라이언트를 만드는 기본 팩토리를 뜻한다
+    (SURVEY_RELEASE_READER=http 이면 ...:http_release_reader, SURVEY_TRACE_INGEST=http 이면 ...:http_trace_ingest)."""
+    if spec == "http":
+        raise ConfigError("'http'는 읽는 쪽(서비스 조립)이 역할에 맞는 팩토리로 바꿔야 한다")
     if ":" not in spec:
         raise ConfigError(f"'모듈:함수' 형식이어야 한다: {spec!r}")
     mod, _, fn = spec.partition(":")

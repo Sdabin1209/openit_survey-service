@@ -42,6 +42,13 @@ def configure_logging(level: str = "INFO") -> None:
     root.setLevel(level)
 
 
+def _spec(spec: str, which: str) -> str:
+    """'http'는 boundary_contracts의 HTTP 클라이언트 기본 팩토리(survey_service.clients)."""
+    if spec == "http":
+        return "survey_service.clients:http_release_reader" if which == "release" else "survey_service.clients:http_trace_ingest"
+    return spec
+
+
 class App:
     """저장소·릴리스 로더·Trace 내보내기·Orchestrator를 조립한다. reader/ingest를 주면 팩토리 설정을 쓰지 않는다(시험)."""
 
@@ -52,8 +59,8 @@ class App:
         self.outbox = Outbox(settings.outbox_db)
         self.registry = ReleaseRegistry()
         self.inference = InferenceServer(settings.model_backend)
-        self.reader = reader if reader is not None else load_factory(settings.release_reader)()
-        self.ingest = ingest if ingest is not None else load_factory(settings.trace_ingest)()
+        self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
+        self.ingest = ingest if ingest is not None else load_factory(_spec(settings.trace_ingest, 'trace'))()
         self.loader = ReleaseLoader(
             self.reader, self.registry, self.inference, workdir=Path(settings.work_dir), keep_releases=settings.keep_releases,
             installed_versions={"turn_engine_version": turn_engine.ENGINE_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION},

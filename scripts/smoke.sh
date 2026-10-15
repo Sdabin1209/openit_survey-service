@@ -48,7 +48,7 @@ echo "$READY" | grep -q '"contract_version": 1' || fail "계약 버전"
 [ "$($DOCKER exec "$NAME" id -u | tr -d '\r')" != "0" ] || fail "root로 실행 중"
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")
 echo "labels:  $LABELS"
-for want in "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" "io.openit.turn-engine\":\"$TURN_ENGINE_TAG" \
+for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" "io.openit.turn-engine\":\"$TURN_ENGINE_TAG" \
             "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SCHEMA_CONTRACT_VERSION"; do
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done

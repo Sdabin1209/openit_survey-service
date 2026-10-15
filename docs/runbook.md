@@ -6,9 +6,11 @@
 
 | 변수 | 예 |
 |---|---|
-| `SURVEY_RELEASE_READER` | I4 구현의 팩토리 `모듈:함수`(release-gate가 배포하는 SDK의 팩토리) |
-| `SURVEY_TRACE_INGEST` | I6 구현의 팩토리(ops-feedback이 배포) |
+| `SURVEY_RELEASE_READER` | `http`(기본 형식: boundary-contracts의 `HttpReleaseReader`) 또는 팩토리 `모듈:함수` |
+| `SURVEY_TRACE_INGEST` | `http`(`HttpTraceIngest`) 또는 팩토리 `모듈:함수` |
 | `SURVEY_MODEL_BACKEND` | 지금은 `fake`(개발·스모크 전용)뿐. 실제 백엔드는 model-runtime에 아직 없다 |
+
+HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_READER_URL`, `SURVEY_TRACE_INGEST_URL`(base URL), `SURVEY_RELEASE_READER_TOKEN_ENV`, `SURVEY_TRACE_INGEST_TOKEN_ENV`(토큰이 들어 있는 **환경 변수의 이름**, 기본 `SURVEY_RELEASE_READER_TOKEN`, `SURVEY_TRACE_INGEST_TOKEN`), `SURVEY_HTTP_TIMEOUT_SECONDS`(10). 토큰 값은 환경 변수로만 받고 이미지·리포지토리·로그에 넣지 않는다. 클라이언트가 던지는 `BoundaryError`는 로더와 outbox 규칙으로 처리된다: UNAVAILABLE이면 로더는 이전 릴리스를 유지한 채 다음 주기에 같은 포인터를 다시 보고, outbox는 UNAVAILABLE일 때만 재시도한다. 그 밖의 오류(INTEGRITY_ERROR, UNSUPPORTED_VERSION, FAILED_PRECONDITION 등)는 릴리스 거부 또는 Trace DEAD다.
 
 선택: `SURVEY_STAFF_CONSOLE`, `SURVEY_RESULT_DISPATCHER`(팩토리, 없으면 알림·결과 전달은 실패로 기록), `SURVEY_PORT`(8080), `SURVEY_SESSION_DB`, `SURVEY_OUTBOX_DB`, `SURVEY_WORK_DIR`(`/data/...`), `SURVEY_RELEASE_POLL_SECONDS`(5), `SURVEY_KEEP_RELEASES`(2), `SURVEY_EXPORT_INTERVAL_SECONDS`(1), `SURVEY_EXPORT_BACKOFF_MAX_SECONDS`(60), `SURVEY_OUTBOX_KEEP_SENT_HOURS`(24), `SURVEY_LOG_LEVEL`. 토큰은 I4·I6 구현이 자기 환경 변수로 받는다. `/data`는 볼륨으로 둔다.
 
@@ -62,6 +64,10 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 ## 6. 이미지
 
 `bash scripts/build_wheels.sh`가 `git -C ../<이름> archive <태그>`로 소스를 꺼내 wheel을 만든다(`BOUNDARY_TAG`, `TURN_ENGINE_TAG`, `MODEL_RUNTIME_TAG`로 바꾼다). 이어서 `docker build --build-arg COMMIT=... BOUNDARY_TAG=... TURN_ENGINE_TAG=... MODEL_RUNTIME_TAG=... SCHEMA_CONTRACT_VERSION=...`(smoke.sh가 하는 그대로). CI는 digest를 게시하고 deploy에 제출한다(D24, 아직 CI는 없다).
+
+## 6-1. 이미지 조합과 릴리스 정책 (D46)
+
+릴리스의 `turn_engine_version`·`model_runtime_version`은 MAJOR.MINOR가 이미지에 설치된 것과 같아야 적재된다(PATCH 차이는 경고). model-runtime이 0.3→0.4로 MAJOR.MINOR가 바뀌었으므로, **게이트가 평가에 쓴 이미지(릴리스 매니페스트에 기록된 버전)와 같은 라이브러리 조합의 survey-service 이미지**를 배포해야 한다. 조합이 어긋난 릴리스는 `VERSION_MISMATCH`로 거부되고 이전 릴리스가 유지된다. 이미지 라벨은 6개다: `io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`(D50). 현재 조합: boundary-contracts v1.2.0, turn-engine v0.2.0, model-runtime v0.4.0(기본 백엔드는 fake. vLLM 백엔드와 어댑터 사전 검사는 이 서비스에 아직 연결하지 않았다).
 
 ## 7. 스키마 패키지 릴리스
 

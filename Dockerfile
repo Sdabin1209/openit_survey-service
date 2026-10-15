@@ -12,12 +12,12 @@ ARG BOUNDARY_TAG=unknown
 ARG SCHEMA_CONTRACT_VERSION=unknown
 ARG TURN_ENGINE_TAG=unknown
 ARG MODEL_RUNTIME_TAG=unknown
-LABEL org.opencontainers.image.revision=$COMMIT \
+LABEL io.openit.service=survey-service \
+      io.openit.revision=$COMMIT \
       io.openit.contracts.boundary=$BOUNDARY_TAG \
       io.openit.contracts.survey-schema=$SCHEMA_CONTRACT_VERSION \
       io.openit.turn-engine=$TURN_ENGINE_TAG \
-      io.openit.model-runtime=$MODEL_RUNTIME_TAG \
-      io.openit.service=survey-service
+      io.openit.model-runtime=$MODEL_RUNTIME_TAG
 COPY --from=build /install /usr/local
 RUN useradd --system --uid 10001 --no-create-home app && mkdir /data && chown app /data
 USER app

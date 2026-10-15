@@ -45,3 +45,11 @@
 - CR-001은 "스키마 v2 후보 목록"으로 보류(적용 안 함), CR-002는 닫음, CR-003 유지.
 - 시험: `.venv/bin/python -m pytest` 168 통과(골든 대조 포함, 1220쌍 중 1215 일치, 5건 (c)). 스모크 SMOKE OK(아래 커밋 뒤 다시 돌림).
 - 남은 일: model-runtime v0.3.0 맞춤(헤드 알림 대기), 실제 I4·I6 통합, 실제 백엔드, O06 이후 어댑터.
+
+## 후속 구간 2 (D49·D51)
+
+- 의존 태그: boundary-contracts v1.2.0, model-runtime v0.4.0, turn-engine v0.2.0 (requirements, wheel 빌드, 이미지 라벨). 라벨은 `io.openit.*` 6개.
+- I4·I6를 HTTP 클라이언트(`HttpReleaseReader`, `HttpTraceIngest`)로 연결(`SURVEY_RELEASE_READER=http`, URL과 토큰 환경 변수 이름 설정). 번들은 `dest/<릴리스 ID>`.
+- 통합 시험: 참조 서버(`tests/ref_servers.py`, boundary-contracts conformance/servers.py 복사)로 번들 수신·적재, 포인터 전환·롤백, UNAVAILABLE/INTEGRITY_ERROR 처리, Trace 전송(재시도·DUPLICATE·DEAD·ID 변환). 스모크도 이미지 안에서 같은 HTTP 경로를 쓴다.
+- `pytest` 180 통과, `scripts/smoke.sh` SMOKE OK.
+- 한계: 실제 release-gate·ops-feedback 서버와의 E2E는 deploy 몫. model-runtime의 vLLM 백엔드와 어댑터 사전 검사는 서비스에 아직 연결하지 않았다(`SURVEY_MODEL_BACKEND`는 fake만).

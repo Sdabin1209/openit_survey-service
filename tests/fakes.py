@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
-from boundary_contracts import BoundaryError
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, BoundaryError
 from boundary_contracts.sdk import ReleaseBundle
 
 
@@ -121,7 +121,7 @@ class FakeReleaseReader:
         ref = lambda i, v, h: {"id": i, "version": v, "content_hash": h}
         zero = "sha256:" + "0" * 64
         manifest = {
-            "pipeline_schema_version": "1.1", "release_id": release_id, "created_at": "2026-10-15T00:00:00Z",
+            "pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id, "created_at": "2026-10-15T00:00:00Z",
             "gate_decision_id": f"gd-{release_id}",
             "question_set": ref("qs-main", str(bank["version"]), canonical.sha256_hash(bank)),
             "lora_a": ref("lora-a", "1.0.0", zero), "lora_b": ref("lora-b", "1.0.0", zero),
@@ -137,7 +137,7 @@ class FakeReleaseReader:
         if decision_subject_swap:
             subject = dict(subject, lora_a=ref("other", "9", zero))
         self.decisions[manifest["gate_decision_id"]] = {
-            "pipeline_schema_version": "1.1", "decision_id": manifest["gate_decision_id"], "decided_at": "2026-10-15T00:00:00Z",
+            "pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "decision_id": manifest["gate_decision_id"], "decided_at": "2026-10-15T00:00:00Z",
             "gate_policy_version": "1", "subject": subject, "runtime_contract_version": runtime_contract_version,
             "result": decision_result, "checks": [{"kind": "CONTRACT_COMPAT", "result": "PASS"}],
             "approver": {"role": "gate-service"}, "release_id": release_id}
@@ -152,7 +152,7 @@ class FakeReleaseReader:
 
     def set_pointer(self, release_id: str, cause: str = "ACTIVATE") -> dict:
         v = (self.pointer["pointer_version"] + 1) if self.pointer else 1
-        self.pointer = {"pipeline_schema_version": "1.1", "release_id": release_id, "pointer_version": v,
+        self.pointer = {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id, "pointer_version": v,
                         "activated_at": "2026-10-15T00:00:00Z", "cause": cause}
         return self.pointer
 
@@ -176,7 +176,7 @@ class FakeReleaseReader:
             raise BoundaryError("FAILED_PRECONDITION", "통과하지 않은 릴리스")
         adapters = {}
         for role in ("LORA_A", "LORA_B"):
-            out = Path(dest) / role
+            out = Path(dest) / release_id / "adapters" / role      # HttpReleaseReader와 같은 배치
             shutil.copytree(self.root / "adapters" / release_id / role, out, dirs_exist_ok=True)
             adapters[role] = out
         return ReleaseBundle(copy.deepcopy(m), copy.deepcopy(self.banks[release_id]), adapters)

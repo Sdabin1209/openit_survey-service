@@ -111,7 +111,7 @@ def test_settings_reject_missing_or_bad(env):
 
 
 def test_load_factory():
-    assert load_factory("tests.smoke_fakes:ingest")().__class__.__name__ == "FakeTraceIngest"
+    assert load_factory("tests.smoke_fakes:console")().__class__.__name__ == "RecordingConsole"
     for bad in ("nocolon", "no.such.module:x", "tests.smoke_fakes:nothing"):
         with pytest.raises(ConfigError):
             load_factory(bad)

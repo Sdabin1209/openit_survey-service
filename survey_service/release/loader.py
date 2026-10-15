@@ -128,9 +128,10 @@ class ReleaseLoader:
         manifest = self.reader.get_release(rid)
         self._check_manifest(manifest, rid)
         self._check_decision(manifest)
-        dest = self.workdir / rid
-        dest.mkdir(parents=True, exist_ok=True)
-        bundle = self.reader.load_bundle(rid, dest=dest)      # 해시 검증, PASS가 아니면 FAILED_PRECONDITION(BoundaryError)
+        self.workdir.mkdir(parents=True, exist_ok=True)
+        # 클라이언트가 dest/<릴리스 ID>에 풀고 모든 해시를 검증한다. PASS가 아니면 FAILED_PRECONDITION(BoundaryError).
+        # 어댑터와 질문지는 번들이 돌려준 경로·내용을 그대로 쓴다.
+        bundle = self.reader.load_bundle(rid, dest=self.workdir)
         bank = bundle.question_bank
         self._check_bank(manifest, bank)
         warnings = self._check_library_versions(manifest)

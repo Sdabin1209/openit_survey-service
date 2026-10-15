@@ -29,3 +29,10 @@
 ## 이 영역이 정리한 순서 제안
 
 한 번의 정수 버전 상승(v2)에 A·B·C를 묶고, 그동안 스키마 패키지는 v1을 낸다. 패키지는 `schema/v2/`를 추가하면 같은 wheel에서 v1·v2를 함께 내므로(여러 정수 버전을 동시에 지원하는 소비자용) 이행 기간을 둘 수 있다.
+
+## D. 조건 규칙을 oneOf 가지로 표현 (추가 후보, 헤드 지시 D48)
+
+- 문제: vLLM의 구조화 출력(제약 디코딩)이 `allOf` / `if` / `then` / `not`을 무시한다(D48). 스키마가 조건으로만 표현한 규칙(예: `Item`에서 `intent == ANSWERED_INTENT`이면 `target`·`value`가 null이 아니어야 함, `SlotDef`의 `choice_catalog`가 있으면 `choices`가 비어야 함, `SessionLoadResult`·`SessionCommitResult`·`StoreDecision`의 상태별 조건)이 제약 단계에서 걸러지지 않고 사후 검증과 재시도에 맡겨진다.
+- 제안: 조건 규칙을 `oneOf`(또는 `anyOf`) 가지로 다시 쓴다. 가지마다 판별 필드를 `const`로 고정한다(예: `intent`가 `ANSWERED_INTENT`인 가지는 `target`·`value`를 null 불가로, 나머지 가지는 허용). 의미는 같고 표현만 바뀐다.
+- 영향 영역: model-runtime(제약 디코딩이 받는 스키마, 완화 정책 `relax`와 사후 검증), model-lab·synthetic-data(출력 형식 정답 데이터), turn-engine(입력·출력 검증은 같은 의미라 영향 작음), release-gate(`runtime_contract_version`), ops-feedback(TurnTrace 검증), survey-service(스키마 패키지). 
+- 계약 버전: 허용 집합이 같은 표현 변경이지만 스키마 파일이 바뀌므로 정수 버전 상승(v2)에 함께 묶는 것을 제안한다. 허용 집합이 같음을 확인하는 시험(기존 예시·골든 표본이 같은 결과로 통과/거부)을 반영 전에 돌려야 한다. 확인하지 못한 것: 각 조건 규칙 전체 목록(여기서는 스키마에서 눈에 띈 예만 적었다).

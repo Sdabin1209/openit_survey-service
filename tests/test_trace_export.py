@@ -3,6 +3,7 @@ import threading
 import time
 
 import pytest
+from boundary_contracts import PIPELINE_SCHEMA_VERSION
 from boundary_contracts import BoundaryError
 
 from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter
@@ -46,7 +47,7 @@ def test_envelope_carries_release_and_contract_version(parts):
     assert r.sent == 3 and ing.calls == 3
     env = ing.received[("S1", "t1")]
     assert env["release_id"] == "rel-e2e-1" and env["runtime_contract_version"] == 1
-    assert env["pipeline_schema_version"] == "1.1" and env["sent_at"].endswith("Z")
+    assert env["pipeline_schema_version"] == PIPELINE_SCHEMA_VERSION and env["sent_at"].endswith("Z")
     assert env["trace"]["session_id"] == "S1" and env["trace"]["turn_id"] == "t1"
     assert ob.counts() == {"PENDING": 0, "SENT": 3, "DEAD": 0}
 

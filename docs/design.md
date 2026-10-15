@@ -105,6 +105,7 @@
 ## 5. 릴리스 로더
 
 - 주기(`SURVEY_RELEASE_POLL_SECONDS`)로 `get_active_pointer()`를 부른다. `pointer_version`이 마지막으로 본 값과 같으면 아무것도 안 한다 [확인: I4].
+- I4는 HTTP 클라이언트(`HttpReleaseReader`)다. `load_bundle(release_id, dest=작업 디렉터리)`가 `dest/<릴리스 ID>/`에 번들을 풀고 모든 해시를 검증하며, 로더는 그 경로의 어댑터와 돌려받은 질문지를 쓴다. 클라이언트 오류는 `BoundaryError`다: `UNAVAILABLE`(네트워크, 5xx, 503)이면 이전 릴리스를 유지한 채 같은 포인터를 다음 주기에 다시 본다. `INTEGRITY_ERROR`, `UNSUPPORTED_VERSION`, `FAILED_PRECONDITION`, `NOT_FOUND`는 그 포인터를 거부로 기록한다.
 - 달라졌으면 `get_release` → 검사 → `load_bundle` → 검사 → 모델 적재 순서. 검사:
   1. `runtime_contract_version`이 지원 값(이 이미지가 설치한 문진 스키마의 정수 버전 집합)에 없으면 **적재하지 않고 이전 릴리스를 유지**한다 [확인: I4]. 같은 포인터 버전은 다시 시도하지 않는다.
   2. `gate_decision_id`의 `GateDecision`이 PASS이고 이 조합을 가리키는지 확인한다(승인 기록 없는 묶음 거부, brief §4). `load_bundle`도 통과하지 않은 릴리스를 `FAILED_PRECONDITION`으로 거절한다.
@@ -142,8 +143,8 @@
 | `SURVEY_PORT` (8080) | `/healthz`, `/readyz` 포트 |
 | `SURVEY_SESSION_DB` (/data/sessions.db) | Session Store |
 | `SURVEY_OUTBOX_DB` (/data/outbox.db) | Trace outbox |
-| `SURVEY_RELEASE_READER` | I4 구현 팩토리 `모듈:함수` (실제 SDK는 release-gate가 배포하면 그 팩토리) |
-| `SURVEY_TRACE_INGEST` | I6 구현 팩토리 `모듈:함수` |
+| `SURVEY_RELEASE_READER` | `http`(기본: `boundary_contracts.clients.HttpReleaseReader`, D49) 또는 팩토리 `모듈:함수`. `SURVEY_RELEASE_READER_URL`, 토큰이 든 환경 변수의 이름 `SURVEY_RELEASE_READER_TOKEN_ENV` |
+| `SURVEY_TRACE_INGEST` | `http`(`HttpTraceIngest`) 또는 팩토리. `SURVEY_TRACE_INGEST_URL`, `SURVEY_TRACE_INGEST_TOKEN_ENV` |
 | `SURVEY_MODEL_BACKEND` | `fake` 등 |
 | `SURVEY_RELEASE_POLL_SECONDS` (5) | 포인터 폴링 주기 |
 | `SURVEY_KEEP_RELEASES` (2) | 내리지 않고 남길 비활성 릴리스 수 |
