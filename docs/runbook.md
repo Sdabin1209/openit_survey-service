@@ -63,7 +63,7 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 `python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --start`
 `... turn --session S1 --utterance "안 피움" --items '[{"item_no":0,"target":{"question_id":"Q1","repeat_key":"","slot_id":"상태"},"value":"안 피움","source_text":"안 피움","intent":"ANSWERED_INTENT","progress_op":null,"guide_id":null}]'`
 
-스모크는 고정 포트를 쓰지 않는다(`-p 127.0.0.1::8080`, `docker port`). docker가 없으면 `docker.exe`를 쓴다(경로 변환은 `wslpath`, 이 경로는 아직 해 보지 못했다).
+스모크는 고정 포트를 쓰지 않는다(`-p 127.0.0.1::8080`, `docker port`). docker 실행 파일 이름은 `DOCKER` 환경 변수로만 바꿀 수 있고(기본 `docker`), 현재 사용자가 데몬에 닿지 않으면 한국어 오류로 중단한다(우회 없음).
 
 ## 6. 이미지
 

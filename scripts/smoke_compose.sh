@@ -3,8 +3,11 @@
 # 추론 서버를 멈췄다가 다시 띄웠을 때의 복구까지 본다. 고정 포트 없음(docker compose port). 실패하면 0이 아닌 값으로 끝난다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-DOCKER=docker
-if ! docker info >/dev/null 2>&1; then DOCKER=docker.exe; fi
+DOCKER=${DOCKER:-docker}   # 실행 파일 이름만 바꿀 수 있다(예: podman). 다른 우회는 두지 않는다
+if ! "$DOCKER" info >/dev/null 2>&1; then
+  echo "오류: 현재 사용자가 docker 데몬에 닿지 않는다. 데몬이 떠 있는지, 사용자에게 docker 권한이 있는지 확인하라." >&2
+  exit 1
+fi
 PROJECT=openit-survey-service-compose-$$
 export SERVICE_IMAGE=openit-survey-service:compose-$$
 export FAKE_IMAGE=openit-survey-service-fake:compose-$$

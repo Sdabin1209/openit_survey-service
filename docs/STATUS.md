@@ -19,7 +19,6 @@
 - **실제 이웃과의 통합**: release-gate(I4)·ops-feedback(I6)의 배포된 SDK가 없어 `boundary_contracts.sdk` Protocol을 따르는 대역(`tests/fakes.py`)으로만 시험했다. 실제 SDK가 나오면 팩토리 설정으로 꽂고 같은 시험을 실제 구현으로 돌려야 한다.
 - **실제 모델**: GPU·실제 백엔드가 없어 FakeModelSession만 썼다. 추론 서버를 별도 GPU 컨테이너로 나누는 일, 모델 출력 품질은 확인하지 못했다.
 - **골든의 한계**: 골든에 문항 세트와 모델·엔진 입력이 없어 실제 turn-engine을 골든 입력으로 돌린 비교는 하지 못했다. Orchestrator는 컴포넌트 출력을 재생해 비교했다(CR-002는 닫음). 입력 조립은 bindings.yaml과 대조했다.
-- `docker.exe` 경로(`wslpath`)는 실행해 보지 못했다(이 환경은 docker가 직접 된다).
 - CI, digest 게시, deploy 제출은 없다(D24).
 - 부하·동시성(여러 프로세스), 세션 문서 암호화·보존 기간 없음.
 
