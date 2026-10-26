@@ -241,6 +241,15 @@ class ReleaseLoader:
                 raise LoadRejected("VERSION_MISMATCH", f"{name} MAJOR.MINOR가 다르다(릴리스 {want}, 설치 {have})")
             if want != have:
                 out.append(f"{name} PATCH가 다르다(릴리스 {want}, 설치 {have})")
+        # 폐기 예정 프롬프트 템플릿(prompt-3 등)은 거부하지 않고 경고만 한다(model-runtime이 허용, D77). 기준은 설치된 model-runtime의 목록.
+        try:
+            from model_runtime.prompts import DEPRECATED_TEMPLATE_VERSIONS, DEFAULT_TEMPLATE_VERSION
+        except ImportError:   # 0.6.0 이하 설치본에는 목록이 없다
+            DEPRECATED_TEMPLATE_VERSIONS, DEFAULT_TEMPLATE_VERSION = frozenset(), ""
+        for role, ad in sorted((manifest.get("adapters") or {}).items()):
+            tv = (ad.get("serving_config") or {}).get("prompt_template_version")
+            if tv in DEPRECATED_TEMPLATE_VERSIONS:
+                out.append(f"{role}의 prompt_template_version {tv}는 폐기 예정이다(기본 {DEFAULT_TEMPLATE_VERSION})")
         return out
 
 

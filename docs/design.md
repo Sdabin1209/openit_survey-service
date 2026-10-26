@@ -285,7 +285,7 @@
 - 직원 접점은 교체 가능하다: 기본은 `AlertStaffConsole`(StaffConsole Protocol 구현), `SURVEY_STAFF_CONSOLE`로 다른 구현을 꽂으면 그것을 쓴다(알림 조회·SSE API는 알림 저장소를 그대로 쓰므로 이 경우 알림은 저장되지 않는다).
 
 
-## 16. D74 구조: 한 턴의 흐름 (계약 2.0.0, turn-engine 0.3.0, model-runtime 0.6.0)
+## 16. D74 구조: 한 턴의 흐름 (계약 2.0.0, turn-engine 0.3.0, model-runtime 0.6.1)
 
 [확인] 정규화·판정·기록·Plan 코드는 서비스에 없다. 모델(LoRA-A)이 값 추출·정규화·절차(action)·다음 문항(next_item)을 한 번에 내고, 서비스는 **검증·저장·전달·표 찾기**만 한다. 판단은 하지 않는다(모델의 출력을 `validate_extraction`이 확인할 뿐이다).
 
@@ -323,6 +323,10 @@ A 입력 `state`의 규칙은 학습 데이터(train·val·test의 A 입력 5,07
 - 2의 묶음 순서는 직전 문항이 먼저, 참조 원천이 나중이 다수(약 90%)다. 나머지 약 10%는 반대 순서였고 이유를 찾지 못했다 [미확인]. 서비스는 다수 규칙을 쓴다. 참조 원천(`reference_sources`: Q5←Q4, Q5_1←Q4_1, Q6←Q5, Q9_1←Q8_1, Q9_2←Q8_2, Q10←Q9_1)도 같은 표본에서 읽은 것이다.
 - 직렬화는 model-runtime의 몫이다(헤드 확인: 학습 글자는 `json.dumps(obj, ensure_ascii=False)`). 서비스는 객체를 만든다: A 입력 최상위 키는 알파벳 순(`current_question`, `question_id`, `state`, `user_utterance`), `state`는 삽입 순서 보존, B 입력은 모든 수준의 키 정렬. `tests/test_extraction.py::test_extract_input_equals_training_data_character_for_character`가 학습 표본 16건에서 서비스가 만든 A 입력을 `json.dumps`한 글자가 학습 데이터와 같음을 확인한다.
 - `MISSING`·`UNCLEAR` 칸의 출처는 서비스가 기억한다(`progress_record.open_slots`): 직전 추출의 미저장 MISSING·UNCLEAR 값. 그 문항을 벗어나면 지운다. 학습 데이터에서 이 칸이 몇 턴 동안 이어지는지는 확인하지 못했다.
+
+**val 대조(2026-10-27, model-runtime 0.6.1)** [확인: `scripts/check_serialization_against_val.py`, 학습 서버 `dataset_10_14`의 `lora_a_val.jsonl` 549행·`lora_b_val.jsonl` 560행을 표준출력으로 흘려 이 PC에서 계산, 저장하지 않음. A 행의 state에서 세션 문서를 거꾸로 만들어 서비스 코드로 다시 조립한 것이라 state 구성은 in-sample이다]:
+- A: 입력 객체 549/549 같음(state 키 집합, 값 내부 키 순서 `value, status`도 549/549). state 키 **순서**와 그에 따른 `json.dumps` 및 prompt-4 user 글자는 536/549 같음. 불일치 13행은 모두 state 안 묶음 순서다: Q10 4행(val은 Q9_1 -> Q9_2, 서비스는 직전 문항 Q9_2 먼저), Q9_2 2행(val은 참조 Q8_2 먼저), Q6 4행(참조 Q5 먼저), Q6 3행(Q5_1 칸이 알파벳 순). 같은 문항에서 같은 규칙으로 맞는 행도 많아(Q10 34행, Q9_2 18행, Q6 6행) 문서에서 읽을 수 있는 기준을 찾지 못했다 [미확인, 고치지 않음: 규칙 없이 맞추면 다수 행이 깨진다].
+- B: A와 짝지은 549행(짝 없는 11행은 START)의 키 집합과 값 형태 549/549 같음. START 11행도 키 집합 같음. 글자는 `next.text`를 뺀 나머지가 549/549 같고, `next.text`만 다르다(문항 은행 문장 대 데이터의 바꿔 쓴 문장, 이 시험은 시험용 문항 세트라 더 다르다. 18절 설명대로 데이터를 따르지 않는 것이 의도이고 실제 문항 세트 문장으로는 확인하지 않았다).
 
 ## 18. 표 찾기와 B 입력: `ask` 문장 틀·칸 설명표 초안 (**미확정, 사용자 확인 필요**)
 

@@ -1,5 +1,11 @@
 # 변경 이력
 
+## model-runtime v0.6.1 맞춤 (브랜치 follow-model-runtime-0.6.1) [미출시, 푸시·태그 전]
+
+- 의존을 model-runtime v0.6.1로(requirements, build_wheels 기본 태그, 이미지 라벨 `io.openit.model-runtime=v0.6.1`). 릴리스 기대값은 `prompt-4`·`protect-2`·`model_runtime_version` 0.6.x. 시험 fixture는 `model_runtime.fake_serving_config()`의 기본(prompt-4)을 따른다.
+- 릴리스 적재: `prompt-3`(model-runtime이 폐기 예정으로 표시)은 거부하지 않고 적재하되 경고를 `release_loader.warnings`에 남긴다. 목록은 설치된 model-runtime의 `DEPRECATED_TEMPLATE_VERSIONS`다.
+- `scripts/check_serialization_against_val.py`: 서비스가 만든 A/B 입력을 학습 서버 val 행과 대조한다(design 17절 끝).
+
 ## 0.2.0 제안 (브랜치 migrate-contracts-2.0.0, 계약 2.0.0, D74·D75·D76) [미출시, 푸시·태그 전]
 
 **파괴적 변경**: v1 레코드는 읽지 않는다. TurnTrace 키가 바뀌었다(ops-feedback 영향, design 19.1).
