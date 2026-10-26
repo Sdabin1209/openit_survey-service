@@ -131,10 +131,12 @@ def test_cli_harness_keeps_session_between_calls(tmp_path, capsys):
     assert cli.main(base + ["turn", "--session", "S1", "--start", "--turn-id", "c1"]) == 0
     first = json.loads(capsys.readouterr().out)
     assert first["orchestrator_output"]["session_info_created"]["session_id"] == "S1"
-    item = json.dumps([{"item_no": 0, "target": {"question_id": "Q1", "repeat_key": "", "slot_id": "상태"}, "value": "안 피움",
-                        "source_text": "안 피움", "intent": "ANSWERED_INTENT", "progress_op": None, "guide_id": None}])
-    assert cli.main(base + ["turn", "--session", "S1", "--utterance", "안 피움", "--items", item, "--turn-id", "c2"]) == 0
+    ex = json.dumps({"action": "NEXT", "next_item": "Q1.D02", "values": [
+        {"key": "Q1.D01.diagnosed", "value": False, "precision": "exact", "status": "ANSWERED", "save": True},
+        {"key": "Q1.D01.on_medication", "value": False, "precision": "exact", "status": "ANSWERED", "save": True}]})
+    assert cli.main(base + ["turn", "--session", "S1", "--utterance", "안 받았고 안 먹어요", "--extraction", ex, "--turn-id", "c2"]) == 0
     second = json.loads(capsys.readouterr().out)
-    assert second["orchestrator_output"]["log_entry"]["record_writer_output"]["store_decisions"][0]["action"] == "FIRST_WRITE"
+    assert second["orchestrator_output"]["log_entry"]["extract_output"]["next_item"] == "Q1.D02"
+    assert second["frontend_input"]["response_text"] == "(가짜 응답)"
     assert cli.main(base + ["turn", "--session", "S1", "--start", "--turn-id", "c1"]) == 0
     assert json.loads(capsys.readouterr().out)["replayed"] is True

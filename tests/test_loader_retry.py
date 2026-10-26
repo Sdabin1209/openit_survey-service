@@ -4,6 +4,7 @@
 결정적(412·422·404·403, 승인 없음, 해시·버전 불일치)은 영구 거부+이전 릴리스 유지(D46)다.
 """
 import json
+import socket
 import threading
 import time
 import urllib.request
@@ -17,8 +18,8 @@ from survey_service.service import App, serve
 from survey_service.settings import Settings
 
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
-from .ref_inference_server import build, err, make_server
 from .sample_bank import sample_bank
+from .runtime_support import FlakyRuntime
 from .test_inference_client import Env, TOKEN
 from .test_release_loader import INSTALLED
 
@@ -45,12 +46,12 @@ def e(tmp_path):
     env.close()
 
 
-UNAVAILABLE = err("UNAVAILABLE", "엔진이 아직 뜨는 중")
+UNAVAILABLE = BoundaryError("UNAVAILABLE", "엔진이 아직 뜨는 중")
 
 
 def test_transient_failures_back_off_then_load_automatically(e):
     clock = with_clock(e)
-    e.inf.put_fail_next = [UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE]
+    e.srv.put_fail_next = [UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE]
     delays = []
     for _ in range(6):
         r = e.loader.poll_once()
@@ -59,8 +60,8 @@ def test_transient_failures_back_off_then_load_automatically(e):
         delays.append(round(rs["_next_ts"] - clock.t))
         assert e.loader.status.rejections == [] and e.loader.status.last_pointer_version is None       # 거부로 확정하지 않았다
         # 백오프 안에서는 서버를 부르지 않는다
-        puts = e.inf.puts
-        assert e.loader.poll_once().action == "WAITING" and e.inf.puts == puts
+        puts = e.srv.puts
+        assert e.loader.poll_once().action == "WAITING" and e.srv.puts == puts
         clock.t += delays[-1]
     assert delays == [5, 10, 20, 40, 60, 60]                                                 # 5초 시작, 최대 60초
     assert e.loader.status.retry["attempts"] == 6
@@ -72,7 +73,7 @@ def test_transient_failures_back_off_then_load_automatically(e):
 
 def test_retry_status_is_visible_with_attempt_info(e):
     clock = with_clock(e)
-    e.inf.put_fail_next = [UNAVAILABLE, UNAVAILABLE]
+    e.srv.put_fail_next = [UNAVAILABLE, UNAVAILABLE]
     e.loader.poll_once(); clock.t += 5; e.loader.poll_once()
     info = e.loader.retry_info()
     assert info["pointer_version"] == 1 and info["release_id"] == "rel-1" and info["attempts"] == 2
@@ -81,32 +82,33 @@ def test_retry_status_is_visible_with_attempt_info(e):
 
 
 @pytest.mark.parametrize("response,code", [
-    (err("FAILED_PRECONDITION", "승인 없음·해시·설정 불일치"), "REMOTE_FAILED_PRECONDITION"),
-    (err("INTEGRITY_ERROR", "해시"), "REMOTE_INTEGRITY_ERROR"),
-    (err("UNSUPPORTED_VERSION", "계약 버전"), "REMOTE_UNSUPPORTED_VERSION"),
-    (err("NOT_FOUND", "릴리스 없음"), "REMOTE_NOT_FOUND"),
-    (err("PERMISSION_DENIED", "토큰"), "REMOTE_PERMISSION_DENIED"),
+    (BoundaryError("FAILED_PRECONDITION", "승인 없음·해시·설정 불일치"), "REMOTE_FAILED_PRECONDITION"),
+    (BoundaryError("INTEGRITY_ERROR", "해시"), "REMOTE_INTEGRITY_ERROR"),
+    (BoundaryError("UNSUPPORTED_VERSION", "계약 버전"), "REMOTE_UNSUPPORTED_VERSION"),
+    (BoundaryError("NOT_FOUND", "릴리스 없음"), "REMOTE_NOT_FOUND"),
+    (BoundaryError("PERMISSION_DENIED", "토큰"), "REMOTE_PERMISSION_DENIED"),
 ])
 def test_deterministic_refusal_is_permanent_with_no_retry(e, response, code):
     clock = with_clock(e)
-    e.inf.put_fail_next = [response]
+    e.srv.put_fail_next = [response]
     r = e.loader.poll_once()
     assert r.action == "REJECTED" and r.code == code and e.registry.active() is None
     assert e.loader.status.retry is None and e.loader.status.rejections[-1]["code"] == code
-    puts = e.inf.puts
+    puts = e.srv.puts
     clock.t += 1000
-    assert e.loader.poll_once().action == "UNCHANGED" and e.inf.puts == puts                    # 다시 시도하지 않는다
+    assert e.loader.poll_once().action == "UNCHANGED" and e.srv.puts == puts                    # 다시 시도하지 않는다
 
 
 def test_new_pointer_takes_priority_over_a_retrying_one(e):
     clock = with_clock(e)
-    e.inf.put_fail_next = [UNAVAILABLE] * 3
+    e.srv.put_fail_next = [UNAVAILABLE] * 3
     e.reader.add_release("rel-2", sample_bank(2), turn_engine_version=INSTALLED["turn_engine_version"],
                          model_runtime_version=INSTALLED["model_runtime_version"])
+    e.srv.available["rel-2"] = "ok"
     e.loader.poll_once()
     assert e.loader.status.retry["release_id"] == "rel-1" and e.loader.poll_once().action == "WAITING"
     e.reader.set_pointer("rel-2")                                                               # 백오프가 끝나기 전에 새 포인터
-    e.inf.put_fail_next.clear()
+    e.srv.put_fail_next.clear()
     r = e.loader.poll_once()
     assert r.action == "LOADED" and r.release_id == "rel-2" and e.registry.active_id() == "rel-2"
     assert e.loader.status.retry is None and e.loader.status.last_pointer_version == 2
@@ -114,9 +116,10 @@ def test_new_pointer_takes_priority_over_a_retrying_one(e):
 
 def test_new_pointer_that_is_also_failing_restarts_the_retry_count(e):
     clock = with_clock(e)
-    e.inf.put_fail_next = [UNAVAILABLE] * 5
+    e.srv.put_fail_next = [UNAVAILABLE] * 5
     e.reader.add_release("rel-2", sample_bank(2), turn_engine_version=INSTALLED["turn_engine_version"],
                          model_runtime_version=INSTALLED["model_runtime_version"])
+    e.srv.available["rel-2"] = "ok"
     e.loader.poll_once(); clock.t += 5; e.loader.poll_once()
     assert e.loader.status.retry["attempts"] == 2
     e.reader.set_pointer("rel-2")
@@ -126,7 +129,7 @@ def test_new_pointer_that_is_also_failing_restarts_the_retry_count(e):
 
 
 def test_slow_load_that_outlasts_the_wait_succeeds_on_a_later_try(tmp_path):
-    e = Env(tmp_path, async_load=True, load_delay=0.6, load_timeout=0.25)
+    e = Env(tmp_path, load_delay=0.6, load_timeout=0.25)
     try:
         clock = with_clock(e)
         r = e.loader.poll_once()
@@ -140,7 +143,7 @@ def test_slow_load_that_outlasts_the_wait_succeeds_on_a_later_try(tmp_path):
 
 
 def test_slow_load_within_the_wait_is_just_waited_for(tmp_path):
-    e = Env(tmp_path, async_load=True, load_delay=0.5, load_timeout=5)
+    e = Env(tmp_path, load_delay=0.5, load_timeout=5)
     try:
         with_clock(e)
         t0 = time.time()
@@ -150,22 +153,17 @@ def test_slow_load_within_the_wait_is_just_waited_for(tmp_path):
 
 
 def test_server_failed_state_that_is_transient_retries_and_deterministic_does_not(tmp_path):
-    e = Env(tmp_path, async_load=True)
+    e = Env(tmp_path, load_error=BoundaryError("UNAVAILABLE", "GPU"))
     try:
         clock = with_clock(e)
-        orig = e.inf._load
-        def fail_unavailable(rid):
-            e.inf._state[rid] = {"state": "FAILED", "error": {"code": "UNAVAILABLE", "message": "GPU", "retryable": True}}
-        e.inf._load = fail_unavailable
         assert e.loader.poll_once().action == "RETRY_LATER"
-        e.inf._state.clear(); e.inf._load = orig; clock.t += 5
+        e.srv.load_error = None; e.srv.load_delay = 0; e.srv._load_started.clear(); clock.t += 5          # 서버가 회복했다
         assert e.loader.poll_once().action == "LOADED"
     finally:
         e.close()
-    e2 = Env(tmp_path / "x", async_load=True)
+    e2 = Env(tmp_path / "x", load_error=BoundaryError("FAILED_PRECONDITION", "x"))
     try:
         with_clock(e2)
-        e2.inf._load = lambda rid: e2.inf._state.__setitem__(rid, {"state": "FAILED", "error": {"code": "FAILED_PRECONDITION", "message": "x", "retryable": False}})
         r = e2.loader.poll_once()
         assert r.action == "REJECTED" and r.code == "REMOTE_FAILED_PRECONDITION"
     finally:
@@ -174,15 +172,13 @@ def test_server_failed_state_that_is_transient_retries_and_deterministic_does_no
 
 def test_connection_refused_is_transient_until_the_server_comes_up(tmp_path):
     e = Env(tmp_path, timeout=0.5)
-    port = e.httpd.server_address[1]
-    e.httpd.shutdown(); e.httpd.server_close()                                                  # 추론 서버가 아직 안 떴다
+    port = e.srv._server.server_address[1]
+    e.srv.stop()                                                                                # 추론 서버가 아직 안 떴다
     clock = with_clock(e)
     try:
         r = e.loader.poll_once()
         assert r.action == "RETRY_LATER" and r.code == "REMOTE_UNAVAILABLE" and e.loader.status.rejections == []
-        httpd = make_server(e.inf, port)                                                        # 같은 주소에 서버가 뜬다
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        e.httpd = httpd
+        e.srv = FlakyRuntime({TOKEN: "survey-service"}).start(port)                              # 같은 주소에 서버가 뜬다
         clock.t += 5
         assert e.loader.poll_once().action == "LOADED" and e.registry.active_id() == "rel-1"
     finally:
@@ -201,7 +197,7 @@ def test_i4_unavailable_also_backs_off_without_marking_the_pointer(e):
 
 def test_give_up_limit_turns_into_a_recorded_rejection(e):
     clock = with_clock(e, give_up_seconds=30)
-    e.inf.put_fail_next = [UNAVAILABLE] * 20
+    e.srv.put_fail_next = [UNAVAILABLE] * 20
     for _ in range(10):
         r = e.loader.poll_once()
         if r.action == "REJECTED":
@@ -213,7 +209,7 @@ def test_give_up_limit_turns_into_a_recorded_rejection(e):
     assert e.loader.poll_once().action == "UNCHANGED"
     # 상한이 없으면(기본) 아무리 오래 걸려도 계속 다시 시도한다
     e2_clock = with_clock(e)
-    e.inf.put_fail_next = [UNAVAILABLE] * 5
+    e.srv.put_fail_next = [UNAVAILABLE] * 5
     for _ in range(5):
         assert e.loader.poll_once().action == "RETRY_LATER"
         e2_clock.t += 100000
@@ -228,17 +224,21 @@ def http(port, path):
         return ex.code, json.loads(ex.read())
 
 
+def free_port():
+    sk = socket.socket()
+    sk.bind(("127.0.0.1", 0))
+    port = sk.getsockname()[1]
+    sk.close()
+    return port
+
+
 def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishes_starting(tmp_path, monkeypatch):
     gate = FakeReleaseReader(tmp_path / "gate")
     gate.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
                      model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
-    # 추론 서버: 포트만 먼저 잡아 두고 아직 뜨지 않은 척한다(연결 거부 -> 이어서 503 -> 정상)
-    probe = make_server(build(Settings(work_dir=str(tmp_path / "iw"), release_reader="x:y", trace_ingest="x:y", model_backend="fake"),
-                              reader=gate, token=TOKEN), 0)
-    port = probe.server_address[1]
-    probe.server_close()
-    inf = build(Settings(work_dir=str(tmp_path / "iw2"), release_reader="x:y", trace_ingest="x:y", model_backend="fake"), reader=gate, token=TOKEN)
+    port = free_port()                                                                           # 추론 서버가 아직 안 떴다: 연결 거부 -> 이어서 503 -> 정상
+    inf = FlakyRuntime({TOKEN: "survey-service"})
     monkeypatch.setenv("SURVEY_API_TOKEN", "a"); monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s")
     monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", TOKEN)
     s = Settings.from_env({"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
@@ -250,7 +250,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
     front = serve(app, 0)
     threading.Thread(target=front.serve_forever, daemon=True).start()
     fport = front.server_address[1]
-    srv = None
+    started = False
     try:
         deadline = time.time() + 5
         while time.time() < deadline and not (app.loader.retry_info() or {}).get("attempts", 0) >= 2:
@@ -262,8 +262,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
         assert "REMOTE_UNAVAILABLE" in rl["retrying"]["last_error"]
         assert http(fport, "/healthz")[0] == 200                                                # 서비스는 살아 있다
         inf.put_fail_next = [UNAVAILABLE]                                                       # 서버가 뜨는 중: 첫 PUT은 503
-        srv = make_server(inf, port)
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        inf.start(port); started = True
         deadline = time.time() + 8
         while time.time() < deadline and http(fport, "/readyz")[0] != 200:
             time.sleep(0.1)
@@ -272,8 +271,8 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
         assert body["release_loader"]["retrying"] is None and body["release_loader"]["rejections"] == []
     finally:
         front.shutdown(); front.server_close(); app.stop()
-        if srv:
-            srv.shutdown(); srv.server_close()
+        if started:
+            inf.stop()
 
 
 def test_previous_release_keeps_serving_while_a_new_one_is_retrying(tmp_path, monkeypatch):
@@ -283,12 +282,12 @@ def test_previous_release_keeps_serving_while_a_new_one_is_retrying(tmp_path, mo
                          model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
     e = Env(tmp_path / "e", timeout=0.5)
+    e.srv.available["rel-2"] = "ok"
     try:
         clock = with_clock(e)
         e.loader.reader = gate
-        e.inf.loader.reader = gate
         assert e.loader.poll_once().action == "LOADED"
-        e.inf.put_fail_next = [UNAVAILABLE] * 3
+        e.srv.put_fail_next = [UNAVAILABLE] * 3
         gate.set_pointer("rel-2")
         assert e.loader.poll_once().action == "RETRY_LATER" and e.registry.active_id() == "rel-1"       # 이전 릴리스 유지
         clock.t += 5; e.loader.poll_once(); clock.t += 10; e.loader.poll_once()
@@ -305,13 +304,10 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
     gate.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
                      model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
-    inf = build(Settings(work_dir=str(tmp_path / "iw"), release_reader="x:y", trace_ingest="x:y", model_backend="fake"),
-                reader=gate, token=TOKEN, async_load=True, load_delay=1.5)
-    srv = make_server(inf, 0)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    srv = FlakyRuntime({TOKEN: "survey-service"}, load_delay=1.5).start()
     monkeypatch.setenv("SURVEY_API_TOKEN", "a"); monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s"); monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", TOKEN)
     s = Settings.from_env({"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
-                           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": f"http://127.0.0.1:{srv.server_address[1]}",
+                           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": srv.url,
                            "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS": "30", "SURVEY_STARTUP_WAIT_SECONDS": "0.3", "SURVEY_SESSION_IDLE_SECONDS": "0"})
     app = App(s, reader=gate, ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     front = None
@@ -331,4 +327,4 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
     finally:
         if front:
             front.shutdown(); front.server_close()
-        app.stop(); srv.shutdown(); srv.server_close()
+        app.stop(); srv.stop()

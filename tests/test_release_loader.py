@@ -40,7 +40,7 @@ def test_loads_active_pointer_and_skips_when_unchanged(env):
     reader.set_pointer("rel-1")
     r = loader.poll_once()
     assert r.action == "LOADED" and reg.active().release_id == "rel-1" and reg.active().bank["version"] == 1
-    assert hasattr(reg.active().session, "parse") and hasattr(reg.active().session, "generate")
+    assert hasattr(reg.active().session, "extract") and hasattr(reg.active().session, "respond")
     calls = dict(reader.calls)
     assert loader.poll_once().action == "UNCHANGED"
     assert reader.calls["get_release"] == calls["get_release"] and reader.calls["load_bundle"] == calls["load_bundle"]

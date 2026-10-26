@@ -9,7 +9,7 @@ from survey_service.errors import StoreError
 from survey_service.store import effects
 from survey_service.store.memory import MemorySessionStore
 from survey_service.store.sqlite import SqliteSessionStore
-from .skeleton_bank import skeleton_bank
+from .sample_bank import sample_bank
 
 
 @pytest.fixture(params=["memory", "sqlite"])
@@ -23,20 +23,17 @@ def store(request, tmp_path):
 
 
 def writes(value=None):
-    sr = effects.empty_store_result()
+    """TurnWriteSet. value가 있으면 Q10.days에 첫 저장."""
+    ups = []
     if value is not None:
-        sr["store_decisions"] = [{"slot": {"question_id": "Q5", "repeat_key": "", "slot_id": "시간"}, "action": "FIRST_WRITE",
-                                  "value": value, "pending_id": None, "risk_mark": None}]
-    upd = {"last_directive": {"action": "ASK_NEXT", "targets": [], "target_pending_id": None, "awaiting": None, "say_values": [],
-                              "reask_reasons": [], "notices": [], "sentence_materials": {}},
-           "open_requests": {"correction_requests": [], "stop_requested": False, "deferred": []}, "skipped_add": [],
-           "skipped_remove": [], "confirm_stopped_add": [], "confirm_stopped_remove": [], "session_status": None, "pause_history_add": []}
-    plan = {"attempt_counts": [], "confirm_counts": [], "unknown_counts": [], "refusal_counts": [], "unrecognized_streak": 0, "ask_counts": []}
-    return {"store_result": sr, "progress_record_update": upd, "planner_record_update": plan}
+        ups = [{"slot": {"question_id": "Q10", "repeat_key": "", "slot_id": "days"}, "action": "FIRST_WRITE", "value": value, "precision": "exact"}]
+    upd = {"current_question_id": "Q1.D02", "open_slots": [], "skipped_add": [], "skipped_remove": [], "session_status": None,
+           "pause_history_add": []}
+    return {"answer_updates": ups, "progress_record_update": upd}
 
 
 def make(store, sid="S1", release="rel-1"):
-    st = effects.initial_state(sid, skeleton_bank())
+    st = effects.initial_state(sid, sample_bank(), "Q1.D01")
     rev = store.create(sid, release, st)
     return st, rev
 
@@ -60,20 +57,20 @@ def test_create_load_roundtrip_and_isolation(store):
 
 def test_commit_applies_all_and_bumps_revision(store):
     st, rev = make(store)
-    res = store.commit({"session_id": "S1", "expected_revision": rev, "writes": writes({"amount": 7, "unit": "시간"})},
+    res = store.commit({"session_id": "S1", "expected_revision": rev, "writes": writes(7)},
                        turn_id="t1", input_hash="h1")
     assert res["status"] == "OK" and res["write_outcome"] == "APPLIED" and res["revision"] == rev + 1
     doc = store.load("S1")["state"]
-    q5 = [r for r in doc["answer_records"] if r["slot"]["question_id"] == "Q5"][0]
-    assert q5["current_value"] == {"answer": {"amount": 7, "unit": "시간"}}
-    assert doc["progress_record"]["last_directive"]["action"] == "ASK_NEXT"
+    q10 = [r for r in doc["answer_records"] if r["slot"]["question_id"] == "Q10"][0]
+    assert q10["current_value"] == {"answer": 7}
+    assert doc["progress_record"]["current_question_id"] == "Q1.D02"
     t = store.get_turn("S1", "t1")
     assert t.committed and t.input_hash == "h1" and t.result is None
 
 
 def test_commit_revision_conflict_applies_nothing(store):
     st, rev = make(store)
-    res = store.commit({"session_id": "S1", "expected_revision": rev + 5, "writes": writes({"amount": 7, "unit": "시간"})},
+    res = store.commit({"session_id": "S1", "expected_revision": rev + 5, "writes": writes(7)},
                        turn_id="t1", input_hash="h1")
     assert res["status"] == "REVISION_CONFLICT" and res["write_outcome"] == "NOT_APPLIED" and res["revision"] == rev
     assert store.load("S1")["state"] == st and store.get_turn("S1", "t1") is None
@@ -81,9 +78,9 @@ def test_commit_revision_conflict_applies_nothing(store):
 
 def test_commit_unappliable_write_applies_nothing(store):
     st, rev = make(store)
-    w = writes({"amount": 7, "unit": "시간"})
-    w["store_result"]["store_decisions"].append({"slot": {"question_id": "Q9", "repeat_key": "", "slot_id": "x"}, "action": "FIRST_WRITE",
-                                                 "value": "a", "pending_id": None, "risk_mark": None})
+    w = writes(7)
+    w["answer_updates"].append({"slot": {"question_id": "Q99", "repeat_key": "", "slot_id": "x"}, "action": "FIRST_WRITE", "value": "a",
+                                "precision": "exact"})
     res = store.commit({"session_id": "S1", "expected_revision": rev, "writes": w}, turn_id="t1", input_hash="h1")
     assert res["status"] == "DB_ERROR" and res["write_outcome"] == "NOT_APPLIED"
     assert store.load("S1")["state"] == st                      # 앞의 결정도 반영되지 않았다
@@ -134,7 +131,7 @@ def test_concurrent_commit_only_one_wins(store):
     results = []
 
     def go(i):
-        results.append(store.commit({"session_id": "S1", "expected_revision": rev, "writes": writes({"amount": i, "unit": "시간"})},
+        results.append(store.commit({"session_id": "S1", "expected_revision": rev, "writes": writes(i)},
                                     turn_id=f"t{i}", input_hash=f"h{i}")["status"])
     ts = [threading.Thread(target=go, args=(i,)) for i in range(8)]
     [t.start() for t in ts]
@@ -146,7 +143,7 @@ def test_sqlite_persists_across_reopen(tmp_path):
     p = str(tmp_path / "x.db")
     s1 = SqliteSessionStore(p)
     st, rev = make(s1)
-    s1.commit({"session_id": "S1", "expected_revision": rev, "writes": writes({"amount": 7, "unit": "시간"})}, turn_id="t1", input_hash="h")
+    s1.commit({"session_id": "S1", "expected_revision": rev, "writes": writes(7)}, turn_id="t1", input_hash="h")
     s1.close()
     s2 = SqliteSessionStore(p)
     assert s2.load("S1")["revision"] == rev + 1 and s2.get_turn("S1", "t1").committed and s2.release_id_of("S1") == "rel-1"

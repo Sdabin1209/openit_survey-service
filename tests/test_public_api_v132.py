@@ -10,7 +10,7 @@ from boundary_contracts import validator
 from survey_service.api import PublicApi
 from survey_service.settings import Settings
 
-from .e2e_support import Rig, item
+from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .test_staff_alerts import (AUTH, STAFF, AlertRig, Sse, _vapid_key_pem, http_call, make_app, start_and_risk, api)
 
 V = {n: validator(n) for n in ("StaffAlert", "StaffAlertPage", "SessionState", "PushConfig", "BoundaryError")}
@@ -138,9 +138,10 @@ def test_inflight_overflow_is_429_unavailable_with_retry_after():
     api_ = PublicApi(rig.orch, "tok", max_inflight=1, retry_after_seconds=3)
     api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
     gate, entered = threading.Event(), threading.Event()
+    real = rig.release.session.extract
     def slow(inp):
-        entered.set(); gate.wait(5); return {"items": []}
-    rig.release.session.parse = slow
+        entered.set(); gate.wait(5); return real(inp)
+    rig.release.session.extract = slow
     body = json.dumps({"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "t1"}).encode()
     t = threading.Thread(target=lambda: api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body)); t.start()
     assert entered.wait(5)

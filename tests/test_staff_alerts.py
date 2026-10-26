@@ -17,12 +17,11 @@ from survey_service.errors import StoreError
 from survey_service.service import App, serve
 from survey_service.settings import ConfigError, Settings
 
-from .e2e_support import Rig, item, other
+from .e2e_support import ANSWER_OUT, RISK_OUT, Rig, ScriptedRisk
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingDispatcher
 from .sample_bank import sample_bank
 from .test_release_loader import INSTALLED
 
-RISK = other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")
 SECRET_TEXT = "숨이 안 쉬어져요"
 AUTH, STAFF = "Bearer tok", "Bearer stok"
 
@@ -38,7 +37,7 @@ class FakePush:
 
 class AlertRig:
     def __init__(self, tmp_path, push=None, db="alerts.db"):
-        self.rig = Rig()
+        self.rig = Rig(risk=True)
         self.store = AlertStore(str(tmp_path / db))
         self.hub = AlertHub()
         self.service = AlertService(self.store, self.hub, push, push_timeout=2.0)
@@ -53,7 +52,7 @@ class AlertRig:
         return self.call("POST", "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"}, auth=AUTH)
 
     def risk(self, sid="K1", tid="t-risk"):
-        self.rig.model.parse_queue.append([RISK])
+        self.rig.model.queue.append(RISK_OUT)
         return self.call("POST", f"/v1/sessions/{sid}/turns",
                          {"session_id": sid, "kind": "UTTERANCE", "utterance": SECRET_TEXT, "turn_id": tid}, auth=AUTH)
 
@@ -384,7 +383,7 @@ def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com"
         monkeypatch.setenv("SURVEY_VAPID_PRIVATE_KEY", vapid)
     else:
         monkeypatch.delenv("SURVEY_VAPID_PRIVATE_KEY", raising=False)
-    app = App(Settings.from_env(env), reader=reader, ingest=FakeTraceIngest(), dispatcher=RecordingDispatcher())
+    app = App(Settings.from_env(env), reader=reader, ingest=FakeTraceIngest(), dispatcher=RecordingDispatcher(), risk_source=ScriptedRisk())
     app.start()
     httpd = serve(app, 0)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()

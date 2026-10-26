@@ -19,8 +19,10 @@ from boundary_contracts.clients import HttpModelRuntime, RuntimeResult, is_outpu
 from .inference import InferenceLoadError
 
 
-def _timed_out(e: BoundaryError) -> bool:
-    return "imeout" in str(e.details.get("reason", "")) or "imed out" in e.message
+def _timed_out(e: BoundaryError, elapsed: float, timeout: float) -> bool:
+    """읽기 타임아웃인가. 클라이언트가 연결 실패와 타임아웃을 같은 UNAVAILABLE(reason=URLError)로 묶어 내므로,
+    걸린 시간이 타임아웃에 닿았는지로 구분한다(연결 실패는 바로 돌아온다)."""
+    return elapsed >= timeout * 0.9 or "imeout" in str(e.details.get("reason", ""))
 
 
 class Stats:
@@ -69,6 +71,7 @@ class RemoteModelSession:
         self.stats.add("calls")
         attempt = 0
         while True:
+            t0 = time.monotonic()
             try:
                 res = self._call_once(op, request)
                 break
@@ -77,9 +80,10 @@ class RemoteModelSession:
                     self.stats.add("output_invalid")
                     self.stats.add("failures")
                     raise
-                if _timed_out(e):
+                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, time.monotonic() - t0, self._rt._timeout)
+                if timed_out:
                     self.stats.add("timeouts")
-                if e.code == "UNAVAILABLE" and not _timed_out(e) and attempt < self.retries:
+                if e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries:
                     attempt += 1
                     self.stats.add("retries")
                     time.sleep(self.backoff * attempt)

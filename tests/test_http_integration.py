@@ -17,7 +17,6 @@ from survey_service.settings import ConfigError, Settings
 from survey_service.store.memory import MemorySessionStore
 from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter, envelope_id
 
-from .e2e_support import item
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .http_support import TOK, publish
 from .ref_servers import ReferenceServer

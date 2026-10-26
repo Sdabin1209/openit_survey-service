@@ -51,7 +51,7 @@ def test_installed_loader(wheel, tmp_path):
         "'cv': (s.schema_dir(1).parent / 'CONTRACT_VERSION').read_text().strip()}))"))
     d = json.loads(out)
     assert d["v"] == [1] and d["cur"] == 1 and d["cv"] == "1"
-    assert d["id"] == "standalone/TurnTrace.json" and d["n"] == 23
+    assert d["id"] == "standalone/TurnTrace.json" and d["n"] == 13
     assert d["dir"].startswith(str(tmp_path))
 
 

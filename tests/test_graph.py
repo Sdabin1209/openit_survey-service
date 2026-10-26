@@ -8,12 +8,12 @@ import pytest
 from survey_service import graph as G
 from survey_service.graph import COLUMNS, TurnCtx, initial_state, route
 
-from .e2e_support import Rig, item, other
+from .e2e_support import Rig, ScriptedRisk, ext, val
 
 
 @pytest.fixture
 def rig():
-    return Rig()
+    return Rig(risk_source=ScriptedRisk())
 
 
 def drawn(rig):
@@ -25,21 +25,25 @@ def test_nodes_and_edges_match_the_design():
     g = drawn(rig)
     nodes = {n for n in g.nodes} - {"__start__", "__end__"}
     assert nodes == {"load_session", "col_none", "col_progress", "col_paused", "col_ended", "ignore", "fail_no_session", "bind_release",
-                     "parse", "normalize", "judge", "write_record", "plan", "commit", "deliver_staff", "dispatch_result",
-                     "generate", "finalize"}
+                     "extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff", "dispatch_result",
+                     "respond", "finalize"}
+    # D74: 정규화·판정·기록·Plan 노드는 없다
+    assert not nodes & {"parse", "normalize", "judge", "write_record", "plan", "generate"}
     edges = {(e.source, e.target) for e in g.edges}
     for e in [("__start__", "load_session"), ("load_session", "col_none"), ("load_session", "col_ended"), ("load_session", "fail_no_session"),
-              ("col_paused", "ignore"), ("col_paused", "bind_release"), ("bind_release", "parse"), ("bind_release", "plan"),
-              ("bind_release", "finalize"), ("parse", "normalize"), ("normalize", "judge"), ("judge", "write_record"),
-              ("write_record", "plan"), ("plan", "commit"), ("commit", "deliver_staff"), ("commit", "finalize"),
-              ("deliver_staff", "dispatch_result"), ("deliver_staff", "generate"), ("dispatch_result", "generate"),
-              ("generate", "finalize"), ("finalize", "__end__"), ("ignore", "__end__"), ("fail_no_session", "__end__")]:
+              ("col_paused", "ignore"), ("col_paused", "bind_release"), ("bind_release", "extract"), ("bind_release", "plan_other"),
+              ("bind_release", "finalize"), ("extract", "validate_extraction"), ("extract", "extract"), ("extract", "finalize"),
+              ("validate_extraction", "plan_writes"), ("validate_extraction", "extract"), ("validate_extraction", "finalize"),
+              ("plan_writes", "commit"), ("plan_other", "commit"), ("commit", "deliver_staff"), ("commit", "finalize"),
+              ("deliver_staff", "dispatch_result"), ("deliver_staff", "respond"), ("dispatch_result", "respond"),
+              ("respond", "finalize"), ("finalize", "__end__"), ("ignore", "__end__"), ("fail_no_session", "__end__")]:
         assert e in edges, e
-    # 저장 판단 뒤에는 앞 단계로 돌아가지 않는다(규칙 4): 되돌아가는 간선이 없다
-    order = ["parse", "normalize", "judge", "write_record", "plan", "commit", "deliver_staff", "dispatch_result", "generate", "finalize"]
-    for s, t in edges:
-        if s in order and t in order:
-            assert order.index(t) > order.index(s), (s, t)
+    # 저장 판단 뒤에는 앞 단계로 돌아가지 않는다(규칙 4). 되돌아가는 간선은 쓰기 확정 전의 재시도(D75)뿐이다
+    order = ["extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff", "dispatch_result", "respond", "finalize"]
+    allowed_back = {("extract", "extract"), ("validate_extraction", "extract")}
+    for s_, t_ in edges:
+        if s_ in order and t_ in order and (s_, t_) not in allowed_back:
+            assert order.index(t_) > order.index(s_) or {s_, t_} == {"plan_writes", "plan_other"}, (s_, t_)
 
 
 def test_no_checkpointer(rig):
@@ -79,7 +83,7 @@ def test_final_state_is_json_serializable_for_every_path(rig):
         dict(message=msg(kind="UTTERANCE", utterance="끝난 뒤")),                      # 종료 열
         dict(message={"session_id": "NEW", "kind": "SESSION_END"}),                    # 세션 없음 + 처리 안 함
     ]
-    rig.model.parse_queue[:] = [[], [other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")], [], []]
+    rig.model.queue[:] = [ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", False)), ext("REDIRECT", "Q1.D02", reason="OFF_TOPIC")]
     for i, p in enumerate(paths):
         final = run_graph(rig, turn_id=f"g{i}", **p)
         json.dumps(final)                                                              # 직렬화 가능
@@ -106,8 +110,8 @@ def test_turns_make_no_network_connections(rig, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", deny)
     monkeypatch.setattr(socket, "create_connection", deny)
     rig.say(kind="SESSION_START")
-    rig.say("안 피움", items=[item(0, "Q1", "상태", "안 피움", "안 피움")])
-    rig.say("숨이 안 쉬어져요", items=[other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")])
+    rig.say("안 피움", out=ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", False)))
+    rig.say("숨이 안 쉬어져요", out=ext("REDIRECT", "Q1.D02", reason="OFF_TOPIC"))
     rig.say(decision="END")
 
 
@@ -126,7 +130,7 @@ def test_graph_overhead_is_small(rig):
     rig.say(kind="SESSION_START")
     t0 = time.time()
     for i in range(50):
-        rig.say("안녕", items=[], turn_id=f"p{i}")
+        rig.say("안녕", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"), turn_id=f"p{i}")
     assert (time.time() - t0) / 50 < 0.15          # 턴당 평균(실제 엔진 + 가짜 모델 포함)
 
 

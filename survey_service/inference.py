@@ -8,6 +8,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 
+import json
+import re
+
 import model_runtime
 import survey_schema
 from boundary_contracts import BoundaryError
@@ -35,11 +38,25 @@ def role_configs(manifest: Mapping) -> tuple[dict, dict, dict]:
             {r: ad[r]["system_prompt"] for r in roles})
 
 
+def dev_responder(req) -> str:
+    """개발·스모크용 가짜 백엔드의 출력. LoRA-A는 항상 "관계없는 말"(REDIRECT, OFF_TOPIC)로 같은 문항을 유지한다: 어떤 입력에도
+    validate_extraction을 통과하고 세션이 끝나지 않는다(model_runtime의 기본 가짜 출력은 NEXT -> END라 검증을 통과하지 못한다)."""
+    if req.role == "LORA_A":
+        m = re.search(r"<\|im_start\|>user\n(.*)<\|im_end\|>", req.prompt, re.S)
+        qid = json.loads(m.group(1))["question_id"]
+        return json.dumps({"action": "REDIRECT", "next_item": qid, "reason": "OFF_TOPIC", "values": []}, ensure_ascii=False)
+    return "(가짜 응답)"
+
+
 class LocalModelSession:
     """model-runtime ModelSession을 graph가 아는 모양(RuntimeResult, BoundaryError)으로 맞춘다."""
 
     def __init__(self, session) -> None:
         self._s = session
+
+    @property
+    def serving_config_hashes(self):
+        return self._s.serving_config_hashes
 
     def extract(self, request: Mapping) -> RuntimeResult:
         try:
@@ -69,7 +86,7 @@ class InferenceServer:
         if self._backend_factory is not None:
             return self._backend_factory()
         if self.backend == "fake":
-            return model_runtime.FakeBackend()
+            return model_runtime.FakeBackend(dev_responder)
         return None
 
     def load(self, manifest: Mapping, adapters: Mapping[str, Path], *, contract_version: Optional[int] = None) -> LocalModelSession:

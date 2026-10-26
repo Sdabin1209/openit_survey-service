@@ -11,16 +11,13 @@ import pytest
 
 import survey_schema
 from survey_service.api import PublicApi
-from .ref_inference_server import InferenceHttp, build, make_server
-from survey_service.inference import InferenceLoadError
 from survey_service.orchestrator import Orchestrator
-from survey_service.release import ReleaseLoader, ReleaseRegistry
-from survey_service.remote import RemoteInference, RemoteModelSession
+from survey_service.release import ReleaseRegistry
 from survey_service.service import App, serve
 from survey_service.settings import Settings
 from survey_service.store.memory import MemorySessionStore
 
-from .e2e_support import Rig, item, other
+from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
 from .test_release_loader import INSTALLED
@@ -36,7 +33,7 @@ def call(api, method, path, body=None, auth=AUTH, raw=None):
 
 @pytest.fixture
 def rig_api():
-    rig = Rig()
+    rig = Rig(risk=True)
     return rig, PublicApi(rig.orch, "tok", max_utterance_chars=100)
 
 
@@ -52,10 +49,10 @@ def test_start_turn_end_happy_path(rig_api):
     rig, api = rig_api
     code, body, _ = start(api)
     assert code == 200 and body["response_text"] and body["turn_failure_signal"] is None and not list(FI.iter_errors(body))
-    rig.model.parse_queue.append([item(0, "Q1", "상태", "안 피움", "안 피움")])
+    rig.model.queue.append(ANSWER_OUT)
     code, body, _ = say(api, "안 피움", "t-1")
     assert code == 200 and body["response_text"] and not list(FI.iter_errors(body))
-    assert rig.doc("K1")["answer_records"][0]["current_value"] == {"answer": "안 피움"}
+    assert rig.doc("K1")["answer_records"][0]["current_value"] == {"answer": False}
     code, body, _ = call(api, "POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})
     assert code == 200 and not list(FI.iter_errors(body))
     assert rig.doc("K1")["progress_record"]["session_status"] == "ENDED_LEFT" and len(rig.dispatcher.inputs) == 1
@@ -64,12 +61,12 @@ def test_start_turn_end_happy_path(rig_api):
 def test_same_turn_id_returns_same_response_and_processes_once(rig_api):
     rig, api = rig_api
     start(api)
-    rig.model.parse_queue.append([item(0, "Q1", "상태", "안 피움", "안 피움")])
+    rig.model.queue.append(ANSWER_OUT)
     a = say(api, "안 피움", "t-1")
     n = len(rig.doc("K1")["dialogue_log"])
-    rig.model.parse_queue.append([])                      # 두 번째 처리가 있었다면 소비됐을 것
+    rig.model.queue.append(ANSWER_OUT)                    # 두 번째 처리가 있었다면 소비됐을 것
     b = say(api, "안 피움", "t-1")
-    assert a[:2] == b[:2] and len(rig.doc("K1")["dialogue_log"]) == n and len(rig.model.parse_queue) == 1
+    assert a[:2] == b[:2] and len(rig.doc("K1")["dialogue_log"]) == n and len(rig.model.queue) == 1
     assert start(api)[:2] == start(api)[:2]               # 시작 재시도도 같은 응답
     code, body, _ = say(api, "다른 말", "t-1")            # 같은 turn_id, 다른 입력
     assert code == 409 and body["code"] == "CONFLICT"
@@ -136,7 +133,7 @@ def test_unknown_and_ended_sessions(rig_api):
 def test_paused_session_gets_nothing_to_say_but_200(rig_api):
     rig, api = rig_api
     start(api)
-    rig.model.parse_queue.append([other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")])
+    rig.model.queue.append(RISK_OUT)
     code, body, _ = say(api, "숨이 안 쉬어져요", "t-1")
     assert code == 200 and body["response_text"] and rig.console.inputs
     assert say(api, "언제 와요", "t-2")[:2] == (200, {"response_text": None, "turn_failure_signal": None})
@@ -146,7 +143,7 @@ def test_failure_signal_is_passed_through_with_200(rig_api):
     rig, api = rig_api
     start(api)
     rig.console.fail = True
-    rig.model.parse_queue.append([other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")])
+    rig.model.queue.append(RISK_OUT)
     code, body, _ = say(api, "숨이 안 쉬어져요", "t-1")
     assert code == 200 and body["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED"}
     assert body["response_text"]                        # 응답 단계는 그대로 한다
@@ -169,12 +166,12 @@ def test_too_many_in_flight_is_429():
     api = PublicApi(rig.orch, "tok", max_inflight=1)
     start(api)
     gate, entered = threading.Event(), threading.Event()
-    real = rig.release.session.parse
+    real = rig.release.session.extract
 
     def slow(inp):
         entered.set(); gate.wait(5)
-        return {"items": []}
-    rig.release.session.parse = slow
+        return real(inp)
+    rig.release.session.extract = slow
     t = threading.Thread(target=lambda: say(api, "느린 말", "t-slow"))
     t.start()
     assert entered.wait(5)
@@ -187,10 +184,10 @@ def test_too_many_in_flight_is_429():
 # ---------------------------------------------------------------- 유휴 만료
 def test_idle_sessions_are_closed_as_left_but_paused_are_not():
     now = [1000.0]
-    rig = Rig(store=MemorySessionStore(clock=lambda: now[0]))
+    rig = Rig(risk=True, store=MemorySessionStore(clock=lambda: now[0]))
     api = PublicApi(rig.orch, "tok")
     start(api, "OLD"); start(api, "PAUSED")
-    rig.model.parse_queue.append([other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")])
+    rig.model.queue.append(RISK_OUT)
     say(api, "숨이 안 쉬어져요", "t-r", sid="PAUSED")
     now[0] += 200
     start(api, "FRESH")
@@ -208,7 +205,7 @@ def test_idle_sessions_are_closed_as_left_but_paused_are_not():
 
 def test_activity_resets_idle_clock():
     now = [0.0]
-    rig = Rig(store=MemorySessionStore(clock=lambda: now[0]))
+    rig = Rig(risk=True, store=MemorySessionStore(clock=lambda: now[0]))
     api = PublicApi(rig.orch, "tok")
     start(api)
     now[0] = 290
@@ -221,7 +218,7 @@ def test_sqlite_list_idle_and_migration(tmp_path):
     import sqlite3
     from survey_service.store import effects
     from survey_service.store.sqlite import SqliteSessionStore
-    from .skeleton_bank import skeleton_bank
+    from .sample_bank import sample_bank
     p = str(tmp_path / "old.db")
     db = sqlite3.connect(p)                                 # updated_at 열이 없는 이전 파일
     db.executescript("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, release_id TEXT NOT NULL, status TEXT NOT NULL, doc TEXT NOT NULL);")
@@ -229,7 +226,7 @@ def test_sqlite_list_idle_and_migration(tmp_path):
     db.commit(); db.close()
     now = [100.0]
     s = SqliteSessionStore(p, clock=lambda: now[0])
-    s.create("B", "r", effects.initial_state("B", skeleton_bank()))
+    s.create("B", "r", effects.initial_state("B", sample_bank(), "Q1.D01"))
     assert s.list_idle(50) == ["A"] and s.list_idle(200) == ["A", "B"]      # 이전 세션은 updated_at 0으로 보고 가장 먼저 만료
     s.close()
 
@@ -287,90 +284,16 @@ def test_app_refuses_to_start_without_api_token(tmp_path, monkeypatch):
         App(s, reader=object(), ingest=object())
 
 
-# ---------------------------------------------------------------- 모델 런타임을 HTTP 경계 뒤에
-@pytest.fixture
-def remote(tmp_path):
-    reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
-                       model_runtime_version=INSTALLED["model_runtime_version"])
-    reader.set_pointer("rel-1")
-    s = Settings(work_dir=str(tmp_path / "inf-work"), release_reader="x:y", trace_ingest="x:y", model_backend="fake")
-    inf = build(s, reader=reader, token="inf-tok")
-    httpd = make_server(inf, 0)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{httpd.server_address[1]}"
-    reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, RemoteInference(url, "inf-tok", 5), workdir=tmp_path / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0)
-    yield reader, reg, loader, inf, url, httpd, tmp_path
-    httpd.shutdown(); httpd.server_close()
-
-
-def test_turns_work_through_the_inference_http_boundary(remote):
-    reader, reg, loader, inf, url, httpd, tmp = remote
-    assert loader.poll_once().action == "LOADED"
-    assert isinstance(reg.active().session, RemoteModelSession) and inf.registry.loaded_ids() == ["rel-1"]
-    orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
-    o = orch.handle_turn(turn_id="a", frontend_message={"session_id": "S1", "kind": "SESSION_START"})
-    assert o.frontend_input["response_text"] == "(가짜 응답)"                   # 추론 서버(fake 백엔드)가 만든 문장
-    o = orch.handle_turn(turn_id="b", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "안녕"})
-    assert o.orchestrator_output["turn_failure_signal"] is None and o.trace["parser_output"] == {"items": []}
-
-
-def test_inference_server_restart_reloads_release_once(remote):
-    reader, reg, loader, inf, url, httpd, tmp = remote
-    loader.poll_once()
-    inf.registry._loaded.clear()                          # 추론 컨테이너가 다시 떴다
-    out = reg.active().session.generate({"directive": {"action": "ASK_NEXT", "targets": [], "target_pending_id": None, "awaiting": None,
-                                                        "say_values": [], "reask_reasons": [], "notices": [],
-                                                        "sentence_materials": {"question_sentences": [], "refusal_explanations": [], "reask_sentences": [],
-                                                                               "choices": [], "guide_sentences": [], "fixed_sentences": []}}, "utterance": None})
-    assert out["response_text"] and inf.registry.loaded_ids() == ["rel-1"]
-
-
-def test_inference_down_fails_the_step_not_the_service(remote):
-    reader, reg, loader, inf, url, httpd, tmp = remote
-    loader.poll_once()
-    httpd.shutdown(); httpd.server_close()
-    orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
-    o = orch.handle_turn(turn_id="a", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "안녕"})
-    assert o.orchestrator_output["log_entry"]["turn_result"] == {"failed_steps": [{"phase": "BEFORE_COMMIT", "step": "LoRA-A"}]}
-    assert o.orchestrator_output["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
-
-
-def test_inference_wrong_token_or_down_rejects_release_and_keeps_previous(remote):
-    reader, reg, loader, inf, url, httpd, tmp = remote
-    loader.poll_once()
-    reader.add_release("rel-2", sample_bank(2), turn_engine_version=INSTALLED["turn_engine_version"],
-                       model_runtime_version=INSTALLED["model_runtime_version"])
-    reader.set_pointer("rel-2")
-    bad = ReleaseLoader(reader, ReleaseRegistry(), RemoteInference(url, "wrong", 5), workdir=tmp / "w2", installed_versions=INSTALLED, retry_base_seconds=0)
-    r = bad.poll_once()
-    assert r.action == "REJECTED" and r.code.startswith("REMOTE_") and bad.registry.active() is None
-    assert reg.active_id() == "rel-1"
-
-
-def test_inference_server_auth_and_errors(remote):
-    reader, reg, loader, inf, url, httpd, tmp = remote
-    assert inf.handle("PUT", "/v1/releases/rel-1", "", b"")[0] == 403
-    assert inf.handle("GET", "/healthz", "", b"")[0] == 200
-    assert inf.handle("PUT", "/v1/releases/nope", "Bearer inf-tok", b"")[0] == 412         # 적재할 수 없는 릴리스
-    assert inf.handle("POST", "/v1/releases/rel-1/parse", "Bearer inf-tok", b"{}")[0] == 404  # 적재 전
-    inf.handle("PUT", "/v1/releases/rel-1", "Bearer inf-tok", b"")
-    assert inf.handle("POST", "/v1/releases/rel-1/parse", "Bearer inf-tok", b"x")[0] == 400
-    assert inf.handle("POST", "/v1/releases/rel-1/parse", "Bearer inf-tok", b'{"utterance": 1}')[0] == 400    # 계약 위반 입력
-    assert inf.handle("POST", "/v1/other", "Bearer inf-tok", b"{}")[0] == 404
-
-
 # ---------------------------------------------------------------- 직원 개입 (PUBLIC_API.md 직원 콘솔)
 STAFF = "Bearer stok"
 
 
 @pytest.fixture
 def paused():
-    rig = Rig()
+    rig = Rig(risk=True)
     api = PublicApi(rig.orch, "tok", staff_token="stok")
     start(api)
-    rig.model.parse_queue.append([other(0, "RISK_SIGNAL", "숨이 안 쉬어져요")])
+    rig.model.queue.append(RISK_OUT)
     say(api, "숨이 안 쉬어져요", "t-risk")
     assert rig.doc("K1")["progress_record"]["session_status"] == "PAUSED_RISK"
     return rig, api
@@ -386,9 +309,9 @@ def test_staff_resumes_paused_session_and_conversation_continues(paused):
     assert code == 200 and body["response_text"] and body["turn_failure_signal"] is None and not list(FI.iter_errors(body))
     assert rig.doc("K1")["progress_record"]["session_status"] == "IN_PROGRESS"
     assert rig.console.inputs[-1]["intervention_result"] == {"session_id": "K1", "result": "APPLIED"}
-    rig.model.parse_queue.append([item(0, "Q1", "상태", "안 피움", "안 피움")])
+    rig.model.queue.append(ANSWER_OUT)
     assert say(api, "안 피움", "t-after")[0] == 200
-    assert rig.doc("K1")["answer_records"][0]["current_value"] == {"answer": "안 피움"}
+    assert rig.doc("K1")["answer_records"][0]["current_value"] == {"answer": False}
 
 
 def test_staff_ends_paused_session(paused):

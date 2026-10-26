@@ -76,7 +76,9 @@ def make_session(model: ScriptedModel) -> RecordingSession:
 
 
 class Rig:
-    def __init__(self, store=None, bank=None, **orch_kw) -> None:
+    def __init__(self, store=None, bank=None, risk: bool = False, **orch_kw) -> None:
+        if risk:
+            orch_kw["risk_source"] = ScriptedRisk()
         self.model = ScriptedModel()
         self.bank = bank or sample_bank()
         self.store = store or MemorySessionStore()
@@ -121,3 +123,8 @@ class ScriptedRisk:
         if self.kind == "RISK":
             return {"kind": "RISK", "reasons": [{"kind": "RISK_SIGNAL", "evidence": [self.phrase]}]}
         return {"kind": self.kind, "reasons": []}
+
+
+# 시험에서 자주 쓰는 A 출력
+ANSWER_OUT = ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", False), val("Q1.D01.on_medication", False))       # Q1.D01을 답하고 다음 문항으로
+RISK_OUT = ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC")                                                       # 위험 입력원이 알림을 내는 턴의 A 출력(내용은 상관없다)

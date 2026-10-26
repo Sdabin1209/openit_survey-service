@@ -8,7 +8,7 @@ from boundary_contracts import BoundaryError
 
 from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter
 
-from .e2e_support import Rig, item
+from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeTraceIngest
 
 
@@ -34,7 +34,7 @@ def parts(tmp_path):
 def run_turns(sink, n=3, **kw):
     rig = Rig(trace_sink=sink)
     rig.say(kind="SESSION_START")
-    rig.say("안 피움", items=[item(0, "Q1", "상태", "안 피움", "안 피움")])
+    rig.say("안 피움", out=ANSWER_OUT)
     if n > 2:
         rig.say(kind="SESSION_END")
     return rig
