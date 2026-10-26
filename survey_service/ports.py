@@ -6,9 +6,10 @@ from typing import Any, Callable, Mapping, Optional, Protocol
 
 
 class ModelSessionLike(Protocol):
-    """model-runtime의 ModelSession 중 Orchestrator가 쓰는 두 동작."""
-    def parse(self, input: Mapping) -> dict: ...
-    def generate(self, input: Mapping) -> dict: ...
+    """추론 세션 중 Orchestrator가 쓰는 두 동작. 둘 다 `boundary_contracts.clients.RuntimeResult`를 돌려주고,
+    실패는 `boundary_contracts.BoundaryError`로 던진다(extract가 끝내 형식을 못 지키면 UNAVAILABLE + details.reason=OUTPUT_INVALID, D75)."""
+    def extract(self, request: Mapping) -> Any: ...
+    def respond(self, request: Mapping) -> Any: ...
 
 
 @dataclass
@@ -29,18 +30,11 @@ class ReleaseProvider(Protocol):
         """세션이 묶인 릴리스. 쓸 수 없으면 ReleaseUnavailable."""
 
 
-@dataclass
-class Engine:
-    """turn-engine의 네 함수. 시험에서는 재생용 대역으로 바꾼다."""
-    normalize: Callable[[Mapping], dict]
-    judge: Callable[[Mapping], dict]
-    write_record: Callable[[Mapping], dict]
-    plan: Callable[[Mapping], dict]
-
-
-def default_engine() -> Engine:
-    import turn_engine
-    return Engine(turn_engine.normalize, turn_engine.judge, turn_engine.write_record, turn_engine.plan)
+class RiskSource(Protocol):
+    """위험 신호·직원 호출 입력원(선택). v2의 A 출력(ActionExtraction)에는 위험 신호 필드가 없어 기본은 없음(None)이고 직원 알림은 비활성이다.
+    입력원이 정해지면(헤드 결정, docs/change-requests/CR-012) 이 접점에 꽂는다."""
+    def check(self, *, extract_input: Mapping, extract_output: Mapping, utterance: str) -> Optional[Mapping]:
+        """StaffAlert(kind RISK | CALL_STAFF | USER_CALLED_STAFF)를 돌려주거나 None."""
 
 
 class StaffConsole(Protocol):

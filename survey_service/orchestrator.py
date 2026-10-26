@@ -2,7 +2,7 @@
 
 한 턴의 분기와 단계는 LangGraph 그래프(survey_service/graph.py, 설계서 14절)가 맡는다. 이 모듈은 그래프 밖에서 유지하는 것을 한다:
 세션별 직렬화, 입력 검증, turn_id 멱등(저장된 결과 재생), 결과 저장, Trace outbox로 넘기기.
-판단은 하지 않는다(turn-engine이 한다). 공개 API(I10)는 survey_service/api.py가 이 handle_turn을 부른다.
+판단은 하지 않는다(추출은 LoRA-A, 의미 검증은 turn-engine의 validate_extraction이 한다). 공개 API(I10)는 survey_service/api.py가 이 handle_turn을 부른다.
 """
 from __future__ import annotations
 
@@ -17,8 +17,12 @@ from boundary_contracts import canonical
 
 from .errors import StoreError, TurnIdConflict
 from .graph import SCHEMA_CONTRACT_VERSION, TRACE_KEYS, Route, TurnCtx, TurnGraph, initial_state, route  # noqa: F401 (재노출)
-from .ports import (Engine, FrontendSink, ReleaseProvider, ResultDispatcher, StaffConsole, TraceSink, UnattachedDispatcher,
-                    UnconfiguredStaffConsole, default_engine)
+import survey_schema
+
+from .flow import Flow, load_flow
+from .ports import (FrontendSink, ReleaseProvider, ResultDispatcher, RiskSource, StaffConsole, TraceSink, UnattachedDispatcher,
+                    UnconfiguredStaffConsole)
+from .response_tables import ResponseTables
 from .store.base import SessionStorePort
 
 log = logging.getLogger("survey_service.orchestrator")
@@ -59,12 +63,15 @@ class _SessionLocks:
 
 
 class Orchestrator:
-    def __init__(self, store: SessionStorePort, releases: ReleaseProvider, *, engine: Optional[Engine] = None,
+    def __init__(self, store: SessionStorePort, releases: ReleaseProvider, *, flow: Optional[Flow] = None,
+                 tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None) -> None:
         self.store = store
         self.releases = releases
-        self.engine = engine or default_engine()
+        self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
+        self.tables = tables or ResponseTables(survey_schema.load_data("response_tables"))   # 미확정 초안 표
+        self.risk_source = risk_source                                   # None이면 직원 알림 입력원이 없다(비활성)
         self.staff_console = staff_console or UnconfiguredStaffConsole()
         self.dispatcher = dispatcher or UnattachedDispatcher()
         self.frontend_sink = frontend_sink

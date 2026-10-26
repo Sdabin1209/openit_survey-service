@@ -1,10 +1,10 @@
 """개발용 하네스(공개 API가 아니다, O06 대기). 한 턴을 처리하고 결과를 JSON으로 찍는다.
 
-문항 세트 파일과 SQLite 파일을 주면 여러 번 부르는 동안 세션이 이어진다. 모델은 FakeModelSession이고, 파서가 낼 항목은 사람이
-`--items`로 직접 준다(turn-engine의 판단은 실제 코드가 한다). 응답 문장은 가짜다.
+문항 세트 파일과 SQLite 파일을 주면 여러 번 부르는 동안 세션이 이어진다. 모델은 FakeModelSession이고, LoRA-A가 낼 ActionExtraction은 사람이
+`--extraction`으로 직접 준다(검증은 실제 turn-engine이 한다). 응답 문장은 가짜다.
 
 예: python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --start
-    python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --utterance "안 피움" --items '[...]'
+    python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --utterance "안 피움" --extraction '{...}'
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ import model_runtime
 import survey_schema
 
 from .orchestrator import Orchestrator
+from .inference import LocalModelSession
 from .ports import LoadedRelease
 from .release.registry import ReleaseRegistry
 from .store.sqlite import SqliteSessionStore
@@ -33,13 +34,11 @@ class _Dispatcher:
         return {"dispatch_record": {"succeeded": True}}
 
 
-def build(bank: dict, db: str, items: list):
-    state = {"items": items}
-
+def build(bank: dict, db: str, extraction: dict):
     def responder(req):
         if req.role == "LORA_A":
-            return json.dumps({"items": state["items"]}, ensure_ascii=False)
-        return json.dumps({"response_text": "(가짜 응답)"}, ensure_ascii=False)
+            return json.dumps(extraction, ensure_ascii=False)
+        return "(가짜 응답)"
 
     backend = model_runtime.FakeBackend(responder)
     cfg = model_runtime.fake_serving_config(backend)
@@ -47,7 +46,7 @@ def build(bank: dict, db: str, items: list):
                                              expected_serving_config_hashes={r: model_runtime.serving_config_hash(cfg) for r in ("LORA_A", "LORA_B")},
                                              backend=backend)
     reg = ReleaseRegistry()
-    reg.register(LoadedRelease("rel-dev", {}, bank, session), activate=True)
+    reg.register(LoadedRelease("rel-dev", {}, bank, LocalModelSession(session)), activate=True)
     return Orchestrator(SqliteSessionStore(db), reg, staff_console=_Console(), dispatcher=_Dispatcher())
 
 
@@ -65,10 +64,10 @@ def main(argv=None) -> int:
     g.add_argument("--end", action="store_true", help="SESSION_END(사용자 이탈)")
     g.add_argument("--resume", action="store_true", help="개입 결정: 재개")
     g.add_argument("--staff-end", action="store_true", help="개입 결정: 종료")
-    t.add_argument("--items", default="[]", help="파서가 낼 항목들(JSON 배열)")
+    t.add_argument("--extraction", default='{"action": "NEXT", "next_item": "END", "values": []}', help="LoRA-A가 낼 ActionExtraction(JSON)")
     a = ap.parse_args(argv)
     bank = json.load(open(a.bank, encoding="utf-8"))
-    orch = build(bank, a.db, json.loads(a.items))
+    orch = build(bank, a.db, json.loads(a.extraction))
     tid = a.turn_id or uuid.uuid4().hex
     kw = {}
     if a.resume or a.staff_end:

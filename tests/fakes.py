@@ -116,6 +116,7 @@ class FakeReleaseReader:
             d = self.root / "adapters" / release_id / role
             d.mkdir(parents=True, exist_ok=True)
             (d / "adapter.bin").write_bytes(f"{release_id}-{role}".encode())
+            (d / "system_prompt.txt").write_text(f"(시험용 시스템 프롬프트 {role})", encoding="utf-8")
             dirs[role] = d
         cfg_b = serving_config_b or cfg
         ref = lambda i, v, h: {"id": i, "version": v, "content_hash": h}
@@ -129,9 +130,11 @@ class FakeReleaseReader:
             "model_runtime_version": model_runtime_version,
             "adapters": {
                 "LORA_A": {"adapter_hash": canonical.directory_hash(dirs["LORA_A"]), "serving_config": cfg,
-                           "serving_config_hash": model_runtime.serving_config_hash(cfg)},
+                           "serving_config_hash": model_runtime.serving_config_hash(cfg),
+                           "system_prompt": {"path": "system_prompt.txt", "sha256": canonical.file_hash(dirs["LORA_A"] / "system_prompt.txt")}},
                 "LORA_B": {"adapter_hash": canonical.directory_hash(dirs["LORA_B"]), "serving_config": cfg_b,
-                           "serving_config_hash": model_runtime.serving_config_hash(cfg_b)}}}
+                           "serving_config_hash": model_runtime.serving_config_hash(cfg_b),
+                           "system_prompt": {"path": "system_prompt.txt", "sha256": canonical.file_hash(dirs["LORA_B"] / "system_prompt.txt")}}}}
         manifest["content_hash"] = canonical.content_hash(manifest)
         subject = {k: manifest[k] for k in ("question_set", "lora_a", "lora_b")}
         if decision_subject_swap:

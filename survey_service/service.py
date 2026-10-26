@@ -57,7 +57,7 @@ def _spec(spec: str, which: str) -> str:
 class App:
     """저장소·릴리스 로더·Trace 내보내기·Orchestrator를 조립한다. reader/ingest를 주면 팩토리 설정을 쓰지 않는다(시험)."""
 
-    def __init__(self, settings: Settings, *, reader=None, ingest=None, staff_console=None, dispatcher=None) -> None:
+    def __init__(self, settings: Settings, *, reader=None, ingest=None, staff_console=None, dispatcher=None, risk_source=None) -> None:
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
         self.store = SqliteSessionStore(settings.session_db)
@@ -95,7 +95,7 @@ class App:
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
         if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다
             console = AlertStaffConsole(self.alerts)
-        self.orchestrator = Orchestrator(self.store, self.registry, staff_console=console, dispatcher=disp,
+        self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox))
         api_token = os.environ.get(settings.api_token_env, "")
         if not api_token:
@@ -190,6 +190,12 @@ class App:
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
             "staff_alerts": self.alerts.status(),
+            # D74: v2의 A 출력에는 위험 신호 필드가 없어 직원 알림의 입력원이 없다. 조용히 끄지 않고 여기에 드러낸다(CR-012, 헤드 결정 대기).
+            "staff_alert_source": ({"active": True} if self.orchestrator.risk_source is not None else
+                                   {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",
+                                    "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 알림이 만들어지지 않는다(docs/change-requests/CR-012)."}),
+            "response_tables": {"status": self.orchestrator.tables.status},
+            "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
             "release_loader": {"retrying": retrying, "unavailable_releases": self.loader.status.unavailable_releases,

@@ -1,174 +1,98 @@
-"""저장소 반영 효과(session_store.md 9-2)를 표의 행마다 확인한다."""
+"""저장소 반영 효과(survey_service/store/effects.py): 판단 없이 효과만 적용하는 순수 함수."""
 import copy
 
+import jsonschema
 import pytest
+
+import survey_schema
 
 from survey_service.errors import StoreEffectError
 from survey_service.store import effects
-from .skeleton_bank import skeleton_bank
 
-SLOT = {"question_id": "Q2", "repeat_key": "", "slot_id": "개비"}
+from .sample_bank import sample_bank
 
-
-def rec(cv="NONE", risk=None, history=(), pending=None, md=None):
-    r = {"slot": SLOT, "current_value": cv, "risk_mark": risk, "history": list(history), "pending": pending}
-    if md:
-        r["value_metadata"] = md
-    return r
+SS = jsonschema.Draft202012Validator(survey_schema.load_schema("SessionStore"))
 
 
-def dec(action, value=None, pending_id=None, risk=None, md=None):
-    d = {"slot": SLOT, "action": action, "value": value, "pending_id": pending_id, "risk_mark": risk}
-    if md:
-        d["value_metadata"] = md
-    return d
+def doc():
+    return effects.initial_state("S1", sample_bank(), "Q1.D01")
 
 
-def apply(r, d):
-    return effects.apply_store_result([r], {"store_decisions": [d], "store_summary": effects.empty_store_result()["store_summary"]})[0]
-
-
-V10, V20 = {"amount": 10, "unit": "개비"}, {"amount": 20, "unit": "개비"}
-MD = {"precision": "approximate", "evidence": []}
-
-
-def test_first_write():
-    r = apply(rec(), dec("FIRST_WRITE", V10, risk="ON_RESULT"))
-    assert r["current_value"] == {"answer": V10} and r["history"] == [] and r["risk_mark"] == "ON_RESULT" and r["pending"] is None
-
-
-def test_first_write_keeps_pending_untouched():
-    p = {"pending_id": "p1", "value": V20, "risk_mark": None}
-    assert apply(rec(pending=p), dec("FIRST_WRITE", V10))["pending"] == p
-
-
-def test_new_revision_pushes_previous_answer():
-    r = apply(rec({"answer": V10}, risk="IMMEDIATE"), dec("NEW_REVISION", V20))
-    assert r["current_value"] == {"answer": V20} and r["history"] == [V10] and r["risk_mark"] is None
-
-
-def test_new_revision_pushes_previous_with_metadata():
-    r = apply(rec({"answer": V10}, md=MD), dec("NEW_REVISION", V20))
-    assert r["history"] == [{"value": V10, "value_metadata": MD}] and "value_metadata" not in r
-
-
-def test_new_revision_after_unknown_pushes_nothing():
-    assert apply(rec("UNKNOWN_RECORD"), dec("NEW_REVISION", V20))["history"] == []
-
-
-@pytest.mark.parametrize("action,cv", [("RECORD_UNKNOWN", "UNKNOWN_RECORD"), ("RECORD_REFUSAL", "REFUSAL_RECORD")])
-def test_unknown_refusal(action, cv):
-    r = apply(rec({"answer": V10}, risk="IMMEDIATE", md=MD), dec(action))
-    assert r["current_value"] == cv and r["history"] == [{"value": V10, "value_metadata": MD}] and r["risk_mark"] is None
-    assert "value_metadata" not in r
-    # 모름·거절은 답이 아니라 이력에 쌓지 않는다
-    assert apply(rec("UNKNOWN_RECORD"), dec(action))["history"] == []
-
-
-def test_set_pending_replaces_and_keeps_current():
-    old = {"pending_id": "p0", "value": V10, "risk_mark": None}
-    r = apply(rec({"answer": V10}, pending=old), dec("SET_PENDING", V20, "p1", "ON_RESULT", MD))
-    assert r["current_value"] == {"answer": V10} and r["history"] == []
-    assert r["pending"] == {"pending_id": "p1", "value": V20, "risk_mark": "ON_RESULT", "value_metadata": MD}
-
-
-def test_accept_pending():
-    p = {"pending_id": "p1", "value": V20, "risk_mark": "ON_RESULT", "value_metadata": MD}
-    r = apply(rec({"answer": V10}, pending=p), dec("ACCEPT_PENDING", V20, "p1"))
-    assert r["current_value"] == {"answer": V20} and r["history"] == [V10] and r["pending"] is None
-    assert r["risk_mark"] == "ON_RESULT" and r["value_metadata"] == MD
-
-
-def test_accept_pending_mismatch_rejected():
-    p = {"pending_id": "p1", "value": V20, "risk_mark": None}
-    with pytest.raises(StoreEffectError):
-        apply(rec({"answer": V10}, pending=p), dec("ACCEPT_PENDING", V20, "other"))
-    with pytest.raises(StoreEffectError):
-        apply(rec({"answer": V10}), dec("ACCEPT_PENDING", V20, "p1"))
-
-
-def test_drop_pending():
-    p = {"pending_id": "p1", "value": V20, "risk_mark": None}
-    r = apply(rec({"answer": V10}, risk="IMMEDIATE", pending=p), dec("DROP_PENDING", pending_id="p1"))
-    assert r["pending"] is None and r["current_value"] == {"answer": V10} and r["history"] == [] and r["risk_mark"] == "IMMEDIATE"
-
-
-def test_invalidate():
-    p = {"pending_id": "p1", "value": V20, "risk_mark": None}
-    r = apply(rec({"answer": V10}, risk="IMMEDIATE", pending=p, md=MD), dec("INVALIDATE"))
-    assert r["current_value"] == "NONE" and r["history"] == [{"value": V10, "value_metadata": MD}]
-    assert r["pending"] is None and r["risk_mark"] is None and "value_metadata" not in r
-
-
-def test_unknown_slot_rejected():
-    bad = {"slot": {"question_id": "Q9", "repeat_key": "", "slot_id": "x"}, "action": "FIRST_WRITE", "value": "a", "pending_id": None, "risk_mark": None}
-    with pytest.raises(StoreEffectError):
-        effects.apply_store_result([rec()], {"store_decisions": [bad], "store_summary": {}})
-
-
-def test_input_not_mutated():
-    r0 = rec({"answer": V10})
-    snap = copy.deepcopy(r0)
-    apply(r0, dec("NEW_REVISION", V20))
-    assert r0 == snap
-
-
-def update(**kw):
-    base = {"last_directive": {"action": "ASK_NEXT"}, "open_requests": {"correction_requests": [], "stop_requested": False, "deferred": []},
-            "skipped_add": [], "skipped_remove": [], "confirm_stopped_add": [], "confirm_stopped_remove": [],
-            "session_status": None, "pause_history_add": []}
-    base.update(kw)
-    return base
+def upd(key, value, action="FIRST_WRITE", precision="exact"):
+    return {"slot": effects.slot_ref(key), "action": action, "value": value, "precision": precision}
 
 
 def prog(**kw):
-    base = effects.initial_state("S", skeleton_bank())["progress_record"]
+    base = {"current_question_id": "Q1.D02", "open_slots": [], "skipped_add": [], "skipped_remove": [], "session_status": None,
+            "pause_history_add": []}
     base.update(kw)
     return base
 
 
-def test_progress_replaces_directive_and_open_requests():
-    u = update(last_directive={"action": "ASK_MISSING"}, open_requests={"correction_requests": [{"target": None}], "stop_requested": True, "deferred": []})
-    p = effects.apply_progress_update(prog(), u)
-    assert p["last_directive"] == {"action": "ASK_MISSING"} and p["open_requests"]["stop_requested"] is True
+def test_initial_state_is_valid_and_all_slots_none():
+    d = doc()
+    assert not list(SS.iter_errors(d))
+    assert all(r["current_value"] == "NONE" and r["history"] == [] for r in d["answer_records"])
+    # 반복 키(술 종류)마다 칸이 있다
+    keys = {effects.model_key(r["slot"]) for r in d["answer_records"]}
+    assert "Q7_1[soju].amount" in keys and "Q7_2[makgeolli].unit" in keys and "Q1.D01.diagnosed" in keys
+    assert d["progress_record"] == {"current_question_id": "Q1.D01", "open_slots": [], "skipped": [], "session_status": "IN_PROGRESS",
+                                    "pause_history": []}
 
 
-def test_skipped_add_replace_remove():
-    p = prog(skipped=[{"question_id": "Q1", "reason": "UNKNOWN_ACCEPTED"}, {"question_id": "Q2", "reason": "REFUSAL_ACCEPTED"}])
-    u = update(skipped_add=[{"question_id": "Q1", "reason": "ATTEMPTS_EXCEEDED"}, {"question_id": "Q5", "reason": "UNKNOWN_ACCEPTED"}],
-               skipped_remove=["Q2"])
-    out = effects.apply_progress_update(p, u)["skipped"]
-    assert out == [{"question_id": "Q1", "reason": "ATTEMPTS_EXCEEDED"}, {"question_id": "Q5", "reason": "UNKNOWN_ACCEPTED"}]
+@pytest.mark.parametrize("key,ref", [("Q7_1[soju].amount", {"question_id": "Q7_1", "repeat_key": "soju", "slot_id": "amount"}),
+                                     ("Q1.D03.on_medication", {"question_id": "Q1.D03", "repeat_key": "", "slot_id": "on_medication"}),
+                                     ("Q10.days", {"question_id": "Q10", "repeat_key": "", "slot_id": "days"})])
+def test_key_and_slot_ref_round_trip(key, ref):
+    assert effects.slot_ref(key) == ref and effects.model_key(ref) == key
 
 
-def test_skipped_remove_before_add():
-    p = prog(skipped=[{"question_id": "Q1", "reason": "UNKNOWN_ACCEPTED"}])
-    u = update(skipped_add=[{"question_id": "Q1", "reason": "REFUSAL_ACCEPTED"}], skipped_remove=["Q1"])
-    assert effects.apply_progress_update(p, u)["skipped"] == [{"question_id": "Q1", "reason": "REFUSAL_ACCEPTED"}]
+def test_first_write_and_new_revision_with_history():
+    d = doc()
+    d1 = effects.apply_writes(d, {"answer_updates": [upd("Q1.D01.diagnosed", True), upd("Q7_1[soju].amount", 2.5, precision="approximate")],
+                                  "progress_record_update": prog()})
+    assert not list(SS.iter_errors(d1))
+    assert d["answer_records"] == doc()["answer_records"]                      # 입력 문서는 바뀌지 않는다
+    assert effects.answers_by_key(d1["answer_records"]) == {"Q1.D01.diagnosed": (True, "exact"), "Q7_1[soju].amount": (2.5, "approximate")}
+    d2 = effects.apply_writes(d1, {"answer_updates": [upd("Q1.D01.diagnosed", False, "NEW_REVISION")], "progress_record_update": None})
+    r = [x for x in d2["answer_records"] if effects.model_key(x["slot"]) == "Q1.D01.diagnosed"][0]
+    assert r["current_value"] == {"answer": False} and r["history"] == [{"value": True, "precision": "exact"}]
+    assert not list(SS.iter_errors(d2))
+    assert d2["progress_record"] == d1["progress_record"]                      # 진행 갱신이 없으면 그대로
 
 
-def test_confirm_stopped_add_remove_dedupe():
-    s1 = {"question_id": "Q2", "repeat_key": "", "slot_id": "개비"}
-    s2 = {"question_id": "Q5", "repeat_key": "", "slot_id": "시간"}
-    p = prog(confirm_stopped=[s1])
-    out = effects.apply_progress_update(p, update(confirm_stopped_add=[s1, s2], confirm_stopped_remove=[]))["confirm_stopped"]
-    assert out == [s1, s2]
-    out = effects.apply_progress_update(p, update(confirm_stopped_remove=[s1]))["confirm_stopped"]
-    assert out == []
+def test_bool_and_numbers_are_kept_distinct():
+    d = effects.apply_writes(doc(), {"answer_updates": [upd("Q8_1.days", 0), upd("Q4.answer", False)], "progress_record_update": None})
+    a = effects.answers_by_key(d["answer_records"])
+    assert a["Q8_1.days"][0] == 0 and a["Q8_1.days"][0] is not False and a["Q4.answer"][0] is False
 
 
-def test_status_and_pause_history():
-    p = prog(pause_history=[{"kind": "PAUSE", "reasons": []}])
-    out = effects.apply_progress_update(p, update(session_status="PAUSED_RISK", pause_history_add=[{"kind": "RESUME", "reasons": []}]))
-    assert out["session_status"] == "PAUSED_RISK" and [e["kind"] for e in out["pause_history"]] == ["PAUSE", "RESUME"]
-    assert effects.apply_progress_update(p, update())["session_status"] == "IN_PROGRESS"
+@pytest.mark.parametrize("bad", [
+    upd("Q1.D01.diagnosed", True, "NEW_REVISION"),                                  # 값이 없는 칸의 정정
+    {"slot": {"question_id": "Q1.D01", "repeat_key": "", "slot_id": "nope"}, "action": "FIRST_WRITE", "value": 1, "precision": "exact"},
+    upd("Q1.D01.diagnosed", True, "RECORD_UNKNOWN"),
+])
+def test_unappliable_writes_are_rejected(bad):
+    with pytest.raises(StoreEffectError):
+        effects.apply_writes(doc(), {"answer_updates": [bad], "progress_record_update": None})
 
 
-def test_initial_state_and_planner_record_replace():
-    st = effects.initial_state("S", skeleton_bank())
-    assert st["progress_record"]["session_status"] == "IN_PROGRESS" and st["dialogue_log"] == [] and st["dispatch_log"] == []
-    assert all(r["current_value"] == "NONE" and r["history"] == [] and r["pending"] is None for r in st["answer_records"])
-    new_plan = {"attempt_counts": [{"question_id": "Q1", "count": 1}], "confirm_counts": [], "unknown_counts": [], "refusal_counts": [],
-                "unrecognized_streak": 1, "ask_counts": []}
-    out = effects.apply_writes(st, {"store_result": effects.empty_store_result(), "progress_record_update": update(), "planner_record_update": new_plan})
-    assert out["planner_record"] == new_plan and st["planner_record"]["unrecognized_streak"] == 0
+def test_first_write_over_existing_value_is_rejected():
+    d = effects.apply_writes(doc(), {"answer_updates": [upd("Q1.D01.diagnosed", True)], "progress_record_update": None})
+    with pytest.raises(StoreEffectError):
+        effects.apply_writes(d, {"answer_updates": [upd("Q1.D01.diagnosed", False)], "progress_record_update": None})
+
+
+def test_progress_update_skipped_remove_before_add_and_status():
+    d = effects.apply_writes(doc(), {"answer_updates": [], "progress_record_update": prog(
+        skipped_add=[{"question_id": "Q1.D01", "reason": "REQUEST_SKIP"}], open_slots=[{"key": "Q1.D02.diagnosed", "status": "MISSING"}])})
+    assert d["progress_record"]["skipped"] == [{"question_id": "Q1.D01", "reason": "REQUEST_SKIP"}]
+    assert d["progress_record"]["open_slots"] == [{"key": "Q1.D02.diagnosed", "status": "MISSING"}]
+    d = effects.apply_writes(d, {"answer_updates": [], "progress_record_update": prog(
+        skipped_remove=["Q1.D01"], skipped_add=[{"question_id": "Q1.D01", "reason": "REFUSED"}], session_status="PAUSED_RISK",
+        pause_history_add=[{"kind": "PAUSE", "reasons": [{"kind": "RISK_SIGNAL", "evidence": ["x"]}]}])})
+    assert d["progress_record"]["skipped"] == [{"question_id": "Q1.D01", "reason": "REFUSED"}]     # 해제를 먼저 한다
+    assert d["progress_record"]["session_status"] == "PAUSED_RISK" and len(d["progress_record"]["pause_history"]) == 1
+    assert not list(SS.iter_errors(d))
+    again = effects.apply_writes(d, {"answer_updates": [], "progress_record_update": prog(skipped_add=[{"question_id": "Q1.D01", "reason": "UNCERTAIN"}])})
+    assert again["progress_record"]["skipped"] == [{"question_id": "Q1.D01", "reason": "UNCERTAIN"}]       # 중복 없이 사유만 바뀐다

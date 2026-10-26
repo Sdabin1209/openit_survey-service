@@ -1,9 +1,10 @@
-# boundary-contracts v1.2.0 conformance/servers.py의 복사본(시험 전용, 수정하지 않는다). 패키지에 포함되지 않아 경로로 읽어 복사했다.
+# boundary-contracts v2.0.0 conformance/servers.py의 복사본(시험 전용). 패키지에 포함되지 않아 경로로 읽어 복사했다.
+# 바꾼 곳은 _example()의 예시 경로뿐이다(환경 변수 BOUNDARY_CONTRACTS_EXAMPLES 또는 이웃 읽기 전용 리포의 examples/).
 """HTTP.md를 따르는 작은 참조 서버(표준 라이브러리 http.server). 적합성 시험용이며 서비스 구현이 아니다.
 
 레코드는 메모리 딕셔너리에 넣어 둔다. 서버는 넣어 둔 내용을 검증하지 않고 그대로 낸다(일부러 틀린 내용을 넣어
 클라이언트의 검증을 시험하려는 것이다). 토큰은 {토큰: 역할}이며 역할 "reader"는 읽기 전용이다.
-`overrides[경로] = (상태, 콘텐츠 타입, 바이트)`로 응답을 통째로 바꾸고, `delay`로 응답을 늦춘다.
+`overrides[경로] = (상태, 콘텐츠 타입, 바이트[, 헤더 딕셔너리])`로 응답을 통째로 바꾸고, `delay`로 응답을 늦춘다.
 """
 from __future__ import annotations
 
@@ -22,6 +23,20 @@ from boundary_contracts import PIPELINE_SCHEMA_VERSION as V, BoundaryError, cont
 STATUS = {"INVALID_RECORD": 400, "PERMISSION_DENIED": 403, "NOT_FOUND": 404, "CONFLICT": 409,
           "FAILED_PRECONDITION": 412, "UNSUPPORTED_VERSION": 422, "INTEGRITY_ERROR": 422, "UNAVAILABLE": 503}
 NOW = "2026-10-15T00:00:00Z"
+
+
+def _example(name: str) -> dict:
+    import os
+    base = os.environ.get("BOUNDARY_CONTRACTS_EXAMPLES") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "boundary-contracts", "examples")
+    with open(os.path.join(base, name + ".json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _submission_view(x: dict) -> dict:
+    return {"submission_id": x["submission_id"], "submitted_at": x["submitted_at"], "submitted_by_role": x["submitted_by_role"],
+            "subject": x["subject"], "status": "AWAITING_APPROVAL", "decision_id": None, "approval_id": None,
+            "release_id": None, "updated_at": x["submitted_at"]}
 
 
 def adapter_digest(files: dict[str, bytes]) -> str:
@@ -89,7 +104,7 @@ class ReferenceServer:
             def do_GET(self):
                 outer._serve(self)
 
-            do_POST = do_GET
+            do_POST = do_PUT = do_GET
 
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self._server.daemon_threads = True
@@ -123,17 +138,19 @@ class ReferenceServer:
         self.requests.append((h.command, h.path, role))
         try:
             if u.path in self.overrides:
-                status, ctype, data = self.overrides[u.path]
+                status, ctype, data, *extra = self.overrides[u.path]
             elif u.path in ("/healthz", "/readyz"):
-                status, ctype, data = 200, "application/json", b'{"ok":true}'
+                status, ctype, data, extra = 200, "application/json", b'{"ok":true}', []
             else:
                 if role is None:
                     raise BoundaryError("PERMISSION_DENIED", "토큰이 없거나 틀리다")
-                status, ctype, data = self._route(h.command, unquote(u.path), query, body, role)
+                status, ctype, data, *extra = self._route(h.command, unquote(u.path), query, body, role)
         except BoundaryError as e:
-            status, ctype, data = STATUS[e.code], "application/json", json.dumps(e.to_record(V)).encode()
+            status, ctype, data, extra = STATUS[e.code], "application/json", json.dumps(e.to_record(V)).encode(), []
         h.send_response(status)
         h.send_header("Content-Type", ctype)
+        for k, v in (extra[0] if extra else {}).items():  # 선택: 네 번째 요소 = 추가 응답 헤더
+            h.send_header(k, v)
         h.send_header("Content-Length", str(len(data)))
         h.end_headers()
         try:
@@ -238,6 +255,20 @@ class ReferenceServer:
                 if not cs:
                     raise nf("케이스")
                 return J(max(cs, key=lambda c: c["version"]))
+            if path == "/v1/submissions":
+                items = [_submission_view(x) for x in self.submissions.values()]
+                if "status" in q:
+                    items = [x for x in items if x["status"] == q["status"]]
+                return self._page(items[::-1], q)
+            if g := m(r"/v1/submissions/([^/]+)"):
+                v = [x for x in self.submissions.values() if x["submission_id"] == g[1]]
+                if not v:
+                    raise nf("제출")
+                return J(_submission_view(v[0]))
+            if g := m(r"/v1/submissions/([^/]+)/review-report"):
+                if not any(x["submission_id"] == g[1] for x in self.submissions.values()):
+                    raise nf("제출")
+                return J(dict(_example("ReviewReport"), submission_id=g[1]))
             if path == "/v1/cases":
                 cs = self.cases
                 for k in ("review_status", "failure_type", "source_release_id"):
@@ -270,6 +301,19 @@ class ReferenceServer:
                 self.submissions[key] = {"pipeline_schema_version": V, "submission_id": f"sub-{len(self.submissions) + 1}",
                                          "submitted_at": NOW, "submitted_by_role": role, "subject": b["subject"]}
             return J(self.submissions[key], 202)
+        if path == "/v1/approvals":
+            b = jb()
+            if role != "release-approver":
+                raise BoundaryError("PERMISSION_DENIED", "release-approver만 결정할 수 있다")
+            if not any(x["submission_id"] == b.get("submission_id") for x in self.submissions.values()):
+                raise nf("제출")
+            if b.get("decision") == "REJECT" and not b.get("reason"):
+                raise BoundaryError("INVALID_RECORD", "반려에는 사유가 필요하다")
+            a = dict(_example("GateApproval"), submission_id=b["submission_id"], decision=b["decision"],
+                     approver_id=b["approver_id"], approver_role=role)
+            if b.get("reason"):
+                a["reason"] = b["reason"]
+            return J(a, 201)
         if path == "/v1/activate":
             b = jb()
             self._same_role(b, role)
@@ -341,3 +385,80 @@ class ReferenceServer:
         self.packages[key] = {"manifest": manifest, "files": adapter}
         self.eval_reports[manifest["eval_report_ref"]] = files.get("eval_report", b"")
         return self._j(manifest, 201)
+
+
+class RuntimeReferenceServer(ReferenceServer):
+    """HTTP.md I9(모델 추론 서버)를 따르는 참조 서버(계약 2.0.0). I1~I7 서버와 경로(`/v1/releases/{id}`)가 겹치므로 따로 띄운다.
+
+    실제 모델은 없다. `extract_fn(요청 dict) -> dict`와 `respond_fn(요청 dict) -> (문장, outcome)`을 바꿔 끼워 동작을 정한다.
+    기본값은 예시의 고정 출력이다. `extract_fn`의 출력이 `ActionExtraction`을 어기면 서버는 그대로 내지 않고 503 OUTPUT_INVALID(D75)를 낸다. 요청 본문은 서버가 스키마로 검증하고(400 INVALID_RECORD), 적재되지 않은 릴리스는 404다.
+    `available[릴리스 ID]`는 PUT 때의 결과다: "ok"(200 LOADED), "loading"(첫 PUT은 202 LOADING, 다음부터 LOADED),
+    "not_pass"(412), 없으면 404. 토큰 역할 "reader"는 PUT(적재)을 할 수 없고 추론 POST는 할 수 있다.
+    """
+
+    def __init__(self, tokens: dict[str, str]):
+        super().__init__(tokens)
+        self.available: dict[str, str] = {}
+        self.loaded: set[str] = set()
+        self._loading: set[str] = set()
+        self.extract_fn = lambda req: _example("ActionExtraction.next")
+        self.respond_fn = lambda req: ("네, 알겠습니다. 다음 질문을 드리겠습니다.", "ok")
+        self.attempts = 1
+        self.protections = ""
+
+    def _headers(self, outcome: str) -> dict:
+        h = {"X-Openit-Outcome": outcome, "X-Openit-Attempts": str(self.attempts)}
+        if self.protections:
+            h["X-Openit-Protections"] = self.protections
+        return h
+
+    def _checked(self, body: bytes, schema: str) -> dict:
+        from boundary_contracts import validator
+        b = self._body(body)
+        if list(validator(schema).iter_errors(b)):
+            raise BoundaryError("INVALID_RECORD", f"본문이 {schema} 스키마를 위반한다")
+        return b
+
+    def _route(self, method, path, q, body, role):
+        J = self._j
+        if path == "/v1/info" and method == "GET":
+            return J({"service": "model-runtime-reference", "runtime_version": "0.0.0", "supported_contract_versions": [1],
+                      "backend": "fake", "loaded": sorted(self.loaded), "serving_config_hash": {}})
+        g = re.fullmatch(r"/v1/releases/([^/]+)(|/extract|/respond)", path)
+        if not g:
+            raise BoundaryError("NOT_FOUND", "경로가 없다")
+        rid, op = g[1], g[2]
+        if not op:
+            if method == "PUT":
+                if role == "reader":
+                    raise BoundaryError("PERMISSION_DENIED", "읽기 토큰으로는 적재할 수 없다")
+                mode = self.available.get(rid)
+                if mode is None:
+                    raise BoundaryError("NOT_FOUND", "릴리스가 없다")
+                if mode == "not_pass":
+                    raise BoundaryError("FAILED_PRECONDITION", "승인되지 않은 릴리스")
+                if mode == "loading" and rid not in self._loading and rid not in self.loaded:
+                    self._loading.add(rid)
+                    return J({"release_id": rid, "state": "LOADING", "error": None}, 202)
+                self.loaded.add(rid)
+                return J({"release_id": rid, "state": "LOADED", "error": None})
+            if method == "GET":
+                state = "LOADED" if rid in self.loaded else "LOADING" if rid in self._loading else "ABSENT"
+                return J({"release_id": rid, "state": state, "error": None})
+            raise BoundaryError("NOT_FOUND", "경로가 없다")
+        if method != "POST":
+            raise BoundaryError("NOT_FOUND", "경로가 없다")
+        if rid not in self.loaded:
+            raise BoundaryError("NOT_FOUND", "적재되지 않은 릴리스")
+        if op == "/extract":
+            req = self._checked(body, "ActionExtractionInput")
+            out = self.extract_fn(req)
+            from boundary_contracts import validator
+            if list(validator("ActionExtraction").iter_errors(out)):
+                # D75: 값을 지어내지 않는다. 모델 출력이 끝내 형식을 못 지키면 503 UNAVAILABLE + details.reason=OUTPUT_INVALID
+                raise BoundaryError("UNAVAILABLE", "모델 출력이 ActionExtraction 형식을 지키지 못했다",
+                                    {"reason": "OUTPUT_INVALID", "attempts": self.attempts})
+            return 200, "application/json", json.dumps(out, ensure_ascii=False).encode(), self._headers("ok")
+        req = self._checked(body, "ResponseRequest")
+        text, outcome = self.respond_fn(req)
+        return 200, "text/plain; charset=utf-8", text.encode("utf-8"), self._headers(outcome)

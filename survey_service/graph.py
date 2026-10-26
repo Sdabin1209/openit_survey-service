@@ -1,7 +1,9 @@
-"""한 턴의 오케스트레이션 그래프(LangGraph StateGraph). 설계서 14절.
+"""한 턴의 오케스트레이션 그래프(LangGraph StateGraph). 설계서 14절, D74 구조(17절).
 
 처리 표(9-1)의 열(세션 상태)은 `load_session` 뒤의 조건부 간선, 행(이벤트 종류)은 열 노드의 표(COLUMNS)다. 단계별 실패는
-`failed`에 쌓고 다음 간선이 종료 노드로 보낸다. turn-engine의 함수는 순수 라이브러리로 그대로 두고 노드가 부른다.
+`failed`에 쌓고 다음 간선이 종료 노드로 보낸다. 발화 턴은 `extract`(LoRA-A 한 번) -> `validate_extraction`(turn-engine) -> `plan_writes`
+-> `commit` -> `respond`(LoRA-B)다. 검증 위반이나 503 OUTPUT_INVALID는 같은 요청을 한 번 더 부른다(`validate_extraction` -> `extract` 간선,
+D75). 세션 시작은 A를 부르지 않고 B만 부른다.
 
 - 상태(TurnState)는 JSON으로 직렬화되는 값만 가진다. 자원(저장소, 엔진, 모델 세션)은 Orchestrator가 가진다.
 - 체크포인터를 쓰지 않는다(compile()에 없음). 쓰기 확정은 `commit` 노드의 저장소 한 번의 commit(한 트랜잭션)이다.
@@ -17,7 +19,11 @@ from typing import Annotated, Any, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from . import assembly
+from boundary_contracts import BoundaryError
+from boundary_contracts.clients import is_output_invalid
+from turn_engine import ContractViolation, validate_extraction
+
+from . import assembly, extraction
 from .errors import ReleaseUnavailable, StoreError
 from .ports import LoadedRelease
 from .store import effects
@@ -26,12 +32,12 @@ log = logging.getLogger("survey_service.orchestrator")
 
 SCHEMA_CONTRACT_VERSION = 1  # TurnTrace.contract_version. 이 서비스가 지원하는 문진 스키마 정수 버전
 
-TRACE_KEYS = ["frontend_message", "intervention_decision", "orchestrator_input", "parser_input", "parser_output",
-              "normalizer_input", "normalizer_output", "judge_input", "judge_output", "record_writer_input",
-              "record_writer_output", "planner_input", "planner_output", "generator_input", "generator_output",
-              "frontend_input", "staff_console_input", "dispatch_input", "dispatch_output", "orchestrator_output",
-              "session_before", "session_after", "log_entry", "persistence_load_request", "persistence_load_result",
+TRACE_KEYS = ["frontend_message", "intervention_decision", "orchestrator_input", "extract_input", "extract_output", "extract_attempts",
+              "extract_status", "extract_protections", "validation_ok", "validation_violations", "response_input", "response_output",
+              "response_outcome", "response_protections", "frontend_input", "staff_console_input", "dispatch_input", "dispatch_output",
+              "orchestrator_output", "session_before", "session_after", "log_entry", "persistence_load_request", "persistence_load_result",
               "persistence_commit_request", "persistence_commit_result"]
+MAX_EXTRACT_CALLS = 2         # 첫 호출 + 같은 요청의 1회 재시도(D75)
 
 
 @dataclass(frozen=True)
@@ -97,13 +103,16 @@ class TurnState(TypedDict, total=False):
     state_doc: Optional[dict]
     revision: Any
     created: Optional[dict]
-    # 컴포넌트 출력
-    parser_out: Optional[dict]
-    norm_out: Optional[dict]
-    judge_out: Optional[dict]
-    writer_out: Optional[dict]
-    records_after: Optional[list]
-    plan_out: Optional[dict]
+    # 추출·검증·저장 계획
+    extract_in: Optional[dict]
+    extract_out: Optional[dict]
+    extract_calls: int
+    extract_next: str               # validate | extract | finalize
+    violations: Optional[list]
+    writes: Optional[dict]
+    flow_end: bool
+    resp: Optional[dict]            # 응답 계획 {kind: model_start | model | fixed | none, text?}
+    alert: Optional[dict]           # 직원 알림(RiskSource가 낸 것). 입력원이 없으면 항상 None
     # 쓰기 확정과 그 뒤
     committed: bool
     commit_unknown: bool
@@ -148,12 +157,23 @@ def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optio
         failed=[], console_calls=[], committed=False, commit_unknown=False, staff_status="NONE", staff_delivery="NOT_APPLICABLE",
         response_text=None, signal=None, intervention_result=None, dispatch_called=False, console_delivered=False,
         console={"staff_alert": None, "turn_failure_signal": None, "intervention_result": None},
-        fatal=None, created=None, parser_out=None, norm_out=None, judge_out=None, writer_out=None, plan_out=None,
-        records_after=None, post_doc=None, state_doc=None, release_id=None)
+        fatal=None, created=None, extract_in=None, extract_out=None, extract_calls=0, extract_next="validate", violations=None,
+        writes=None, flow_end=False, resp=None, alert=None, post_doc=None, state_doc=None, release_id=None)
 
 
 def _ctx(config) -> TurnCtx:
     return config["configurable"]["ctx"]
+
+
+def _pause_reasons(alert: dict) -> list:
+    """StaffAlert(RISK)의 사유를 일시 중지 기록(PauseReason) 모양으로."""
+    out = []
+    for r in alert["reasons"]:
+        if r["kind"] == "RISK_SIGNAL":
+            out.append({"kind": "RISK_SIGNAL", "evidence": list(r["evidence"])})
+        elif r["kind"] == "RISK_RULE":
+            out.append({"kind": "RISK_RULE", "target": [t["slot"] for t in r["target"]]})
+    return out
 
 
 def _step_failed(phase_step: tuple[str, str]) -> list:
@@ -170,8 +190,8 @@ class TurnGraph:
     def build(self):
         g = StateGraph(TurnState)
         for name in ("load_session", "col_none", "col_progress", "col_paused", "col_ended", "ignore", "fail_no_session",
-                     "bind_release", "parse", "normalize", "judge", "write_record", "plan", "commit", "deliver_staff",
-                     "dispatch_result", "generate", "finalize"):
+                     "bind_release", "extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff",
+                     "dispatch_result", "respond", "finalize"):
             g.add_node(name, getattr(self, "n_" + name))
         g.add_edge(START, "load_session")
         g.add_conditional_edges("load_session", self.r_column, {"fail_no_session": "fail_no_session", "col_none": "col_none",
@@ -180,16 +200,17 @@ class TurnGraph:
         for col in ("col_none", "col_progress", "col_paused", "col_ended"):
             g.add_conditional_edges(col, self.r_handled, {"ignore": "ignore", "bind_release": "bind_release"})
         g.add_conditional_edges("bind_release", self.r_after_bind, {"fail_no_session": "fail_no_session", "finalize": "finalize",
-                                                                    "parse": "parse", "plan": "plan"})
-        g.add_conditional_edges("parse", self.r_ok("normalize"), {"normalize": "normalize", "finalize": "finalize"})
-        g.add_conditional_edges("normalize", self.r_ok("judge"), {"judge": "judge", "finalize": "finalize"})
-        g.add_conditional_edges("judge", self.r_ok("write_record"), {"write_record": "write_record", "finalize": "finalize"})
-        g.add_conditional_edges("write_record", self.r_ok("plan"), {"plan": "plan", "finalize": "finalize"})
-        g.add_conditional_edges("plan", self.r_ok("commit"), {"commit": "commit", "finalize": "finalize"})
+                                                                    "extract": "extract", "plan_other": "plan_other"})
+        g.add_conditional_edges("extract", self.r_extract, {"validate_extraction": "validate_extraction", "extract": "extract",
+                                                           "finalize": "finalize"})
+        g.add_conditional_edges("validate_extraction", self.r_validated, {"plan_writes": "plan_writes", "extract": "extract",
+                                                                         "finalize": "finalize"})
+        g.add_conditional_edges("plan_writes", self.r_ok("commit"), {"commit": "commit", "finalize": "finalize"})
+        g.add_conditional_edges("plan_other", self.r_ok("commit"), {"commit": "commit", "finalize": "finalize"})
         g.add_conditional_edges("commit", self.r_ok("deliver_staff"), {"deliver_staff": "deliver_staff", "finalize": "finalize"})
-        g.add_conditional_edges("deliver_staff", self.r_flow, {"dispatch_result": "dispatch_result", "generate": "generate"})
-        g.add_edge("dispatch_result", "generate")
-        g.add_edge("generate", "finalize")
+        g.add_conditional_edges("deliver_staff", self.r_flow, {"dispatch_result": "dispatch_result", "respond": "respond"})
+        g.add_edge("dispatch_result", "respond")
+        g.add_edge("respond", "finalize")
         g.add_edge("finalize", END)
         g.add_edge("ignore", END)
         g.add_edge("fail_no_session", END)
@@ -212,16 +233,24 @@ class TurnGraph:
             return "fail_no_session"
         if st["failed"]:
             return "finalize"
-        return "parse" if st["route"]["full"] else "plan"
+        return "extract" if st["route"]["full"] else "plan_other"
+
+    @staticmethod
+    def r_extract(st) -> str:
+        return {"validate": "validate_extraction", "extract": "extract"}.get(st["extract_next"], "finalize")
+
+    @staticmethod
+    def r_validated(st) -> str:
+        return {"plan": "plan_writes", "extract": "extract"}.get(st["extract_next"], "finalize")
 
     @staticmethod
     def r_ok(nxt: str):
-        # 쓰기 확정 전 단계가 실패했으면(failed가 비어 있지 않다) 확정 뒤의 일 없이 종료 노드로. 되돌아가지 않는다(규칙 4)
+        # 쓰기 확정 전 단계가 실패했으면(failed가 비어 있지 않다) 확정 뒤의 일 없이 종료 노드로. 저장 판단 뒤에는 되돌아가지 않는다(규칙 4)
         return lambda st: "finalize" if st["failed"] else nxt
 
     @staticmethod
     def r_flow(st) -> str:
-        return "dispatch_result" if st["plan_out"]["flow"] == "END" else "generate"
+        return "dispatch_result" if st["flow_end"] else "respond"
 
     # ------------------------------------------------------------------ 노드: 앞부분
     def n_load_session(self, st, config):
@@ -316,7 +345,7 @@ class TurnGraph:
                 if latest is None:
                     raise ReleaseUnavailable("활성 릴리스가 없다")
                 ctx.release = latest
-                doc = effects.initial_state(sid, latest.bank)
+                doc = effects.initial_state(sid, latest.bank, self.o.flow.table.order[0])
                 revision = self.o.store.create(sid, latest.release_id, doc)
                 created = copy.deepcopy(doc["session_info"])
         except ReleaseUnavailable:
@@ -337,82 +366,119 @@ class TurnGraph:
         self.o._count(f"step_failed.{step}")
         return _step_failed(("BEFORE_COMMIT", step))
 
-    def n_parse(self, st, config):
+    def n_extract(self, st, config):
+        """LoRA-A를 한 번 부른다(이 노드가 다시 실행되면 같은 요청의 재시도). 시작·정지 같은 비발화 턴은 이 노드에 오지 않는다."""
         ctx, doc = _ctx(config), st["state_doc"]
-        pin = assembly.parser_input(st["utterance"], doc, ctx.bank)
-        upd: dict = {"trace": {"parser_input": pin}}
+        calls = st["extract_calls"]
+        upd: dict = {"extract_calls": calls + 1}
+        tr: dict = {"extract_attempts": calls + 1}
+        inp = st["extract_in"]
+        if inp is None:
+            try:
+                inp = extraction.build_extract_input(doc, ctx.bank, self.o.flow, st["utterance"])
+            except Exception as e:
+                upd.update(extract_next="finalize", failed=self._fail(st, "LoRA-A", e))
+                tr["extract_status"] = "ERROR"
+                return {**upd, "trace": tr}
+            upd["extract_in"] = inp
+            tr["extract_input"] = copy.deepcopy(inp)
         try:
-            out = ctx.release.session.parse(pin)
-            upd["parser_out"] = out
+            res = ctx.release.session.extract(inp)
+        except BoundaryError as e:
+            invalid = is_output_invalid(e)
+            if invalid and calls + 1 < MAX_EXTRACT_CALLS:
+                upd["extract_next"] = "extract"                    # D75: 같은 요청을 1회 재시도
+            else:
+                upd.update(extract_next="finalize", failed=self._fail(st, "LoRA-A", e))
+                tr["extract_status"] = "OUTPUT_INVALID" if invalid else "ERROR"
+            return {**upd, "trace": tr}
         except Exception as e:
-            upd["parser_out"] = None
-            upd["failed"] = self._fail(st, "LoRA-A", e)
-        upd["trace"]["parser_output"] = copy.deepcopy(upd["parser_out"])
+            upd.update(extract_next="finalize", failed=self._fail(st, "LoRA-A", e))
+            tr["extract_status"] = "ERROR"
+            return {**upd, "trace": tr}
+        upd.update(extract_out=res.output, extract_next="validate")
+        tr.update(extract_output=copy.deepcopy(res.output), extract_protections=dict(res.protections) or None)
+        return {**upd, "trace": tr}
+
+    def n_validate_extraction(self, st, config):
+        """turn-engine의 validate_extraction(의미 검증)과 저장할 칸이 문항 세트에 있는지. 위반이면 같은 요청을 1회 재시도, 그래도면 턴 실패(D75)."""
+        ctx, doc = _ctx(config), st["state_doc"]
+        out, inp = st["extract_out"], st["extract_in"]
+        try:
+            viol = list(validate_extraction(inp, out, self.o.flow.table))
+            viol += extraction.check_slots(out, doc["answer_records"])
+        except ContractViolation as e:                       # 우리가 만든 입력이 계약을 어겼다: 재시도해도 같다
+            return {"extract_next": "finalize", "failed": self._fail(st, "VALIDATE", e),
+                    "trace": {"extract_status": "ERROR", "validation_ok": False, "validation_violations": None}}
+        rec = [{"code": v.code, "path": v.path, "message": v.message} for v in viol]
+        tr = {"validation_ok": not rec, "validation_violations": rec, "extract_output": copy.deepcopy(out)}
+        if not rec:
+            tr["extract_status"] = "OK"
+            return {"extract_next": "plan", "violations": [], "trace": tr}
+        self.o._count("validation_violation")
+        if st["extract_calls"] < MAX_EXTRACT_CALLS:
+            return {"extract_next": "extract", "violations": rec, "extract_out": None, "trace": tr}
+        tr["extract_status"] = "VIOLATION"
+        return {"extract_next": "finalize", "violations": rec, "failed": self._fail(st, "VALIDATE", RuntimeError("violation")), "trace": tr}
+
+    def n_plan_writes(self, st, config):
+        """검증을 통과한 추출 결과에서 저장(save=true)과 진행 갱신을 계획하고, 응답 계획을 정한다. 판단은 하지 않는다."""
+        ctx, doc = _ctx(config), st["state_doc"]
+        out = st["extract_out"]
+        try:
+            writes = extraction.plan_writes(doc, out)
+        except Exception as e:
+            return {"failed": self._fail(st, "VALIDATE", e)}
+        upd: dict = {"writes": writes, "resp": {"kind": "model"}, "flow_end": out["next_item"] == "END"}
+        src = self.o.risk_source
+        if src is not None:                                  # 입력원이 없으면(기본) 직원 알림은 비활성이다(설계 17.6)
+            try:
+                alert = src.check(extract_input=st["extract_in"], extract_output=out, utterance=st["utterance"])
+            except Exception as e:
+                log.warning("위험 입력원 오류 session=%s error=%s", st["session_id"], type(e).__name__)
+                self.o._count("risk_source_error")
+                alert = None
+            if alert is not None:
+                upd["alert"] = alert
+                if alert["kind"] == "RISK":
+                    pu = writes["progress_record_update"]
+                    pu["session_status"] = "PAUSED_RISK"
+                    pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(alert)}]
+                    upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
         return upd
 
-    def n_normalize(self, st, config):
-        ctx, doc = _ctx(config), st["state_doc"]
-        nin = assembly.normalizer_input(st["parser_out"]["items"], doc, ctx.bank, len(doc["dialogue_log"]))
-        upd: dict = {"trace": {"normalizer_input": nin}}
-        try:
-            upd["norm_out"] = self.o.engine.normalize(nin)
-        except Exception as e:
-            upd["norm_out"] = None
-            upd["failed"] = self._fail(st, "NORMALIZE", e)
-        upd["trace"]["normalizer_output"] = copy.deepcopy(upd["norm_out"])
-        return upd
+    @staticmethod
+    def _fixed(ctx, key: str) -> dict:
+        text = ctx.bank.fixed_sentence(key) if ctx.bank else None
+        return {"kind": "fixed", "text": text, "key": key}
 
-    def n_judge(self, st, config):
+    def n_plan_other(self, st, config):
+        """발화가 아닌 턴(시작, 직원 재개·종료, 이탈): A를 부르지 않는다. 쓰기와 응답 계획만 정한다."""
         ctx, doc = _ctx(config), st["state_doc"]
-        jin = assembly.judge_input(st["parser_out"]["items"], st["norm_out"], st["utterance"], doc, ctx.bank)
-        upd: dict = {"trace": {"judge_input": jin}}
-        try:
-            upd["judge_out"] = self.o.engine.judge(jin)
-        except Exception as e:
-            upd["judge_out"] = None
-            upd["failed"] = self._fail(st, "JUDGE", e)
-        upd["trace"]["judge_output"] = copy.deepcopy(upd["judge_out"])
-        return upd
-
-    def n_write_record(self, st, config):
-        ctx, doc = _ctx(config), st["state_doc"]
-        win = assembly.writer_input(st["judge_out"], doc, ctx.bank)
-        upd: dict = {"trace": {"record_writer_input": win}}
-        try:
-            res = self.o.engine.write_record(win)
-            records_after = effects.apply_store_result(doc["answer_records"], res)
-        except Exception as e:
-            upd["failed"] = self._fail(st, "RECORD_WRITE", e)
-            return upd
-        upd.update(writer_out=res, records_after=records_after)
-        upd["trace"]["record_writer_output"] = copy.deepcopy(res)
-        return upd
-
-    def n_plan(self, st, config):
-        ctx, doc = _ctx(config), st["state_doc"]
-        full = st["route"]["full"]
-        store_result, judgments, utter_judgment, store_summary = effects.empty_store_result(), [], None, None
-        records_after = doc["answer_records"]
-        if full:
-            store_result, judgments = st["writer_out"], st["judge_out"]["judgments"]
-            utter_judgment, store_summary = st["judge_out"]["utterance_judgment"], st["writer_out"]["store_summary"]
-            records_after = st["records_after"]
-        pl_in = assembly.planner_input(st["route"]["turn_kind"], utter_judgment, judgments, store_summary, records_after, doc, ctx.bank)
-        upd: dict = {"trace": {"planner_input": pl_in}}
-        try:
-            upd["plan_out"] = self.o.engine.plan(pl_in)
-        except Exception as e:
-            upd["plan_out"] = None
-            upd["failed"] = self._fail(st, "PLAN", e)
-        upd["trace"]["planner_output"] = copy.deepcopy(upd["plan_out"])
+        kind = st["route"]["turn_kind"]
+        prog = doc["progress_record"]
+        cur = prog["current_question_id"]
+        pu = {"current_question_id": cur, "open_slots": copy.deepcopy(prog["open_slots"]), "skipped_add": [], "skipped_remove": [],
+              "session_status": None, "pause_history_add": []}
+        writes = {"answer_updates": [], "progress_record_update": None}
+        upd: dict = {"writes": writes, "flow_end": False}
+        if kind == "SESSION_START":
+            first = self.o.flow.table.order[0]
+            upd["resp"] = {"kind": "model_start"} if cur == first else {"kind": "fixed", "key": None, "text": ctx.bank.sentence(cur)}
+        elif kind == "RESUME":
+            pu.update(session_status="IN_PROGRESS", pause_history_add=[{"kind": "RESUME", "reasons": []}])
+            writes["progress_record_update"] = pu
+            upd["resp"] = self._fixed(ctx, "RESUME")
+        else:                                                # INTERVENTION_END, END_LEFT
+            pu["session_status"] = "ENDED_STAFF" if kind == "INTERVENTION_END" else "ENDED_LEFT"
+            writes["progress_record_update"] = pu
+            upd["flow_end"] = True
+            upd["resp"] = self._fixed(ctx, "SURVEY_STOPPED") if kind == "INTERVENTION_END" else {"kind": "none"}
         return upd
 
     def n_commit(self, st, config):
-        """쓰기 확정: 저장 결정 + 진행 기록 갱신 + Plan 기록 갱신을 저장소의 한 번의 commit(한 트랜잭션)으로."""
-        doc, po = st["state_doc"], st["plan_out"]
-        store_result = st["writer_out"] if st["route"]["full"] else effects.empty_store_result()
-        writes = {"store_result": store_result, "progress_record_update": po["progress_record_update"],
-                  "planner_record_update": po["planner_record_update"]}
+        """쓰기 확정: 값 저장 + 진행 기록 갱신을 저장소의 한 번의 commit(한 트랜잭션)으로."""
+        doc, writes = st["state_doc"], st["writes"]
         req = {"session_id": st["session_id"], "expected_revision": st["revision"], "writes": writes}
         res = self.o.store.commit(req, turn_id=st["turn_id"], input_hash=st["input_hash"])
         tr = {"persistence_commit_request": copy.deepcopy(req), "persistence_commit_result": copy.deepcopy(res)}
@@ -423,12 +489,12 @@ class TurnGraph:
 
     # ------------------------------------------------------------------ 노드: 쓰기 확정 뒤 (서로의 성패와 무관)
     def n_deliver_staff(self, st, config):
-        sid, po = st["session_id"], st["plan_out"]
+        sid = st["session_id"]
         upd: dict = {}
         intervention_result = st["intervention_result"]
         if st["route"]["turn_kind"] in ("RESUME", "INTERVENTION_END"):
             intervention_result = {"session_id": sid, "result": "APPLIED"}
-        alert = po.get("staff_alert")
+        alert = st.get("alert")
         console = copy.deepcopy(st["console"])
         # 직원 알림은 지연 없이: 응답 생성보다 앞에서 한다
         if alert is not None:
@@ -468,18 +534,32 @@ class TurnGraph:
             log.error("전달 기록을 남기지 못했다 session=%s turn=%s", st["session_id"], st["turn_id"])
         return {"dispatch_called": True, "trace": tr}
 
-    def n_generate(self, st, config):
+    def n_respond(self, st, config):
+        """응답 문장: 모델(LoRA-B)이 쓰는 턴은 표 찾기로 ResponseRequest를 조립해 부르고, 고정 문장 턴은 문항 세트의 고정 문장을 쓴다."""
         ctx = _ctx(config)
-        gin = assembly.generator_input(st["plan_out"]["directive"], st["utterance"])
-        tr = {"generator_input": gin}
+        plan = st["resp"]
+        tr: dict = {}
+        if plan["kind"] == "none":
+            return {}
+        if plan["kind"] == "fixed":
+            if plan.get("text"):
+                tr["response_outcome"] = "fixed"
+                return {"response_text": plan["text"], "trace": tr}
+            self.o._count("step_failed.LoRA-B")
+            return {"failed": _step_failed(("AFTER_COMMIT", "LoRA-B")), "trace": tr}
         try:
-            gen = ctx.release.session.generate(gin)
-            tr["generator_output"] = copy.deepcopy(gen)
-            return {"response_text": gen["response_text"], "trace": tr}
+            if plan["kind"] == "model_start":
+                req = extraction.build_start_request(ctx.bank, self.o.tables, self.o.flow.table.order[0])
+            else:
+                req = extraction.build_response_request(st["extract_out"], st["extract_in"], st["post_doc"], ctx.bank, self.o.tables)
+            tr["response_input"] = copy.deepcopy(req)
+            res = ctx.release.session.respond(req)
         except Exception as e:
             log.warning("응답 생성 실패 session=%s turn=%s error=%s", st["session_id"], st["turn_id"], type(e).__name__)
             self.o._count("step_failed.LoRA-B")
             return {"failed": _step_failed(("AFTER_COMMIT", "LoRA-B")), "trace": tr}
+        tr.update(response_output=res.output, response_outcome=res.outcome, response_protections=dict(res.protections) or None)
+        return {"response_text": res.output, "trace": tr}
 
     # ------------------------------------------------------------------ 종료 노드: 로그, 신호, 프론트
     @staticmethod
@@ -537,7 +617,6 @@ class TurnGraph:
         return payload, [copy.deepcopy(payload)]
 
     def _log_entry(self, st, *, failed, committed, signal, intervention_result, response_text, staff_delivery, bank_version, handled) -> dict:
-        po = st.get("plan_out")
         if failed:
             result: Any = {"failed_steps": copy.deepcopy(failed)}
         elif handled is None:
@@ -550,12 +629,9 @@ class TurnGraph:
             "handling": {"handled": handled} if handled else "IGNORED",
             "question_bank_version": bank_version,
             "turn_result": result,
-            "parser_output": copy.deepcopy(st.get("parser_out")), "normalizer_output": copy.deepcopy(st.get("norm_out")),
-            "judge_output": copy.deepcopy(st.get("judge_out")), "record_writer_output": copy.deepcopy(st.get("writer_out")),
-            "directive": copy.deepcopy(po["directive"]) if po else None,
-            "flow": po["flow"] if po else None,
-            "progress_record_update": copy.deepcopy(po["progress_record_update"]) if po else None,
-            "staff_alert": copy.deepcopy(po["staff_alert"]) if po and committed else None,
+            "extract_output": copy.deepcopy(st.get("extract_out")),
+            "validation_violations": copy.deepcopy(st.get("violations")),
+            "staff_alert": copy.deepcopy(st.get("alert")) if committed else None,
             "response_text": response_text,
             "staff_alert_delivery": staff_delivery,
             "turn_failure_signal": signal,
