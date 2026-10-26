@@ -186,13 +186,17 @@ class RemoteInference:
             while rec.get("state") != "LOADED":
                 if rec.get("state") == "FAILED":
                     err = rec.get("error") or {}
-                    raise InferenceLoadError("REMOTE_" + str(err.get("code", "FAILED_PRECONDITION")), "추론 서버가 릴리스 적재에 실패했다")
-                if time.monotonic() > deadline:
-                    raise InferenceLoadError("REMOTE_TIMEOUT", "추론 서버의 릴리스 적재가 시간 안에 끝나지 않았다")
+                    code = str(err.get("code", "FAILED_PRECONDITION"))
+                    raise InferenceLoadError("REMOTE_" + code, "추론 서버가 릴리스 적재에 실패했다", retryable=code == "UNAVAILABLE")
+                if time.monotonic() > deadline:   # 서버가 계속 적재 중이다: 일시적이다(같은 PUT은 멱등이라 나중에 다시 하면 된다)
+                    raise InferenceLoadError("REMOTE_TIMEOUT", "추론 서버의 릴리스 적재가 시간 안에 끝나지 않았다", retryable=True)
                 time.sleep(self.poll_interval)
                 _, rec, _ = self._http.call("GET", path)
         except RemoteInferenceError as e:
-            raise InferenceLoadError("REMOTE_" + e.code, "추론 서버가 릴리스 적재를 거부했거나 부를 수 없다") from e
+            # 연결 실패, 타임아웃, 502·503·504는 UNAVAILABLE이다: 추론 서버가 아직 뜨는 중일 수 있어 다시 시도할 수 있다.
+            # 412·422·403·404 등 결정적 거부는 다시 시도해도 같다.
+            raise InferenceLoadError("REMOTE_" + e.code, "추론 서버가 릴리스 적재를 거부했거나 부를 수 없다",
+                                     retryable=e.code == "UNAVAILABLE") from e
         version = (contract_version or 1)
         return RemoteModelSession(self._http, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, version=version)
 

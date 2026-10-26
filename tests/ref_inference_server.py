@@ -45,6 +45,8 @@ class InferenceHttp:
         self.load_delay, self.async_load = load_delay, async_load
         self.delay = 0.0                       # parse/generate 응답 지연(초)
         self.fail_next: list = []              # 다음 parse/generate 호출의 (상태, 본문 dict|bytes, 헤더)
+        self.put_fail_next: list = []          # 다음 적재 신호(PUT)의 (상태, 본문, 헤더): 엔진이 아직 뜨는 중 등
+        self.puts = 0
         self.calls: list = []                  # (op, release_id)
         self._lock = threading.Lock()
         self._state: dict[str, dict] = {}      # rid -> {"state", "error"}
@@ -85,6 +87,9 @@ class InferenceHttp:
                                           else {"state": "ABSENT", "error": None})
             return 200, {"release_id": rid, **st}, {}
         if method == "PUT" and not op:
+            self.puts += 1
+            if self.put_fail_next:
+                return self.put_fail_next.pop(0)
             with self._lock:
                 if rid in self.registry.loaded_ids():
                     return 200, {"release_id": rid, "state": "LOADED", "error": None}, {}

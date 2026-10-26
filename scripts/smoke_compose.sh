@@ -28,10 +28,20 @@ cleanup() { $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true; $DOCKER r
 trap cleanup EXIT
 fail() { echo "SMOKE(compose) FAIL: $1"; $COMPOSE logs --tail 15 2>&1 | tail -40; exit 1; }
 
-$COMPOSE up -d >/dev/null 2>&1 || fail "compose up"
+# 추론 서버가 아직 안 떴을 때 서비스가 먼저 뜬다: 살아 있고(/healthz 200) 준비는 안 됐고(release_loading) 거부로 확정하지 않는다
+$COMPOSE up -d gate >/dev/null 2>&1 || fail "compose up gate"
+for i in $(seq 1 30); do [ "$($COMPOSE ps --format '{{.Health}}' gate 2>/dev/null | head -1)" = healthy ] && break; sleep 1; done
+$COMPOSE up -d --no-deps service >/dev/null 2>&1 || fail "compose up service"
 PORT=$($COMPOSE port service 8080 | head -1 | tr -d '\r' | sed 's/.*://')
 echo "host port: $PORT"
 API="http://127.0.0.1:$PORT"
+for i in $(seq 1 30); do curl -fsS "$API/healthz" >/dev/null 2>&1 && break; sleep 1; done
+curl -fsS "$API/healthz" >/dev/null || fail "추론 서버가 없어도 /healthz는 200이어야 한다"
+for i in $(seq 1 30); do curl -s "$API/readyz" | grep -q '"release_loading"' && break; sleep 1; done
+EARLY=$(curl -s "$API/readyz"); echo "early readyz: $EARLY" | cut -c1-400
+echo "$EARLY" | grep -q '"release_loading"' || fail "추론 서버가 없을 때 release_loading이 보이지 않는다"
+echo "$EARLY" | grep -q '"rejections": \[\]' || fail "일시적 실패가 영구 거부로 기록됐다"
+$COMPOSE up -d inference >/dev/null 2>&1 || fail "compose up inference"
 for i in $(seq 1 60); do curl -fsS "$API/readyz" >/dev/null 2>&1 && break; sleep 1; done
 READY=$(curl -fsS "$API/readyz") || fail "readyz가 준비되지 않았다"
 echo "readyz: $READY"

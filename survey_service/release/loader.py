@@ -3,12 +3,18 @@
 - 포인터(`pointer_version`)가 바뀌었을 때만 읽는다. 같은 포인터 버전은 다시 시도하지 않는다.
 - 새 세션부터 새 릴리스를 쓴다(적용 시점은 Orchestrator가 세션 생성 때 활성 릴리스에 묶는 것으로 지킨다).
 - 적재할 수 없는 릴리스(지원하지 않는 계약 버전, 승인 기록 없음, 해시 불일치, 모델 거부)는 이전 릴리스를 유지하고 사유를 남긴다.
+  **결정적 거부**(412·422·404 등)는 그 포인터를 영구 거부(rejections)로 확정하고 다시 시도하지 않는다.
+- **일시적 실패**(I4 불능, 추론 서버가 아직 뜨는 중이라 연결 실패·503·타임아웃·적재 대기 시간 초과)는 포인터를 거부로 확정하지 않는다.
+  같은 포인터를 백오프(기본 5초 시작, 최대 60초)로 계속 다시 시도하고(`status.retry`), 포인터가 새 버전으로 바뀌면 새 포인터를 먼저 본다.
+  상한(`give_up_seconds`, 기본 없음)을 넘기면 RETRY_EXHAUSTED로 거부를 확정한다. 서비스는 그동안에도 살아 있다.
 """
 from __future__ import annotations
 
 import logging
 import re
 import threading
+import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
@@ -26,15 +32,16 @@ log = logging.getLogger("survey_service.release")
 
 
 class LoadRejected(Exception):
-    def __init__(self, code: str, detail: str = "") -> None:
+    def __init__(self, code: str, detail: str = "", *, retryable: bool = False) -> None:
         super().__init__(f"{code}: {detail}")
         self.code = code
         self.detail = detail
+        self.retryable = retryable      # True면 일시적이라 나중에 다시 시도한다(영구 거부가 아니다)
 
 
 @dataclass
 class PollResult:
-    action: str            # NO_POINTER | UNCHANGED | LOADED | ACTIVATED | REJECTED | RETRY_LATER
+    action: str            # NO_POINTER | UNCHANGED | LOADED | ACTIVATED | REJECTED | RETRY_LATER | WAITING
     release_id: Optional[str] = None
     code: Optional[str] = None
 
@@ -47,12 +54,16 @@ class LoaderStatus:
     warnings: list = field(default_factory=list)
     last_poll_error: Optional[str] = None
     unavailable_releases: list = field(default_factory=list)   # 진행 중 세션이 쓰는데 적재하지 못한 릴리스
+    # 일시적 실패로 재시도 중인 포인터: {pointer_version, release_id, attempts, first_failure_at, last_attempt_at, next_attempt_at, last_error}
+    retry: Optional[dict] = None
 
 
 class ReleaseLoader:
     def __init__(self, reader, registry: ReleaseRegistry, inference: InferenceServer, *, workdir: Path,
                  supported_versions: Optional[Iterable[int]] = None, installed_versions: Optional[dict] = None,
-                 keep_releases: int = 2, open_release_ids: Callable[[], set] = lambda: set()) -> None:
+                 keep_releases: int = 2, open_release_ids: Callable[[], set] = lambda: set(),
+                 retry_base_seconds: float = 5.0, retry_max_seconds: float = 60.0, give_up_seconds: float = 0.0,
+                 clock: Callable[[], float] = time.time) -> None:
         self.reader, self.registry, self.inference = reader, registry, inference
         self.workdir = Path(workdir)
         self.supported = set(supported_versions) if supported_versions is not None else {survey_schema.current_version()}
@@ -61,6 +72,7 @@ class ReleaseLoader:
         self.open_release_ids = open_release_ids
         self.status = LoaderStatus()
         self._lock = threading.Lock()
+        self.retry_base, self.retry_max, self.give_up, self.clock = retry_base_seconds, retry_max_seconds, give_up_seconds, clock
 
     # ------------------------------------------------------------------ 폴링
     def poll_once(self) -> PollResult:
@@ -77,6 +89,12 @@ class ReleaseLoader:
             if ptr["pointer_version"] == self.status.last_pointer_version:
                 return PollResult("UNCHANGED", ptr["release_id"])
             rid = ptr["release_id"]
+            rs = self.status.retry
+            if rs is not None and rs["pointer_version"] != ptr["pointer_version"]:
+                log.info("재시도 중이던 포인터 대신 새 포인터를 본다 old=%s new=%s", rs["pointer_version"], ptr["pointer_version"])
+                self.status.retry = rs = None                      # 새 포인터가 우선이다
+            if rs is not None and self.clock() < rs["_next_ts"]:
+                return PollResult("WAITING", rid, rs["last_error"])   # 백오프 중: 다음 시도 시각 전에는 부르지 않는다
             try:
                 already = rid in self.registry.loaded_ids()
                 if not already:
@@ -84,18 +102,46 @@ class ReleaseLoader:
                     self.registry.register(rel)
                 self.registry.activate(rid)
             except LoadRejected as e:
+                if e.retryable:
+                    return self._retry(ptr, e.code, e.detail)
                 return self._reject(ptr, e)
             except BoundaryError as e:
-                if e.retryable:                      # 일시 장애는 다음 주기에 다시
-                    self.status.last_poll_error = e.code
-                    log.warning("릴리스를 읽지 못했다 release=%s code=%s", rid, e.code)
-                    return PollResult("RETRY_LATER", rid, e.code)
+                if e.retryable:                      # 일시 장애는 포인터를 확정하지 않고 백오프로 다시
+                    return self._retry(ptr, e.code, e.message)
                 return self._reject(ptr, LoadRejected(e.code, e.message))
+            self.status.retry = None
             self.status.last_pointer_version = ptr["pointer_version"]
             self.status.active_release_id = rid
             self.registry.gc(self.open_release_ids(), self.keep)
             log.info("릴리스 적용 release=%s pointer_version=%s", rid, ptr["pointer_version"])
             return PollResult("ACTIVATED" if already else "LOADED", rid)
+
+    @staticmethod
+    def _iso(ts: float) -> str:
+        return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _retry(self, ptr: dict, code: str, detail: str) -> PollResult:
+        """일시적 실패: 포인터를 거부로 확정하지 않고 백오프 뒤 같은 포인터를 다시 시도한다."""
+        now = self.clock()
+        rs = self.status.retry
+        if rs is None:
+            rs = self.status.retry = {"pointer_version": ptr["pointer_version"], "release_id": ptr["release_id"], "attempts": 0,
+                                      "first_failure_at": self._iso(now), "_first_ts": now}
+        rs["attempts"] += 1
+        delay = min(self.retry_max, self.retry_base * 2 ** (rs["attempts"] - 1))
+        rs.update(last_attempt_at=self._iso(now), next_attempt_at=self._iso(now + delay), _next_ts=now + delay,
+                  last_error=f"{code}: {detail}"[:200])
+        self.status.last_poll_error = None
+        if self.give_up > 0 and now - rs["_first_ts"] >= self.give_up:      # 상한(기본 없음)
+            self.status.retry = None
+            return self._reject(ptr, LoadRejected("RETRY_EXHAUSTED", f"{rs['attempts']}번 시도했으나 계속 일시적으로 실패했다 ({code})"))
+        log.warning("릴리스 적재를 나중에 다시 시도한다 release=%s attempts=%s code=%s next_in=%.0fs", ptr["release_id"], rs["attempts"], code, delay)
+        return PollResult("RETRY_LATER", ptr["release_id"], code)
+
+    def retry_info(self) -> Optional[dict]:
+        """/readyz용: 재시도 중이면 공개 필드만(내부 시각 제외)."""
+        rs = self.status.retry
+        return None if rs is None else {k: v for k, v in rs.items() if not k.startswith("_")}
 
     def _reject(self, ptr: dict, e: LoadRejected) -> PollResult:
         self.status.last_pointer_version = ptr["pointer_version"]    # 같은 포인터는 다시 시도하지 않는다
@@ -138,7 +184,7 @@ class ReleaseLoader:
         try:
             session = self.inference.load(manifest, bundle.adapters, contract_version=manifest["runtime_contract_version"])
         except InferenceLoadError as e:
-            raise LoadRejected(e.code, str(e)) from e
+            raise LoadRejected(e.code, str(e), retryable=e.retryable) from e
         for w in warnings:
             log.warning("릴리스 경고 release=%s %s", rid, w)
         self.status.warnings = (self.status.warnings + [{"release_id": rid, "warning": w} for w in warnings])[-20:]

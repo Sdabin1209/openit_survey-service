@@ -16,7 +16,7 @@ HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_
 
 공개 API: `SURVEY_API_TOKEN_ENV`(토큰이 든 환경 변수의 이름, 기본 `SURVEY_API_TOKEN`. **토큰이 없으면 시작하지 않는다**), `SURVEY_STAFF_API_TOKEN_ENV`(직원 개입용 토큰이 든 환경 변수의 이름, 기본 `SURVEY_STAFF_API_TOKEN`. 키오스크 토큰과 달라야 하고 없으면 시작하지 않는다), `SURVEY_SESSION_IDLE_SECONDS`(300, 0이면 유휴 만료 끔), `SURVEY_API_MAX_INFLIGHT`(32), `SURVEY_API_MAX_UTTERANCE_CHARS`(1000). 프론트에는 `https://<서비스>/v1/sessions...`와 토큰을 운영 배포 때 전달한다(TLS는 앞단). 모델을 추론 컨테이너로 분리하려면 `SURVEY_INFERENCE_URL`, `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_INFERENCE_TIMEOUT_SECONDS`(호출 하나, 4), `SURVEY_INFERENCE_RETRIES`(1), `SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS`(600)를 준다(`SURVEY_MODEL_BACKEND`는 비워도 된다). 추론 서버는 model-runtime 영역의 서빙 이미지이고 규약은 `docs/inference-server-spec.md`다. `/readyz`의 `inference`로 호출 실패·재시도·타임아웃·보호 건수를 본다(타임아웃이 늘면 추론 서버 부하, `outcome_fallback`이 늘면 모델 품질 문제).
 
-선택: `SURVEY_STAFF_CONSOLE`, `SURVEY_RESULT_DISPATCHER`(팩토리, 없으면 알림·결과 전달은 실패로 기록), `SURVEY_PORT`(8080), `SURVEY_SESSION_DB`, `SURVEY_OUTBOX_DB`, `SURVEY_WORK_DIR`(`/data/...`), `SURVEY_RELEASE_POLL_SECONDS`(5), `SURVEY_KEEP_RELEASES`(2), `SURVEY_EXPORT_INTERVAL_SECONDS`(1), `SURVEY_EXPORT_BACKOFF_MAX_SECONDS`(60), `SURVEY_OUTBOX_KEEP_SENT_HOURS`(24), `SURVEY_LOG_LEVEL`. 토큰은 I4·I6 구현이 자기 환경 변수로 받는다. `/data`는 볼륨으로 둔다.
+선택: `SURVEY_STAFF_CONSOLE`, `SURVEY_RESULT_DISPATCHER`(팩토리, 없으면 알림·결과 전달은 실패로 기록), `SURVEY_PORT`(8080), `SURVEY_SESSION_DB`, `SURVEY_OUTBOX_DB`, `SURVEY_WORK_DIR`(`/data/...`), `SURVEY_RELEASE_POLL_SECONDS`(5), `SURVEY_RELEASE_RETRY_BASE_SECONDS`(5)·`SURVEY_RELEASE_RETRY_MAX_SECONDS`(60)·`SURVEY_RELEASE_RETRY_GIVE_UP_SECONDS`(0=상한 없음)(일시적 적재 실패의 백오프), `SURVEY_STARTUP_WAIT_SECONDS`(5), `SURVEY_KEEP_RELEASES`(2), `SURVEY_EXPORT_INTERVAL_SECONDS`(1), `SURVEY_EXPORT_BACKOFF_MAX_SECONDS`(60), `SURVEY_OUTBOX_KEEP_SENT_HOURS`(24), `SURVEY_LOG_LEVEL`. 토큰은 I4·I6 구현이 자기 환경 변수로 받는다. `/data`는 볼륨으로 둔다.
 
 ## 2. 상태 보기
 
@@ -25,7 +25,8 @@ HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_
 
 | problems | 뜻 | 조치 |
 |---|---|---|
-| `no_active_release` | 활성 릴리스를 적재하지 못했다 | `release_loader.rejections`의 코드, `last_poll_error` 확인 |
+| `no_active_release` | 활성 릴리스를 적재하지 못했다 | `release_loader.rejections`(영구 거부)와 `retrying`(재시도 중)을 본다 |
+| `release_loading` | **영구 거부가 아니라 일시적 실패로 재시도 중**(추론 서버가 아직 뜨는 중, 연결 실패·503·타임아웃, I4 불능) | `release_loader.retrying`: 포인터 버전, 시도 횟수, 마지막·다음 시도 시각, 마지막 오류. 백오프(기본 5초 시작, 최대 60초)로 계속 다시 시도해 스스로 ready가 된다. 서비스와 `/healthz`는 그동안 살아 있다. 오래 가면 추론 서버(`/readyz`, GPU 적재)를 본다 |
 | `session_db` | 세션 DB를 열 수 없다 | 볼륨, 디스크, 권한 |
 | `outbox_db` | outbox를 열 수 없다 | 같음 |
 

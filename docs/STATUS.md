@@ -84,3 +84,7 @@
 - 구현은 design 15절. 의존: boundary-contracts v1.3.2, pywebpush 2.5.0(잠금 고정).
 - 알려진 한계: SSE 연결 생존은 쓰기 실패로만 알 수 있어 연결이 소리 없이 끊기면 다음 ping 전까지 DELIVERED로 볼 수 있다(운영 절차 필요). 알림 저장과 세션 쓰기 확정은 서로 다른 파일이라 한 트랜잭션이 아니다. 실제 브라우저·실제 푸시 서비스(FCM 등)로는 시험하지 못했다(로컬 가짜 푸시 서비스로 전송 형식만 확인).
 - 시험: pytest 322 통과, scripts/smoke.sh SMOKE OK(직원 알림 한 바퀴 포함), scripts/smoke_compose.sh OK. 오케스트레이터 그래프(graph.py)는 바꾸지 않았다.
+
+## fix/loader-retry
+
+- 서버에서 실제 vLLM 추론 서버가 뜨기 전에 활성 포인터 적재를 시도해 REMOTE_UNAVAILABLE이 영구 거부로 남던 결함 수정(설계 5절, 런북). main에는 합치지 않았다(서버 검증 뒤 합친다).

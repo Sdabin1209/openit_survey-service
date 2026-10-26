@@ -87,7 +87,8 @@ class App:
         self.loader = ReleaseLoader(
             self.reader, self.registry, self.inference, workdir=Path(settings.work_dir), keep_releases=settings.keep_releases,
             installed_versions={"turn_engine_version": turn_engine.ENGINE_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION},
-            open_release_ids=self.store.open_release_ids)
+            open_release_ids=self.store.open_release_ids, retry_base_seconds=settings.release_retry_base_seconds,
+            retry_max_seconds=settings.release_retry_max_seconds, give_up_seconds=settings.release_retry_give_up_seconds)
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,
                                       max_delay=settings.export_backoff_max_seconds)
         console = staff_console if staff_console is not None else (load_factory(settings.staff_console)() if settings.staff_console else None)
@@ -113,25 +114,33 @@ class App:
 
     # ------------------------------------------------------------------ 수명
     def start(self) -> None:
-        self.loader.poll_once()                                   # 첫 활성 릴리스를 가능하면 바로 적재한다
-        self.loader.ensure_loaded(self.store.open_release_ids())  # 다시 띄운 뒤 진행 중 세션의 릴리스(턴 밖에서)
         self.exporter.start(self.settings.export_interval_seconds)
+        first_done = threading.Event()
 
         def poll():
             n = 0
-            while not self._stop.wait(self.settings.release_poll_seconds):
+            first = True
+            # 첫 폴링은 바로 한다(첫 활성 릴리스, 다시 띄운 뒤 진행 중 세션의 릴리스). 추론 서버가 아직 뜨는 중이면 오래 걸릴 수 있어
+            # 이 스레드에서 하고, start()는 startup_wait_seconds까지만 기다린다(그동안에도 /healthz는 산다).
+            while first or not self._stop.wait(self.settings.release_poll_seconds):
                 try:
                     self.loader.poll_once()
-                    if self.loader.status.unavailable_releases:
+                    if first:
+                        self.loader.ensure_loaded(self.store.open_release_ids())
+                    elif self.loader.status.unavailable_releases:
                         self.loader.ensure_loaded(self.store.open_release_ids())
                     n += 1
                     if n % 60 == 0:
                         self.outbox.purge_sent(time.time() - self.settings.outbox_keep_sent_hours * 3600)
                 except Exception as e:
                     log.error("릴리스 폴링 실패 error=%s", type(e).__name__)
+                if first:
+                    first = False
+                    first_done.set()
         t = threading.Thread(target=poll, name="release-poller", daemon=True)
         t.start()
         self._threads.append(t)
+        first_done.wait(self.settings.startup_wait_seconds)
         if self.settings.session_idle_seconds > 0:
             idle = self.settings.session_idle_seconds
 
@@ -170,8 +179,11 @@ class App:
         except Exception:
             problems.append("alert_db")
         active = self.registry.active_id()
+        retrying = self.loader.retry_info()
         if active is None:
             problems.append("no_active_release")
+            if retrying is not None:
+                problems.append("release_loading")      # 거부가 아니라 일시적 실패로 재시도 중이다(release_loader.retrying)
         body = {
             "ready": not problems, "problems": problems, "service_version": SERVICE_VERSION,
             "active_release": active, "contract_version": survey_schema.current_version(),
@@ -180,7 +192,7 @@ class App:
             "staff_alerts": self.alerts.status(),
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
-            "release_loader": {"unavailable_releases": self.loader.status.unavailable_releases,
+            "release_loader": {"retrying": retrying, "unavailable_releases": self.loader.status.unavailable_releases,
                                "last_pointer_version": self.loader.status.last_pointer_version,
                                "last_poll_error": self.loader.status.last_poll_error,
                                "rejections": self.loader.status.rejections[-5:], "warnings": self.loader.status.warnings[-5:]},

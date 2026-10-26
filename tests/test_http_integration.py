@@ -35,7 +35,7 @@ def srv():
 def loader_env(srv, tmp_path):
     reg = ReleaseRegistry()
     loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "work",
-                           installed_versions=INSTALLED)
+                           installed_versions=INSTALLED, retry_base_seconds=0)
     return srv, reg, loader
 
 
@@ -97,7 +97,7 @@ def test_non_pass_release_is_not_loaded_over_http(loader_env, tmp_path):
 def test_wrong_token_is_a_rejection_not_a_crash(srv, tmp_path):
     publish(srv, tmp_path, "rel-1")
     loader = ReleaseLoader(HttpReleaseReader(srv.url, "nope", 5), ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / "w",
-                           installed_versions=INSTALLED)
+                           installed_versions=INSTALLED, retry_base_seconds=0)
     r = loader.poll_once()
     assert r.action == "RETRY_LATER" and r.code == "PERMISSION_DENIED"      # 포인터를 읽지 못했을 뿐이다. 서비스는 죽지 않는다
     assert loader.registry.active() is None
@@ -106,7 +106,7 @@ def test_wrong_token_is_a_rejection_not_a_crash(srv, tmp_path):
 def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
     publish(srv, tmp_path, "rel-1")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED)
+    loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
     loader.poll_once()
     ob = Outbox(str(tmp_path / "ob.db"))
     now = [time.time()]
@@ -138,7 +138,7 @@ def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
 def test_non_retryable_ingest_error_goes_dead_over_http(srv, tmp_path):
     publish(srv, tmp_path, "rel-1")
     reg = ReleaseRegistry()
-    ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED).poll_once()
+    ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0).poll_once()
     ob = Outbox(str(tmp_path / "ob.db"))
     ex = TraceExporter(ob, HttpTraceIngest(srv.url, "r-tok", 5))        # 읽기 토큰으로 쓰기 -> PERMISSION_DENIED, 재시도하지 않는다
     Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole(), trace_sink=OutboxTraceSink(ob)).handle_turn(

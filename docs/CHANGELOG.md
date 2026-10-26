@@ -22,3 +22,7 @@
 
 - 직원 알림: 영속 저장(SQLite), 목록, SSE(이벤트 순번으로 이어 받기), 웹 푸시(pywebpush, VAPID 환경 변수, 없으면 SSE만), 구독 등록·해지(멱등), 개입 시 해결 표시, 전달 판정(DELIVERED/DELIVERY_FAILED). `StaffConsole` 접점의 기본 구현으로 정리(교체 가능).
 - 공개 API 보완(boundary-contracts v1.3.2): 세션 상태(`resume_text`), 푸시 설정, 오류 코드 표, Retry-After, turn_id 봉투, 폴링 빈도 상한. 응답을 boundary-contracts의 StaffAlert/StaffAlertPage/SessionState/PushConfig/BoundaryError 스키마로 검증하는 시험.
+
+## 수정 (fix/loader-retry)
+
+- 릴리스 로더: 일시적 적재 실패(추론 서버가 아직 뜨는 중 등)를 영구 거부로 확정하던 결함을 고쳤다. 백오프로 같은 포인터를 계속 다시 시도하고(`/readyz` `release_loading`, `release_loader.retrying`), 결정적 거부만 영구 거부로 둔다. 시작할 때 첫 적재를 기다리는 시간에 상한을 두어 /healthz가 적재 동안에도 산다.

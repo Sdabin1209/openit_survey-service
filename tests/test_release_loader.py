@@ -20,7 +20,7 @@ INSTALLED = {"turn_engine_version": turn_engine.ENGINE_VERSION, "model_runtime_v
 def env(tmp_path):
     reader = FakeReleaseReader(tmp_path / "gate")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED)
+    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0)
     return reader, reg, loader
 
 

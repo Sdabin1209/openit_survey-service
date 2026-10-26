@@ -34,7 +34,7 @@ class Env:
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
         self.registry = ReleaseRegistry()
         self.client = RemoteInference(self.url, TOKEN, timeout, load_timeout=load_timeout, retries=retries, poll_interval=0.05, backoff=0.01)
-        self.loader = ReleaseLoader(self.reader, self.registry, self.client, workdir=tmp / "svc-work", installed_versions=INSTALLED)
+        self.loader = ReleaseLoader(self.reader, self.registry, self.client, workdir=tmp / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0)
         self.orch = Orchestrator(MemorySessionStore(), self.registry, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
         self.n = 0
 
@@ -214,11 +214,11 @@ def test_async_load_is_polled_until_loaded(tmp_path):
         e.close()
 
 
-def test_load_timeout_rejects_release_and_keeps_previous(tmp_path):
+def test_load_wait_timeout_is_transient_not_a_rejection(tmp_path):
     e = Env(tmp_path, async_load=True, load_delay=1.5, load_timeout=0.3)
     try:
-        r = e.loader.poll_once()
-        assert r.action == "REJECTED" and r.code == "REMOTE_TIMEOUT" and e.registry.active() is None
+        r = e.loader.poll_once()           # 서버가 아직 적재 중이다: 영구 거부가 아니라 재시도(tests/test_loader_retry.py)
+        assert r.action == "RETRY_LATER" and r.code == "REMOTE_TIMEOUT" and e.registry.active() is None and not e.loader.status.rejections
     finally:
         e.close()
 

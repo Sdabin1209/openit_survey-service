@@ -49,6 +49,10 @@ class Settings:
     staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
     result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
     release_poll_seconds: float = 5.0
+    startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
+    release_retry_base_seconds: float = 5.0       # 일시적 적재 실패의 재시도 백오프 시작
+    release_retry_max_seconds: float = 60.0       # 백오프 최대
+    release_retry_give_up_seconds: float = 0.0    # 0이면 상한 없음(계속 재시도)
     # HTTP 클라이언트(release_reader/trace_ingest가 'http'일 때): 토큰은 값이 아니라 '환경 변수 이름'으로 받는다
     release_reader_url: str = ""
     release_reader_token_env: str = "SURVEY_RELEASE_READER_TOKEN"
@@ -113,6 +117,10 @@ class Settings:
             inference_load_timeout_seconds=_float(env, "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS", 600.0),
             inference_retries=_int(env, "SURVEY_INFERENCE_RETRIES", 1, 0),
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
+            startup_wait_seconds=_float(env, "SURVEY_STARTUP_WAIT_SECONDS", 5.0),
+            release_retry_base_seconds=_float(env, "SURVEY_RELEASE_RETRY_BASE_SECONDS", 5.0),
+            release_retry_max_seconds=_float(env, "SURVEY_RELEASE_RETRY_MAX_SECONDS", 60.0),
+            release_retry_give_up_seconds=float(env.get("SURVEY_RELEASE_RETRY_GIVE_UP_SECONDS", "0")),
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),
             export_backoff_max_seconds=_float(env, "SURVEY_EXPORT_BACKOFF_MAX_SECONDS", 60.0),

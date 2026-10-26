@@ -16,9 +16,10 @@ from .errors import SurveyServiceError
 
 class InferenceLoadError(SurveyServiceError):
     """모델을 적재할 수 없다. code는 거부 사유(상태·런북에 쓴다)."""
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, retryable: bool = False) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
+        self.retryable = retryable      # 일시적이라 같은 릴리스를 나중에 다시 시도할 수 있는 실패(추론 서버가 아직 뜨는 중 등)
 
 
 KNOWN_BACKENDS = ("fake",)

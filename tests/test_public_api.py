@@ -300,7 +300,7 @@ def remote(tmp_path):
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{httpd.server_address[1]}"
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, RemoteInference(url, "inf-tok", 5), workdir=tmp_path / "svc-work", installed_versions=INSTALLED)
+    loader = ReleaseLoader(reader, reg, RemoteInference(url, "inf-tok", 5), workdir=tmp_path / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0)
     yield reader, reg, loader, inf, url, httpd, tmp_path
     httpd.shutdown(); httpd.server_close()
 
@@ -343,7 +343,7 @@ def test_inference_wrong_token_or_down_rejects_release_and_keeps_previous(remote
     reader.add_release("rel-2", sample_bank(2), turn_engine_version=INSTALLED["turn_engine_version"],
                        model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-2")
-    bad = ReleaseLoader(reader, ReleaseRegistry(), RemoteInference(url, "wrong", 5), workdir=tmp / "w2", installed_versions=INSTALLED)
+    bad = ReleaseLoader(reader, ReleaseRegistry(), RemoteInference(url, "wrong", 5), workdir=tmp / "w2", installed_versions=INSTALLED, retry_base_seconds=0)
     r = bad.poll_once()
     assert r.action == "REJECTED" and r.code.startswith("REMOTE_") and bad.registry.active() is None
     assert reg.active_id() == "rel-1"
