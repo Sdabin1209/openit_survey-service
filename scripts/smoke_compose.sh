@@ -63,9 +63,9 @@ curl -fsS "$API/healthz" >/dev/null || fail "추론 서버가 죽었다고 서�
 $COMPOSE start inference >/dev/null 2>&1
 for i in $(seq 1 30); do
   c=$(turn "다시 안녕" "t-3-$i");  # 실패한 턴도 같은 turn_id로는 같은 결과라 시도마다 새 turn_id를 쓴다
-  grep -q '"write_committed": "COMMITTED"' /tmp/smoke-compose-$$.body && [ "$c" = 200 ] && break; sleep 1
+  grep -q '"turn_failure_signal": null' /tmp/smoke-compose-$$.body && [ "$c" = 200 ] && break; sleep 1
 done
-grep -q '"write_committed": "COMMITTED"' /tmp/smoke-compose-$$.body || fail "추론 서버가 다시 떠도 복구하지 않는다: $(cat /tmp/smoke-compose-$$.body)"
+grep -q '"turn_failure_signal": null' /tmp/smoke-compose-$$.body || fail "추론 서버가 다시 떠도 복구하지 않는다: $(cat /tmp/smoke-compose-$$.body)"
 [ "$(post /v1/sessions/cs-1/end '{"session_id":"cs-1","kind":"SESSION_END"}')" = 200 ] || fail "종료"
 # 같은 턴 ID 재시도는 같은 응답(이전 실패 응답 포함)
 [ "$(turn "또 안녕" t-2)" = 200 ] && [ "$(cat /tmp/smoke-compose-$$.body)" = "$FAILED_BODY" ] || fail "같은 turn_id 재시도가 처음(실패) 응답과 다르다"

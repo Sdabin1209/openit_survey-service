@@ -254,3 +254,26 @@ def test_inference_backend_must_be_known():
         InferenceServer("vllm")
     assert e.value.code == "UNKNOWN_BACKEND"
     assert InferenceServer("fake").production_safe is False
+
+
+def test_release_expectations_for_contract_2_0_0(env):
+    """헤드 지시(migration-2.0.0): model_runtime_version 0.6.x, prompt-3, protect-2, 역할별 system_prompt를 가진 매니페스트를 적재한다."""
+    reader, reg, loader = env
+    assert INSTALLED["model_runtime_version"].startswith("0.6.") and INSTALLED["turn_engine_version"].startswith("0.3.")
+    add(reader, "rel-1")
+    reader.set_pointer("rel-1")
+    assert loader.poll_once().action == "LOADED"
+    m = reg.active().manifest
+    for role in ("LORA_A", "LORA_B"):
+        assert m["adapters"][role]["serving_config"]["prompt_template_version"] == "prompt-3"
+        assert m["adapters"][role]["serving_config"]["protection_policy_version"] == "protect-2"
+        assert m["adapters"][role]["system_prompt"]["path"] == "system_prompt.txt"
+    assert m["pipeline_schema_version"] == "2.0"
+
+
+def test_release_built_with_model_runtime_0_5_is_rejected(env):
+    reader, reg, loader = env
+    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version="0.5.3")
+    reader.set_pointer("rel-1")
+    r = loader.poll_once()
+    assert r.action == "REJECTED" and r.code == "VERSION_MISMATCH" and reg.active() is None

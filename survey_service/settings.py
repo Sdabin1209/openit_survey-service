@@ -48,6 +48,7 @@ class Settings:
     model_backend: str = ""         # 예: fake
     staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
     result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
+    risk_source: str = ""           # 선택 팩토리(RiskSource). 없으면 직원 알림의 입력원이 없다(v2 A 출력에는 위험 신호가 없다, CR-012). /readyz에 드러난다
     release_poll_seconds: float = 5.0
     startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
     release_retry_base_seconds: float = 5.0       # 일시적 적재 실패의 재시도 백오프 시작
@@ -93,7 +94,7 @@ class Settings:
             outbox_db=env.get("SURVEY_OUTBOX_DB", cls.outbox_db), work_dir=env.get("SURVEY_WORK_DIR", cls.work_dir),
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
-            result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""),
+            result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""), risk_source=env.get("SURVEY_RISK_SOURCE", ""),
             release_reader_url=env.get("SURVEY_RELEASE_READER_URL", ""),
             release_reader_token_env=env.get("SURVEY_RELEASE_READER_TOKEN_ENV", "SURVEY_RELEASE_READER_TOKEN"),
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),

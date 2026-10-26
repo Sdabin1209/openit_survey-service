@@ -1,5 +1,7 @@
 # 추론 서버 규약 (survey-service <-> 모델 서빙 컨테이너)
 
+> **[D74로 대체됨]** 호출은 이제 `extract`(ActionExtractionInput -> ActionExtraction, JSON)와 `respond`(ResponseRequest -> 응답 문장, text/plain)다. 아래 `parse`/`generate`, `UtteranceParserInput`, `ParserOutput`, `ResponseGeneratorInput`, `GeneratorOutput`, `is_fallback` JSON 본문은 v1이다. 기준은 `boundary-contracts/HTTP.md`의 I9 절(2.0.0)이고, 서비스 쪽 실패 처리는 design 16절과 `survey_service/remote.py`의 머리말이다: 503 `OUTPUT_INVALID`와 검증 위반은 같은 요청을 1회 재시도하고 그래도면 턴 실패(D75), 연결 실패는 클라이언트 층에서 1회 재시도, 읽기 타임아웃·400은 재시도 없음, 404는 릴리스를 한 번 다시 적재. 이 문서의 나머지는 v1 시절 기록이다.
+
 > **기준은 `boundary-contracts/HTTP.md`의 'I9 ModelRuntime 추론 서버' 절이다(D62).** 이 문서는 그 절의 근거와 서비스 쪽 실패 처리(5절)를 담고, 어긋나면 HTTP.md에 맞춘다. 보호 헤더는 `X-Openit-Outcome`, `X-Openit-Attempts`, `X-Openit-Protections`(규칙 코드:건수, 예 `P1:1,G5:1`)다. `/v1/info`에는 `serving_config_hash`(역할별)가 더해졌다.
 
 상태: survey-service가 정한 제안 규약 v1(헤드 확인 요청, CR-010). 구현은 **model-runtime 영역이 만드는 추론 서버 이미지**(vLLM, 서빙 서버 RTX 4090)이고, 서비스 쪽은 `survey_service/remote.py`의 HTTP 클라이언트뿐이다. 서비스는 모델을 직접 적재하거나 호출하지 않는다(`SURVEY_INFERENCE_URL`이 있으면). 참조 구현(모델 없는 가짜 경로)과 클라이언트 시험은 `tests/ref_inference_server.py`, `tests/test_inference_client.py`에 있고, 실제 서버는 같은 시험의 HTTP 부분(`test_spec_endpoints_over_raw_http`)과 5절의 동작을 만족해야 한다.

@@ -5,7 +5,7 @@
 ## 1. 소유하는 것
 
 - 소유 저장소: **Session Store**(서비스 내부, 기본 SQLite 파일 `SURVEY_SESSION_DB`)와 **Trace outbox**(SQLite 파일 `SURVEY_OUTBOX_DB`). 이웃은 두 파일을 읽지 않는다.
-- 유지하는 것: `schema/`(문진 스키마, 정수 버전 `CONTRACT_VERSION`=1). 변경은 다른 영역의 변경 요청을 받아 반영하고, 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다(D21).
+- 유지하는 것: `schema/`(문진 스키마, 정수 버전 `CONTRACT_VERSION`=1, 문항 순서·건너뛰기 표 `QuestionFlow`와 표 찾기 표 `ResponseTables` 초안 포함). 변경은 다른 영역의 변경 요청을 받아 반영하고, 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다(D21).
 
 ## 2. 제공하는 것
 
@@ -21,13 +21,13 @@
 | 소비 | 지원 |
 |---|---|
 | 문진 스키마(자기 `schema/`) | 정수 버전 **1** 한 값. `ReleaseManifest.runtime_contract_version`이 이 집합 밖이면 적재를 거부하고 이전 릴리스를 유지 |
-| 경계 계약 | `boundary-contracts` **v1.3.2**(`pipeline_schema_version` "1.3"). 영역 사이 호출은 HTTP(`HTTP.md`), 클라이언트는 `boundary_contracts.clients`. 같은 MAJOR의 모르는 필드는 보존(`ext`)하고 판단에 쓰지 않는다 |
+| 경계 계약 | `boundary-contracts` **v2.0.0**(`pipeline_schema_version` "2.0", v1 레코드는 `UNSUPPORTED_VERSION`). 영역 사이 호출은 HTTP(`HTTP.md`), 클라이언트는 `boundary_contracts.clients`. 같은 MAJOR의 모르는 필드는 보존(`ext`)하고 판단에 쓰지 않는다 |
 | I4 ReleaseReader | `get_active_pointer`(폴링), `get_release`, `get_decision`, `load_bundle`. 턴 처리 중에는 부르지 않는다 |
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
 | 웹 푸시 | pywebpush 2.5.0(잠금 고정). VAPID 키는 환경 변수 비밀, 없으면 SSE만 |
 | 오케스트레이션 | LangGraph **1.2.15**(잠금 파일에 고정, 이미지 라벨 `io.openit.langgraph`). 외부 추적(LangSmith)은 이미지에서 끈다 |
-| I8 turn-engine | **v0.2.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `normalize`, `judge`, `write_record`, `plan` |
-| I9 model-runtime | **v0.3.0** (같은 규칙. `load`는 역할별 `serving_configs`·`expected_serving_config_hashes`) `load`, `parse`, `generate`, `last_call_info` |
+| I8 turn-engine | **v0.3.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `validate_extraction`, `QuestionFlowTable`(문항 순서·건너뛰기 표는 이 영역이 문진 스키마에서 만들어 넘긴다, D76). 정규화기·판정기·기록기·Plan은 쓰지 않는다 |
+| I9 model-runtime | **v0.6.0** (같은 규칙) HTTP 서버 `PUT /v1/releases/{id}`, `POST .../extract`(JSON), `POST .../respond`(text/plain). 매니페스트 기대값: `model_runtime_version` 0.6.x, 역할별 `system_prompt`, serving_config `prompt-3`·`protect-2`. 프로세스 안 `load`는 개발·스모크용 |
 
 버전 고정: Git 태그(`requirements.txt`), 서드파티는 `requirements.lock`, 이미지는 `git archive <태그>`로 만든 wheel. 이미지 라벨: `org.opencontainers.image.revision`(커밋), `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`.
 
@@ -40,6 +40,9 @@
 - 한 턴 동안 문항 저작·합성 데이터·모델 개발·게이트를 호출하지 않는다.
 
 ## 5. 이웃이 이 영역에 기대해서는 안 되는 것
+
+- **직원 알림은 지금 만들어지지 않는다**: v2의 A 출력에 위험 신호가 없어 입력원이 없다(CR-012, 헤드 결정 대기). `/readyz`의 `staff_alert_source.active`가 false다. 알림 API·SSE·푸시는 살아 있다.
+- 표 찾기 표(`ask` 문장 틀, 칸 설명)는 **미확정 초안**이다(`/readyz`의 `response_tables.status`).
 
 - 직원 개입은 위험으로 멈춘 세션에만 된다. 쓰기 반영 여부를 알 수 없는 커밋(`write_outcome: UNKNOWN`)은 결과를 고정하지 않으므로 같은 턴 ID 재시도가 다시 처리될 수 있다.
 - 실패한 턴(`NOT_COMMITTED`)의 결과도 같은 턴 ID로는 같게 돌아온다. 다시 시도하려면 새 턴 ID가 필요하다 [제안, CR-003의 `turn_id` 항목과 함께 O06에서 확정].

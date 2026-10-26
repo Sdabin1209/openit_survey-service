@@ -1,5 +1,7 @@
 # survey-service 영역 설계서
 
+> **D74 구조(계약 2.0.0)로 바꾸었다.** 이 문서의 1~15절은 v1(파서-정규화기-판정기-기록기-Plan-생성기) 시절에 쓴 것이고, 그중 컴포넌트 입력 조립(3.1), 골든 대조(10), 그래프 노드 표(14.1, 14.2, 14.5)는 **폐기**되었다. 현재 구조는 **16~19절**이 정한다: 16 한 턴의 흐름과 노드, 17 문항 순서·건너뛰기 표(D76)와 A 입력 state, 18 표 찾기와 B 입력(ask 틀·칸 설명 초안, 57행 문제), 19 Trace 키, 오류 처리, 위험 신호·직원 알림(미정). 처리 표 9-1, Session Store, 릴리스 로더, Trace 내보내기, 공개 API, 직원 알림 저장·전달은 그대로 유효하다.
+
 표기: **[확인]** 계약·브리프·규칙 문서에서 읽은 것, **[결정]** 이 영역이 정한 내부 설계(경계에 닿지 않음), **[제안]** 규칙 문서에 없어 이 문서가 고른 해석(바꿀 수 있음, 필요하면 변경 요청), **[미정]** 정해지지 않은 것, **[O06 대기]** 공개 API가 정해져야 하는 것.
 
 ## 1. 범위
@@ -54,9 +56,9 @@
 
    "처리 안 함"은 어떤 컴포넌트도 부르지 않고 응답이 없다. 개입 결정이면 `intervention_result = IGNORED`. 로그 규칙은 9-1의 3항.
 4. **세션 생성**: 초기 `SessionStore`(모든 슬롯 NONE, 진행 기록·Plan 기록 초기값)를 만들고 현재 활성 릴리스에 묶는다(새 세션부터 새 릴리스, O13). 실패하면 그 턴은 로그 없이 `NOT_COMMITTED` 신호(J8a).
-5. **전체 흐름(발화)**: Parser(LoRA-A) → normalize → judge → write_record → (저장 결정을 메모리에서 반영) → plan. 어느 단계든 예외면 `BEFORE_COMMIT` 실패로 멈추고 이후 단계를 하지 않는다(규칙 4: 저장 판단 뒤에는 앞으로 돌아가지 않음). Plan만 부르는 턴은 LoRA-A~저장 판단을 건너뛴다.
+5. **전체 흐름(발화)** [D74 이후는 16절]: extract(LoRA-A 한 번) → validate_extraction(turn-engine) → plan_writes. 어느 단계든 실패면 `BEFORE_COMMIT` 실패로 멈추고 이후 단계를 하지 않는다. 시작·재개·종료·이탈 턴은 A를 부르지 않고 `plan_other`만 한다.
 6. **쓰기 확정**: 저장 결정 + 진행 기록 갱신 + Plan 기록 갱신을 한 번에 커밋한다(`SessionCommitRequest.writes`). 실패하면 아무것도 반영하지 않는다. 실패 시 확정 뒤의 일은 하나도 하지 않는다(preconditions 0-1.3, J8f).
-7. **확정 뒤의 일(`AFTER_COMMIT`)** 은 서로의 성패와 무관하게 모두 시도한다: 직원 알림 전달(Plan이 `staff_alert`를 냈을 때), 결과 전달(`flow == END`), 응답 생성(LoRA-B), 프론트 전달. 직원 알림 전달은 지연 없이 하기 위해 응답 생성보다 앞에 한다.
+7. **확정 뒤의 일(`AFTER_COMMIT`)** 은 서로의 성패와 무관하게 모두 시도한다: 직원 알림 전달(위험 입력원이 알림을 냈을 때, 19.4), 결과 전달(문진이 끝난 턴), 응답 생성(LoRA-B 또는 고정 문장), 프론트 전달. 직원 알림 전달은 지연 없이 하기 위해 응답 생성보다 앞에 한다.
 8. **로그와 신호**: 대화 로그(`LogEntry`)는 턴 맨 끝에 따로 쓴다(실패한 턴도). 실패 단계가 하나라도 있으면 `TurnFailureSignal{write_committed, staff_alert}`를 프론트·직원 콘솔·출력에 싣는다. 개입 결정이면 `intervention_result`는 쓰기가 반영되면 APPLIED, 반영되지 않으면 FAILED, 처리 안 함이면 IGNORED.
 9. **Trace**: 턴이 끝나면 `TurnTrace`를 조립해 `TraceEnvelope`(릴리스 ID, 계약 버전 포함)로 outbox에 넣는다(§6). 이 한 번의 로컬 쓰기 외에 턴 응답이 전송을 기다리지 않는다.
 
@@ -160,7 +162,7 @@
 `schema/`에 `pyproject.toml`, `setup.py`, `survey_schema/`를 둔다. 배포 이름 `openit-survey-schema`, import 이름 `survey_schema`. 설치본은 `survey_schema/v<정수 버전>/{schemas,CONTRACT_VERSION,COMPONENTS.yaml}`을 담고, 원본은 `schema/`에 하나만 있다(빌드 때 복사). API: `load_schema(name, version=1)`, `schema_dir(version=1)`(= `<계약명>.json`이 있는 디렉터리, model-runtime `load(schema_dir=...)`에 그대로 넘긴다), `contract_version_dir`, `available_versions`, `current_version`, `list_schemas`.
 설치: `pip install "openit-survey-schema @ git+ssh://git@github.com/Sdabin1209/openit_survey-service.git@<태그>#subdirectory=schema"`. 태그는 헤드가 붙인다. 새 정수 버전 N을 추가할 때는 `schema/vN/`(schemas, CONTRACT_VERSION)을 만들면 같은 wheel에 함께 들어간다. `CONTRACT_VERSION`과 정수 버전은 이 작업에서 바꾸지 않았다.
 
-## 10. 골든 예시와의 대조
+## 10. 골든 예시와의 대조 [폐기: v1 컴포넌트 출력 재생이라 D74 구조에는 맞지 않는다. 골든 시험과 재생 도구를 지웠다]
 
 방법은 `tests/golden_replay.py`, `tests/test_golden.py`, `tests/golden_known.json`에 있다. 결과: 226 케이스, 처리한 턴 234(형식·표현 예시 13턴은 스키마 검증만), 비교한 쌍 1220(OrchestratorInput, OrchestratorOutput, FrontendInput, 세션 저장소의 처리 시작·최종 상태, StaffConsoleInput, DispatchInput/Output) 중 1215 일치, 5 불일치(모두 (c) 예시 오류). 골든 표본 1704개는 모두 자기 계약 스키마를 통과한다. 요약: 골든에는 문항 세트와 모델·엔진 입력이 없고(오케스트레이터 계약만 있다) 로그 항목 안에 컴포넌트 **출력**이 있다. 그래서 컴포넌트 출력을 재생하는 엔진·모델 대역으로 Orchestrator 자체(입력 조립, 처리 표, 저장 반영, 진행 기록, 로그, 실패 처리, 직원 알림, 결과 전달)를 비교한다. 실제 turn-engine을 골든 입력으로 돌리는 비교는 문항 세트가 없어 못 한다(CR-002는 원본에 없어 해결할 수 없다고 닫혔다). 입력 조립은 골든이 아니라 bindings.yaml과 대조한다(3.1).
 
@@ -195,7 +197,7 @@
 - 실제 release-gate(I4)·ops-feedback(I6) SDK와의 통합: 배포된 SDK가 없어 `boundary_contracts.sdk`의 Protocol을 따르는 시험용 대역(`tests/fakes.py`)으로만 시험했다. 팩토리 설정(`SURVEY_RELEASE_READER`, `SURVEY_TRACE_INGEST`)으로 실제 구현을 꽂는다.
 - 세션 문서 암호화, 보존 기간, 다중 프로세스 부하 시험.
 
-## 14. LangGraph 오케스트레이션 (D62)
+## 14. LangGraph 오케스트레이션 (D62) [노드 구성은 16절로 대체. 아래 14.3의 "그래프 밖에서 유지하는 것", 14.4의 위험·결정은 그대로 유효]
 
 사용자 지시로 한 턴의 오케스트레이션을 LangGraph `StateGraph`로 옮긴다. **동작은 바꾸지 않는다**: 기존 시험(228+), 골든 대조, 스모크가 회귀 기준이다. turn-engine은 수정하지 않고 노드가 그대로 호출한다(순수 라이브러리).
 
@@ -281,3 +283,88 @@
 - **turn_id 봉투**: 본문에서 `turn_id`를 떼어 낸 나머지를 `FrontendMessage`/`InterventionDecision`으로 검증한다(문진 스키마는 바꾸지 않았다). 시작·종료에서는 선택 필드이고 없으면 고정 ID(`start`, `end`)다.
 - **유휴 만료**: 위험 정지(PAUSED_RISK) 세션은 만료하지 않는다(`list_idle`이 진행 중 세션만 낸다, 시험이 확인).
 - 직원 접점은 교체 가능하다: 기본은 `AlertStaffConsole`(StaffConsole Protocol 구현), `SURVEY_STAFF_CONSOLE`로 다른 구현을 꽂으면 그것을 쓴다(알림 조회·SSE API는 알림 저장소를 그대로 쓰므로 이 경우 알림은 저장되지 않는다).
+
+
+## 16. D74 구조: 한 턴의 흐름 (계약 2.0.0, turn-engine 0.3.0, model-runtime 0.6.0)
+
+[확인] 정규화·판정·기록·Plan 코드는 서비스에 없다. 모델(LoRA-A)이 값 추출·정규화·절차(action)·다음 문항(next_item)을 한 번에 내고, 서비스는 **검증·저장·전달·표 찾기**만 한다. 판단은 하지 않는다(모델의 출력을 `validate_extraction`이 확인할 뿐이다).
+
+```
+ load_session -> col_* -> (ignore | bind_release)
+ bind_release -> extract -> validate_extraction -> plan_writes -> commit -> deliver_staff -> [dispatch_result] -> respond -> finalize
+                   ^  |            |  (위반)                                                       
+                   +--+------------+  같은 요청 1회 재시도(D75)          
+ bind_release -> plan_other -> commit -> ... (시작, 직원 재개·종료, 이탈: A를 부르지 않는다)
+```
+
+| 노드 | 하는 일 |
+|---|---|
+| `extract` | `ActionExtractionInput`을 조립해(17절) 추론 서버 `extract`를 한 번 부른다. 이 노드가 다시 실행되면 같은 요청의 재시도다 |
+| `validate_extraction` | `turn_engine.validate_extraction(입력, 출력, QuestionFlowTable)`과 서비스 검사(저장할 칸이 문항 세트에 있는가: `UNKNOWN_SLOT`). 위반이 있으면 한 번 재시도, 그래도면 턴 실패 |
+| `plan_writes` | `save=true`인 값만 `AnswerUpdate`로(칸에 값이 이미 있으면 정정 `NEW_REVISION`, 이력에 쌓음), 진행 갱신(`next_item`, 미저장 칸, 건너뜀, 문진 종료), 위험 입력원 호출(있을 때) |
+| `plan_other` | 비발화 턴의 쓰기·응답 계획. SESSION_START는 B만(`action=START`, `next=Q1.D01`), 직원 재개는 고정 문장 RESUME, 직원 종료는 SURVEY_STOPPED, 이탈은 응답 없음 |
+| `commit` | 값 저장과 진행 갱신을 한 트랜잭션으로(그대로) |
+| `respond` | B 입력을 표 찾기로 조립해(18절) `respond` 호출. 고정 문장 턴은 문항 세트의 `fixed_sentences`(제안: v1 어휘의 RESUME, SURVEY_STOPPED, RISK_NOTICE 키를 그대로 씀) |
+
+- **저장 규칙** [제안, 계약의 `save` 규칙을 따름]: ANSWERED·CORRECTION(`save=true`)만 저장한다. CONFLICT는 현재 값을 지키고 CONFIRM으로 되묻는다(A가 다음 턴에 CORRECTION으로 확정). UNKNOWN·REJECTED·MISSING·UNCLEAR는 저장하지 않는다. SKIP·HOLD는 `progress_record.skipped`에 사유(`REQUEST_SKIP`, `REFUSED`, `UNCERTAIN`)와 문항을 남기고, 나중에 그 문항의 값이 저장되면 지운다. 같은 값을 같은 정밀도로 다시 말하면 쓰지 않는다.
+- **세션 문서(SessionStore)**: `progress_record`는 `current_question_id`(다음 발화를 해석할 문항, 끝나면 `END`), `open_slots`(직전 추출이 MISSING·UNCLEAR로 본 칸, 문항이 바뀌면 비움), `skipped`, `session_status`, `pause_history`다. v1의 `last_directive`, `open_requests`, `confirm_stopped`, `planner_record`, 확인 대기(pending), `value_metadata`는 없앴다. `Value`는 bool·수를 받는다. `current_question`(A 입력)은 대화 로그의 마지막 응답 문장이다(별도 칸 없음). 직전 응답이 없으면(응답 실패 등) 문항 은행의 질문 문장.
+- **재시도·실패(D75)**: 503 `OUTPUT_INVALID`이거나 `validate_extraction` 위반(또는 `UNKNOWN_SLOT`)이면 같은 요청을 1회 더 보낸다. 그래도면 `turn_failure_signal`(`write_committed=NOT_COMMITTED`)이고 세션 상태는 바뀌지 않는다(대화 로그만 남는다). 그 밖의 호출 실패는 클라이언트 층에서 연결 실패만 1회 재시도하고 읽기 타임아웃은 재시도하지 않는다(`remote.py`). 입력 400은 재시도하지 않는다. B가 실패하면 쓰기는 확정된 채 `AFTER_COMMIT/LoRA-B` 실패 신호다(v1과 같다). 재시도 상한은 한 곳(`MAX_EXTRACT_CALLS = 2`)이다.
+- **미정**: v1에는 문항별 물음 상한(`ask_limit`, `question_limit`, `confirm_limit`)과 연속 못 알아들음 상한(`unrecognized_streak_limit`)이 Plan 안에 있었다. v2에서는 A가 REASK·CONFIRM을 내는 한 서비스가 막지 않는다. 같은 문항에서 반복되는 되묻기를 끊는 정책은 정해진 것이 없어 넣지 않았다(헤드 결정 필요, CR-012에 함께 적음).
+
+## 17. 문항 순서·건너뛰기 표(D76)와 A 입력 state
+
+[확인] 소유는 이 영역이다. 문진 스키마에 `QuestionFlow` 계약(`schema/schemas/QuestionFlow.json`)과 데이터(`schema/data/question_flow.json`)를 두었다: `order`(31개 문항), `skips`(`{slot, op: "==", value, skip_item}` 7건, `Q8_1.days == 0` 같은 수 조건 포함), `reference_sources`, `slot_order`. 서비스(`survey_service/flow.py`)가 이 데이터를 계약으로 검증한 뒤 turn-engine의 `QuestionFlowTable`을 만들어 `validate_extraction`에 넘긴다. `tests/test_extraction.py::test_flow_built_from_survey_schema_equals_dataset_v2_flow`가 이 표와 turn-engine의 `DATASET_V2_FLOW`가 같음을 시험한다(`DATASET_V2_FLOW`는 시험용 기준일 뿐 서비스는 쓰지 않는다). 비교 연산은 `==`뿐이다(turn-engine `SkipRule`이 그것만 안다). 다른 연산이 필요해지면 turn-engine 변경 요청이다.
+
+문진 스키마의 **정수 버전은 올리지 않았다**(`CONTRACT_VERSION` 1 그대로). 이유: model-runtime 0.6.0이 `SUPPORTED_RUNTIME_CONTRACT_VERSION = 1`만 받는다. 대신 같은 정수 버전 안에서 v1 모델 입출력 계약 12개(`UtteranceParserInput` 등)를 지우고 `SessionStore`, `TurnTrace` 등을 바꾸고 `QuestionFlow`, `ResponseTables`를 더했다. **이것은 같은 정수 버전 안의 비호환 변경이다**(ops-feedback이 가진 TurnTrace 사본, 결과 전달의 DispatchInput). 정수 버전을 2로 올릴지(그러려면 model-runtime의 지원 값부터 바뀌어야 한다)는 헤드 결정이다.
+
+A 입력 `state`의 규칙은 학습 데이터(train·val·test의 A 입력 5,077행 전수)에서 읽은 것이다 [확인: 묶음 순서(지금 문항 저장 값 -> 다른 문항 -> 지금 문항 미저장)는 5,077행 모두 일치. 다른 문항의 구성은 직전 두 문항과 참조 원천 안에 드는 것이 5,062행이고 나머지 15행(Q8_1이 Q7을 가짐)은 Q7_1·Q7_2를 건너뛴 직전 문항 규칙으로 설명되나 전수를 규칙으로 재현해 대조하지는 않았다. 한계는 아래]:
+1. 지금 문항의 **저장된 값**(status `ANSWERED`) -> 2. **직전 문항**(문항 순서에서 바로 앞, 건너뛰기 규칙이 참인 문항은 건너뜀)과 **참조 원천 문항**의 저장된 값 -> 3. 지금 문항의 **MISSING·UNCLEAR** 칸(값 null). 각 항목은 `{"value", "status"}` 순서.
+- 한 문항 안의 칸 순서: 키 문자열 정렬이 2,145개 묶음에서 맞고, Q4_1·Q5_1의 "다른 문항" 묶음 333개는 문진 스키마의 `slot_order`(status, total_years, daily_count, years_since_quit)와 같았다. 지금 문항 묶음에서 두 칸 이상인 경우는 39개뿐이고 모두 정렬 순서였다(Q4_1·Q5_1이 지금 문항일 때의 순서는 데이터가 없어 확인하지 못했다. 서비스는 같은 `slot_order`를 쓴다).
+- 2의 묶음 순서는 직전 문항이 먼저, 참조 원천이 나중이 다수(약 90%)다. 나머지 약 10%는 반대 순서였고 이유를 찾지 못했다 [미확인]. 서비스는 다수 규칙을 쓴다. 참조 원천(`reference_sources`: Q5←Q4, Q5_1←Q4_1, Q6←Q5, Q9_1←Q8_1, Q9_2←Q8_2, Q10←Q9_1)도 같은 표본에서 읽은 것이다.
+- 직렬화는 model-runtime의 몫이다(헤드 확인: 학습 글자는 `json.dumps(obj, ensure_ascii=False)`). 서비스는 객체를 만든다: A 입력 최상위 키는 알파벳 순(`current_question`, `question_id`, `state`, `user_utterance`), `state`는 삽입 순서 보존, B 입력은 모든 수준의 키 정렬. `tests/test_extraction.py::test_extract_input_equals_training_data_character_for_character`가 학습 표본 16건에서 서비스가 만든 A 입력을 `json.dumps`한 글자가 학습 데이터와 같음을 확인한다.
+- `MISSING`·`UNCLEAR` 칸의 출처는 서비스가 기억한다(`progress_record.open_slots`): 직전 추출의 미저장 MISSING·UNCLEAR 값. 그 문항을 벗어나면 지운다. 학습 데이터에서 이 칸이 몇 턴 동안 이어지는지는 확인하지 못했다.
+
+## 18. 표 찾기와 B 입력: `ask` 문장 틀·칸 설명표 초안 (**미확정, 사용자 확인 필요**)
+
+IO_SPEC 7장이 미정으로 둔 표를 B 입력의 학습 데이터에서 **역으로 읽어** 초안으로 만들었다(`schema/data/response_tables.json`, 계약 `ResponseTables`, 파일 안 `table_status: DRAFT_UNCONFIRMED`, `/readyz`의 `response_tables.status`). 구현은 `survey_service/response_tables.py`, 조립은 `extraction.py`. 서비스가 하는 표 찾기는 다음이다.
+
+| B 입력 | 만드는 법 [제안, 데이터와의 일치로 확인] |
+|---|---|
+| `topic` | 표의 문항별 문구. 어느 문항이냐: **첫 값(`values[0]`)의 문항**, 값이 없으면(REDIRECT) 입력 `question_id`. 5,077행 전수 일치 |
+| `known` | NEXT·CORRECT·REASK에서 이번 말에서 저장된 값(`save=true`)을 칸별 문장으로 이어 쓴다(`진단 받음, 지금 약 먹음`). 첫 문항은 이름 없이, 다른 문항은 `이름: 문장`. 근사값은 `쯤`(수 칸만). 주기·단위 칸은 짝 칸에 합친다(`일주일에 7번`, `소주 2병`). 양만 있고 단위가 없으면 `소주 1 (단위는 아직 모름)`. 그 밖의 action은 빈 문자열 |
+| `ask` | REASK·CONFIRM의 사유와 대상 칸으로 고르는 문장 틀(`{bev:을/를}` 같은 조사 지정). 표에 없으면 그 문항의 `topic`을 쓴다(폴백, 건수를 센다) |
+| `previous`, `current` | CONFIRM: 현재 값은 CONFLICT 값(짝 단위 포함), 이전 값은 state의 저장 값. `평소 ` 접두(CONFLICT_MAX_BELOW_USUAL), DOES_NOT_DRINK는 값에서 |
+| `hold` | HOLD·SKIP: 문항 이름표, 대상이 부분 칸이면 그 칸 이름(Q4_1.status -> `일반담배 중 지금 피우는지`) |
+| `next.text` | **문항 은행의 질문 문장**(데이터의 `next.text`는 같은 문항도 여러 문장으로 바꿔 쓴 것이라 데이터를 따르지 않는다). 아래 57행 처리만 다르다 |
+
+**일치율** [확인: `scripts/table_agreement.py`로 학습 서버 `dataset_10_14`의 train·val·test 전수를 표준출력으로 흘려 이 PC에서 센 값, 데이터는 저장하지 않았다]: topic 5,077/5,077, hold 392/392, known(NEXT 3,073, CORRECT 446, REASK 601) 전수, ask(REASK 601, CONFIRM 333) 전수, previous·current 333/333. **한계**: 규칙을 이 데이터를 보고 만들었으므로(in-sample) 일치는 "표가 데이터와 같은 문장을 낸다"는 뜻이지 "표가 옳다"는 뜻이 아니다. 데이터에 없는 경우(새 사유, 새 칸 조합)는 폴백으로 간다. 사용자 확인이 필요한 곳: (1) CONFLICT_WITH_PREVIOUS의 `ask`가 데이터에서 279/279 같은 문장 `이번에 말한 값(current)이 맞는지, 아까 말한 값(previous)이 맞는지`(괄호 속 영문이 그대로)라는 점, (2) 술 종류 이름 `양주(위스키 등)`, (3) 칸 이름표(`일반담배`, `숨이 약간 차는 운동 하는 날 수` 등), (4) 가장 많이 마신 날 CONFIRM 문장.
+
+**57행 문제**(같은 말에서 일부 칸이 이미 채워진 문항으로 NEXT; 데이터에서 Q4->Q4_1 25+3건, Q5->Q5_1 28+1건 모두 `Q4_1.status`/`Q5_1.status`가 이미 저장됨): 학습 데이터의 `next.text`는 이미 저장된 칸을 다시 묻는 문장(`요즘 일반담배를 피우고 계신가요?`)이라 모델이 받은 내용을 다시 묻는다. 서비스는 **남은 칸만 묻도록** 조립한다: 표의 문항 칸 설명(`slots`, `only_if`)에서 저장된 칸을 빼고 `일반담배는 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 말씀해 주세요.`처럼 만든다(현재 흡연자면 `끊은 지`는 묻지 않는다). 근거: (a) 같은 말에서 저장했다고 `known`에 말한 값을 곧바로 다시 묻는 것은 사용자에게 틀린 응대고 저장 기록(이미 있음)과 어긋난다, (b) 계약은 이 NEXT를 허용한다(V2_DRAFT 3장), (c) 서비스는 값을 지어내지 않고 표에서 문장을 만든다. **위험**: 이 문장은 학습 분포에 없다(학습 데이터는 이미 답한 칸을 다시 묻는다). B 모델이 이 `next.text`를 어떻게 다루는지는 확인하지 못했다. 남은 칸이 없으면(모든 칸이 이미 저장) 문항 은행 문장 그대로 보낸다(이때 A가 이미 다 채워진 문항을 다음으로 지목한 것이라 건너뛰기는 A의 몫이다). 칸 설명이 표에 있는 문항은 Q4_1·Q5_1뿐이다(데이터에서 이 현상이 나온 곳).
+
+## 19. Trace 키, 오류, 위험 신호
+
+**19.1 TurnTrace 키(최종)** [확인: `schema/schemas/TurnTrace.json`, ops-feedback이 읽는다]. 모든 키는 필수이고 값이 없으면 null이다(`turn_index`만 선택).
+
+| 키 | 값 | v1 키 |
+|---|---|---|
+| `session_id`, `turn_id`, `contract_version` | 그대로 | 같음 |
+| `frontend_message`, `intervention_decision`, `orchestrator_input`, `orchestrator_output`, `frontend_input`, `staff_console_input`, `dispatch_input`, `dispatch_output`, `session_before`, `session_after`, `log_entry`, `persistence_load_request`, `persistence_load_result`, `persistence_commit_request`, `persistence_commit_result`, `turn_index` | 형식은 새 `SessionStore`, `LogEntry`, `TurnWriteSet`로 바뀜 | 같음 |
+| `extract_input` | LoRA-A 입력(`ActionExtractionInput` 사본). 비발화·처리 안 함 턴은 null | `parser_input` |
+| `extract_output` | LoRA-A 출력(`ActionExtraction` 사본). 마지막 호출의 것, 503으로 못 받았으면 null | `parser_output` |
+| `extract_attempts` | 서비스가 부른 횟수 1~2 (D75 재시도 포함) | 신규 |
+| `extract_status` | `OK`, `OUTPUT_INVALID`(503 두 번), `VIOLATION`(검증 위반 두 번), `ERROR`(그 밖의 호출·입력 오류) | 신규 |
+| `extract_protections` | `X-Openit-Protections`를 푼 `{규칙 코드: 건수}` 또는 null | 신규 |
+| `validation_ok` | `validate_extraction`+서비스 검사 통과 여부 | 신규(`normalizer_*`, `judge_*` 대체) |
+| `validation_violations` | 위반 `[{code, path, message}]`(마지막 시도, 값 없음). 통과하면 `[]`, 검증하지 않았으면 null | 신규 |
+| `response_input` | LoRA-B 입력(`ResponseRequest` 사본). 고정 문장·응답 없음 턴은 null | `generator_input` |
+| `response_output` | 응답 문장 또는 null | `generator_output` |
+| `response_outcome` | `ok`, `fallback`(서버가 대체 문장), `fixed`(문항 세트의 고정 문장, 모델 없음) | 신규 |
+| `response_protections` | `extract_protections`와 같은 모양 | 신규 |
+
+없어진 키: `parser_input`, `parser_output`, `normalizer_input`, `normalizer_output`, `judge_input`, `judge_output`, `record_writer_input`, `record_writer_output`, `planner_input`, `planner_output`, `generator_input`, `generator_output`. 저장 결정은 `persistence_commit_request.writes`(`answer_updates`, `progress_record_update`)에 있다. `LogEntry`(대화 로그, `session_*`와 `log_entry`에 들어감)의 모델 관련 칸은 `extract_output`, `validation_violations` 둘로 줄었다(`directive`, `flow`, `progress_record_update`, `parser_output` 등 삭제). `FailedStep.step`은 `LoRA-A`, `VALIDATE`, `COMMIT`, `DELIVER_STAFF`, `LoRA-B`, `DELIVER_FRONT`(`NORMALIZE`, `JUDGE`, `RECORD_WRITE`, `PLAN` 삭제).
+
+**19.2 공개 API는 바뀌지 않았다**(PUBLIC_API.md). `FrontendInput`, `SessionState`, 오류 코드, 직원 알림 API의 형식과 시험(`test_public_api*.py`, `test_staff_alerts.py`)은 그대로다. 응답 문장은 모델 출력이거나 고정 문장이다.
+
+**19.3 추론 호출**: `remote.py`는 `boundary_contracts.clients.HttpModelRuntime`(extract JSON, respond text/plain)을 쓴다. 시험은 계약의 `RuntimeReferenceServer`(tests/ref_servers.py, 계약 저장소의 conformance/servers.py 복사본)에 사고 주입(`tests/runtime_support.py`)을 붙여 한다. `inference-server-spec.md`의 v1 규약은 HTTP.md I9 v2로 대체되었다.
+
+**19.4 위험 신호·직원 알림: 미정, 헤드 결정 필요(CR-012)**. v1이 직원 알림을 만든 곳과 읽은 것(현재 코드가 아니라 turn-engine 0.3.0의 폐기 표시된 `planner.py`와 v1 서비스 코드에서 확인한 것): (1) 파서의 `risk_signal` 의도와 문항 세트의 `session_settings.risk_phrases`(판정기가 `utterance_judgment.risk_signal`로) -> `RISK/RISK_SIGNAL` 알림과 세션 정지(`PAUSED_RISK`), (2) 문항 세트 슬롯의 `risk_rule`(IMMEDIATE)과 저장 값 -> `RISK/RISK_RULE`, (3) 파서의 `STAFF_REQUEST` 요청 -> `USER_CALLED_STAFF`, (4) Plan의 물음 상한·못 알아들음 상한 -> `CALL_STAFF`. **v2의 A 출력(`ActionExtraction`)에는 이 신호가 없다**: action은 NEXT·CORRECT·REASK·CONFIRM·HOLD·SKIP·REDIRECT, REDIRECT 사유는 OUT_OF_SCHEMA·OFF_TOPIC·ASK_PURPOSE뿐이고 `note`는 OUT_OF_SCHEMA의 요약이다. 따라서 서비스는 알림을 **만들지 않는다**(지어내지 않는다). 알림 저장·전달·SSE·푸시·해결 경로와 정지 세션의 직원 재개·종료 경로는 코드를 그대로 두었다. `Orchestrator(risk_source=...)`(Protocol `RiskSource`, 설정 `SURVEY_RISK_SOURCE`)에 입력원을 꽂으면 켜진다. 꽂지 않았을 때는 `/readyz`의 `staff_alert_source: {active: false, reason: NO_INPUT_SOURCE_IN_V2_EXTRACTION}`로 드러낸다. 선택지(결정은 헤드): 서버에서 위험 신호를 내는 모델/규칙 층을 따로 둘지, 문항 세트의 `risk_rule`을 저장 값에 서비스가 평가하는 것을 허용할지(이는 판단 코드를 서비스에 두지 않는다는 D74(1)와 부딪힌다), A에 필드를 더하도록 데이터셋 담당에 요청할지, 아니면 직원 알림은 키오스크의 도움 요청 버튼 같은 다른 경로로 받을지. 시험·스모크용 대역 `ScriptedRisk`만 있다.

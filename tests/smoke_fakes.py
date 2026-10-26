@@ -6,6 +6,7 @@ from pathlib import Path
 
 from boundary_contracts.clients import HttpReleaseReader, HttpTraceIngest
 
+from .e2e_support import ScriptedRisk
 from .fakes import RecordingConsole, RecordingDispatcher
 from .http_support import TOK, publish
 from .ref_servers import ReferenceServer
@@ -35,3 +36,8 @@ def console():
 
 def dispatcher():
     return RecordingDispatcher()
+
+
+def risk_source():
+    """스모크 전용 위험 입력원: 실제 입력원은 아직 없다(CR-012). 직원 알림 경로가 이미지 안에서 도는지만 본다."""
+    return ScriptedRisk(("숨이 안 쉬어져요", "가슴이 너무 아파"))

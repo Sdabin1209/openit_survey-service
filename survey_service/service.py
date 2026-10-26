@@ -95,6 +95,8 @@ class App:
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
         if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다
             console = AlertStaffConsole(self.alerts)
+        if risk_source is None and settings.risk_source:
+            risk_source = load_factory(settings.risk_source)()
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox))
         api_token = os.environ.get(settings.api_token_env, "")

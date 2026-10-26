@@ -1,0 +1,791 @@
+[
+ {
+  "a_input": {
+   "current_question": "고혈압은 어떠세요? 진단을 받으셨거나 약을 복용 중이신가요?",
+   "question_id": "Q1.D03",
+   "state": {
+    "Q1.D02.diagnosed": {
+     "value": false,
+     "status": "ANSWERED"
+    },
+    "Q1.D02.on_medication": {
+     "value": false,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "십 년 전에 고혈압 진단받았어요. 지금은 약을 매일 먹고 있어요."
+  },
+  "a_output": {
+   "action": "NEXT",
+   "next_item": "Q1.D04",
+   "values": [
+    {
+     "key": "Q1.D03.diagnosed",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": true
+    },
+    {
+     "key": "Q1.D03.on_medication",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": true
+    }
+   ]
+  },
+  "b_input": {
+   "action": "NEXT",
+   "known": "진단 받음, 지금 약 먹음",
+   "next": {
+    "question_id": "Q1.D04",
+    "text": "혹시 당뇨병으로 진단받으셨거나 현재 약물 치료 중이신가요?",
+    "type": "NEXT"
+   },
+   "topic": "고혈압 진단을 받았는지와 지금 약을 먹는지",
+   "user_utterance": "십 년 전에 고혈압 진단받았어요. 지금은 약을 매일 먹고 있어요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "지난 1년간 술을 마실 때 보통 어느 정도의 양을 마셨나요?",
+   "question_id": "Q7_1",
+   "state": {
+    "Q7.does_not_drink": {
+     "value": false,
+     "status": "ANSWERED"
+    },
+    "Q7.frequency": {
+     "value": 4,
+     "status": "ANSWERED"
+    },
+    "Q7.unit": {
+     "value": "month",
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "술 마실 때 보통 카스를 하루에 여섯 캔 마셔요"
+  },
+  "a_output": {
+   "action": "NEXT",
+   "next_item": "Q7_2",
+   "values": [
+    {
+     "key": "Q7_1[beer].amount",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": 6
+    },
+    {
+     "key": "Q7_1[beer].unit",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": "can"
+    }
+   ]
+  },
+  "b_input": {
+   "action": "NEXT",
+   "known": "맥주 6캔",
+   "next": {
+    "question_id": "Q7_2",
+    "text": "지난 1년 동안 하루에 가장 많이 마셨던 술의 양, 대략 어느 정도였나요?",
+    "type": "NEXT"
+   },
+   "topic": "술 마시는 날 평소에 마시는 양",
+   "user_utterance": "술 마실 때 보통 카스를 하루에 여섯 캔 마셔요"
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "고강도 신체활동을 하는 날에는 하루에 몇 시간 정도 하세요?",
+   "question_id": "Q8_2",
+   "state": {
+    "Q8_1.days": {
+     "value": 2,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "그런 운동하는 날은 오십에서 오십오 분 정도 해요"
+  },
+  "a_output": {
+   "action": "NEXT",
+   "next_item": "Q9_1",
+   "values": [
+    {
+     "key": "Q8_2.duration_minutes",
+     "precision": "approximate",
+     "save": true,
+     "status": "ANSWERED",
+     "value": 52
+    }
+   ]
+  },
+  "b_input": {
+   "action": "NEXT",
+   "known": "하루 52분쯤",
+   "next": {
+    "question_id": "Q9_1",
+    "text": "중강도 신체활동, 숨이 약간 찰 정도의 활동을 평소 1주일에 며칠 하시는지요?",
+    "type": "NEXT"
+   },
+   "topic": "숨이 많이 찰 정도로 힘든 운동을 하는 날 하루에 얼마나 하는지",
+   "user_utterance": "그런 운동하는 날은 오십에서 오십오 분 정도 해요"
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "최근 1년 동안 술은 얼마나 자주 드셨나요? 일주일에, 한 달에, 또는 1년에 몇 번인지 편하게 말씀해 주세요.",
+   "question_id": "Q7",
+   "state": {
+    "Q6.answer": {
+     "value": false,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "예전부터 모임 때마다 술을 마셨는데, 최근엔 일주일에 한 번 꼭 마시는 편이에요. 그게 제 습관이자 작은 즐거움이기도 하고요."
+  },
+  "a_output": {
+   "action": "NEXT",
+   "next_item": "Q7_1",
+   "values": [
+    {
+     "key": "Q7.does_not_drink",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": false
+    },
+    {
+     "key": "Q7.frequency",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": 1
+    },
+    {
+     "key": "Q7.unit",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": "week"
+    }
+   ]
+  },
+  "b_input": {
+   "action": "NEXT",
+   "known": "술 마심, 일주일에 1번",
+   "next": {
+    "question_id": "Q7_1",
+    "text": "지난 1년 동안 술을 마시는 날, 평균적으로 얼마나 마셨나요?",
+    "type": "NEXT"
+   },
+   "topic": "지난 1년 동안 술을 얼마나 자주 마시는지(일주일·한 달·1년에 몇 번)",
+   "user_utterance": "예전부터 모임 때마다 술을 마셨는데, 최근엔 일주일에 한 번 꼭 마시는 편이에요. 그게 제 습관이자 작은 즐거움이기도 하고요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "혹시 평생 동안 100개비 이상의 일반담배를 피워보신 적 있으신가요?",
+   "question_id": "Q4",
+   "state": {
+    "Q3.answer": {
+     "value": "unknown",
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "일반담배는 예전에 피워봤는데 지금은 끊었어요."
+  },
+  "a_output": {
+   "action": "NEXT",
+   "next_item": "Q4_1",
+   "values": [
+    {
+     "key": "Q4.answer",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": true
+    },
+    {
+     "key": "Q4_1.status",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": "former"
+    }
+   ]
+  },
+  "b_input": {
+   "action": "NEXT",
+   "known": "5갑 넘게 피운 적 있음, 일반담배: 끊음",
+   "next": {
+    "question_id": "Q4_1",
+    "text": "그럼 현재 일반담배 흡연은 어떠세요?",
+    "type": "NEXT"
+   },
+   "topic": "일반담배를 평생 5갑(100개비) 이상 피운 적이 있는지",
+   "user_utterance": "일반담배는 예전에 피워봤는데 지금은 끊었어요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "네, 지금 약을 먹고 계시는군요. 그러면 C형간염은 어떠세요? 진단을 받으셨거나 약을 복용 중이신가요? C형간염은 어떠세요? 진단을 받으셨거나 약을 복용 중이신가요?",
+   "question_id": "Q1.D09",
+   "state": {
+    "Q1.D08.diagnosed": {
+     "value": true,
+     "status": "ANSWERED"
+    },
+    "Q1.D08.on_medication": {
+     "value": true,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "음, 말씀드린 내용을 정정하고자 합니다. 조기정신증 약은 지금 복용하고 있지 않습니다."
+  },
+  "a_output": {
+   "action": "CORRECT",
+   "next_item": "Q1.D09",
+   "values": [
+    {
+     "key": "Q1.D08.on_medication",
+     "precision": "exact",
+     "save": true,
+     "status": "CORRECTION",
+     "value": false
+    }
+   ]
+  },
+  "b_input": {
+   "action": "CORRECT",
+   "known": "지금 약 안 먹음",
+   "next": {
+    "question_id": "Q1.D09",
+    "text": "C형간염은 어떠세요? 진단을 받으셨거나 약을 복용 중이신가요?",
+    "type": "NEXT"
+   },
+   "topic": "조기정신증 진단을 받았는지와 지금 약을 먹는지",
+   "user_utterance": "음, 말씀드린 내용을 정정하고자 합니다. 조기정신증 약은 지금 복용하고 있지 않습니다."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "다음은 고혈압입니다. 진단받은 적이 있으신지, 지금 약을 드시는지 알려 주세요.",
+   "question_id": "Q1.D03",
+   "state": {
+    "Q1.D02.diagnosed": {
+     "value": false,
+     "status": "ANSWERED"
+    },
+    "Q1.D02.on_medication": {
+     "value": false,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "십 년 전에 고혈압 진단을 받았어요."
+  },
+  "a_output": {
+   "action": "REASK",
+   "next_item": "Q1.D03",
+   "reason": "MISSING",
+   "targets": [
+    "Q1.D03.on_medication"
+   ],
+   "values": [
+    {
+     "key": "Q1.D03.diagnosed",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": true
+    },
+    {
+     "key": "Q1.D03.on_medication",
+     "precision": "unspecified",
+     "save": false,
+     "status": "MISSING",
+     "value": null
+    }
+   ]
+  },
+  "b_input": {
+   "action": "REASK",
+   "ask": "지금 고혈압 약을 먹는지",
+   "known": "진단 받음",
+   "next": {
+    "question_id": "Q1.D03",
+    "text": "다음은 고혈압입니다. 진단받은 적이 있으신지, 지금 약을 드시는지 알려 주세요.",
+    "type": "SAME"
+   },
+   "reason": "MISSING",
+   "topic": "고혈압 진단을 받았는지와 지금 약을 먹는지",
+   "user_utterance": "십 년 전에 고혈압 진단을 받았어요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "가장 많이 드신 날을 떠올려 보시면, 무슨 술을 얼마나 드셨나요?",
+   "question_id": "Q7_2",
+   "state": {
+    "Q7_1[beer].amount": {
+     "value": 7,
+     "status": "ANSWERED"
+    },
+    "Q7_1[beer].unit": {
+     "value": "glass",
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "음... 소주 한 짝 마셨는데, 그게 맞는 거 같아요"
+  },
+  "a_output": {
+   "action": "REASK",
+   "next_item": "Q7_2",
+   "reason": "UNKNOWN_UNIT",
+   "targets": [
+    "Q7_2[soju].unit"
+   ],
+   "values": [
+    {
+     "key": "Q7_2[soju].amount",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": 1
+    },
+    {
+     "key": "Q7_2[soju].unit",
+     "precision": "unspecified",
+     "save": false,
+     "status": "UNCLEAR",
+     "value": null
+    }
+   ]
+  },
+  "b_input": {
+   "action": "REASK",
+   "ask": "소주를 병·잔·캔 같은 단위로 치면 얼마나인지",
+   "known": "소주 1 (단위는 아직 모름)",
+   "next": {
+    "question_id": "Q7_2",
+    "text": "최근 1년 동안 하루 동안 가장 많이 마신 음주는 어느 정도였나요?",
+    "type": "SAME"
+   },
+   "reason": "UNKNOWN_UNIT",
+   "topic": "지난 1년 중 가장 많이 마신 날 하루에 마신 양",
+   "user_utterance": "음... 소주 한 짝 마셨는데, 그게 맞는 거 같아요"
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "술 드시는 건 어떠세요? 평소 일주일이나 한 달에 몇 번 정도 드시는지 궁금해요.",
+   "question_id": "Q7",
+   "state": {},
+   "user_utterance": "술을 마십니다. 한 번 마셔요."
+  },
+  "a_output": {
+   "action": "REASK",
+   "next_item": "Q7",
+   "reason": "MISSING",
+   "targets": [
+    "Q7.unit"
+   ],
+   "values": [
+    {
+     "key": "Q7.does_not_drink",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": false
+    },
+    {
+     "key": "Q7.frequency",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": 1
+    },
+    {
+     "key": "Q7.unit",
+     "precision": "unspecified",
+     "save": false,
+     "status": "MISSING",
+     "value": null
+    }
+   ]
+  },
+  "b_input": {
+   "action": "REASK",
+   "ask": "1번이 일주일에·한 달에·1년에 중 어느 기준인지",
+   "known": "술 마심, 1번 (기준 기간은 아직 모름)",
+   "next": {
+    "question_id": "Q7",
+    "text": "최근 1년 동안 술은 얼마나 자주 드셨나요? 일주일에, 한 달에, 또는 1년에 몇 번인지 편하게 말씀해 주세요.",
+    "type": "SAME"
+   },
+   "reason": "MISSING",
+   "topic": "지난 1년 동안 술을 얼마나 자주 마시는지(일주일·한 달·1년에 몇 번)",
+   "user_utterance": "술을 마십니다. 한 번 마셔요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "네, 하루에 막걸리 1.5병 마시는군요. 지난 1년 중 하루에 가장 많이 마셨던 음주량은 어느 정도였나요?",
+   "question_id": "Q7_2",
+   "state": {
+    "Q7_1[makgeolli].amount": {
+     "value": 1.5,
+     "status": "ANSWERED"
+    },
+    "Q7_1[makgeolli].unit": {
+     "value": "bottle",
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "막걸리삼병마셨어요"
+  },
+  "a_output": {
+   "action": "CONFIRM",
+   "next_item": "Q7_1",
+   "reason": "CONFLICT_WITH_PREVIOUS",
+   "targets": [
+    "Q7_1[makgeolli].amount"
+   ],
+   "values": [
+    {
+     "key": "Q7_1[makgeolli].amount",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": 3
+    },
+    {
+     "key": "Q7_1[makgeolli].unit",
+     "precision": "exact",
+     "save": true,
+     "status": "ANSWERED",
+     "value": "bottle"
+    }
+   ]
+  },
+  "b_input": {
+   "action": "CONFIRM",
+   "ask": "이번에 말한 값(current)이 맞는지, 아까 말한 값(previous)이 맞는지",
+   "current": "막걸리 3병",
+   "known": "",
+   "next": {
+    "question_id": "Q7_1",
+    "text": "지난 1년 동안 술 마시는 날은 보통 몇 잔 정도 드셨나요?",
+    "type": "SAME"
+   },
+   "previous": "막걸리 1.5병",
+   "reason": "CONFLICT_WITH_PREVIOUS",
+   "topic": "술 마시는 날 평소에 마시는 양",
+   "user_utterance": "막걸리삼병마셨어요"
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "네, 지금 약은 안 드시는군요. 그럼 심근경색이나 협심증으로 진단을 받았거나 치료약을 드시는 중이신가요?",
+   "question_id": "Q1.D02",
+   "state": {
+    "Q1.D01.diagnosed": {
+     "value": false,
+     "status": "ANSWERED"
+    },
+    "Q1.D01.on_medication": {
+     "value": false,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "그 약은 지금 먹어요."
+  },
+  "a_output": {
+   "action": "CONFIRM",
+   "next_item": "Q1.D01",
+   "reason": "CONFLICT_WITH_PREVIOUS",
+   "targets": [
+    "Q1.D01.on_medication"
+   ],
+   "values": [
+    {
+     "key": "Q1.D01.on_medication",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": true
+    },
+    {
+     "key": "Q1.D01.diagnosed",
+     "precision": "approximate",
+     "save": true,
+     "status": "CORRECTION",
+     "value": true
+    }
+   ]
+  },
+  "b_input": {
+   "action": "CONFIRM",
+   "ask": "이번에 말한 값(current)이 맞는지, 아까 말한 값(previous)이 맞는지",
+   "current": "지금 약 먹음",
+   "known": "",
+   "next": {
+    "question_id": "Q1.D01",
+    "text": "뇌졸중은 어떠세요? 진단을 받으셨거나 약을 복용 중이신가요?",
+    "type": "SAME"
+   },
+   "previous": "지금 약 안 먹음",
+   "reason": "CONFLICT_WITH_PREVIOUS",
+   "topic": "뇌졸중(중풍) 진단을 받았는지와 지금 약을 먹는지",
+   "user_utterance": "그 약은 지금 먹어요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "지난 1년 중 하루에 가장 많이 마셨던 음주량은 어느 정도였나요?",
+   "question_id": "Q7_2",
+   "state": {
+    "Q7_1[beer].amount": {
+     "value": 3,
+     "status": "ANSWERED"
+    },
+    "Q7_1[beer].unit": {
+     "value": "bottle",
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "음, 그게, 가장 많이 마신 날은 맥주 하나 병이에요."
+  },
+  "a_output": {
+   "action": "CONFIRM",
+   "next_item": "Q7_2",
+   "reason": "CONFLICT_MAX_BELOW_USUAL",
+   "targets": [
+    "Q7_2[beer].amount",
+    "Q7_2[beer].unit"
+   ],
+   "values": [
+    {
+     "key": "Q7_2[beer].amount",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": 1
+    },
+    {
+     "key": "Q7_2[beer].unit",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": "bottle"
+    }
+   ]
+  },
+  "b_input": {
+   "action": "CONFIRM",
+   "ask": "가장 많이 마신 날의 양이 맞는지(평소보다 적게 나옴)",
+   "current": "맥주 1병",
+   "known": "",
+   "next": {
+    "question_id": "Q7_2",
+    "text": "지난 1년 중에 하루에 가장 많이 드셨던 날은 얼마나 드셨어요?",
+    "type": "SAME"
+   },
+   "previous": "평소 맥주 3병",
+   "reason": "CONFLICT_MAX_BELOW_USUAL",
+   "topic": "지난 1년 중 가장 많이 마신 날 하루에 마신 양",
+   "user_utterance": "음, 그게, 가장 많이 마신 날은 맥주 하나 병이에요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "지난 1년을 떠올려 보시면, 술은 보통 얼마나 자주 드셨어요? 일주일이나 한 달 기준으로 말씀해 주세요.",
+   "question_id": "Q7",
+   "state": {
+    "Q6.answer": {
+     "value": false,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "술은 안 마셔. 근데 모임 때는 맥주 한 캔씩 마셔요."
+  },
+  "a_output": {
+   "action": "CONFIRM",
+   "next_item": "Q7",
+   "reason": "CONFLICT_DOES_NOT_DRINK",
+   "targets": [
+    "Q7.does_not_drink",
+    "Q7_1[beer].amount",
+    "Q7_1[beer].unit"
+   ],
+   "values": [
+    {
+     "key": "Q7.does_not_drink",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": true
+    },
+    {
+     "key": "Q7_1[beer].amount",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": 1
+    },
+    {
+     "key": "Q7_1[beer].unit",
+     "precision": "exact",
+     "save": false,
+     "status": "CONFLICT",
+     "value": "can"
+    }
+   ]
+  },
+  "b_input": {
+   "action": "CONFIRM",
+   "ask": "지난 1년 동안 술을 마신 적이 있는지",
+   "current": "맥주 1캔",
+   "known": "",
+   "next": {
+    "question_id": "Q7",
+    "text": "다음은 음주예요. 지난 1년간 술을 얼마나 자주 드셨는지, 주나 달 기준으로 알려 주시겠어요?",
+    "type": "SAME"
+   },
+   "previous": "지난 1년 술 안 마심",
+   "reason": "CONFLICT_DOES_NOT_DRINK",
+   "topic": "지난 1년 동안 술을 얼마나 자주 마시는지(일주일·한 달·1년에 몇 번)",
+   "user_utterance": "술은 안 마셔. 근데 모임 때는 맥주 한 캔씩 마셔요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "지금 일반담배를 피우고 계신다면 말해 주세요.",
+   "question_id": "Q4_1",
+   "state": {
+    "Q4.answer": {
+     "value": true,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "지금 담배 피우는지 잘 기억 안 나요"
+  },
+  "a_output": {
+   "action": "HOLD",
+   "next_item": "Q5",
+   "reason": "UNCERTAIN",
+   "targets": [
+    "Q4_1.status"
+   ],
+   "values": [
+    {
+     "key": "Q4_1.status",
+     "precision": "unspecified",
+     "save": false,
+     "status": "UNKNOWN",
+     "value": null
+    }
+   ]
+  },
+  "b_input": {
+   "action": "HOLD",
+   "hold": "일반담배 중 지금 피우는지",
+   "known": "",
+   "next": {
+    "question_id": "Q5",
+    "text": "지금까지 아이코스나 글로 같은 가열식 전자담배를 써 본 적 있으신가요?",
+    "type": "NEXT"
+   },
+   "reason": "UNCERTAIN",
+   "topic": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지",
+   "user_utterance": "지금 담배 피우는지 잘 기억 안 나요"
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "안녕하세요. 문진표 함께 작성해 볼게요. 편하게 말씀해 주세요. 뇌졸중은 어떠세요? 진단을 받으셨거나 약을 복용 중이신가요?",
+   "question_id": "Q1.D01",
+   "state": {},
+   "user_utterance": "이거 나중에 말할게요."
+  },
+  "a_output": {
+   "action": "SKIP",
+   "next_item": "Q1.D02",
+   "reason": "REQUEST_SKIP",
+   "targets": [
+    "Q1.D01.diagnosed",
+    "Q1.D01.on_medication"
+   ],
+   "values": [
+    {
+     "key": "Q1.D01.diagnosed",
+     "precision": "unspecified",
+     "save": false,
+     "status": "REJECTED",
+     "value": null
+    },
+    {
+     "key": "Q1.D01.on_medication",
+     "precision": "unspecified",
+     "save": false,
+     "status": "REJECTED",
+     "value": null
+    }
+   ]
+  },
+  "b_input": {
+   "action": "SKIP",
+   "hold": "뇌졸중(중풍)",
+   "known": "",
+   "next": {
+    "question_id": "Q1.D02",
+    "text": "혹시 심근경색이나 협심증으로 진단받으셨거나 현재 약물 치료 중이신가요?",
+    "type": "NEXT"
+   },
+   "reason": "REQUEST_SKIP",
+   "topic": "뇌졸중(중풍) 진단을 받았는지와 지금 약을 먹는지",
+   "user_utterance": "이거 나중에 말할게요."
+  }
+ },
+ {
+  "a_input": {
+   "current_question": "다음은 당뇨병입니다. 진단받은 적이 있으신지, 지금 약을 드시는지 알려 주세요.",
+   "question_id": "Q1.D04",
+   "state": {
+    "Q1.D03.diagnosed": {
+     "value": true,
+     "status": "ANSWERED"
+    },
+    "Q1.D03.on_medication": {
+     "value": false,
+     "status": "ANSWERED"
+    }
+   },
+   "user_utterance": "아이고, 요즘 손녀가 고양이를 가져왔어요. 그거 때문에 알레르기 생겨서 좀 애먹고 있어요. 당뇨병은 이제 좀 안 그렇고, 그건 뭐, 고양이 때문이에요."
+  },
+  "a_output": {
+   "action": "REDIRECT",
+   "next_item": "Q1.D04",
+   "note": "고양이 알레르기",
+   "reason": "OUT_OF_SCHEMA",
+   "values": []
+  },
+  "b_input": {
+   "action": "REDIRECT",
+   "known": "",
+   "next": {
+    "question_id": "Q1.D04",
+    "text": "당뇨병 진단을 받으신 적이 있거나, 지금 당뇨병 약을 드시고 계신가요?",
+    "type": "SAME"
+   },
+   "note": "고양이 알레르기",
+   "reason": "OUT_OF_SCHEMA",
+   "topic": "당뇨병 진단을 받았는지와 지금 약을 먹는지",
+   "user_utterance": "아이고, 요즘 손녀가 고양이를 가져왔어요. 그거 때문에 알레르기 생겨서 좀 애먹고 있어요. 당뇨병은 이제 좀 안 그렇고, 그건 뭐, 고양이 때문이에요."
+  }
+ }
+]

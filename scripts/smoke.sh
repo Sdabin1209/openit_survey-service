@@ -29,7 +29,7 @@ code=$($DOCKER run --rm "$IMG" python -m survey_service >/dev/null 2>&1; echo $?
 # 이웃(I4, I6)은 시험용 대역 팩토리로 꽂는다. 대역은 이미지에 없고 tests/ 를 읽기 전용으로 붙인다.
 $DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -e PYTHONPATH=/mnt \
   -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest \
-  -e SURVEY_RESULT_DISPATCHER=tests.smoke_fakes:dispatcher \
+  -e SURVEY_RESULT_DISPATCHER=tests.smoke_fakes:dispatcher -e SURVEY_RISK_SOURCE=tests.smoke_fakes:risk_source \
   -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_STAFF_API_TOKEN=smoke-staff-token -e SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS=0 -e SURVEY_SSE_HEARTBEAT_SECONDS=1 -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
 PORT=$($DOCKER port "$NAME" 8080/tcp | head -1 | tr -d '\r' | sed 's/.*://')
 echo "host port: $PORT"
@@ -46,6 +46,8 @@ READY=$(curl -fsS "http://127.0.0.1:$PORT/readyz") || fail "readyz가 준비되�
 echo "readyz:  $READY"
 echo "$READY" | grep -q '"active_release": "rel-smoke"' || fail "활성 릴리스가 rel-smoke가 아니다"
 echo "$READY" | grep -q '"contract_version": 1' || fail "계약 버전"
+echo "$READY" | grep -q '"staff_alert_source": {"active": true}' || fail "스모크의 위험 입력원이 /readyz에 드러나지 않는다"
+echo "$READY" | grep -q '"response_tables": {"status": "DRAFT_UNCONFIRMED"}' || fail "표 초안 상태가 /readyz에 드러나지 않는다"
 
 [ "$($DOCKER exec "$NAME" id -u | tr -d '\r')" != "0" ] || fail "root로 실행 중"
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")
@@ -71,7 +73,7 @@ A=$(cat /tmp/smoke-$$.body); echo "api turn:  $A"
 [ "$(post /v1/sessions/nope/turns '{"session_id":"nope","kind":"UTTERANCE","utterance":"x","turn_id":"t-1"}' smoke-api-token)" = 404 ] || fail "모르는 세션이 404가 아니다"
 [ "$(post /v1/sessions/smoke-1/end '{"session_id":"smoke-1","kind":"SESSION_END"}' smoke-api-token)" = 200 ] || fail "세션 종료"
 [ "$(post /v1/sessions/smoke-1/turns '{"session_id":"smoke-1","kind":"UTTERANCE","utterance":"x","turn_id":"t-2"}' smoke-api-token)" = 409 ] || fail "끝난 세션이 409가 아니다"
-# 위험으로 멈춘 세션을 직원이 풀어 이어가는 한 바퀴(위험 표현은 문항 세트의 risk_phrases가 잡는다), 직원이 끝내는 경우, 역할 분리
+# 위험으로 멈춘 세션을 직원이 풀어 이어가는 한 바퀴(스모크 전용 위험 입력원 tests.smoke_fakes:risk_source가 잡는다. 실제 입력원은 아직 없다, CR-012), 직원이 끝내는 경우, 역할 분리
 rk() { post "/v1/sessions/$1/turns" "{\"session_id\":\"$1\",\"kind\":\"UTTERANCE\",\"utterance\":\"$2\",\"turn_id\":\"$3\"}" smoke-api-token; }
 iv() { post "/v1/sessions/$1/intervention" "{\"session_id\":\"$1\",\"decision\":\"$2\",\"turn_id\":\"$3\"}" "$4"; }
 # 전달 경로가 없을 때(SSE 연결도 푸시도 없다): 알림은 저장되지만 DELIVERY_FAILED -> 목록에서는 조회된다
@@ -126,11 +128,11 @@ out = subprocess.run([sys.executable, "-m", "survey_service.cli", "--bank", d + 
                      capture_output=True, text=True)
 assert out.returncode == 0, out.stderr
 r = json.loads(out.stdout)
-assert r["orchestrator_output"]["log_entry"]["directive"]["action"] == "ASK_NEXT", r
+assert r["frontend_input"]["response_text"] == "(가짜 응답)" and r["orchestrator_output"]["log_entry"]["turn_result"] == "COMMITTED", r
 import importlib.metadata as md, os
 assert md.version("langgraph") == os.environ.get("EXPECT_LANGGRAPH", md.version("langgraph")), "langgraph 버전이 잠금과 다르다"
 assert os.environ.get("LANGSMITH_TRACING") == "false" and os.environ.get("LANGCHAIN_TRACING_V2") == "false", "외부 추적이 꺼져 있지 않다"
-print("in-image turn:", r["orchestrator_output"]["log_entry"]["directive"]["action"])
+print("in-image turn:", r["frontend_input"]["response_text"])
 PY
 # 재시작해도 알림이 남아 있다(영속 저장)
 $DOCKER restart -t 10 "$NAME" >/dev/null

@@ -88,3 +88,11 @@
 ## fix/loader-retry
 
 - 서버에서 실제 vLLM 추론 서버가 뜨기 전에 활성 포인터 적재를 시도해 REMOTE_UNAVAILABLE이 영구 거부로 남던 결함 수정(설계 5절, 런북). main에는 합치지 않았다(서버 검증 뒤 합친다).
+
+## 후속 구간 8 (계약 2.0.0 이전, D74·D75·D76, 브랜치 migrate-contracts-2.0.0)
+
+- 한 일: 서비스를 D74 구조로 바꿨다(design 16~19절). `extract`+`validate_extraction` 노드, 시작은 B만, 1회 재시도(D75), 문항 순서·건너뛰기 표를 문진 스키마로(D76), 표 찾기 초안(ask 틀·칸 설명, 57행 처리), Trace 키 교체, 직원 알림 입력원 비활성 명시(CR-012), 의존 태그 v2.0.0 / v0.3.0 / v0.6.0.
+- 시험: `.venv/bin/python -m pytest` 전부 통과(수는 보고서 참조). `scripts/smoke.sh` SMOKE OK, `scripts/smoke_compose.sh` SMOKE(compose) OK(docker 데몬 있음, 이 PC 한 환경에서만 확인).
+- 확인하지 못한 것: 실제 model-runtime 0.6.0 서버 이미지와의 E2E(계약 참조 서버로만 시험), 실제 모델이 57행 문제의 새 `next.text`를 어떻게 다루는지, 두 번째 깨끗한 환경에서의 재현(이 PC 한 곳).
+- 미정(헤드 결정 필요): 직원 알림 입력원과 반복 물음 상한(CR-012), 같은 정수 버전 안의 비호환 스키마 변경을 어떻게 낼지(정수 버전 2 여부, model-runtime이 1만 받는다), 표 초안의 사용자 확인.
+- 푸시·태그는 하지 않았다.

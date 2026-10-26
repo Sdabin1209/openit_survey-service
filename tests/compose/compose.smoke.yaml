@@ -11,18 +11,10 @@ services:
       retries: 15
   inference:
     image: ${FAKE_IMAGE}
-    command: ["python", "-m", "tests.ref_inference_server"]
+    command: ["python", "-m", "tests.ref_runtime_main"]
     environment:
       INFERENCE_TOKEN: smoke-inference-token
       INFERENCE_PORT: "8081"
-      SURVEY_MODEL_BACKEND: fake
-      SURVEY_WORK_DIR: /data/releases
-      SURVEY_RELEASE_READER: http
-      SURVEY_RELEASE_READER_URL: http://gate:9000
-      SURVEY_RELEASE_READER_TOKEN_ENV: GATE_READ_TOKEN
-      GATE_READ_TOKEN: r-tok
-    depends_on:
-      gate: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8081/readyz')"]
       interval: 2s

@@ -60,7 +60,7 @@ python3 -m venv .venv && .venv/bin/pip install -e ../boundary-contracts ../turn-
 bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz + 비root + 라벨 + 이미지 안의 한 턴
 ```
 
-개발용 CLI(세션은 SQLite 파일에 이어진다, 파서가 낼 항목은 `--items`로 직접 준다):
+개발용 CLI(세션은 SQLite 파일에 이어진다, LoRA-A가 낼 ActionExtraction은 `--extraction`으로 직접 준다):
 `python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --start`
 `... turn --session S1 --utterance "안 피움" --items '[{"item_no":0,"target":{"question_id":"Q1","repeat_key":"","slot_id":"상태"},"value":"안 피움","source_text":"안 피움","intent":"ANSWERED_INTENT","progress_op":null,"guide_id":null}]'`
 
@@ -72,7 +72,7 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 
 ## 6-1. 이미지 조합과 릴리스 정책 (D46)
 
-릴리스의 `turn_engine_version`·`model_runtime_version`은 MAJOR.MINOR가 이미지에 설치된 것과 같아야 적재된다(PATCH 차이는 경고). model-runtime이 0.3→0.4로 MAJOR.MINOR가 바뀌었으므로, **게이트가 평가에 쓴 이미지(릴리스 매니페스트에 기록된 버전)와 같은 라이브러리 조합의 survey-service 이미지**를 배포해야 한다. 조합이 어긋난 릴리스는 `VERSION_MISMATCH`로 거부되고 이전 릴리스가 유지된다. 이미지 라벨은 공통 6개(`io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`, D50)에 `io.openit.langgraph`가 더해진다(CR-011). 오케스트레이션은 LangGraph이고 버전은 `requirements.lock`에 고정되어 있다. 이미지는 LangSmith 추적을 끈 채(`LANGSMITH_TRACING=false`) 나가야 하며, 환경 변수로 켜지 않는다(발화가 외부로 나간다). 현재 조합: boundary-contracts v1.2.0, turn-engine v0.2.0, model-runtime v0.4.0(기본 백엔드는 fake. vLLM 백엔드와 어댑터 사전 검사는 이 서비스에 아직 연결하지 않았다).
+릴리스의 `turn_engine_version`·`model_runtime_version`은 MAJOR.MINOR가 이미지에 설치된 것과 같아야 적재된다(PATCH 차이는 경고). model-runtime이 0.3→0.4로 MAJOR.MINOR가 바뀌었으므로, **게이트가 평가에 쓴 이미지(릴리스 매니페스트에 기록된 버전)와 같은 라이브러리 조합의 survey-service 이미지**를 배포해야 한다. 조합이 어긋난 릴리스는 `VERSION_MISMATCH`로 거부되고 이전 릴리스가 유지된다. 이미지 라벨은 공통 6개(`io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`, D50)에 `io.openit.langgraph`가 더해진다(CR-011). 오케스트레이션은 LangGraph이고 버전은 `requirements.lock`에 고정되어 있다. 이미지는 LangSmith 추적을 끈 채(`LANGSMITH_TRACING=false`) 나가야 하며, 환경 변수로 켜지 않는다(발화가 외부로 나간다). 현재 조합: boundary-contracts v2.0.0, turn-engine v0.3.0, model-runtime v0.6.0(서비스는 추론 서버를 HTTP로만 부른다. 프로세스 안 백엔드는 fake뿐이다). 릴리스 매니페스트가 역할별 `system_prompt`를 갖고 model_runtime_version이 0.6.x이어야 적재된다.
 
 ## 7. 스키마 패키지 릴리스
 
@@ -82,3 +82,11 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 ## 8. compose 스모크 (서비스 + 추론 + 가짜 게이트)
 
 `bash scripts/smoke_compose.sh`: 서비스 이미지, 가짜 추론 이미지(model-runtime의 FakeModelSession 경로, 모델 없음), 가짜 게이트/수집 서버를 `tests/compose/compose.smoke.yaml`로 같이 띄운다(호스트 포트는 Docker가 배정, `docker compose port`). 공개 API 한 턴이 HTTP 추론 경계를 거치는지, 추론 컨테이너를 멈췄을 때 그 턴만 `NOT_COMMITTED`로 실패하고 서비스는 살아 있는지, 다시 띄우면 복구(404 → 재적재)하는지, 같은 `turn_id` 재시도가 처음 응답을 돌려주는지 확인한다. 실제 서빙 이미지가 나오면 compose의 `inference` 이미지만 바꾼다.
+
+
+## D74 구조 운영 메모
+
+- **직원 알림이 안 나온다**: `/readyz`의 `staff_alert_source`를 보라. `active: false`면 v2에 입력원이 없는 것이다(CR-012). 고장이 아니다. 입력원이 정해지면 `SURVEY_RISK_SOURCE=모듈:함수`로 꽂는다.
+- **턴이 `LoRA-A` 또는 `VALIDATE`로 실패한다**: 로그의 `step=`과 Trace의 `extract_status`(`OUTPUT_INVALID` 서버가 형식을 못 지킴, `VIOLATION` 의미 검증 위반, `ERROR` 호출·입력 오류), `validation_violations`의 `code`를 본다(값은 없다). 같은 요청을 한 번 더 보낸 뒤의 실패다. 세션 상태는 그대로이고 사용자는 다시 말하면 된다. 반복되면 모델 패키지(어댑터, 프롬프트)와 문진 스키마 정수 버전, 문항 순서 표(`question_flow`) 일치를 확인한다.
+- **`ask_fallback` 건수가 늘어난다**: 표(`ResponseTables`)에 없는 (사유, 칸) 조합이다. 폴백은 문항의 `topic`을 `ask`로 쓴다. 표 초안 보강 대상이다(미확정 표).
+- 표 일치율 재계산(학습 서버 읽기 전용): `PYTHONPATH=. python scripts/table_agreement.py <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_a_val.jsonl') <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_b_val.jsonl')`. 데이터는 저장되지 않는다.

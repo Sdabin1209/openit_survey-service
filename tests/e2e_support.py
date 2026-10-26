@@ -112,16 +112,18 @@ class Rig:
 
 class ScriptedRisk:
     """RiskSource 시험용 대역. v2의 A 출력에는 위험 신호가 없어 실제 입력원은 없다(CR-012). 직원 알림 경로가 살아 있는지 보려고 꽂는다."""
-    def __init__(self, phrase: str = "숨이 안 쉬어져요", kind: str = "RISK") -> None:
-        self.phrase, self.kind = phrase, kind
+    def __init__(self, phrase="숨이 안 쉬어져요", kind: str = "RISK") -> None:
+        self.phrases = (phrase,) if isinstance(phrase, str) else tuple(phrase)
+        self.kind = kind
         self.calls = 0
 
     def check(self, *, extract_input, extract_output, utterance):
         self.calls += 1
-        if self.phrase not in utterance:
+        hit = next((p for p in self.phrases if p in utterance), None)
+        if hit is None:
             return None
         if self.kind == "RISK":
-            return {"kind": "RISK", "reasons": [{"kind": "RISK_SIGNAL", "evidence": [self.phrase]}]}
+            return {"kind": "RISK", "reasons": [{"kind": "RISK_SIGNAL", "evidence": [hit]}]}
         return {"kind": self.kind, "reasons": []}
 
 

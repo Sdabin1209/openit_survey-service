@@ -140,3 +140,22 @@ def test_cli_harness_keeps_session_between_calls(tmp_path, capsys):
     assert second["frontend_input"]["response_text"] == "(가짜 응답)"
     assert cli.main(base + ["turn", "--session", "S1", "--start", "--turn-id", "c1"]) == 0
     assert json.loads(capsys.readouterr().out)["replayed"] is True
+
+
+def test_readyz_says_the_staff_alert_source_is_missing_instead_of_silently_disabling(running):
+    """D74: v2의 A 출력에는 위험 신호가 없어 직원 알림의 입력원이 없다(CR-012). 알림 경로는 살아 있지만 알림이 만들어지지 않는다는 사실을 /readyz가 낸다."""
+    app, reader, ingest, port = running
+    body = get(port, "/readyz")[1]
+    src = body["staff_alert_source"]
+    assert src["active"] is False and src["reason"] == "NO_INPUT_SOURCE_IN_V2_EXTRACTION" and "CR-012" in src["detail"]
+    assert "staff_alerts" in body                                              # 저장·전달 경로의 통계는 그대로 있다
+    assert body["response_tables"] == {"status": "DRAFT_UNCONFIRMED"} and body["question_flow"] == {"flow_id": "dataset_v2", "items": 31}
+
+
+def test_risk_source_factory_setting_activates_the_alert_path(tmp_path):
+    app = App(settings(tmp_path, risk_source="tests.smoke_fakes:risk_source"), reader=FakeReleaseReader(tmp_path / "gate"),
+              ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
+    try:
+        assert app.readiness()[1]["staff_alert_source"] == {"active": True}
+    finally:
+        app.stop()
