@@ -1,6 +1,6 @@
 """프로세스 안 추론(개발·스모크 전용): 릴리스마다 model-runtime의 ModelSession을 만들어 들고 있다.
 
-실제 운영은 `remote.py`(HTTP 추론 서버, model-runtime v0.6.1 서버)다. 여기서는 model-runtime의 FakeBackend만 쓸 수 있다.
+실제 운영은 `remote.py`(HTTP 추론 서버, model-runtime v0.6.2 서버)다. 여기서는 model-runtime의 FakeBackend만 쓸 수 있다.
 값이 없거나 모르는 백엔드는 시작을 거부한다. graph는 extract/respond가 `RuntimeResult`를 돌려주는 세션만 안다.
 """
 from __future__ import annotations
