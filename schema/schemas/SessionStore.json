@@ -3,58 +3,6 @@
   "$id": "standalone/SessionStore.json",
   "$ref": "#/$defs/SessionStore",
   "$defs": {
-    "Action": {
-      "oneOf": [
-        {
-          "const": "ASK_NEXT"
-        },
-        {
-          "const": "ASK_MISSING"
-        },
-        {
-          "const": "ASK_CLARIFY"
-        },
-        {
-          "const": "ASK_CONFIRM"
-        },
-        {
-          "const": "ASK_AFTER_UNKNOWN"
-        },
-        {
-          "const": "ASK_AFTER_REFUSAL"
-        },
-        {
-          "const": "ASK_CORRECTION_TARGET"
-        },
-        {
-          "const": "ASK_FINISH"
-        },
-        {
-          "const": "ASK_STOP"
-        },
-        {
-          "const": "ASK_REPEAT"
-        },
-        {
-          "const": "CALL_STAFF"
-        },
-        {
-          "const": "REDIRECT"
-        },
-        {
-          "const": "RISK_NOTICE"
-        },
-        {
-          "const": "WAIT_NOTICE"
-        },
-        {
-          "const": "STAFF_NOTICE"
-        },
-        {
-          "const": "FAREWELL"
-        }
-      ]
-    },
     "AlertKind": {
       "oneOf": [
         {
@@ -67,141 +15,6 @@
           "const": "USER_CALLED_STAFF"
         }
       ]
-    },
-    "AskAction": {
-      "oneOf": [
-        {
-          "const": "ASK_NEXT"
-        },
-        {
-          "const": "ASK_MISSING"
-        },
-        {
-          "const": "ASK_CLARIFY"
-        },
-        {
-          "const": "ASK_CONFIRM"
-        },
-        {
-          "const": "ASK_AFTER_UNKNOWN"
-        },
-        {
-          "const": "ASK_AFTER_REFUSAL"
-        },
-        {
-          "const": "ASK_CORRECTION_TARGET"
-        },
-        {
-          "const": "ASK_FINISH"
-        },
-        {
-          "const": "ASK_STOP"
-        }
-      ]
-    },
-    "AskDirective": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/AskAction"
-        },
-        "targets": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Target"
-          }
-        },
-        "target_pending_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PendingId"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "say_values": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SayValue"
-          }
-        }
-      },
-      "required": [
-        "action",
-        "targets",
-        "target_pending_id",
-        "say_values"
-      ],
-      "additionalProperties": false
-    },
-    "AskSubject": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/Target"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "untargeted": {
-              "oneOf": [
-                {
-                  "const": "ASK_FINISH"
-                },
-                {
-                  "const": "ASK_STOP"
-                },
-                {
-                  "const": "ASK_CORRECTION_TARGET"
-                }
-              ]
-            }
-          },
-          "required": [
-            "untargeted"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "ChangedSlot": {
-      "type": "object",
-      "properties": {
-        "slot": {
-          "$ref": "#/$defs/SlotRef"
-        },
-        "previous_value": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Value"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "new_value": {
-          "$ref": "#/$defs/Value"
-        },
-        "kind": {
-          "oneOf": [
-            {
-              "const": "FIRST_ANSWER"
-            },
-            {
-              "const": "CORRECTION"
-            }
-          ]
-        }
-      },
-      "required": [
-        "slot",
-        "previous_value",
-        "new_value",
-        "kind"
-      ],
-      "additionalProperties": false
     },
     "CodedValue": {
       "type": "object",
@@ -235,12 +48,6 @@
           "additionalProperties": false
         },
         {
-          "const": "UNKNOWN_RECORD"
-        },
-        {
-          "const": "REFUSAL_RECORD"
-        },
-        {
           "const": "NONE"
         }
       ]
@@ -255,73 +62,6 @@
         }
       ]
     },
-    "Directive": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/Action"
-        },
-        "targets": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Target"
-          }
-        },
-        "target_pending_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PendingId"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "awaiting": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AskDirective"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "say_values": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SayValue"
-          }
-        },
-        "reask_reasons": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Reason"
-          },
-          "uniqueItems": true
-        },
-        "notices": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Notice"
-          }
-        },
-        "sentence_materials": {
-          "$ref": "#/$defs/SentenceMaterials"
-        }
-      },
-      "required": [
-        "action",
-        "targets",
-        "target_pending_id",
-        "awaiting",
-        "say_values",
-        "reask_reasons",
-        "notices",
-        "sentence_materials"
-      ],
-      "additionalProperties": false
-    },
     "DispatchRecord": {
       "type": "object",
       "properties": {
@@ -334,42 +74,66 @@
       ],
       "additionalProperties": false
     },
-    "Evidence": {
+    "ExtractionRecord": {
       "type": "object",
+      "description": "LoRA-A 출력(boundary-contracts ActionExtraction)의 기록 사본. 형식 검증은 model-runtime과 boundary_contracts가 한다. 여기서는 읽는 쪽이 기대는 필드만 요구하고 모르는 필드는 허용한다.",
       "properties": {
-        "turn_index": {
-          "type": "integer",
-          "minimum": 0
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {},
+              "precision": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "save": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "key",
+              "value",
+              "precision",
+              "status",
+              "save"
+            ],
+            "additionalProperties": true
+          }
         },
-        "start": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "end": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "offset_unit": {
-          "type": "string",
-          "enum": [
-            "unicode_code_point",
-            "utf16_code_unit",
-            "utf8_byte"
-          ]
-        },
-        "text": {
+        "action": {
           "type": "string",
           "minLength": 1
+        },
+        "next_item": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
         }
       },
       "required": [
-        "turn_index",
-        "start",
-        "end",
-        "offset_unit",
-        "text"
+        "values",
+        "action",
+        "next_item"
       ],
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "FailedStep": {
       "type": "object",
@@ -390,16 +154,7 @@
               "const": "LoRA-A"
             },
             {
-              "const": "NORMALIZE"
-            },
-            {
-              "const": "JUDGE"
-            },
-            {
-              "const": "RECORD_WRITE"
-            },
-            {
-              "const": "PLAN"
+              "const": "VALIDATE"
             },
             {
               "const": "COMMIT"
@@ -422,62 +177,6 @@
       ],
       "additionalProperties": false
     },
-    "FixedSentenceKey": {
-      "oneOf": [
-        {
-          "const": "ASK_REPEAT"
-        },
-        {
-          "const": "OOS_NOTICE"
-        },
-        {
-          "const": "CALL_STAFF"
-        },
-        {
-          "const": "FAREWELL"
-        },
-        {
-          "const": "ASK_CONFIRM"
-        },
-        {
-          "const": "ASK_CORRECTION_TARGET"
-        },
-        {
-          "const": "ASK_FINISH"
-        },
-        {
-          "const": "RISK_NOTICE"
-        },
-        {
-          "const": "RESUME"
-        },
-        {
-          "const": "SURVEY_STOPPED"
-        },
-        {
-          "const": "WAIT_NOTICE"
-        },
-        {
-          "const": "ASK_STOP"
-        },
-        {
-          "const": "STAFF_NOTICE"
-        },
-        {
-          "const": "DEFERRED"
-        }
-      ]
-    },
-    "Flow": {
-      "oneOf": [
-        {
-          "const": "CONTINUE"
-        },
-        {
-          "const": "END"
-        }
-      ]
-    },
     "HistoryEntry": {
       "oneOf": [
         {
@@ -489,13 +188,13 @@
             "value": {
               "$ref": "#/$defs/Value"
             },
-            "value_metadata": {
-              "$ref": "#/$defs/ValueMetadata"
+            "precision": {
+              "$ref": "#/$defs/Precision"
             }
           },
           "required": [
             "value",
-            "value_metadata"
+            "precision"
           ],
           "additionalProperties": false
         }
@@ -514,46 +213,6 @@
         },
         {
           "const": "SESSION_END"
-        }
-      ]
-    },
-    "Intent": {
-      "oneOf": [
-        {
-          "const": "ANSWERED_INTENT"
-        },
-        {
-          "const": "CORRECTION_MARKED"
-        },
-        {
-          "const": "CONFIRM_YES"
-        },
-        {
-          "const": "CONFIRM_NO"
-        },
-        {
-          "const": "SAYS_UNKNOWN"
-        },
-        {
-          "const": "SAYS_REFUSAL"
-        },
-        {
-          "const": "PROGRESS_OP"
-        },
-        {
-          "const": "GUIDE_REQUEST"
-        },
-        {
-          "const": "USER_CALLED_STAFF"
-        },
-        {
-          "const": "OUT_OF_SCOPE"
-        },
-        {
-          "const": "UNRECOGNIZED"
-        },
-        {
-          "const": "RISK_SIGNAL"
         }
       ]
     },
@@ -582,427 +241,6 @@
         "result"
       ],
       "additionalProperties": false
-    },
-    "Item": {
-      "type": "object",
-      "properties": {
-        "item_no": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "target": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Target"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "source_text": {
-          "$ref": "#/$defs/SourceText"
-        },
-        "intent": {
-          "$ref": "#/$defs/Intent"
-        },
-        "progress_op": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ProgressOp"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "guide_id": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/TextSpan"
-          }
-        }
-      },
-      "required": [
-        "item_no",
-        "target",
-        "value",
-        "source_text",
-        "intent",
-        "progress_op",
-        "guide_id"
-      ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "intent": {
-                "enum": [
-                  "ANSWERED_INTENT"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "target": {
-                "not": {
-                  "enum": [
-                    null
-                  ]
-                }
-              },
-              "value": {
-                "not": {
-                  "enum": [
-                    null
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
-    "ItemCheck": {
-      "type": "object",
-      "properties": {
-        "item_no": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "standard_value": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Value"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "problems": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Problem"
-          },
-          "uniqueItems": true
-        },
-        "mismatched_slots": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
-          }
-        },
-        "vs_current": {
-          "oneOf": [
-            {
-              "const": "EQUAL"
-            },
-            {
-              "const": "DIFFERENT"
-            },
-            {
-              "const": "NO_CURRENT"
-            },
-            {
-              "const": "NOT_APPLICABLE"
-            }
-          ]
-        },
-        "vs_pending": {
-          "oneOf": [
-            {
-              "const": "EQUAL"
-            },
-            {
-              "const": "DIFFERENT"
-            },
-            {
-              "const": "NO_PENDING"
-            },
-            {
-              "const": "NOT_APPLICABLE"
-            }
-          ]
-        },
-        "risk_rule": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RiskResponse"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "prerequisite_unmet": {
-          "type": "boolean"
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        },
-        "problem_details": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ProblemDetail"
-          }
-        }
-      },
-      "required": [
-        "item_no",
-        "standard_value",
-        "problems",
-        "mismatched_slots",
-        "vs_current",
-        "vs_pending",
-        "risk_rule",
-        "prerequisite_unmet"
-      ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "value_metadata"
-            ],
-            "properties": {
-              "value_metadata": {
-                "properties": {
-                  "precision": {
-                    "enum": [
-                      "exact",
-                      "approximate"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "standard_value": {
-                "not": {
-                  "type": "null"
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
-    "JudgeOutput": {
-      "type": "object",
-      "properties": {
-        "judgments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Judgment"
-          }
-        },
-        "invalidated_questions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/QuestionId"
-          },
-          "uniqueItems": true
-        },
-        "utterance_judgment": {
-          "$ref": "#/$defs/UtteranceJudgment"
-        }
-      },
-      "required": [
-        "judgments",
-        "invalidated_questions",
-        "utterance_judgment"
-      ],
-      "additionalProperties": false
-    },
-    "Judgment": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "$ref": "#/$defs/Target"
-        },
-        "status": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/JudgmentStatus"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "reasons": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Reason"
-          },
-          "uniqueItems": true
-        },
-        "value_now": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Value"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "said_value": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "pending_handling": {
-          "oneOf": [
-            {
-              "const": "CREATE"
-            },
-            {
-              "const": "ACCEPT"
-            },
-            {
-              "const": "DROP"
-            },
-            {
-              "const": "NONE"
-            }
-          ]
-        },
-        "target_pending_ids": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PendingId"
-          }
-        },
-        "mismatched_slots": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
-          }
-        },
-        "risk_rule": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RiskResponse"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        },
-        "problem_details": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ProblemDetail"
-          }
-        }
-      },
-      "required": [
-        "target",
-        "status",
-        "reasons",
-        "value_now",
-        "said_value",
-        "pending_handling",
-        "target_pending_ids",
-        "mismatched_slots",
-        "risk_rule"
-      ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "value_metadata"
-            ],
-            "properties": {
-              "value_metadata": {
-                "properties": {
-                  "precision": {
-                    "enum": [
-                      "exact",
-                      "approximate"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "value_now": {
-                "not": {
-                  "type": "null"
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
-    "JudgmentStatus": {
-      "oneOf": [
-        {
-          "const": "ANSWERED"
-        },
-        {
-          "const": "MISSING"
-        },
-        {
-          "const": "UNCLEAR"
-        },
-        {
-          "const": "CONFLICT"
-        },
-        {
-          "const": "CORRECTION"
-        },
-        {
-          "const": "UNKNOWN"
-        },
-        {
-          "const": "REJECTED"
-        },
-        {
-          "const": "PREREQUISITE_UNMET"
-        }
-      ]
     },
     "LogEntry": {
       "type": "object",
@@ -1090,70 +328,23 @@
             }
           ]
         },
-        "parser_output": {
+        "extract_output": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ParserOutput"
+              "$ref": "#/$defs/ExtractionRecord"
             },
             {
               "type": "null"
             }
           ]
         },
-        "normalizer_output": {
+        "validation_violations": {
           "anyOf": [
             {
-              "$ref": "#/$defs/NormalizerOutput"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "judge_output": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/JudgeOutput"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "record_writer_output": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StoreResult"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "directive": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Directive"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "flow": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Flow"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "progress_record_update": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ProgressRecordUpdate"
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ViolationRecord"
+              }
             },
             {
               "type": "null"
@@ -1220,13 +411,8 @@
         "handling",
         "question_bank_version",
         "turn_result",
-        "parser_output",
-        "normalizer_output",
-        "judge_output",
-        "record_writer_output",
-        "directive",
-        "flow",
-        "progress_record_update",
+        "extract_output",
+        "validation_violations",
         "staff_alert",
         "response_text",
         "staff_alert_delivery",
@@ -1235,213 +421,24 @@
       ],
       "additionalProperties": false
     },
-    "NormalizerOutput": {
+    "OpenSlot": {
       "type": "object",
+      "description": "저장하지 않은 칸 중 직전 추출이 MISSING·UNCLEAR로 본 것. A 입력의 state에 싣는다. 문항이 바뀌면 비운다.",
       "properties": {
-        "item_checks": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ItemCheck"
-          }
+        "key": {
+          "type": "string",
+          "minLength": 1
         },
-        "missing_required_slots": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
-          }
+        "status": {
+          "enum": [
+            "MISSING",
+            "UNCLEAR"
+          ]
         }
       },
       "required": [
-        "item_checks",
-        "missing_required_slots"
-      ],
-      "additionalProperties": false
-    },
-    "Notice": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "$ref": "#/$defs/NoticeKind"
-        },
-        "guide_id": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "question_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QuestionId"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "question_name": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "slot": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SlotRef"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "previous_value": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Value"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Value"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        },
-        "previous_value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        }
-      },
-      "required": [
-        "kind",
-        "guide_id",
-        "question_id",
-        "question_name",
-        "slot",
-        "previous_value",
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "NoticeKind": {
-      "oneOf": [
-        {
-          "const": "CORRECTION_ACK"
-        },
-        {
-          "const": "KEPT_PREVIOUS"
-        },
-        {
-          "const": "RESUME"
-        },
-        {
-          "const": "SURVEY_STOPPED"
-        },
-        {
-          "const": "GUIDE"
-        },
-        {
-          "const": "DEFERRED"
-        }
-      ]
-    },
-    "OpenRequests": {
-      "type": "object",
-      "properties": {
-        "correction_requests": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "target": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/Target"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "target"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "stop_requested": {
-          "type": "boolean"
-        },
-        "deferred": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "oneOf": [
-                  {
-                    "const": "QUESTION"
-                  },
-                  {
-                    "const": "PENDING"
-                  },
-                  {
-                    "const": "CORRECTION_REQUEST"
-                  }
-                ]
-              },
-              "target": {
-                "$ref": "#/$defs/Target"
-              }
-            },
-            "required": [
-              "kind",
-              "target"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "correction_requests",
-        "stop_requested",
-        "deferred"
-      ],
-      "additionalProperties": false
-    },
-    "ParserOutput": {
-      "type": "object",
-      "properties": {
-        "items": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Item"
-          }
-        }
-      },
-      "required": [
-        "items"
+        "key",
+        "status"
       ],
       "additionalProperties": false
     },
@@ -1518,158 +515,6 @@
         }
       ]
     },
-    "PendingId": {
-      "type": "string",
-      "minLength": 1
-    },
-    "PendingRecord": {
-      "type": "object",
-      "properties": {
-        "pending_id": {
-          "$ref": "#/$defs/PendingId"
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "risk_mark": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RiskResponse"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        }
-      },
-      "required": [
-        "pending_id",
-        "value",
-        "risk_mark"
-      ],
-      "additionalProperties": false
-    },
-    "PlannerRecord": {
-      "type": "object",
-      "properties": {
-        "attempt_counts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "question_id": {
-                "$ref": "#/$defs/QuestionId"
-              },
-              "count": {
-                "type": "integer",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "question_id",
-              "count"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "confirm_counts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "slot": {
-                "$ref": "#/$defs/SlotRef"
-              },
-              "count": {
-                "type": "integer",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "slot",
-              "count"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "unknown_counts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "question_id": {
-                "$ref": "#/$defs/QuestionId"
-              },
-              "count": {
-                "type": "integer",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "question_id",
-              "count"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "refusal_counts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "question_id": {
-                "$ref": "#/$defs/QuestionId"
-              },
-              "count": {
-                "type": "integer",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "question_id",
-              "count"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "unrecognized_streak": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "ask_counts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "subject": {
-                "$ref": "#/$defs/AskSubject"
-              },
-              "count": {
-                "type": "integer",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "subject",
-              "count"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "attempt_counts",
-        "confirm_counts",
-        "unknown_counts",
-        "refusal_counts",
-        "unrecognized_streak",
-        "ask_counts"
-      ],
-      "additionalProperties": false
-    },
     "Precision": {
       "type": "string",
       "enum": [
@@ -1678,103 +523,24 @@
         "unspecified"
       ]
     },
-    "Problem": {
-      "oneOf": [
-        {
-          "const": "NO_UNIT"
-        },
-        {
-          "const": "OUT_OF_RANGE"
-        },
-        {
-          "const": "AMBIGUOUS"
-        },
-        {
-          "const": "MISMATCH"
-        },
-        {
-          "const": "UNKNOWN_TARGET"
-        }
-      ]
-    },
-    "ProblemDetail": {
+    "ProgressRecord": {
       "type": "object",
+      "description": "current_question_id는 다음 발화를 해석할 문항(A 입력의 question_id)이다. 문진이 끝나면 END.",
       "properties": {
-        "category": {
-          "$ref": "#/$defs/Problem"
-        },
-        "code": {
+        "current_question_id": {
           "type": "string",
           "minLength": 1
         },
-        "refs": {
+        "open_slots": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/SlotRef"
+            "$ref": "#/$defs/OpenSlot"
           }
-        },
-        "message": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "category",
-        "code",
-        "refs",
-        "message"
-      ],
-      "additionalProperties": false
-    },
-    "ProgressOp": {
-      "oneOf": [
-        {
-          "const": "REPEAT"
-        },
-        {
-          "const": "WAIT"
-        },
-        {
-          "const": "LATER"
-        },
-        {
-          "const": "STOP"
-        }
-      ]
-    },
-    "ProgressRecord": {
-      "type": "object",
-      "properties": {
-        "last_directive": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Directive"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "open_requests": {
-          "$ref": "#/$defs/OpenRequests"
         },
         "skipped": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/SkipEntry"
-          }
-        },
-        "confirm_stopped": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
           }
         },
         "session_status": {
@@ -1788,168 +554,17 @@
         }
       },
       "required": [
-        "last_directive",
-        "open_requests",
+        "current_question_id",
+        "open_slots",
         "skipped",
-        "confirm_stopped",
         "session_status",
         "pause_history"
-      ],
-      "additionalProperties": false
-    },
-    "ProgressRecordUpdate": {
-      "type": "object",
-      "properties": {
-        "last_directive": {
-          "$ref": "#/$defs/Directive"
-        },
-        "open_requests": {
-          "$ref": "#/$defs/OpenRequests"
-        },
-        "skipped_add": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SkipEntry"
-          }
-        },
-        "skipped_remove": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/QuestionId"
-          },
-          "uniqueItems": true
-        },
-        "confirm_stopped_add": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
-          }
-        },
-        "confirm_stopped_remove": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
-          }
-        },
-        "session_status": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionStatus"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "pause_history_add": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PauseEntry"
-          }
-        }
-      },
-      "required": [
-        "last_directive",
-        "open_requests",
-        "skipped_add",
-        "skipped_remove",
-        "confirm_stopped_add",
-        "confirm_stopped_remove",
-        "session_status",
-        "pause_history_add"
       ],
       "additionalProperties": false
     },
     "QuestionId": {
       "type": "string",
       "minLength": 1
-    },
-    "Reason": {
-      "oneOf": [
-        {
-          "const": "NO_UNIT"
-        },
-        {
-          "const": "OUT_OF_RANGE"
-        },
-        {
-          "const": "AMBIGUOUS"
-        },
-        {
-          "const": "MISMATCH"
-        },
-        {
-          "const": "UNRECOGNIZED"
-        },
-        {
-          "const": "MISSING_SLOT"
-        }
-      ]
-    },
-    "Request": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "$ref": "#/$defs/RequestKind"
-        },
-        "guide_id": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "target_question_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/QuestionId"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "source_text": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SourceText"
-          },
-          "minItems": 1
-        }
-      },
-      "required": [
-        "kind",
-        "guide_id",
-        "target_question_id",
-        "source_text"
-      ],
-      "additionalProperties": false
-    },
-    "RequestKind": {
-      "oneOf": [
-        {
-          "const": "REPEAT"
-        },
-        {
-          "const": "WAIT"
-        },
-        {
-          "const": "LATER"
-        },
-        {
-          "const": "STOP"
-        },
-        {
-          "const": "GUIDE"
-        },
-        {
-          "const": "STAFF_REQUEST"
-        }
-      ]
     },
     "RevisionToken": {
       "oneOf": [
@@ -1972,197 +587,6 @@
           "const": "ON_RESULT"
         }
       ]
-    },
-    "SayValue": {
-      "type": "object",
-      "properties": {
-        "slot": {
-          "$ref": "#/$defs/SlotRef"
-        },
-        "question_name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "role": {
-          "oneOf": [
-            {
-              "const": "CURRENT"
-            },
-            {
-              "const": "PENDING"
-            },
-            {
-              "const": "JUST_SAVED"
-            },
-            {
-              "const": "SAID"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        }
-      },
-      "required": [
-        "slot",
-        "question_name",
-        "value",
-        "role"
-      ],
-      "additionalProperties": false
-    },
-    "SentenceMaterials": {
-      "type": "object",
-      "properties": {
-        "question_sentences": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "question_id": {
-                "$ref": "#/$defs/QuestionId"
-              },
-              "sentence": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "question_id",
-              "sentence"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "refusal_explanations": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "question_id": {
-                "$ref": "#/$defs/QuestionId"
-              },
-              "sentence": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "question_id",
-              "sentence"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "reask_sentences": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "slot": {
-                "$ref": "#/$defs/SlotRef"
-              },
-              "sentence": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "slot",
-              "sentence"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "choices": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "slot": {
-                "$ref": "#/$defs/SlotRef"
-              },
-              "choices": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "minItems": 1
-              }
-            },
-            "required": [
-              "slot",
-              "choices"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "guide_sentences": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "guide_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "question_id": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/QuestionId"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "sentence": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "guide_id",
-              "question_id",
-              "sentence"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "fixed_sentences": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "key": {
-                "$ref": "#/$defs/FixedSentenceKey"
-              },
-              "sentence": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "required": [
-              "key",
-              "sentence"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "question_sentences",
-        "refusal_explanations",
-        "reask_sentences",
-        "choices",
-        "guide_sentences",
-        "fixed_sentences"
-      ],
-      "additionalProperties": false
     },
     "SessionId": {
       "type": "string",
@@ -2222,9 +646,6 @@
         "progress_record": {
           "$ref": "#/$defs/ProgressRecord"
         },
-        "planner_record": {
-          "$ref": "#/$defs/PlannerRecord"
-        },
         "dialogue_log": {
           "type": "array",
           "items": {
@@ -2245,7 +666,6 @@
         "session_info",
         "answer_records",
         "progress_record",
-        "planner_record",
         "dialogue_log",
         "dispatch_log"
       ],
@@ -2270,24 +690,28 @@
     "SkipReason": {
       "oneOf": [
         {
-          "const": "UNKNOWN_ACCEPTED"
+          "const": "REQUEST_SKIP"
         },
         {
-          "const": "REFUSAL_ACCEPTED"
+          "const": "REFUSED"
         },
         {
-          "const": "ATTEMPTS_EXCEEDED"
+          "const": "UNCERTAIN"
         }
       ]
     },
     "SlotRecord": {
       "type": "object",
+      "description": "칸 하나의 저장 기록. 모델 키 Q7_1[soju].amount는 {question_id Q7_1, repeat_key soju, slot_id amount}다. risk_mark는 위험 입력원이 정해질 때까지 항상 null이다(미정).",
       "properties": {
         "slot": {
           "$ref": "#/$defs/SlotRef"
         },
         "current_value": {
           "$ref": "#/$defs/CurrentValue"
+        },
+        "precision": {
+          "$ref": "#/$defs/Precision"
         },
         "risk_mark": {
           "anyOf": [
@@ -2304,60 +728,15 @@
           "items": {
             "$ref": "#/$defs/HistoryEntry"
           }
-        },
-        "pending": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PendingRecord"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
         }
       },
       "required": [
         "slot",
         "current_value",
         "risk_mark",
-        "history",
-        "pending"
+        "history"
       ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "value_metadata"
-            ],
-            "properties": {
-              "value_metadata": {
-                "properties": {
-                  "precision": {
-                    "enum": [
-                      "exact",
-                      "approximate"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "current_value": {
-                "type": "object",
-                "required": [
-                  "answer"
-                ]
-              }
-            }
-          }
-        }
-      ]
+      "additionalProperties": false
     },
     "SlotRef": {
       "type": "object",
@@ -2485,273 +864,6 @@
         }
       ]
     },
-    "StoreAction": {
-      "oneOf": [
-        {
-          "const": "FIRST_WRITE"
-        },
-        {
-          "const": "NEW_REVISION"
-        },
-        {
-          "const": "RECORD_UNKNOWN"
-        },
-        {
-          "const": "RECORD_REFUSAL"
-        },
-        {
-          "const": "SET_PENDING"
-        },
-        {
-          "const": "ACCEPT_PENDING"
-        },
-        {
-          "const": "DROP_PENDING"
-        },
-        {
-          "const": "INVALIDATE"
-        }
-      ]
-    },
-    "StoreDecision": {
-      "type": "object",
-      "properties": {
-        "slot": {
-          "$ref": "#/$defs/SlotRef"
-        },
-        "action": {
-          "$ref": "#/$defs/StoreAction"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Value"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "pending_id": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PendingId"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "risk_mark": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RiskResponse"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        }
-      },
-      "required": [
-        "slot",
-        "action",
-        "value",
-        "pending_id",
-        "risk_mark"
-      ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "value_metadata"
-            ],
-            "properties": {
-              "value_metadata": {
-                "properties": {
-                  "precision": {
-                    "enum": [
-                      "exact",
-                      "approximate"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "value": {
-                "not": {
-                  "type": "null"
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
-    "StoreResult": {
-      "type": "object",
-      "properties": {
-        "store_decisions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/StoreDecision"
-          }
-        },
-        "store_summary": {
-          "$ref": "#/$defs/StoreSummary"
-        }
-      },
-      "required": [
-        "store_decisions",
-        "store_summary"
-      ],
-      "additionalProperties": false
-    },
-    "StoreSummary": {
-      "type": "object",
-      "properties": {
-        "changed_slots": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ChangedSlot"
-          }
-        },
-        "unknown_refused_records": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "slot": {
-                "$ref": "#/$defs/SlotRef"
-              },
-              "record": {
-                "oneOf": [
-                  {
-                    "const": "UNKNOWN_RECORD"
-                  },
-                  {
-                    "const": "REFUSAL_RECORD"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "slot",
-              "record"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "created_pendings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "slot": {
-                "$ref": "#/$defs/SlotRef"
-              }
-            },
-            "required": [
-              "slot"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "resolved_pendings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "slot": {
-                "$ref": "#/$defs/SlotRef"
-              },
-              "handling": {
-                "oneOf": [
-                  {
-                    "const": "ACCEPT"
-                  },
-                  {
-                    "const": "DROP"
-                  },
-                  {
-                    "const": "REPLACE"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "slot",
-              "handling"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "invalidated_questions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/QuestionId"
-          },
-          "uniqueItems": true
-        }
-      },
-      "required": [
-        "changed_slots",
-        "unknown_refused_records",
-        "created_pendings",
-        "resolved_pendings",
-        "invalidated_questions"
-      ],
-      "additionalProperties": false
-    },
-    "Target": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/SlotRef"
-        },
-        {
-          "$ref": "#/$defs/WholeQuestion"
-        }
-      ]
-    },
-    "TextSpan": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "end": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "offset_unit": {
-          "type": "string",
-          "enum": [
-            "unicode_code_point",
-            "utf16_code_unit",
-            "utf8_byte"
-          ]
-        },
-        "text": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "start",
-        "end",
-        "offset_unit",
-        "text"
-      ],
-      "additionalProperties": false
-    },
     "TurnFailureSignal": {
       "type": "object",
       "properties": {
@@ -2808,91 +920,17 @@
         }
       ]
     },
-    "UtteranceJudgment": {
-      "type": "object",
-      "properties": {
-        "result": {
-          "$ref": "#/$defs/UtteranceResult"
-        },
-        "valueless_correction_requests": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ValuelessCorrection"
-          }
-        },
-        "confirmation": {
-          "oneOf": [
-            {
-              "const": "YES"
-            },
-            {
-              "const": "NO"
-            },
-            {
-              "const": "NONE"
-            }
-          ]
-        },
-        "requests": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Request"
-          }
-        },
-        "risk_signal": {
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "evidence": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/SourceText"
-                  },
-                  "minItems": 1
-                }
-              },
-              "required": [
-                "evidence"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "result",
-        "valueless_correction_requests",
-        "confirmation",
-        "requests",
-        "risk_signal"
-      ],
-      "additionalProperties": false
-    },
-    "UtteranceResult": {
-      "oneOf": [
-        {
-          "const": "HAS_ANSWER"
-        },
-        {
-          "const": "REQUEST_ONLY"
-        },
-        {
-          "const": "OUT_OF_SCOPE_ONLY"
-        },
-        {
-          "const": "UNRECOGNIZED_TURN"
-        }
-      ]
-    },
     "Value": {
       "oneOf": [
         {
           "type": "string",
           "minLength": 1
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
         },
         {
           "type": "object",
@@ -2920,57 +958,25 @@
         }
       ]
     },
-    "ValueMetadata": {
+    "ViolationRecord": {
       "type": "object",
+      "description": "turn_engine.Violation의 기록(값 없음: code, path, message).",
       "properties": {
-        "precision": {
-          "$ref": "#/$defs/Precision"
+        "code": {
+          "type": "string",
+          "minLength": 1
         },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Evidence"
-          }
-        }
-      },
-      "required": [
-        "precision",
-        "evidence"
-      ],
-      "additionalProperties": false
-    },
-    "ValuelessCorrection": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Target"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "target"
-      ],
-      "additionalProperties": false
-    },
-    "WholeQuestion": {
-      "type": "object",
-      "properties": {
-        "question_id": {
-          "$ref": "#/$defs/QuestionId"
+        "path": {
+          "type": "string"
         },
-        "whole_question": {
-          "const": true
+        "message": {
+          "type": "string"
         }
       },
       "required": [
-        "question_id",
-        "whole_question"
+        "code",
+        "path",
+        "message"
       ],
       "additionalProperties": false
     }

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/QuestionFlow.json",
+  "$ref": "#/$defs/QuestionFlow",
+  "$defs": {
+    "QuestionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SlotName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.]+\\.[A-Za-z0-9_]+$",
+      "description": "문항.칸 (종류 괄호 없음). 예: Q8_1.days"
+    },
+    "SkipCondition": {
+      "type": "object",
+      "description": "slot에 저장된 값이 value와 같으면(op '==') skip_item은 묻지 않는다. 값은 bool 또는 수(0 같은 수 조건 포함) 또는 문자열이다. 비교에서 bool과 수는 다르다(true != 1).",
+      "properties": {
+        "slot": {
+          "$ref": "#/$defs/SlotName"
+        },
+        "op": {
+          "const": "=="
+        },
+        "value": {
+          "type": [
+            "boolean",
+            "number",
+            "string"
+          ]
+        },
+        "skip_item": {
+          "$ref": "#/$defs/QuestionId"
+        }
+      },
+      "required": [
+        "slot",
+        "op",
+        "value",
+        "skip_item"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionFlow": {
+      "type": "object",
+      "description": "문항 순서와 건너뛰기 표(D76). survey-service가 QuestionFlowTable(turn-engine)을 이 표에서 만든다.",
+      "properties": {
+        "flow_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuestionId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "skips": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkipCondition"
+          }
+        },
+        "reference_sources": {
+          "type": "object",
+          "description": "문항 -> A 입력 state에 함께 싣는 참조 원천 문항들(직전 문항과 별개). 데이터 표본에서 읽은 규칙이다(미확정).",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/QuestionId"
+            },
+            "minItems": 1
+          }
+        },
+        "slot_order": {
+          "type": "object",
+          "description": "A 입력 state에서 한 문항 안의 칸 순서. 없는 문항은 키 문자열 정렬. 학습 데이터 표본에서 읽은 규칙이다(미확정).",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      },
+      "required": [
+        "flow_id",
+        "order",
+        "skips",
+        "reference_sources",
+        "slot_order"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -35,12 +35,6 @@
           "additionalProperties": false
         },
         {
-          "const": "UNKNOWN_RECORD"
-        },
-        {
-          "const": "REFUSAL_RECORD"
-        },
-        {
           "const": "NONE"
         }
       ]
@@ -63,12 +57,6 @@
             "$ref": "#/$defs/SkipEntry"
           }
         },
-        "confirm_stopped": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SlotRef"
-          }
-        },
         "session_status": {
           "$ref": "#/$defs/SessionStatus"
         },
@@ -83,46 +71,8 @@
         "session_info",
         "answer_records",
         "skipped",
-        "confirm_stopped",
         "session_status",
         "pause_history"
-      ],
-      "additionalProperties": false
-    },
-    "Evidence": {
-      "type": "object",
-      "properties": {
-        "turn_index": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "start": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "end": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "offset_unit": {
-          "type": "string",
-          "enum": [
-            "unicode_code_point",
-            "utf16_code_unit",
-            "utf8_byte"
-          ]
-        },
-        "text": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "turn_index",
-        "start",
-        "end",
-        "offset_unit",
-        "text"
       ],
       "additionalProperties": false
     },
@@ -137,13 +87,13 @@
             "value": {
               "$ref": "#/$defs/Value"
             },
-            "value_metadata": {
-              "$ref": "#/$defs/ValueMetadata"
+            "precision": {
+              "$ref": "#/$defs/Precision"
             }
           },
           "required": [
             "value",
-            "value_metadata"
+            "precision"
           ],
           "additionalProperties": false
         }
@@ -221,40 +171,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "PendingId": {
-      "type": "string",
-      "minLength": 1
-    },
-    "PendingRecord": {
-      "type": "object",
-      "properties": {
-        "pending_id": {
-          "$ref": "#/$defs/PendingId"
-        },
-        "value": {
-          "$ref": "#/$defs/Value"
-        },
-        "risk_mark": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RiskResponse"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
-        }
-      },
-      "required": [
-        "pending_id",
-        "value",
-        "risk_mark"
-      ],
-      "additionalProperties": false
     },
     "Precision": {
       "type": "string",
@@ -340,24 +256,28 @@
     "SkipReason": {
       "oneOf": [
         {
-          "const": "UNKNOWN_ACCEPTED"
+          "const": "REQUEST_SKIP"
         },
         {
-          "const": "REFUSAL_ACCEPTED"
+          "const": "REFUSED"
         },
         {
-          "const": "ATTEMPTS_EXCEEDED"
+          "const": "UNCERTAIN"
         }
       ]
     },
     "SlotRecord": {
       "type": "object",
+      "description": "칸 하나의 저장 기록. 모델 키 Q7_1[soju].amount는 {question_id Q7_1, repeat_key soju, slot_id amount}다. risk_mark는 위험 입력원이 정해질 때까지 항상 null이다(미정).",
       "properties": {
         "slot": {
           "$ref": "#/$defs/SlotRef"
         },
         "current_value": {
           "$ref": "#/$defs/CurrentValue"
+        },
+        "precision": {
+          "$ref": "#/$defs/Precision"
         },
         "risk_mark": {
           "anyOf": [
@@ -374,60 +294,15 @@
           "items": {
             "$ref": "#/$defs/HistoryEntry"
           }
-        },
-        "pending": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PendingRecord"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "value_metadata": {
-          "$ref": "#/$defs/ValueMetadata"
         }
       },
       "required": [
         "slot",
         "current_value",
         "risk_mark",
-        "history",
-        "pending"
+        "history"
       ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "value_metadata"
-            ],
-            "properties": {
-              "value_metadata": {
-                "properties": {
-                  "precision": {
-                    "enum": [
-                      "exact",
-                      "approximate"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "current_value": {
-                "type": "object",
-                "required": [
-                  "answer"
-                ]
-              }
-            }
-          }
-        }
-      ]
+      "additionalProperties": false
     },
     "SlotRef": {
       "type": "object",
@@ -461,6 +336,12 @@
           "minLength": 1
         },
         {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
           "type": "object",
           "properties": {
             "amount": {
@@ -485,25 +366,6 @@
           "$ref": "#/$defs/CodedValue"
         }
       ]
-    },
-    "ValueMetadata": {
-      "type": "object",
-      "properties": {
-        "precision": {
-          "$ref": "#/$defs/Precision"
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Evidence"
-          }
-        }
-      },
-      "required": [
-        "precision",
-        "evidence"
-      ],
-      "additionalProperties": false
     }
   }
 }

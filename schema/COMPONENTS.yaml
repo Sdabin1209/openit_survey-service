@@ -28,60 +28,33 @@ components:
     input: OrchestratorInput
     output: OrchestratorOutput
     trace: TurnTrace
-- name: Utterance Parser
+- name: Action Extractor
   title: LoRA-A
   kind: 모델
-  responsibility: 사용자 발화를 (대상, 값, 원문, 의도) 항목들로 바꾼다.
-  why: 자연어 해석만 모델이 하고 판단은 코드가 한다(역할 분리 원칙).
-  id: utterance_parser
+  responsibility: 사용자 발화를 값 추출, 정규화, 절차(action), 다음 문항으로 한 번에 바꾼다. 입력과 출력은 boundary-contracts의 ActionExtractionInput, ActionExtraction이다(D74).
+  why: 해석과 정규화를 모델이 하고 코드는 검증과 저장만 한다. 세션 시작은 이 모델을 부르지 않는다.
+  id: action_extractor
   contracts:
-    input: UtteranceParserInput
-    output: ParserOutput
-- name: Answer Normalizer
-  title: 정규화·검증
+    input: ActionExtractionInput (boundary-contracts)
+    output: ActionExtraction (boundary-contracts)
+- name: Extraction Validator
+  title: 출력 검증
   kind: 코드
-  responsibility: 항목 값을 표준 형태로 바꾸고, 규칙 위반·기존 값과의 같음/다름·빠진 필수 슬롯·선행 조건을 사실로 표시한다.
-  why: 값 규칙(단위·범위·선행 조건)이 바뀌면 이곳만 바뀐다.
-  id: answer_normalizer
+  responsibility: turn-engine의 validate_extraction으로 A 출력의 의미(targets, next_item, 건너뛰기, save 규칙)를 검증한다. 문항 순서·건너뛰기 표(QuestionFlow)는 이 영역이 문진 스키마에서 만들어 넘긴다(D76).
+  why: 위반 출력은 값을 지어내지 않고 한 번 재시도한 뒤 턴 실패로 처리한다(D75).
+  id: extraction_validator
   contracts:
-    input: AnswerNormalizerInput
-    output: NormalizerOutput
-- name: Answer Judge
-  title: 상태 판정
-  kind: 코드
-  responsibility: 이번 발화가 각 대상에 대해 무엇을 뜻하는지(정상·정정·충돌·누락 등) 판정한다.
-  why: 해석 규칙(충돌·정정·확인 응답)이 바뀌면 이곳만 바뀐다. 저장 판단보다 먼저 있어야 한다(상태 판정 결과를 저장 판단보다 먼저 전달하는 순서).
-  id: answer_judge
-  contracts:
-    input: AnswerJudgeInput
-    output: JudgeOutput
-- name: Record Writer
-  title: 저장 판단
-  kind: 코드
-  responsibility: 판정을 응답 기록에 어떻게 반영할지 슬롯별로 정한다.
-  why: 저장소가 판단 없이 반영하게 하려면 무엇을 할지가 다 정해져 있어야 한다.
-  id: record_writer
-  contracts:
-    input: RecordWriterInput
-    output: StoreResult
-- name: Dialogue Planner
-  title: Plan 결정
-  kind: 코드
-  responsibility: 다음에 무엇을 말할지 정하고, 그 말에 필요한 값과 문장 재료를 담은 응답 지시를 만든다.
-  why: 대화 정책이 바뀌면 이곳만 바뀐다. 진행 기록·Plan 기록을 쓰는 유일한 곳.
-  id: dialogue_planner
-  contracts:
-    input: DialoguePlannerInput
-    output: PlannerOutput
-- name: Response Generator
+    table: QuestionFlow
+- name: Response Composer
   title: LoRA-B
   kind: 모델
-  responsibility: 응답 지시를 사용자 발화에 맞춰 받아 주며 자연스러운 문장으로 바꾼다.
-  why: 문장만 모델이 만들고 무엇을 말할지는 정하지 않는다(역할 분리 원칙).
-  id: response_generator
+  responsibility: 서비스가 표 찾기로 조립한 ResponseRequest(known, ask, previous, current, hold, topic, next)를 사용자에게 할 문장으로 바꾼다(text/plain).
+  why: 문장만 모델이 만든다. 문항 질문 문장, 칸 설명, ask 문장 틀은 서비스가 표에서 찾는다(ResponseTables, 미확정 초안).
+  id: response_composer
   contracts:
-    input: ResponseGeneratorInput
-    output: GeneratorOutput
+    input: ResponseRequest (boundary-contracts)
+    output: ResponseText (boundary-contracts)
+    table: ResponseTables
 - name: Result Dispatcher
   title: 결과 전달
   kind: 외부 접점(붙을 예정)

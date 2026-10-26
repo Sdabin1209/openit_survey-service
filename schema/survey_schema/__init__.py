@@ -3,7 +3,7 @@
 정수 버전(문진 스키마의 CONTRACT_VERSION)별로 스키마를 낸다. 여러 정수 버전을 동시에 지원하는 소비자는
 `load_schema(name, version=N)`으로 버전마다 얻는다. 이 패키지가 설치되어 있으면 리포지토리 사본이 필요 없다.
 
-- 설치본(wheel): survey_schema/v<N>/{schemas/*.json, CONTRACT_VERSION, COMPONENTS.yaml}
+- 설치본(wheel): survey_schema/v<N>/{schemas/*.json, data/*.json, CONTRACT_VERSION, COMPONENTS.yaml}
 - 소스 트리(개발, `pip install -e`): schema/ (현행 버전) 또는 schema/v<N>/
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 __all__ = ["load_schema", "schema_dir", "contract_version_dir", "available_versions", "current_version",
-           "list_schemas", "DEFAULT_VERSION"]
+           "list_schemas", "load_data", "DEFAULT_VERSION"]
 
 DEFAULT_VERSION = 1
 _PKG = Path(__file__).resolve().parent
@@ -70,4 +70,13 @@ def load_schema(name: str, version: int = DEFAULT_VERSION) -> dict:
     path = schema_dir(version) / f"{name}.json"
     if not path.exists():
         raise KeyError(f"알 수 없는 문진 스키마 계약: {name} (정수 버전 {version})")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_data(name: str, version: int = DEFAULT_VERSION) -> dict:
+    """문진 스키마가 담는 데이터 표(예: 'question_flow', 'response_tables')의 JSON. 형식은 같은 이름의 계약
+    (QuestionFlow, ResponseTables)이 정한다."""
+    path = contract_version_dir(version) / "data" / f"{name}.json"
+    if not path.exists():
+        raise KeyError(f"알 수 없는 문진 스키마 데이터: {name} (정수 버전 {version})")
     return json.loads(path.read_text(encoding="utf-8"))

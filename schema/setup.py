@@ -33,6 +33,10 @@ class BuildPy(build_py):
             (dest / "schemas").mkdir(parents=True)
             for f in sorted((src / "schemas").glob("*.json")):
                 shutil.copy2(f, dest / "schemas" / f.name)
+            if (src / "data").is_dir():
+                (dest / "data").mkdir()
+                for f in sorted((src / "data").glob("*.json")):
+                    shutil.copy2(f, dest / "data" / f.name)
             for name in ("CONTRACT_VERSION", "COMPONENTS.yaml"):
                 if (src / name).exists():
                     shutil.copy2(src / name, dest / name)

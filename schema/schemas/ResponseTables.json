@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standalone/ResponseTables.json",
+  "$ref": "#/$defs/ResponseTables",
+  "$defs": {
+    "ResponseTables": {
+      "type": "object",
+      "description": "LoRA-B 입력(ResponseRequest)의 topic·known·ask·previous·current·hold와 남은 칸 문장을 만드는 표. table_status가 DRAFT_UNCONFIRMED이면 사용자 확인 전의 초안이다.",
+      "properties": {
+        "table_status": {"enum": ["DRAFT_UNCONFIRMED", "CONFIRMED"]},
+        "note": {"type": "string"},
+        "questions": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/QuestionEntry"}},
+        "beverages": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+        "units": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+        "periods": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+        "approx_suffix": {"type": "string"},
+        "value_phrases": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/ValuePhrase"}},
+        "ask": {"type": "array", "items": {"$ref": "#/$defs/AskRule"}, "minItems": 1}
+      },
+      "required": ["table_status", "questions", "beverages", "units", "periods", "value_phrases", "ask"],
+      "additionalProperties": false
+    },
+    "QuestionEntry": {
+      "type": "object",
+      "properties": {
+        "topic": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1, "description": "hold와 다른 문항 값 앞의 이름표"},
+        "hold_by_targets": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+        "slots": {"type": "array", "items": {"$ref": "#/$defs/SlotDesc"}},
+        "remaining_lead": {"type": "string"}
+      },
+      "required": ["topic", "name"],
+      "additionalProperties": false
+    },
+    "SlotDesc": {
+      "type": "object",
+      "properties": {
+        "slot": {"type": "string", "minLength": 1},
+        "desc": {"type": "string", "minLength": 1},
+        "only_if": {"type": "object", "properties": {"slot": {"type": "string"}, "value": {"type": ["boolean", "number", "string"]}}, "required": ["slot", "value"], "additionalProperties": false}
+      },
+      "required": ["slot", "desc"],
+      "additionalProperties": false
+    },
+    "ValuePhrase": {
+      "type": "object",
+      "properties": {
+        "kind": {"enum": ["bool", "enum", "number", "minutes", "frequency", "unit_only", "amount", "amount_unit"]},
+        "true": {"type": "string"}, "false": {"type": "string"},
+        "map": {"type": "object", "additionalProperties": {"type": "string"}},
+        "template": {"type": "string"}, "template_no_unit": {"type": "string"},
+        "special": {"type": "object", "additionalProperties": {"type": "string"}},
+        "unit_slot": {"type": "string"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "AskRule": {
+      "type": "object",
+      "properties": {
+        "reason": {"type": "string", "minLength": 1},
+        "slots": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "template": {"type": "string", "minLength": 1},
+        "note": {"type": "string"}
+      },
+      "required": ["reason", "template"],
+      "additionalProperties": false
+    }
+  }
+}
