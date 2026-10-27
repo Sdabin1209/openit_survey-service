@@ -1,16 +1,17 @@
 # CR-015 처리 중인 같은 turn_id의 오류 표기
 
-상태: **헤드 확인 요청(선택).** 서비스는 계약을 바꾸지 않는 범위로 구현했다.
+상태: **처리됨 (헤드 결정, 2026-10-28).**
 
-## 구현한 것 (FAULT_POLICY 원칙 2)
+## 결정
 
-- 같은 (세션, turn_id)가 처리 중일 때 들어온 같은 turn_id 요청은 새로 시작하지 않고 `409`와 `Retry-After`로 답한다. 본문은 기존 오류 형식을 재사용한다: `code: "CONFLICT"`, `message`가 `TURN_IN_PROGRESS:`로 시작, `retryable: false`.
-- 이미 확정된 turn_id는 저장된 결과를 그대로 돌려준다(전부터 그랬다).
+계약 변경 없이 기존 규약(HTTP.md: 409의 사유는 `BoundaryError.details.reason`)을 따른다. 처리 중인 같은 turn_id의 409는 `code: "CONFLICT"`, `details.reason: "TURN_IN_PROGRESS"`, `Retry-After` 헤더 동봉이고 `retryable`은 CONFLICT 기본값을 유지한다. 의미는 boundary-contracts PUBLIC_API.md 409 행에 기재됐다. 전용 `code`는 만들지 않는다.
 
-## 부족한 것
+## 구현
 
-- PUBLIC_API.md 오류 코드 열거에 `TURN_IN_PROGRESS`가 없어 클라이언트는 메시지 접두사로 구분해야 한다. `CONFLICT`는 "같은 turn_id에 다른 입력"(재시도해도 같음)과 "처리 중"(재시도하면 됨)이 섞인다.
+- `survey_service/api.py`의 `_in_progress`가 이 형식으로 답한다. 이전의 message 접두사 방식은 폐기했다.
+- 입력 불일치 409(같은 turn_id에 다른 내용)는 `details` 없음, `Retry-After` 없음으로 구분된다.
+- 시험: `tests/test_turn_idempotency_deadline.py`(처리 중 409 형식, 입력 불일치 409와의 구분).
 
-## 제안
+## 원래 제안(참고, 채택하지 않음)
 
-- `code: "TURN_IN_PROGRESS"`(HTTP 409, `retryable: true`)를 오류 코드에 추가한다. 승인되면 `HTTP_CODE`에 한 줄과 `_in_progress`의 코드만 바꾸면 된다. 그때까지 키오스크는 409 + `Retry-After`면 같은 turn_id로 재시도하고, 메시지가 `TURN_IN_PROGRESS:`가 아닌 409(입력 불일치)는 재시도하지 않는 규칙을 쓸 수 있다.
+`code: "TURN_IN_PROGRESS"`를 오류 코드에 추가하는 안.

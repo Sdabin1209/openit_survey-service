@@ -56,9 +56,11 @@ RESERVED = (START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID)
 STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
 
 
-def _err(code: str, message: str, status: Optional[int] = None, headers: Optional[dict] = None):
+def _err(code: str, message: str, status: Optional[int] = None, headers: Optional[dict] = None, details: Optional[dict] = None):
     rec = {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "code": code, "message": message,
            "retryable": code == "UNAVAILABLE"}
+    if details:
+        rec["details"] = details
     return status or HTTP_CODE[code], rec, headers or {}
 
 
@@ -234,9 +236,10 @@ class PublicApi:
         return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
 
     def _in_progress(self):
-        """같은 turn_id가 처리 중. 기존 오류 형식(CONFLICT 409)을 재사용하고 메시지가 TURN_IN_PROGRESS로 시작한다(계약 변경 없음, CR-015)."""
-        return _err("CONFLICT", "TURN_IN_PROGRESS: 같은 turn_id가 처리 중이다. 잠시 뒤 같은 turn_id로 다시 보낸다", 409,
-                    {"Retry-After": str(self.retry_after)})
+        """같은 turn_id가 처리 중. `code: CONFLICT`(409), `details.reason: TURN_IN_PROGRESS`, `Retry-After` 헤더(HTTP.md의 409 사유 규약, CR-015 처리됨).
+        입력 불일치 409(details 없음)와 구분된다."""
+        return _err("CONFLICT", "같은 turn_id가 처리 중이다. Retry-After 뒤 같은 turn_id로 다시 보낸다", 409,
+                    {"Retry-After": str(self.retry_after)}, details={"reason": "TURN_IN_PROGRESS"})
 
     def _replayed(self, sid: str, turn_id: str) -> bool:
         try:

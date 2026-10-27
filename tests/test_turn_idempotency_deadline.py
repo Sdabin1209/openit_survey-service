@@ -46,7 +46,8 @@ def test_concurrent_same_turn_id_is_409_while_in_progress_then_replays_once():
     th.start()
     assert entered.wait(5)
     code, body, hdr = _call(api, "t-1")                       # 처리 중인 같은 turn_id
-    assert code == 409 and body["message"].startswith("TURN_IN_PROGRESS") and "Retry-After" in hdr
+    assert code == 409 and body["code"] == "CONFLICT" and body["details"] == {"reason": "TURN_IN_PROGRESS"} and body["retryable"] is False
+    assert "Retry-After" in hdr and "TURN_IN_PROGRESS" not in body["message"]
     gate.set()
     th.join(10)
     assert first[0][0] == 200
@@ -137,3 +138,13 @@ def test_deadline_not_exceeded_is_normal():
     rig.start()
     out = rig.say("안 피움", out=ANSWER_OUT)
     assert out.frontend_input["turn_failure_signal"] is None and rig.orch.counters.get("turn_deadline_exceeded") is None
+
+
+def test_input_mismatch_409_is_distinguishable_from_in_progress():
+    rig = Rig(risk=True)
+    api = _api(rig)
+    _start(api)
+    rig.model.queue.append(ANSWER_OUT)
+    assert _call(api, "t-m", "안 피움")[0] == 200
+    code, body, hdr = _call(api, "t-m", "다른 말")            # 같은 turn_id, 다른 입력
+    assert code == 409 and body["code"] == "CONFLICT" and "details" not in body and "Retry-After" not in hdr

@@ -141,7 +141,7 @@
 
 ## 2026-10-28 장애 정책 구현 1단계 (FAULT_POLICY 2·3·4·9)
 
-- 한 일: (1) 같은 turn_id 겹침 409 TURN_IN_PROGRESS(+Retry-After), (2) 서버 턴 총 마감 8초, (3) DB 주 연결 connect/statement timeout(3초)과 무응답 DB 강제 끊기, (4) Trace DEAD 건수 원인 코드별 `/readyz` 노출. 변경 이유와 한계는 docs/boundary.md §5·§6, CHANGELOG.
+- 한 일: (1) 같은 turn_id 겹침 409 CONFLICT + details.reason TURN_IN_PROGRESS(+Retry-After), (2) 서버 턴 총 마감 8초, (3) DB 주 연결 connect/statement timeout(3초)과 무응답 DB 강제 끊기, (4) Trace DEAD 건수 원인 코드별 `/readyz` 노출. 변경 이유와 한계는 docs/boundary.md §5·§6, CHANGELOG.
 - 확인한 것(이 PC): 새 시험 `tests/test_turn_idempotency_deadline.py`, `tests/test_readyz_db_outage.py`의 frozen DB 시험(`docker pause`), `tests/test_trace_export.py` 한 개. 개수와 smoke 결과는 아래 보고 시점의 값이 아니라 다시 돌려 확인할 것.
 - 확인하지 못한 것: 실제 compose·gateway 경유, 실제 모델 서버와의 조합, 마감 직전에 시작된 확정이 뒤늦게 반영되는 경합의 실측, 키오스크 재시도와의 맞물림.
-- 남은 일/결정 대기: 위험 신호가 있는 턴의 확정 실패 시 알림(사용자 결정, 코드 불변), 전용 오류 코드 TURN_IN_PROGRESS(CR-015), DEAD 건의 재전송 도구.
+- 남은 일/결정 대기: 위험 신호가 있는 턴의 확정 실패 시 알림(사용자 결정, 코드 불변), DEAD 건의 재전송 도구.

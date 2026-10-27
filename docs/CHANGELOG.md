@@ -2,7 +2,7 @@
 
 ## 장애 정책 구현 1단계 (FAULT_POLICY 2·3·4·9) [미출시, 푸시·태그 전]
 
-- 같은 turn_id가 처리 중이면 `409 TURN_IN_PROGRESS:` + `Retry-After`(기존 오류 형식 재사용, CR-015). 서버 턴 총 마감 `SURVEY_TURN_DEADLINE_SECONDS`(기본 8). DB 주 연결 `SURVEY_DB_CONNECT_TIMEOUT_SECONDS`(기본 3, 이전 10)·`SURVEY_DB_STATEMENT_TIMEOUT_SECONDS`(기본 3)와 무응답 DB 강제 끊기. `/readyz`의 `trace_outbox.dead_by_code`. 자세한 내용과 한계는 docs/boundary.md §5·§6.
+- 같은 turn_id가 처리 중이면 `409`(`code: CONFLICT`, `details.reason: TURN_IN_PROGRESS`) + `Retry-After`(HTTP.md 409 사유 규약, CR-015 처리됨). 서버 턴 총 마감 `SURVEY_TURN_DEADLINE_SECONDS`(기본 8). DB 주 연결 `SURVEY_DB_CONNECT_TIMEOUT_SECONDS`(기본 3, 이전 10)·`SURVEY_DB_STATEMENT_TIMEOUT_SECONDS`(기본 3)와 무응답 DB 강제 끊기. `/readyz`의 `trace_outbox.dead_by_code`. 자세한 내용과 한계는 docs/boundary.md §5·§6.
 - 동작이 바뀐 곳: 겹친 같은 turn_id는 기다리지 않고 409(이전: 락에서 기다린 뒤 저장 결과). 턴이 8초를 넘으면 NOT_COMMITTED(이전: 끝날 때까지). 접속 대기 10초에서 3초.
 
 ## 설치 줄을 태그 기준으로 고침 [미출시, 푸시·태그 전]
