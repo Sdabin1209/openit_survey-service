@@ -131,3 +131,10 @@
 - 확인한 것: 학습 데이터 B 입력 5,077/5,077행(START 제외, train 3,982 + val 549 + test 546) 글자 단위 일치, START 110/110, 원본 코드와 조합 비교(ask 20,332, value 1,134, 무작위 b_input 40,000) 전부 일치.
 - 확인하지 못한 것: 데이터셋 담당의 표 승인(기록 미확인, 확인 대기), 실제 문항 세트 문장으로 만든 `next.text`와 모델의 결합, B 모델이 57행 문제의 남은 칸 문장을 어떻게 다루는지.
 - 시험 수와 스모크는 이 절 아래 보고 참조가 아니라 CHANGELOG의 시험 항목과 커밋 메시지를 본다(E2E 수는 쓰지 않는다).
+
+## 2026-10-27 /readyz의 PostgreSQL 장애 응답 (CR-D23)
+
+- 한 일: `/readyz`가 DB 장애 때 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본 2초)+약 2초 안에 503(`database.status=UNAVAILABLE`, `detail=db unavailable`)으로 답하고 복구 뒤 200이 되게 했다. 별도 짧은 연결(`PgConn.probe`)로 세 저장소를 동시에 확인하고 하드 상한을 두며, DB를 읽는 보조 수치 예외로 연결이 끊기던 것을 막았다. 원인·측정은 CHANGELOG 맨 위 절, 경계 문서 §5·§6.
+- 확인한 것(이 PC, 로컬 PostgreSQL 컨테이너): 고치기 전 연결 불가에서 세 확인 30.0초, `docker pause`에서 120초 넘게 무응답. 고친 뒤 전체 pytest(PostgreSQL 붙임) 990 통과, 새 시험 4개(`tests/test_readyz_db_outage.py`), `scripts/smoke.sh` SMOKE OK.
+- 확인하지 못한 것: 고친 뒤 응답 시간의 숫자 재측정(시험이 6초 미만만 검증), 실제 compose 환경의 재측정(deploy E2E 5p에서 헤드), RemoteDisconnected의 직접 원인이 보조 수치 예외라는 것은 코드 읽기로 본 추정, `SMOKE_PG=1 smoke.sh`는 돌리지 않음.
+- 남은 일/제안: 응답 없는 DB에서 요청 경로가 최대 10초(`connect_timeout`) 기다리는 점은 그대로다. 단축은 환자 경로 의미가 바뀌므로 별도 결정.
