@@ -648,7 +648,12 @@ class TurnGraph:
                 failed.append({"phase": "AFTER_COMMIT", "step": "DELIVER_FRONT"})
                 signal = self._signal(sid, failed, committed, st["staff_status"])
                 fi_text = None
-        fi = {"response_text": fi_text, "turn_failure_signal": signal}
+        fi_signal = signal
+        if signal is None and st["staff_status"] == "DELIVERED":
+            # 위험 정지로 직원 알림이 닿았다: PUBLIC_API.md가 정한 대로 staff_alert=DELIVERED를 알려 키오스크가 대기 화면으로 가게 한다(횡단 H-2).
+            # 내부 신호·로그·Trace는 그대로 두고(실패가 아니다) 프론트 응답에만 싣는다.
+            fi_signal = {"session_id": sid, "write_committed": "COMMITTED" if committed else "NOT_COMMITTED", "staff_alert": "DELIVERED"}
+        fi = {"response_text": fi_text, "turn_failure_signal": fi_signal}
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         doc = st["state_doc"]
         bank_version = ctx.release.bank["version"] if ctx.release else doc["session_info"]["question_bank_version"]

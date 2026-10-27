@@ -79,7 +79,7 @@ class App:
             if not settings.vapid_subject:
                 raise ConfigError("VAPID 비밀키가 있는데 SURVEY_VAPID_SUBJECT(mailto: 또는 https://)가 없다")
             try:
-                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds)
+                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds, allow_private_hosts=settings.push_allow_private_hosts)
             except ValueError as e:
                 raise ConfigError(str(e)) from None
         self.alerts = AlertService(self.alert_store, AlertHub(), push, settings.push_timeout_seconds)
@@ -130,7 +130,7 @@ class App:
         if result_token in (api_token, staff_token) or risk_token in (api_token, staff_token) or (result_token and result_token == risk_token):
             raise ConfigError("토큰은 역할마다 서로 달라야 한다")
         self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
-                             result_token=result_token, risk_token=risk_token, require_subject_ref=settings.require_subject_ref,
+                             result_token=result_token, risk_token=risk_token, require_subject_ref=settings.require_subject_ref, push_allow_private=settings.push_allow_private_hosts,
                              retry_after_seconds=settings.retry_after_seconds, state_poll_min_interval=settings.state_poll_min_interval_seconds,
                              max_inflight=settings.api_max_inflight,
                              max_utterance_chars=settings.api_max_utterance_chars)

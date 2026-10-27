@@ -72,7 +72,7 @@ def test_risk_stop_is_persisted_with_only_session_and_kind(ar):
     ar.start()
     q = ar.hub.subscribe()
     code, fi, _ = ar.risk()
-    assert code == 200 and fi["turn_failure_signal"] is None and fi["response_text"]
+    assert code == 200 and fi["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED"} and fi["response_text"]       # 위험 정지 + 알림 전달: 키오스크가 대기 화면으로 가도록 DELIVERED를 알린다(H-2)
     code, body, _ = ar.call("GET", "/v1/staff/alerts")
     assert code == 200 and len(body["items"]) == 1 and body["next_cursor"] is None
     a = body["items"][0]
@@ -99,7 +99,7 @@ def test_no_delivery_path_is_delivery_failed_but_alert_is_stored(ar):
 def test_sse_connection_makes_it_delivered(ar):
     ar.start()
     ar.hub.subscribe()
-    assert ar.risk()[1]["turn_failure_signal"] is None
+    assert ar.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED"}
     assert ar.service.status()["delivered"] == 1 and ar.service.status()["sse_connections"] == 1
 
 
@@ -109,7 +109,7 @@ def test_push_accepted_makes_it_delivered_and_payload_is_minimal(tmp_path):
     try:
         r.store.upsert_subscription({"endpoint": "https://push.example/1", "keys": {"p256dh": "a", "auth": "b"}})
         r.start()
-        assert r.risk()[1]["turn_failure_signal"] is None and len(push.sent) == 1
+        assert r.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED"} and len(push.sent) == 1
         sub, payload = push.sent[0]
         body = json.loads(payload)
         assert set(body) == {"type", "alert_id", "session_id", "kind"} and body["session_id"] == "K1" and body["kind"] == "RISK_STOP"
@@ -261,8 +261,8 @@ def test_list_pagination_newest_first_and_validation(ar):
 
 def test_staff_routes_need_staff_token(ar):
     for method, path, body in [("GET", "/v1/staff/alerts", None),
-                               ("POST", "/v1/staff/push-subscriptions", {"endpoint": "https://p/1", "keys": {"p256dh": "a", "auth": "b"}}),
-                               ("DELETE", "/v1/staff/push-subscriptions?endpoint=https://p/1", None)]:
+                               ("POST", "/v1/staff/push-subscriptions", {"endpoint": "https://p.example/1", "keys": {"p256dh": "a", "auth": "b"}}),
+                               ("DELETE", "/v1/staff/push-subscriptions?endpoint=https://p.example/1", None)]:
         assert ar.call(method, path, body, auth=AUTH)[0] == 403                 # 키오스크 토큰
         assert ar.call(method, path, body, auth="Bearer nope")[0] == 401
         assert ar.call(method, path, body, auth="")[0] == 401
@@ -291,9 +291,9 @@ def test_subscription_register_is_idempotent_and_delete(ar):
 
 
 @pytest.mark.parametrize("body", [
-    {"endpoint": "http://insecure/1", "keys": {"p256dh": "a", "auth": "b"}}, {"endpoint": "https://p/1"},
-    {"endpoint": "https://p/1", "keys": {"p256dh": "a"}}, {"keys": {"p256dh": "a", "auth": "b"}},
-    {"endpoint": "https://p/1", "keys": {"p256dh": "a", "auth": "b"}, "extra": 1}, {"endpoint": 5, "keys": {}},
+    {"endpoint": "http://insecure/1", "keys": {"p256dh": "a", "auth": "b"}}, {"endpoint": "https://p.example/1"},
+    {"endpoint": "https://p.example/1", "keys": {"p256dh": "a"}}, {"keys": {"p256dh": "a", "auth": "b"}},
+    {"endpoint": "https://p.example/1", "keys": {"p256dh": "a", "auth": "b"}, "extra": 1}, {"endpoint": 5, "keys": {}},
 ])
 def test_subscription_validation(ar, body):
     assert ar.call("POST", "/v1/staff/push-subscriptions", body)[0] == 400 and ar.store.count_subscriptions() == 0
@@ -302,9 +302,9 @@ def test_subscription_validation(ar, body):
 def test_subscription_limit(ar):
     ar.api.max_subscriptions = 2
     for i in range(2):
-        assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "endpoint": f"https://p/{i}"})[0] == 201
-    assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "endpoint": "https://p/9"})[0] == 409
-    assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "endpoint": "https://p/0"})[0] == 201           # 기존 구독 갱신은 허용
+        assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "endpoint": f"https://p.example/{i}"})[0] == 201
+    assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "endpoint": "https://p.example/9"})[0] == 409
+    assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "endpoint": "https://p.example/0"})[0] == 201           # 기존 구독 갱신은 허용
 
 
 # ---------------------------------------------------------------- 실제 웹 푸시 전송(pywebpush) 로컬 푸시 서비스로
@@ -347,7 +347,7 @@ class PushService:
 def test_webpush_sender_against_local_push_service(status, expected):
     ps = PushService(status)
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=3)
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=3, allow_private_hosts=True)
         payload = json.dumps({"type": "alert", "alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
         assert sender.send({"endpoint": ps.url, "keys": _client_keys()}, payload) == expected
         hdr, body = ps.requests[0]
@@ -359,7 +359,7 @@ def test_webpush_sender_against_local_push_service(status, expected):
 
 
 def test_webpush_sender_bad_subscription_is_failed_not_crash():
-    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com")
+    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", allow_private_hosts=True)
     assert sender.send({"endpoint": "http://127.0.0.1:1/x", "keys": {"p256dh": "zz", "auth": "zz"}}, b"{}") == "FAILED"
 
 
@@ -461,7 +461,7 @@ def test_sse_streams_new_alerts_resolves_and_heartbeats(live):
     sse = Sse(port)
     time.sleep(0.2)
     code, fi = start_and_risk(port, "K1", "t-1")
-    assert code == 200 and fi["turn_failure_signal"] is None                      # SSE 연결이 있어 DELIVERED
+    assert code == 200 and fi["turn_failure_signal"]["staff_alert"] == "DELIVERED"      # SSE 연결이 있어 DELIVERED
     i1, ev, alert = sse.next()
     assert ev == "alert" and alert["session_id"] == "K1" and alert["kind"] == "RISK_STOP" and i1 >= 1
     assert api(port, "POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, token="test-staff-token")[0] == 200

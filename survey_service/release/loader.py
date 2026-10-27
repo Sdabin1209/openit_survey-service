@@ -31,6 +31,10 @@ from .registry import ReleaseRegistry
 log = logging.getLogger("survey_service.release")
 
 
+# 서비스가 직접 환자 화면에 내보내는 고정 문장(graph.py의 _fixed 호출). 문항 세트에 없으면 적재를 거부한다.
+REQUIRED_FIXED_SENTENCES = ("RISK_NOTICE", "CALL_STAFF", "RESUME", "SURVEY_STOPPED")
+
+
 class LoadRejected(Exception):
     def __init__(self, code: str, detail: str = "", *, retryable: bool = False) -> None:
         super().__init__(f"{code}: {detail}")
@@ -227,6 +231,10 @@ class ReleaseLoader:
             raise LoadRejected("INTEGRITY_ERROR", "문항 세트 해시가 매니페스트와 다르다")
         if str(bank["version"]) != str(manifest["question_set"]["version"]):
             raise LoadRejected("INVALID_RECORD", "문항 세트 버전이 ArtifactRef와 다르다")
+        have = {f["key"] for f in bank["session_settings"]["fixed_sentences"] if isinstance(f.get("sentence"), str) and f["sentence"].strip()}
+        missing = sorted(set(REQUIRED_FIXED_SENTENCES) - have)
+        if missing:      # 위험 정지 안내·직원 호출·재개·종료 안내가 비면 환자 화면이 비므로 적재 단계에서 거부한다(감사 I3)
+            raise LoadRejected("MISSING_FIXED_SENTENCE", "필수 고정 문장이 없거나 비어 있다: " + ", ".join(missing))
 
     def _check_library_versions(self, manifest: dict) -> list:
         """게이트가 승인한 동작과 서비스 동작이 달라지지 않게(I4): turn-engine·model-runtime의 MAJOR.MINOR가 설치본과 다르면 거부,

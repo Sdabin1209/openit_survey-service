@@ -75,6 +75,7 @@ class Settings:
     alert_db: str = ""                                 # 직원 알림 영속 저장(SQLite). 비우면 세션 DB와 같은 디렉터리의 alerts.db
     vapid_private_key_env: str = "SURVEY_VAPID_PRIVATE_KEY"   # 웹 푸시 VAPID 비밀키가 든 환경 변수의 이름(없으면 푸시 없이 SSE만)
     vapid_subject: str = ""                            # mailto:... 또는 https://... (비밀 아님)
+    push_allow_private_hosts: bool = False        # 개발·시험 전용: 웹 푸시 endpoint가 사설·내부 주소여도 허용(운영은 false: SSRF 방어)
     push_timeout_seconds: float = 3.0
     sse_heartbeat_seconds: float = 15.0          # ': ping' 주석을 보내는 간격
     retry_after_seconds: int = 1                 # 429·503 응답의 Retry-After(초)
@@ -125,6 +126,7 @@ class Settings:
             vapid_private_key_env=env.get("SURVEY_VAPID_PRIVATE_KEY_ENV", "SURVEY_VAPID_PRIVATE_KEY"),
             vapid_subject=env.get("SURVEY_VAPID_SUBJECT", ""),
             push_timeout_seconds=_float(env, "SURVEY_PUSH_TIMEOUT_SECONDS", 3.0),
+            push_allow_private_hosts=env.get("SURVEY_PUSH_ALLOW_PRIVATE_HOSTS", "").strip().lower() in ("1", "true", "yes", "on"),
             retry_after_seconds=_int(env, "SURVEY_RETRY_AFTER_SECONDS", 1, 1),
             state_poll_min_interval_seconds=float(env.get("SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS", "0.5")),
             sse_heartbeat_seconds=_float(env, "SURVEY_SSE_HEARTBEAT_SECONDS", 15.0),

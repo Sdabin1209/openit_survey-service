@@ -37,6 +37,7 @@ from boundary_contracts import PIPELINE_SCHEMA_VERSION
 
 from .alerts import KIND_MAP, AlertService
 from .store.effects import model_key
+from . import netguard
 from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
 from .orchestrator import Orchestrator
 
@@ -67,7 +68,7 @@ def _err(code: str, message: str, status: Optional[int] = None, headers: Optiona
 class PublicApi:
     def __init__(self, orchestrator: Orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
                  max_utterance_chars: int = 1000, alerts: Optional[AlertService] = None, max_subscriptions: int = 100,
-                 retry_after_seconds: int = 1, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
+                 retry_after_seconds: int = 1, push_allow_private: bool = False, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
                  risk_token: Optional[str] = None, require_subject_ref: bool = False) -> None:
         if not token:
             raise ValueError("공개 API 토큰이 비어 있다")
@@ -81,6 +82,7 @@ class PublicApi:
         self.alerts, self.max_subscriptions = alerts, max_subscriptions
         self.max_chars = max_utterance_chars
         self.retry_after = max(1, int(retry_after_seconds))
+        self.push_allow_private = push_allow_private     # 개발·시험 전용(내부 푸시 대역). 운영 기본은 false
         self.state_poll_min_interval = state_poll_min_interval
         self._polls: dict[str, float] = {}
         self._poll_lock = threading.Lock()
@@ -561,6 +563,10 @@ class PublicApi:
         ep, keys = body.get("endpoint"), body.get("keys")
         if not isinstance(ep, str) or not ep.startswith("https://") or len(ep) > 2048:
             return _err("INVALID_RECORD", "endpoint는 https URL이어야 한다")
+        if not self.push_allow_private:
+            why = netguard.endpoint_syntax_error(ep)             # 사설·내부 주소로 서버가 요청을 보내게 하지 못한다(SSRF, 감사 B6). 해석 검사는 보낼 때 한다
+            if why:
+                return _err("INVALID_RECORD", why)
         if not isinstance(keys, dict) or not all(isinstance(keys.get(k), str) and keys.get(k) for k in ("p256dh", "auth")):
             return _err("INVALID_RECORD", "keys.p256dh와 keys.auth가 있어야 한다")
         unknown = set(body) - {"endpoint", "keys", "expirationTime"}

@@ -155,7 +155,9 @@ class Orchestrator:
                 return replay
             out = self._process(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
             try:
-                if out.cacheable and not ctx.cancelled.is_set():      # 마감으로 끝낸 턴의 늦은 결과는 고정하지 않는다(같은 turn_id 재전송이 새로 처리된다)
+                sig = (out.orchestrator_output or {}).get("turn_failure_signal") or {}
+                # 확정된 턴만 멱등 재생한다(CR-D25): 확정되지 못한 턴(NOT_COMMITTED: 모델 단계 실패 등)은 결과를 고정하지 않아 같은 turn_id 재전송이 새로 처리된다
+                if out.cacheable and sig.get("write_committed") != "NOT_COMMITTED" and not ctx.cancelled.is_set():      # 마감으로 끝낸 턴의 늦은 결과는 고정하지 않는다(같은 turn_id 재전송이 새로 처리된다)
                     self.store.save_turn_result(sid, turn_id, input_hash, {
                         "orchestrator_output": out.orchestrator_output, "frontend_input": out.frontend_input,
                         "staff_console_input": out.staff_console_input, "release_id": out.release_id})
