@@ -116,7 +116,7 @@ def _is_num(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x and abs(x) <= _MAX_NUM
 
 
-def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank]) -> list[Violation]:
+def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank], flow: Optional[Flow] = None) -> list[Violation]:
     """turn-engine의 validate_extraction 뒤에 서비스가 한 번 더 보는 값 타당성(감사 TE-1, D88): 위반이면 값을 저장하지 않고 같은 요청을 1회 재시도, 그래도면 턴 NOT_COMMITTED.
     (1) 저장하는 값의 칸이 현재 문항이어야 한다(정정은 예외: status CORRECTION 또는 action CORRECT). (2) 값이 Value 형식이고 합리적인 크기다.
     (3) 슬롯 정의가 아는 만큼 타입이 맞는다: choices는 그 목록의 문자열, yes_no_map은 불리언(또는 yes/no 문자열), units는 단위가 목록에 있는 양 또는 숫자.
@@ -127,6 +127,13 @@ def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank]) -> list[Vi
     cur_q = doc["progress_record"]["current_question_id"]
     # 한 발화가 문항과 그 후속 문항(Q4와 Q4_1, Q1.D01과 Q1.D02)을 함께 채우는 것은 정상이다: 현재 문항과 next_item의 같은 계열(Q4_1 -> Q4, Q1.D01 -> Q1)까지 허용한다
     fams = {_family(cur_q)} | ({_family(output["next_item"])} if output.get("next_item") not in (None, "END") else set())
+    span: set = set()                    # 한 발화가 여러 문항을 한꺼번에 답하면(예: 운동 문항 세 개를 '안 해요') 현재 문항에서 next_item 사이의 문항도 정상이다 (C1 학습 데이터 대조에서 확인)
+    if flow is not None and cur_q in flow.table.order:
+        order = list(flow.table.order)
+        i = order.index(cur_q)
+        nxt = output.get("next_item")
+        j = len(order) - 1 if nxt == "END" else (order.index(nxt) if nxt in order else i)
+        span = set(order[i:max(i, j) + 1])
     answers = effects.answers_by_key(doc["answer_records"])
     is_corr_action = output.get("action") == "CORRECT"
     for i, v in enumerate(output["values"]):
@@ -134,7 +141,7 @@ def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank]) -> list[Vi
             continue
         path = f"values/{i}"
         ref = effects.slot_ref(v["key"])
-        if _family(ref["question_id"]) not in fams and not (is_corr_action or v["status"] == "CORRECTION"):
+        if _family(ref["question_id"]) not in fams and ref["question_id"] not in span and not (is_corr_action or v["status"] == "CORRECTION"):
             out.append(Violation("OUT_OF_CURRENT_ITEM", f"{path}/key", "현재 문항이 아닌 칸을 정정이 아닌데 저장하려 한다"))
             continue
         val = v["value"]

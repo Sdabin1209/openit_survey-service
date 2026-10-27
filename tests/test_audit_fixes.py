@@ -238,3 +238,18 @@ def test_extract_input_is_trimmed_to_the_model_runtime_limit():
     sent = rig.session.extract_requests[-1]
     assert len(__import__("json").dumps(sent, ensure_ascii=False)) <= 600 and rig.orch.counters.get("extract_input_truncated") == 1
     assert sent["user_utterance"].startswith("가가가")
+
+
+def test_one_utterance_may_answer_several_following_items_up_to_next_item():
+    """C1 학습 데이터 대조에서 확인: '운동 안 해요' 한 말이 Q8_1·Q9_1·Q10을 함께 채우고 next_item이 END인 정상 정답이 있다. 현재 문항에서 next_item까지의 문항 저장은 거부하지 않는다."""
+    from survey_service import extraction
+    from survey_service.assembly import Bank
+    from survey_service.flow import load_flow
+    from .sample_bank import sample_bank
+    flow, bank = load_flow(), Bank(sample_bank())
+    from survey_service.store import effects
+    doc = effects.initial_state("S", bank.raw, "Q8_1")
+    out = ext("NEXT", "END", val("Q8_1.days", 0), val("Q9_1.days", 0), val("Q10.days", 0))
+    assert extraction.check_values(out, doc, bank, flow) == []
+    out2 = ext("NEXT", "Q8_2", val("Q8_1.days", 3), val("Q1.D01.diagnosed", True))                 # 앞 문항(범위 밖)은 여전히 거부
+    assert [v.code for v in extraction.check_values(out2, doc, bank, flow)] == ["OUT_OF_CURRENT_ITEM"]

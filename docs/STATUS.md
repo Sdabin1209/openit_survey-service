@@ -157,3 +157,7 @@
 - 한 일/확인: docs/boundary.md §5·§6와 CHANGELOG 참조. 시험 `tests/test_fault_a6_a8_a10.py`.
 - 확인하지 못한 것: 실제 compose의 수집 서버·gateway를 거친 동작, SSE의 gateway·브라우저 재연결, 동시 SSE 연결 수 상한(없음), 사본이 있어도 I4 없이는 시작 직후 적재하지 못하는 한계의 설계 결정.
 - gpu-dev의 test_graph 실패: 이 PC에서 lock 제약 없이 설치하면 langgraph가 1.2.18로 풀려 같은 시험이 실패함을 재현했다(`-c requirements.lock`으로 설치하면 통과). gpu-dev 접속은 하지 않았다.
+
+## 2026-10-28 학습 데이터(C1) 대조
+
+- 결과 표와 원인은 docs/boundary.md §5 '학습 데이터(C1 빌드) 대조'. 값 검증이 정상 정답 2행(0.006%)을 거부한 것을 찾아 고쳤다(현재 문항에서 next_item까지 저장 허용). 못 한 것: 실제 문항 세트(선택지·단위 정의)로의 재대조.
