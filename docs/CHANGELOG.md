@@ -1,5 +1,9 @@
 # 변경 이력
 
+## model-runtime v0.6.3 맞춤 [미출시, 푸시·태그 전]
+
+- 의존을 model-runtime v0.6.3으로(requirements, build_wheels 기본 태그, 이미지 라벨, 문서 표기). 코드 변경 없음.
+
 ## model-runtime v0.6.2 맞춤 (브랜치 follow-mr-0.6.2) [미출시, 푸시·태그 전]
 
 - 의존을 model-runtime v0.6.2로(requirements, build_wheels 기본 태그, 이미지 라벨 `io.openit.model-runtime=v0.6.2`; D72·D80). 라이브러리 API 변화 없음. 코드 변경은 주석·문서의 버전 표기뿐.
