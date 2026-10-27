@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Callable, Iterable, Mapping, Optional, Protocol
 
 from .errors import StoreError, SurveyServiceError
+from .risk_rules import rule_id_of
 
 log = logging.getLogger("survey_service.alerts")
 
@@ -43,6 +44,20 @@ CREATE TABLE IF NOT EXISTS alert_events (
   type TEXT NOT NULL,
   alert_n INTEGER NOT NULL,
   payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS session_timeline (
+  session_id TEXT NOT NULL,
+  turn_index INTEGER NOT NULL,
+  turn_id TEXT,
+  at TEXT NOT NULL,
+  PRIMARY KEY (session_id, turn_index)
+);
+CREATE TABLE IF NOT EXISTS staff_access_log (
+  n INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  role TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  outcome TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   endpoint TEXT PRIMARY KEY,
@@ -76,6 +91,8 @@ class AlertStore:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=FULL")
             self._db.executescript(_SCHEMA)
+            if "rule_id" not in [r[1] for r in self._db.execute("PRAGMA table_info(alerts)").fetchall()]:      # 이전 파일 이행
+                self._db.execute("ALTER TABLE alerts ADD COLUMN rule_id TEXT")
         except sqlite3.Error as e:
             raise StoreError(f"알림 DB를 열 수 없다: {type(e).__name__}") from e
 
@@ -119,11 +136,12 @@ class AlertStore:
                                (etype, n, json.dumps(alert, ensure_ascii=False)))
         return {"type": etype, "id": cur.lastrowid, "alert": alert}      # SSE의 id는 이벤트 순번이다(알림·해결 이벤트가 각각 하나씩 증가)
 
-    def create(self, session_id: str, kind: str) -> dict:
-        """알림 행과 이벤트 행을 한 트랜잭션으로 쓴다. 돌려주는 값: 이벤트 {type: alert, id: 이벤트 순번, alert}."""
+    def create(self, session_id: str, kind: str, rule_id: Optional[str] = None) -> dict:
+        """알림 행과 이벤트 행을 한 트랜잭션으로 쓴다. 돌려주는 값: 이벤트 {type: alert, id: 이벤트 순번, alert}.
+        rule_id(위험 규칙 id, 발화 원문 아님)는 알림 행에만 남고 목록·SSE의 알림 모양은 그대로다(직원 세션 조회가 읽는다)."""
         def fn():
-            cur = self._db.execute("INSERT INTO alerts(session_id, kind, created_at) VALUES (?,?,?)",
-                                   (session_id, kind, _iso(self._clock())))
+            cur = self._db.execute("INSERT INTO alerts(session_id, kind, created_at, rule_id) VALUES (?,?,?,?)",
+                                   (session_id, kind, _iso(self._clock()), rule_id))
             return self._event("alert", cur.lastrowid)
         return self._txn(fn)
 
@@ -166,6 +184,33 @@ class AlertStore:
     def trim_events(self, keep: int = 10000) -> int:
         """오래된 이벤트를 지운다(Last-Event-ID로 이어 받을 수 있는 범위는 최근 keep개). 알림 행은 지우지 않는다."""
         return self._txn(lambda: self._db.execute("DELETE FROM alert_events WHERE id<=(SELECT COALESCE(MAX(id),0)-? FROM alert_events)", (keep,)).rowcount)
+
+    # ---- 직원 세션 조회(StaffSessionView)용
+    def alerts_of_session(self, session_id: str) -> list[dict]:
+        """그 세션의 알림(오래된 것부터). rule_id가 없는 알림은 null."""
+        rows = self._read("SELECT n, kind, status, created_at, rule_id FROM alerts WHERE session_id=? ORDER BY n", (session_id,))
+        return [{"alert_id": f"al-{r[0]}", "kind": r[1], "status": r[2], "created_at": r[3], "rule_id": r[4]} for r in rows]
+
+    def record(self, session_id: str, turn_index: int, turn_id: Optional[str]) -> None:
+        """세션 문서에 없는 시각을 남긴다. turn_index -1은 세션 생성, 0 이상은 대화 로그 항목의 위치. 같은 키는 처음 값을 지킨다(멱등)."""
+        self._txn(lambda: self._db.execute("INSERT OR IGNORE INTO session_timeline(session_id, turn_index, turn_id, at) VALUES (?,?,?,?)",
+                                           (session_id, turn_index, turn_id, _iso(self._clock()))))
+
+    def timeline(self, session_id: str) -> dict[int, dict]:
+        rows = self._read("SELECT turn_index, turn_id, at FROM session_timeline WHERE session_id=?", (session_id,))
+        return {r[0]: {"turn_id": r[1], "at": r[2]} for r in rows}
+
+    def log_access(self, role: str, session_id: str, outcome: str) -> None:
+        """환자 데이터 조회 기록: (시각, 토큰의 역할 이름, session_id, 결과). 토큰 값·발화 내용은 넣지 않는다. 실패하면 StoreError."""
+        self._txn(lambda: self._db.execute("INSERT INTO staff_access_log(at, role, session_id, outcome) VALUES (?,?,?,?)",
+                                           (_iso(self._clock()), role, session_id, outcome)))
+
+    def access_log(self, session_id: Optional[str] = None, limit: int = 100) -> list[dict]:
+        q, args = "SELECT n, at, role, session_id, outcome FROM staff_access_log", []
+        if session_id:
+            q += " WHERE session_id=?"; args.append(session_id)
+        rows = self._read(q + " ORDER BY n DESC LIMIT ?", args + [limit])
+        return [{"n": r[0], "at": r[1], "role": r[2], "session_id": r[3], "outcome": r[4]} for r in rows]
 
     # ---- 푸시 구독
     def upsert_subscription(self, sub: Mapping) -> bool:
@@ -276,10 +321,10 @@ class AlertService:
             self.stats[k] += n
 
     # ---- 만들기와 전달
-    def raise_alert(self, session_id: str, staff_alert_kind: str) -> dict:
+    def raise_alert(self, session_id: str, staff_alert_kind: str, rule_id: Optional[str] = None) -> dict:
         """알림을 저장하고 구독자에게 보낸다. 닿은 경로가 없으면 DeliveryFailed(알림은 저장된 채)."""
         kind = KIND_MAP.get(staff_alert_kind, staff_alert_kind)
-        event = self.store.create(session_id, kind)         # StoreError는 그대로 올라간다(저장 실패 = 전달 실패)
+        event = self.store.create(session_id, kind, rule_id)         # StoreError는 그대로 올라간다(저장 실패 = 전달 실패)
         self._count("created")
         live = self.hub.publish(event)
         pushed = self._push(event)
@@ -356,4 +401,4 @@ class AlertStaffConsole:
         sa = console_input.get("staff_alert")
         if sa is None:
             return
-        self.service.raise_alert(sa["session_id"], sa["staff_alert"]["kind"])
+        self.service.raise_alert(sa["session_id"], sa["staff_alert"]["kind"], rule_id_of(sa["staff_alert"]))

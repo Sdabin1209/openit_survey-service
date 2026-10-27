@@ -103,3 +103,12 @@
 - 시험: pytest 403 통과, smoke.sh OK, smoke_compose.sh OK (이 PC 한 곳).
 - 남은 일: A state 묶음 순서 13행의 원인(학습 데이터 생성 규칙 확인 필요), 두 번째 환경 확인.
 - **현재 기준 (2026-10-27 확인, 위 기록은 당시 값)**: 의존 태그는 `requirements.txt` 기준 boundary-contracts v2.0.2 / turn-engine v0.4.0 / model-runtime v0.7.1. 시험은 `pytest --collect-only`로 수집 415개. 403은 당시 통과 수였고 415개의 통과 여부는 이번에 돌리지 않아 미확인. smoke 결과도 이후 갱신 여부 미확인.
+
+## 후속 구간 9 (직원 세션 조회, 위험 규칙 엔진, 위반 관측, 조사)
+
+- 한 일: 직원 세션 조회 `GET /v1/staff/sessions/{id}`(`StaffSessionView` 스키마 추가, 호출마다 접근 기록, CR-013), 위험 규칙 파일 입력원 `SURVEY_RISK_RULES_FILE`(기본 파일 없음, 오류는 시작 거부, `/readyz`에 version·sha256·규칙 개수), 의미 검증 위반 코드의 로그·`/readyz` 카운터, 추론 타임아웃 분류 정정(원인: 추론 타임아웃 기본 4초 + 시간만 보던 분류), 결과 전달 대상 없음을 오류가 아닌 상태로. 자세한 이유는 CHANGELOG.
+- 시험: `.venv/bin/python -m pytest -o addopts=""` 448 통과(이전 415). `bash scripts/smoke.sh` SMOKE OK (이 PC 한 환경). `smoke_compose.sh`는 돌리지 않았다.
+- 확인하지 못한 것: 5.65초 timeout이 실제로 어느 경우(읽기 타임아웃, 느린 5xx, 재적재 대기)였는지(당시 로그에 reason 없음, gpu-dev 접속 금지), 프런트가 `StaffSessionView`의 null 허용(`created_at`·`turn_id`·`at`)과 `values[].status` 값을 받아들이는지, 두 번째 깨끗한 환경에서의 재현.
+- 한계: 위험 규칙은 A 출력 검증을 통과한 턴에서만 평가된다. 알림 DB(`alerts.db`)가 조회의 시각·접근 기록 원본이 되었다(PostgreSQL 이전 때 함께 옮겨야 한다).
+- 미정(헤드): CR-013(PUBLIC_API.md 반영), 정수 버전은 올리지 않았다(근거 CHANGELOG), 규칙을 검증 앞에서 평가할지.
+- 푸시·태그는 하지 않았다.

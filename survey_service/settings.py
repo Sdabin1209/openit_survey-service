@@ -49,6 +49,7 @@ class Settings:
     staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
     result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
     risk_source: str = ""           # 선택 팩토리(RiskSource). 없으면 직원 알림의 입력원이 없다(v2 A 출력에는 위험 신호가 없다, CR-012). /readyz에 드러난다
+    risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
     release_poll_seconds: float = 5.0
     startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
     release_retry_base_seconds: float = 5.0       # 일시적 적재 실패의 재시도 백오프 시작
@@ -96,6 +97,7 @@ class Settings:
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
             result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""), risk_source=env.get("SURVEY_RISK_SOURCE", ""),
+            risk_rules_file=env.get("SURVEY_RISK_RULES_FILE", ""),
             release_reader_url=env.get("SURVEY_RELEASE_READER_URL", ""),
             release_reader_token_env=env.get("SURVEY_RELEASE_READER_TOKEN_ENV", "SURVEY_RELEASE_READER_TOKEN"),
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),
@@ -134,6 +136,8 @@ class Settings:
                                 ("SURVEY_TRACE_INGEST", s.trace_ingest, s.trace_ingest_url)):
             if spec == "http" and not url:
                 missing.append(name + "_URL")
+        if s.risk_rules_file and s.risk_source:
+            raise ConfigError("SURVEY_RISK_RULES_FILE과 SURVEY_RISK_SOURCE는 함께 쓸 수 없다(입력원은 하나)")
         if missing:
             raise ConfigError("필수 환경 변수가 없다: " + ", ".join(missing))
         return s

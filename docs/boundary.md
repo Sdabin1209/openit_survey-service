@@ -13,7 +13,7 @@
 |---|---|
 | 문진 스키마 패키지 | 배포 이름 `openit-survey-schema`, import `survey_schema`. `load_schema(name, version=1)`, `schema_dir(version=1)`(model-runtime `load(schema_dir=...)`에 넘기는 `<계약명>.json`이 있는 디렉터리), `contract_version_dir`, `available_versions`, `current_version`, `list_schemas`. 정수 버전별 디렉터리 `survey_schema/v1/`. 설치: Git 태그 + `#subdirectory=schema`(태그는 헤드가 붙인다). |
 | SDK 인터페이스 | **없다**(brief §2). 이웃이 서비스의 내부 저장소를 읽지 않는다. 따라서 이 영역의 메모리 구현(가짜 SDK)도 없다. 이웃이 이 영역을 흉내 낼 일은 공개 API(I10)가 정해진 뒤의 몫이다. |
-| 공개 API(I10) | `boundary-contracts/PUBLIC_API.md`(D55): `POST /v1/sessions`, `POST /v1/sessions/{id}/turns`, `POST /v1/sessions/{id}/end`, `GET /v1/sessions/{id}/state`(키오스크), `POST /v1/sessions/{id}/intervention`(역할 staff, 멈춘 세션만), 직원 알림 `GET /v1/staff/alerts`, `GET /v1/staff/alerts/stream`(SSE), `GET /v1/staff/push-config`, `POST/DELETE /v1/staff/push-subscriptions`(모두 staff), `GET /healthz`, `/readyz`. Bearer 토큰(키오스크/직원 두 개). 해석은 CR-009 |
+| 공개 API(I10) | `boundary-contracts/PUBLIC_API.md`(D55): `POST /v1/sessions`, `POST /v1/sessions/{id}/turns`, `POST /v1/sessions/{id}/end`, `GET /v1/sessions/{id}/state`(키오스크), `POST /v1/sessions/{id}/intervention`(역할 staff, 멈춘 세션만), 직원 알림 `GET /v1/staff/alerts`, `GET /v1/staff/alerts/stream`(SSE), `GET /v1/staff/push-config`, `POST/DELETE /v1/staff/push-subscriptions`, 세션 기록 조회 `GET /v1/staff/sessions/{id}`(응답 `StaffSessionView`, 호출마다 접근 기록, PUBLIC_API.md 반영 요청은 CR-013)(모두 staff), `GET /healthz`, `/readyz`. Bearer 토큰(키오스크/직원 두 개). 해석은 CR-009 |
 | 개발용 CLI | `python -m survey_service.cli`(공개 API가 아니다) |
 
 ## 3. 소비하는 것과 지원 버전
@@ -39,12 +39,14 @@
 - 같은 (세션 ID, 턴 ID)의 재전송은 같은 결과(이중 저장 없음). 같은 턴 ID에 다른 입력이면 `TurnIdConflict`.
 - 한 턴 동안 문항 저작·합성 데이터·모델 개발·게이트를 호출하지 않는다.
 
-- **직원 알림 입력원 포트(G01)**: `survey_service.ports.RiskSource.check(*, extract_input, extract_output, utterance) -> Optional[Mapping]`. 발화가 검증을 통과한 턴마다 불리고, `StaffAlert`(`{"kind": "RISK"|"CALL_STAFF"|"USER_CALLED_STAFF", "reasons": [...]}`) 또는 None을 돌려준다. `RISK`는 세션을 정지시키고 고정 문장 `RISK_NOTICE`를 쓴다(reasons는 `RISK_SIGNAL`/`RISK_RULE`). 다른 kind는 정지 없이 알림만 낸다. 예외를 던지면 그 턴은 알림 없이 진행하고 `risk_source_error`를 센다. 같은 입력에는 같은 결과를 내야 하고 환자 발화 원문을 알림에 담지 않는다. 구현은 `SURVEY_RISK_SOURCE=모듈:함수`(인자 없는 팩토리)로 고르고, 기본은 없음(비활성)이다. 어떤 입력원을 쓸지는 정해지지 않았다.
+- **직원 알림 입력원 포트(G01)**: `survey_service.ports.RiskSource.check(*, extract_input, extract_output, utterance) -> Optional[Mapping]`. 발화가 검증을 통과한 턴마다 불리고, `StaffAlert`(`{"kind": "RISK"|"CALL_STAFF"|"USER_CALLED_STAFF", "reasons": [...]}`) 또는 None을 돌려준다. `RISK`는 세션을 정지시키고 고정 문장 `RISK_NOTICE`를 쓴다(reasons는 `RISK_SIGNAL`/`RISK_RULE`). 다른 kind는 정지 없이 알림만 낸다. 예외를 던지면 그 턴은 알림 없이 진행하고 `risk_source_error`를 센다. 같은 입력에는 같은 결과를 내야 하고 환자 발화 원문을 알림에 담지 않는다. 구현은 `SURVEY_RISK_SOURCE=모듈:함수`(인자 없는 팩토리)로 고르고, 기본은 없음(비활성)이다. 어떤 입력원을 쓸지는 정해지지 않았다. 설정만으로 쓸 수 있는 규칙 파일 입력원이 있다: `SURVEY_RISK_RULES_FILE`(`survey_service/risk_rules.py`, `SURVEY_RISK_SOURCE`와 함께 쓸 수 없다). 기본 규칙 파일은 없고 이 영역은 임상 문구를 담지 않는다. 걸리면 알림 이유의 evidence에 발화 원문 대신 `rule:<규칙 id>`만 담는다.
 - **되묻기 상한(G12)**: `SURVEY_MAX_CONSECUTIVE_REASK`(기본 0=끔). 켜면 상한을 넘는 REASK·CONFIRM 대신 기존 직원 호출 경로(정지 `PAUSED_RISK`, `CALL_STAFF` 알림, 고정 문장 `CALL_STAFF`)를 쓴다. 값은 미정이다.
 
 ## 5. 이웃이 이 영역에 기대해서는 안 되는 것
 
-- **직원 알림은 지금 만들어지지 않는다**: v2의 A 출력에 위험 신호가 없어 입력원이 없다(CR-012, 헤드 결정 대기). `/readyz`의 `staff_alert_source.active`가 false다. 알림 API·SSE·푸시는 살아 있다.
+- **직원 알림은 지금 만들어지지 않는다**: v2의 A 출력에 위험 신호가 없어 입력원이 없다(CR-012, 헤드 결정 대기). `/readyz`의 `staff_alert_source.active`가 false다. 알림 API·SSE·푸시는 살아 있다. 규칙 파일(`SURVEY_RISK_RULES_FILE`)을 주면 활성이 되고 `/readyz`의 `staff_alert_source`에 `rule_count`, `version`, `sha256`이 나온다. 규칙은 A 출력의 검증을 통과한 턴에서만 평가한다(검증 실패·A 호출 실패 턴의 발화에는 평가가 돌지 않는다. 한계).
+- **환자 데이터 조회와 접근 기록**: 직원 세션 조회는 호출마다 (시각, 역할 이름, session_id, 결과)를 알림 DB의 `staff_access_log`에 남기고, 남기지 못하면 데이터를 주지 않는다. 시각은 알림 DB의 `session_timeline`에 턴마다 남긴다(세션 문서에는 시각이 없다). 알림 DB는 이 조회와 접근 기록의 원본이므로 백업 대상이다.
+- **결과 전달 대상 없음은 오류가 아니다**: 결과 전달은 붙을 예정이라 대상이 없는 것이 지금의 정상 구성이다. 세션이 끝날 때 INFO 로그 `결과 전달 대상 없음`과 `/readyz`의 `result_dispatcher: {attached: false, status: NO_TARGET}`로 드러내고, 세션의 전달 기록은 `succeeded=false`로 남는다. 대상을 꽂았는데 실패하면 그때는 `결과 전달 실패`(경고)다.
 - 표 찾기 표(`ask` 문장 틀, 칸 설명)는 **미확정 초안**이다(`/readyz`의 `response_tables.status`).
 
 - 직원 개입은 위험으로 멈춘 세션에만 된다. 쓰기 반영 여부를 알 수 없는 커밋(`write_outcome: UNKNOWN`)은 결과를 고정하지 않으므로 같은 턴 ID 재시도가 다시 처리될 수 있다.

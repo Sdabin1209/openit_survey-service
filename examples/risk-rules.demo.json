@@ -1,0 +1,7 @@
+{
+  "_comment": "시험용, 임상 규칙 아님. 데모에서 위험 정지 경로를 눈으로 보기 위한 문구 하나다. 운영에 쓰지 않는다.",
+  "version": "demo-0",
+  "rules": [
+    {"id": "demo-test-phrase", "description": "시험용, 임상 규칙 아님: 위험 정지 경로 확인용 문구", "match": {"any_of": [{"contains": "시험위험문구"}]}}
+  ]
+}

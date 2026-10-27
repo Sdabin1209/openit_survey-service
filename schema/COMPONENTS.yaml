@@ -18,6 +18,7 @@ components:
   contracts:
     input: StaffConsoleInput
     output: InterventionDecision
+    view: StaffSessionView
 - name: Orchestrator
   title: LangGraph
   kind: 흐름 제어

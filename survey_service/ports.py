@@ -64,6 +64,9 @@ class UnconfiguredStaffConsole:
 
 
 class UnattachedDispatcher:
-    """결과 전달은 붙을 예정(COMPONENTS.yaml). 붙기 전에는 전달이 안 된 것으로 기록한다."""
+    """결과 전달은 붙을 예정(COMPONENTS.yaml): 대상이 없는 것은 정상 구성이다. graph는 attached=False를 보고 이 객체를 부르지 않고
+    '결과 전달 대상 없음'으로 기록한다(전달 기록은 succeeded=false). 직접 부르면 실패한다(성공으로 꾸미지 않는다)."""
+    attached = False
+
     def dispatch(self, dispatch_input: Mapping) -> Mapping:
         raise RuntimeError("결과 전달이 붙어 있지 않다")

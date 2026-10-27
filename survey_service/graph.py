@@ -348,6 +348,7 @@ class TurnGraph:
                 doc = effects.initial_state(sid, latest.bank, self.o.flow.table.order[0])
                 revision = self.o.store.create(sid, latest.release_id, doc)
                 created = copy.deepcopy(doc["session_info"])
+                self._timeline(sid, -1, st["turn_id"])
         except ReleaseUnavailable:
             if not found:
                 return {"fatal": "no_session"}
@@ -361,8 +362,9 @@ class TurnGraph:
                 "trace": {"session_before": copy.deepcopy(doc)}}
 
     # ------------------------------------------------------------------ 노드: 쓰기 확정까지
-    def _fail(self, st, step: str, e: Exception) -> list:
-        log.warning("턴 단계 실패 session=%s turn=%s step=%s error=%s", st["session_id"], st["turn_id"], step, type(e).__name__)
+    def _fail(self, st, step: str, e: Exception, detail: str = "") -> list:
+        log.warning("턴 단계 실패 session=%s turn=%s step=%s error=%s%s", st["session_id"], st["turn_id"], step, type(e).__name__,
+                    f" {detail}" if detail else "")
         self.o._count(f"step_failed.{step}")
         return _step_failed(("BEFORE_COMMIT", step))
 
@@ -416,10 +418,13 @@ class TurnGraph:
             tr["extract_status"] = "OK"
             return {"extract_next": "plan", "violations": [], "trace": tr}
         self.o._count("validation_violation")
+        self.o.count_violations(v["code"] for v in rec)
+        summary = "violations=" + ",".join(f"{v['code']}@{v['path']}" for v in rec[:10]) + (f",+{len(rec) - 10}" if len(rec) > 10 else "")
         if st["extract_calls"] < MAX_EXTRACT_CALLS:
+            log.info("의미 검증 위반 session=%s turn=%s attempt=%s %s", st["session_id"], st["turn_id"], st["extract_calls"], summary)   # 발화·값·메시지는 싣지 않는다
             return {"extract_next": "extract", "violations": rec, "extract_out": None, "trace": tr}
         tr["extract_status"] = "VIOLATION"
-        return {"extract_next": "finalize", "violations": rec, "failed": self._fail(st, "VALIDATE", RuntimeError("violation")), "trace": tr}
+        return {"extract_next": "finalize", "violations": rec, "failed": self._fail(st, "VALIDATE", RuntimeError("violation"), summary), "trace": tr}
 
     def n_plan_writes(self, st, config):
         """검증을 통과한 추출 결과에서 저장(save=true)과 진행 갱신을 계획하고, 응답 계획을 정한다. 판단은 하지 않는다."""
@@ -547,6 +552,14 @@ class TurnGraph:
         """결과 전달(문진이 끝나는 턴)."""
         din = assembly.dispatch_input(st["post_doc"])
         tr = {"dispatch_input": din}
+        if not getattr(self.o.dispatcher, "attached", True):
+            # 결과 전달 대상이 아직 없다(붙을 예정, 정상 구성). 오류가 아니라 명시된 상태로 기록한다. 전달 기록은 succeeded=false(전달되지 않았다)
+            log.info("결과 전달 대상 없음 session=%s turn=%s status=NO_TARGET", st["session_id"], st["turn_id"])
+            self.o._count("dispatch_no_target")
+            dout = {"dispatch_record": {"succeeded": False}}
+            tr["dispatch_output"] = copy.deepcopy(dout)
+            self._append_dispatch(st, False)
+            return {"dispatch_called": True, "trace": tr}
         try:
             dout = dict(self.o.dispatcher.dispatch(copy.deepcopy(din)))
             ok = bool(dout.get("dispatch_record", {}).get("succeeded"))
@@ -554,11 +567,14 @@ class TurnGraph:
             log.warning("결과 전달 실패 session=%s turn=%s error=%s", st["session_id"], st["turn_id"], type(e).__name__)
             dout, ok = {"dispatch_record": {"succeeded": False}}, False
         tr["dispatch_output"] = copy.deepcopy(dout)
+        self._append_dispatch(st, ok)
+        return {"dispatch_called": True, "trace": tr}
+
+    def _append_dispatch(self, st, ok: bool) -> None:
         try:
             self.o.store.append_dispatch(st["session_id"], {"succeeded": ok})
         except StoreError:
             log.error("전달 기록을 남기지 못했다 session=%s turn=%s", st["session_id"], st["turn_id"])
-        return {"dispatch_called": True, "trace": tr}
 
     def n_respond(self, st, config):
         """응답 문장: 모델(LoRA-B)이 쓰는 턴은 표 찾기로 ResponseRequest를 조립해 부르고, 고정 문장 턴은 문항 세트의 고정 문장을 쓴다."""
@@ -664,9 +680,22 @@ class TurnGraph:
             "intervention_result": intervention_result,
         }
 
+    def _timeline(self, sid: str, index: int, turn_id: str) -> None:
+        """직원 조회용 시각 기록(세션 문서에는 시각이 없다). 실패해도 턴은 계속된다."""
+        tl = self.o.timeline
+        if tl is None:
+            return
+        try:
+            tl.record(sid, index, turn_id)
+        except Exception as e:
+            log.warning("시각 기록 실패 session=%s error=%s", sid, type(e).__name__)
+            self.o._count("timeline_failed")
+
     def _append_log(self, st, entry: dict) -> None:
         try:
+            index = len(st["state_doc"]["dialogue_log"]) if st.get("state_doc") else len(st["loaded"]["state"]["dialogue_log"])
             self.o.store.append_log(st["session_id"], entry)
+            self._timeline(st["session_id"], index, st["turn_id"])
         except StoreError:
             log.error("대화 로그를 남기지 못했다 session=%s turn=%s", st["session_id"], st["turn_id"])
             self.o._count("log_append_failed")

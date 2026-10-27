@@ -25,6 +25,7 @@ from .inference import InferenceServer
 from .remote import RemoteInference
 from .orchestrator import Orchestrator
 from .release import ReleaseLoader, ReleaseRegistry
+from .risk_rules import RuleRiskSource
 from .settings import ConfigError, Settings, load_factory
 from .store.sqlite import SqliteSessionStore
 from .trace import Outbox, OutboxTraceSink, TraceExporter
@@ -103,10 +104,16 @@ class App:
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
         if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다
             console = AlertStaffConsole(self.alerts)
-        if risk_source is None and settings.risk_source:
+        if settings.risk_rules_file and settings.risk_source:
+            raise ConfigError("SURVEY_RISK_RULES_FILE과 SURVEY_RISK_SOURCE는 함께 쓸 수 없다(입력원은 하나)")
+        if risk_source is None and settings.risk_rules_file:
+            risk_source = RuleRiskSource.from_file(settings.risk_rules_file)        # 오류는 ConfigError: 시작을 거부한다
+            d = risk_source.describe()
+            log.info("위험 규칙 적재 version=%s rules=%s sha256=%s", d["version"], d["rule_count"], d["sha256"])
+        elif risk_source is None and settings.risk_source:
             risk_source = load_factory(settings.risk_source)()
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
-                                         trace_sink=OutboxTraceSink(self.outbox),
+                                         trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         if not api_token:
@@ -215,9 +222,12 @@ class App:
             "staff_alerts": self.alerts.status(),
             "secrets": self._secret_sources(),
             # D74: v2의 A 출력에는 위험 신호 필드가 없어 직원 알림의 입력원이 없다. 조용히 끄지 않고 여기에 드러낸다(CR-012, 헤드 결정 대기).
-            "staff_alert_source": ({"active": True} if self.orchestrator.risk_source is not None else
+            "staff_alert_source": ((self.orchestrator.risk_source.describe() if hasattr(self.orchestrator.risk_source, "describe")
+                                    else {"active": True}) if self.orchestrator.risk_source is not None else
                                    {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",
                                     "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 알림이 만들어지지 않는다(docs/change-requests/CR-012)."}),
+            "validation_violations": self.orchestrator.violation_stats(),
+            "result_dispatcher": self.orchestrator.dispatcher_status(),
             "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
             "response_tables": {"status": self.orchestrator.tables.status},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},

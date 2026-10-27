@@ -8,6 +8,7 @@
 직원 콘솔(토큰 역할 staff)
   POST /v1/sessions/{id}/intervention  개입 결정   본문 {session_id, decision: RESUME|END} + 봉투 turn_id (멈춘 세션만)
   GET  /v1/staff/alerts                알림 목록   StaffAlertPage
+  GET  /v1/staff/sessions/{id}         세션 기록 조회   StaffSessionView (대화 기록, 저장된 값, 알림. 읽을 때마다 접근 기록)
   GET  /v1/staff/alerts/stream         알림 SSE    (스트리밍은 service.py가 한다)
   GET  /v1/staff/push-config           푸시 설정   PushConfig (공개키 또는 null)
   POST/DELETE /v1/staff/push-subscriptions  웹 푸시 구독 등록·해지
@@ -33,7 +34,8 @@ import jsonschema
 import survey_schema
 from boundary_contracts import PIPELINE_SCHEMA_VERSION
 
-from .alerts import AlertService
+from .alerts import KIND_MAP, AlertService
+from .store.effects import model_key
 from .errors import StoreError, TurnIdConflict
 from .orchestrator import Orchestrator
 
@@ -43,7 +45,7 @@ SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 MAX_BODY = 64 * 1024
 HTTP_CODE = {"INVALID_RECORD": 400, "PERMISSION_DENIED": 401, "NOT_FOUND": 404, "CONFLICT": 409, "UNAVAILABLE": 503}
-STAFF_ROUTES = {"intervention", "alerts", "push_add", "push_del", "push_config"}
+STAFF_ROUTES = {"intervention", "staff_session", "alerts", "push_add", "push_del", "push_config"}
 START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID = "start", "end", "idle-expire"   # turn_id가 없는 동작의 고정 ID(CR-009)
 RESERVED = (START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID)
 STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
@@ -112,6 +114,8 @@ class PublicApi:
                 return getattr(self, "_" + name)(parse_qs(query))
             if name in ("state", "push_config"):
                 return getattr(self, "_" + name)(arg)
+            if name == "staff_session":
+                return self._staff_session(arg, role)
             return getattr(self, "_" + name)(body, arg)
         finally:
             self._slots.release()
@@ -128,6 +132,9 @@ class PublicApi:
     def _route(method: str, path: str):
         if method == "GET" and path == "/v1/staff/alerts":
             return ("alerts", None)
+        m = re.fullmatch(r"/v1/staff/sessions/([^/]+)", path)
+        if method == "GET" and m:
+            return ("staff_session", m.group(1))
         if method == "GET" and path == "/v1/staff/push-config":
             return ("push_config", None)
         if method == "POST" and path == "/v1/staff/push-subscriptions":
@@ -346,6 +353,45 @@ class PublicApi:
         except StoreError:
             return _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다")
         return 200, {"items": items, "next_cursor": nxt}, {}
+
+    # ------------------------------------------------------------------ 직원 세션 조회 (staff)
+    def _staff_session(self, sid: str, role: str):
+        """StaffSessionView. 환자 데이터를 내보내므로 읽을 때마다 접근 기록(시각, 역할 이름, session_id)을 남긴다.
+        기록을 남기지 못하면 데이터를 주지 않는다(기록 없는 열람을 만들지 않는다). 토큰 값·발화 내용은 기록에 없다."""
+        if not SESSION_ID.match(sid):
+            return _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
+        status, r = self._state_of(sid)
+        if status == "ERROR":
+            return _err("UNAVAILABLE", "지금은 조회할 수 없다")
+        try:
+            self.alerts.store.log_access(role, sid, "OK" if r is not None and r["status"] == "OK" else "NOT_FOUND")
+        except StoreError:
+            log.error("접근 기록을 남기지 못해 조회를 거부했다 role=%s session=%s", role, sid)
+            return _err("UNAVAILABLE", "접근 기록을 남길 수 없어 조회하지 않았다")
+        if status is None:
+            return _err("NOT_FOUND", "모르는 세션이다")
+        doc = r["state"]
+        try:
+            times = self.alerts.store.timeline(sid)
+            alerts = self.alerts.store.alerts_of_session(sid)
+        except StoreError:
+            return _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다")
+        turns = []
+        for i, e in enumerate(doc["dialogue_log"]):
+            t = times.get(i) or {}
+            turns.append({"turn_index": i, "turn_id": t.get("turn_id"), "at": t.get("at"), "utterance": e["input"]["utterance"],
+                          "response_text": e["response_text"], "action": (e.get("extract_output") or {}).get("action")})
+        values = []
+        for rec in doc["answer_records"]:
+            cv = rec["current_value"]
+            if isinstance(cv, dict) and "answer" in cv:
+                values.append({"key": model_key(rec["slot"]), "value": cv["answer"],
+                               "status": "CORRECTION" if rec.get("history") else "ANSWERED", "precision": rec.get("precision", "unspecified")})
+        view = {"session_id": sid, "status": status, "release_id": self.orch.store.release_id_of(sid),
+                "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": values,
+                "alerts": [{"alert_id": a["alert_id"], "kind": {v: k for k, v in KIND_MAP.items()}.get(a["kind"], a["kind"]),
+                            "status": a["status"], "created_at": a["created_at"], "rule_id": a["rule_id"]} for a in alerts]}
+        return 200, view, {}
 
     def _push_config(self, _arg):
         return 200, {"vapid_public_key": self.alerts.public_key()}, {}

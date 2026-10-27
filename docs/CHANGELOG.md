@@ -1,5 +1,24 @@
 # 변경 이력
 
+## 직원 세션 조회, 위험 규칙 엔진, 위반 코드 관측, 타임아웃 분류 정정, 결과 전달 대상 없음 [미출시, 푸시·태그 전]
+
+비어 있는 요구사항은 임의로 채우지 않고 표준적인 방법을 골랐다. 고른 이유는 항목마다 한 줄.
+
+- **직원 세션 조회** `GET /v1/staff/sessions/{session_id}`(응답 `StaffSessionView`, 스키마 `schema/schemas/StaffSessionView.json`, `COMPONENTS.yaml`의 Staff Console에 `view`). 기존 직원 토큰·역할 검사를 그대로 쓰고 없으면 404. 출처는 세션 문서와 AlertStore. PUBLIC_API.md는 소유자가 달라 CR-013에 추가할 문구를 썼다.
+  - 이유(접근 기록): 환자 데이터를 읽는 호출은 누가 언제 어느 세션을 읽었는지 남기는 것이 의료 정보 열람의 표준 통제라서, 알림 DB의 새 테이블 `staff_access_log`(시각, 역할 이름, session_id, 결과)에 호출마다 남긴다. 토큰 값·발화는 넣지 않는다. 남기지 못하면 데이터를 주지 않는다(기록 없는 열람 금지, fail-closed).
+  - 이유(시각 테이블): 세션 문서에 시각과 turn_id가 없어(스키마를 바꾸면 정수 버전과 저장소 이전에 걸린다) `session_timeline` 테이블에 턴마다 남긴다. 이전 세션은 null.
+  - 이유(`rule_id` 열): `alerts` 테이블에 열을 더했다(기존 파일은 시작할 때 `ALTER TABLE`로 이행). 알림 목록·SSE 모양은 바꾸지 않았다.
+- **문진 스키마 정수 버전(`CONTRACT_VERSION`)은 1 그대로**(올리지 않음). 판단: 새 계약 파일 하나를 더하는 것은 덧붙임이라 기존 소비자(model-runtime은 계약 이름으로 읽는다)가 깨지지 않고, `StaffSessionView`는 이 서비스와 프런트만 쓰는 읽기 응답이다. 정수 버전은 같은 이름의 기존 계약을 비호환으로 바꿀 때 올리는 값(design.md의 정수 버전 설명)이라 해당하지 않는다. 단 스키마 패키지의 계약 개수가 13에서 14가 되어 `tests/test_schema_package.py`의 기대값을 바꿨다. 헤드가 다르게 보면(예: 패키지 MINOR 표시) 알려 주세요.
+- **위험 감지 규칙 엔진** `SURVEY_RISK_RULES_FILE`(`survey_service/risk_rules.py`). 환자 발화가 규칙에 걸리면 기존 `RiskSource` 경로(RISK 알림, `PAUSED_RISK` 정지, 고정 문장)를 탄다. 기본 규칙 파일 없음(없으면 비활성), 임상 키워드를 담지 않는다. 시험은 "시험위험문구"만 쓴다. 데모 `examples/risk-rules.demo.json`은 '시험용, 임상 규칙 아님'.
+  - 이유(evidence): 알림 이유 스키마(`RISK_SIGNAL.evidence`)는 비어 있지 않은 문자열을 요구하고 `RISK_RULE`은 슬롯 목표를 요구해서, 스키마를 바꾸지 않고 `rule:<규칙 id>`를 evidence에 담는다. 발화 원문은 알림·푸시·접근 기록·정지 기록·로그에 가지 않는다.
+  - 이유(맞춤): 외부 규칙 파일의 표준적인 두 방식(부분 문자열, 정규식)만 두고, 발화와 문구를 유니코드 NFC로 맞춘 뒤 문구는 대소문자 무시(한글 표기 차이로 놓치지 않으려고). 규칙은 파일 순서, 처음 걸린 하나만 쓴다.
+  - 파일 sha256·version·규칙 개수를 시작 로그와 `/readyz`의 `staff_alert_source`에 낸다. 파일 오류는 시작 거부(종료 코드 3). `SURVEY_RISK_SOURCE`와 함께 쓰면 설정 오류(입력원은 하나).
+  - 한계: 규칙은 A 출력이 검증을 통과한 턴의 `plan_writes`에서 평가된다. A 호출 실패·검증 실패 턴의 발화는 평가되지 않는다. 안전 기능으로는 부족할 수 있어 헤드 판단이 필요하다(검증 앞으로 옮기면 턴 흐름이 바뀐다).
+- **의미 검증 실패 사유 관측**. 위반 코드와 경로를 로그(`의미 검증 위반 ...`, 최종 실패 줄의 `violations=`)에, 코드별 빈도를 `/readyz`의 `validation_violations`에 남긴다. 발화·값·메시지는 제외한다. HTTP 응답 본문은 바꾸지 않았다. 이유: 원인을 구분하려면 코드가 있어야 하고, turn-engine이 이미 값을 싣지 않는 `code`·`path`를 주므로 그것만 쓴다.
+- **조사 (4) 추론 타임아웃 분류**. 5.65초에 timeout으로 분류된 원인: 추론 호출의 타임아웃은 `SURVEY_INFERENCE_TIMEOUT_SECONDS`(기본 **4초**)이고, `SURVEY_HTTP_TIMEOUT_SECONDS`(10초)는 릴리스 읽기·Trace 전송에만 쓰인다(`clients.py`). 분류 함수 `_timed_out`은 `UNAVAILABLE`의 걸린 시간이 타임아웃의 90%(3.6초) 이상이면 오류 종류와 관계없이 timeout으로 셌다. 그래서 4초 설정에서 5.65초 걸려 실패한 호출은 읽기 타임아웃뿐 아니라 느린 502·503 응답이나 릴리스 재적재 대기도 timeout으로 분류됐다(이 경우 재시도도 건너뛴다). 5.65초가 4초를 넘은 것은 urllib의 타임아웃이 소켓 동작마다 적용되는 값이라 합계가 넘을 수 있어서다. 어느 경우였는지는 당시 로그에 reason이 없어 **확인하지 못했다**. 고침: 서버 응답(`status`가 있다)이나 이 서비스가 직접 낸 사유(`RELOADING`)는 timeout이 아니다. `reason=TimeoutError`는 항상 timeout, 연결 단계 타임아웃(`URLError`로 감싸짐)만 걸린 시간으로 가른다. 실패마다 `추론 호출 실패 op= code= reason= status= elapsed= read_timeout= classified=` 로그를 남긴다. 시험 `test_timeout_classification`.
+- **조사 (4) 결과 전달**. `결과 전달 실패 turn=end error=RuntimeError`의 원인: Result Dispatcher가 꽂히지 않으면 기본 객체 `UnattachedDispatcher.dispatch`가 `RuntimeError`를 던지게 되어 있었고, graph가 그 예외를 일반 전달 실패로 경고 로그에 남겼다. `COMPONENTS.yaml`이 결과 전달을 "붙을 예정"으로 두었으므로 대상이 없는 것은 정상 구성이다. 고침: `attached=False`인 전달자는 부르지 않고 INFO `결과 전달 대상 없음 status=NO_TARGET`, 카운터 `dispatch_no_target`, `/readyz`의 `result_dispatcher`로 명시한다. 세션의 전달 기록은 계약대로 `succeeded=false`(전달되지 않았다)이고 `dispatch_called`는 그대로 true다(턴 출력 모양 유지). 꽂은 전달자가 실패하면 기존대로 경고다.
+- 시험: `tests/test_staff_view_and_rules.py`(조회·스키마·404·401/403·접근 기록·기록 실패 거부·규칙 파싱/매칭/readyz/시작 거부·알림에 원문 없음·위반 코드·타임아웃 분류·대상 없음). 전체 pytest 448 통과(이전 415), `scripts/smoke.sh`는 STATUS 참조.
+
 ## 의존 태그 올림: model-runtime v0.7.0 -> v0.7.1 [미출시, 푸시·태그 전]
 
 - model-runtime 의존을 v0.7.1로(requirements, build_wheels 기본 태그, inference.py 주석, boundary·runbook·STATUS의 현재 기준 표기). v0.7.1은 가짜 백엔드가 값을 내도록 확장(흐름 파일 선택 항목 slots/skips)이고 HTTP·계약 모양은 그대로다. 서비스 코드 변경 없음.

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from typing import Mapping, Optional
@@ -18,11 +19,26 @@ from boundary_contracts.clients import HttpModelRuntime, RuntimeResult, is_outpu
 
 from .inference import InferenceLoadError
 
+log = logging.getLogger("survey_service.remote")
+
 
 def _timed_out(e: BoundaryError, elapsed: float, timeout: float) -> bool:
-    """읽기 타임아웃인가. 클라이언트가 연결 실패와 타임아웃을 같은 UNAVAILABLE(reason=URLError)로 묶어 내므로,
-    걸린 시간이 타임아웃에 닿았는지로 구분한다(연결 실패는 바로 돌아온다)."""
-    return elapsed >= timeout * 0.9 or "imeout" in str(e.details.get("reason", ""))
+    """타임아웃인가. boundary_contracts 클라이언트는 응답을 읽다 시간이 넘으면 reason=TimeoutError, 연결 단계에서 넘으면 urllib이
+    URLError로 감싸 reason=URLError로 낸다. 후자는 연결 실패(거부, 이름 풀이 실패)와 구분되지 않으므로 걸린 시간으로 가른다.
+    서버가 응답을 줬거나(details.status가 있다) 이 서비스가 직접 낸 UNAVAILABLE(reason=RELOADING 등)은 느렸어도 타임아웃이 아니다:
+    예전에는 걸린 시간만 봐서 느린 502·503 응답이 타임아웃으로 세어지고 재시도도 건너뛰었다."""
+    d = e.details or {}
+    reason = str(d.get("reason", ""))
+    if "imeout" in reason:
+        return True
+    if d.get("status") is not None or (reason and reason != "URLError"):
+        return False
+    return reason == "URLError" and elapsed >= timeout * 0.9
+
+
+def _failure_info(e: BoundaryError) -> str:
+    d = e.details or {}
+    return f"code={e.code} reason={d.get('reason', '-')} status={d.get('status', '-')}"
 
 
 class Stats:
@@ -64,7 +80,7 @@ class RemoteModelSession:
         self.stats.add("reloads")
         st = self._rt.load_release(self.release_id)
         if st["state"] != "LOADED":
-            raise BoundaryError("UNAVAILABLE", "추론 서버가 릴리스를 다시 적재하는 중이다")
+            raise BoundaryError("UNAVAILABLE", "추론 서버가 릴리스를 다시 적재하는 중이다", {"reason": "RELOADING"})
         return fn(self.release_id, dict(request))
 
     def _call(self, op: str, request: Mapping) -> RuntimeResult:
@@ -80,7 +96,10 @@ class RemoteModelSession:
                     self.stats.add("output_invalid")
                     self.stats.add("failures")
                     raise
-                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, time.monotonic() - t0, self._rt._timeout)
+                elapsed = time.monotonic() - t0
+                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, self._rt._timeout)
+                log.warning("추론 호출 실패 op=%s %s elapsed=%.2fs read_timeout=%.1fs classified=%s attempt=%d", op, _failure_info(e),
+                            elapsed, self._rt._timeout, "timeout" if timed_out else "not_timeout", attempt + 1)
                 if timed_out:
                     self.stats.add("timeouts")
                 if e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries:

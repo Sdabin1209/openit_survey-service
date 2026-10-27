@@ -67,7 +67,7 @@ class Orchestrator:
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
-                 max_consecutive_reask: int = 0) -> None:
+                 max_consecutive_reask: int = 0, timeline=None) -> None:
         self.store = store
         self.releases = releases
         self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
@@ -78,8 +78,11 @@ class Orchestrator:
         self.frontend_sink = frontend_sink
         self.max_consecutive_reask = max(0, int(max_consecutive_reask))   # 0이면 끔(G12). 값은 헤드 결정 대기(CR-012)
         self.trace_sink = trace_sink
+        self.timeline = timeline        # 선택. record(session_id, turn_index, turn_id)를 가진 객체(AlertStore). 직원 조회의 시각용, 실패해도 턴은 계속된다
         self._locks = _SessionLocks()
+        self._stats_lock = threading.Lock()
         self.counters: dict[str, int] = {}
+        self.violations: dict[str, int] = {}      # 의미 검증 위반 코드별 건수(값 없음)
         self._graph = TurnGraph(self).build()      # 체크포인터 없이 컴파일
 
     # ------------------------------------------------------------------ 공개
@@ -162,4 +165,25 @@ class Orchestrator:
             self._count("trace_enqueue_failed")
 
     def _count(self, name: str) -> None:
-        self.counters[name] = self.counters.get(name, 0) + 1
+        with self._stats_lock:
+            self.counters[name] = self.counters.get(name, 0) + 1
+
+    def count_violations(self, codes) -> None:
+        with self._stats_lock:
+            for c in codes:
+                self.violations[c] = self.violations.get(c, 0) + 1
+
+    def violation_stats(self) -> dict:
+        """/readyz용. 검증을 한 번 돌릴 때 나온 위반마다 코드별로 센다(같은 턴의 재시도도 각각 센다)."""
+        with self._stats_lock:
+            by = dict(self.violations)
+            turns = self.counters.get("validation_violation", 0)
+        return {"validations_with_violation": turns, "total": sum(by.values()), "by_code": by}
+
+    def dispatcher_status(self) -> dict:
+        """결과 전달 대상. 붙어 있지 않은 것은 오류가 아니라 명시된 상태다(COMPONENTS.yaml: 붙을 예정)."""
+        if getattr(self.dispatcher, "attached", True):
+            return {"attached": True}
+        with self._stats_lock:
+            n = self.counters.get("dispatch_no_target", 0)
+        return {"attached": False, "status": "NO_TARGET", "detail": "결과 전달 대상 없음(붙을 예정). 전달 기록은 succeeded=false로 남는다", "skipped_turns": n}
