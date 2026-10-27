@@ -42,3 +42,9 @@ def test_a_state_order_agreement_stays_high(parts):
     tot, ex = _ra().a_state_agreement(d, ["val", "test"], bank, flow, 600)
     assert tot["일치(순서·값 모두)"] / tot["A 행(전체)"] >= 0.95
     assert not [k for k in tot if k.startswith("불일치") and "순서만" not in k]            # 다르더라도 칸 집합·값은 같다(순서 차이뿐)
+
+
+def test_false_alarm_rate_on_training_utterances_stays_tiny(parts):
+    d, flow, bank, tables = parts
+    tot, hits, old_only = _ra().false_alarm_check(d, ["val", "test"], 1000)
+    assert tot["수정 후 적중"] <= tot["수정 전 적중"] and tot["수정 후 적중"] / tot["발화(전체)"] < 0.005

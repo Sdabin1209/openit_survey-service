@@ -154,6 +154,44 @@ def validation_check(d: Path, splits, bank, flow, limit):
     return tot, codes, ex
 
 
+# 수정 전(2차 점검 전) 임시 기본 목록과 매칭 방식(부분 문자열, 공백 제거 후 매칭, 부정 처리 없음). 비교용으로 얼려 둔 사본이다.
+_OLD_PROVISIONAL = {'self-harm': ('자살', '죽고싶', '죽을래', '죽어버리', '죽고만싶', '스스로목숨', '목숨을끊', '자해', '손목을그', '극단적선택', '살기싫', '사는게싫', '삶을끝'), 'chest-pain': ('가슴이아', '가슴이너무아', '흉통', '가슴통증', '가슴이조이', '가슴이답답', '가슴을쥐어', '심장이아', '심장이조여', '심장이터'), 'dyspnea': ('숨이안쉬', '숨을못쉬', '숨쉬기힘', '숨쉬기가힘', '숨쉬기어렵', '호흡곤란', '숨이막', '숨막혀', '숨이차서말', '숨이넘어'), 'consciousness': ('의식을잃', '의식이없', '정신을잃', '정신을못차', '기절', '쓰러졌', '쓰러질것', '쓰러질거', '의식이흐', '정신이혼미'), 'bleeding': ('피가많이', '피가계속나', '피가멈추지', '출혈이심', '피를토', '토혈', '피를많이', '하혈이심', '피가쏟'), 'paralysis': ('마비', '팔다리에힘이안', '한쪽팔이안', '한쪽다리가안', '말이안나', '말이어눌', '말이잘안나', '입이돌아', '얼굴이한쪽', '한쪽이저리'), 'help': ('살려', '도와주세요', '응급', '119', '구급차')}
+
+
+def _old_match(text: str) -> bool:
+    import re
+    import unicodedata
+    compact = re.sub(r"\s+", "", unicodedata.normalize("NFC", text).casefold())
+    return any(p.replace(" ", "") in compact for ph in _OLD_PROVISIONAL.values() for p in ph)
+
+
+def false_alarm_check(d: Path, splits, limit):
+    """모든 user_utterance에 수정 전·후 매처를 돌려 적중 수(분모 포함)와 적중 발화를 센다. 정상 발화 데이터이므로 적중은 오탐 후보다."""
+    from survey_service.risk_rules import RuleRiskSource
+    new = RuleRiskSource.provisional_default()
+    tot = collections.Counter()
+    hits_new, hits_old_only = [], []
+    for sp in splits:
+        n = 0
+        for sid, inp, _ in rows(d / f"lora_a_{sp}.jsonl"):
+            if limit and n >= limit:
+                break
+            n += 1
+            u = inp["user_utterance"]
+            tot["발화(전체)"] += 1
+            o, w = _old_match(u), new.match(u)
+            tot["수정 전 적중"] += bool(o)
+            tot["수정 후 적중"] += bool(w)
+            if w:
+                hits_new.append((sid, w, u))
+            elif o:
+                hits_old_only.append((sid, u))
+    tot["수정 후: 부정으로 제외한 적중"] = new.context_hits.get("negated_hits", 0)
+    tot["수정 후: 제3자 이야기로 제외한 적중"] = new.context_hits.get("third_party_hits", 0)
+    tot["수정 후: 과거 병력 이야기로 제외한 적중"] = new.context_hits.get("history_hits", 0)
+    return tot, hits_new, hits_old_only
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--splits", default="train,val,test")
@@ -174,6 +212,17 @@ def main(argv=None) -> int:
     flow, bank = load_flow(), Bank(sample_bank())
     tables = ResponseTables(survey_schema.load_data("response_tables"))
     only = a.only.split(",")
+    if "4" in only:
+        tot, hn, ho = false_alarm_check(d, splits, a.max)
+        print("== (4) 위험 문구 오탐(수정 전·후 매처) ==")
+        for k in tot:
+            print(f"{k}: {tot[k]}")
+        print("-- 수정 후에도 적중한 발화(최대 200)")
+        for sid, rid, u in hn[:200]:
+            print(f"  [{rid}] {sid}: {u}")
+        print("-- 수정 전에만 적중한 발화(최대 30)")
+        for sid, u in ho[:30]:
+            print(f"  {sid}: {u}")
     if "1" in only:
         tot, bad = b_agreement(d, splits, tables, a.max)
         print("== (1) B 입력 대조 ==")
