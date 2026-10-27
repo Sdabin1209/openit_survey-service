@@ -26,11 +26,16 @@ fail() { echo "SMOKE FAIL: $1"; $DOCKER logs "$NAME" 2>&1 | tail -20; exit 1; }
 code=$($DOCKER run --rm "$IMG" python -m survey_service >/dev/null 2>&1; echo $?) || true
 [ "$code" = 2 ] || fail "설정이 없는데 시작했다 (종료 코드 $code)"
 
+# 비밀은 파일로 받는다(D84): 직원 토큰은 NAME_FILE(읽기 전용 마운트), 키오스크 토큰은 개발용 환경 변수. 이미지 사용자(비root)가 읽을 수 있게 644
+SECRET_DIR=$(mktemp -d)
+printf 'smoke-staff-token\n' > "$SECRET_DIR/staff_token"; chmod 755 "$SECRET_DIR"; chmod 644 "$SECRET_DIR/staff_token"
+trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"' EXIT
+
 # 이웃(I4, I6)은 시험용 대역 팩토리로 꽂는다. 대역은 이미지에 없고 tests/ 를 읽기 전용으로 붙인다.
-$DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -e PYTHONPATH=/mnt \
+$DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
   -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest \
   -e SURVEY_RESULT_DISPATCHER=tests.smoke_fakes:dispatcher -e SURVEY_RISK_SOURCE=tests.smoke_fakes:risk_source \
-  -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_STAFF_API_TOKEN=smoke-staff-token -e SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS=0 -e SURVEY_SSE_HEARTBEAT_SECONDS=1 -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
+  -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_STAFF_API_TOKEN_FILE=/run/secrets/staff_token -e SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS=0 -e SURVEY_SSE_HEARTBEAT_SECONDS=1 -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
 PORT=$($DOCKER port "$NAME" 8080/tcp | head -1 | tr -d '\r' | sed 's/.*://')
 echo "host port: $PORT"
 for i in $(seq 1 30); do
@@ -47,6 +52,8 @@ echo "readyz:  $READY"
 echo "$READY" | grep -q '"active_release": "rel-smoke"' || fail "활성 릴리스가 rel-smoke가 아니다"
 echo "$READY" | grep -q '"contract_version": 1' || fail "계약 버전"
 echo "$READY" | grep -q '"staff_alert_source": {"active": true}' || fail "스모크의 위험 입력원이 /readyz에 드러나지 않는다"
+echo "$READY" | grep -q '"secrets": {"api_token": "env", "staff_api_token": "file"' || fail "비밀 출처(file|env)가 /readyz에 드러나지 않는다"
+echo "$READY" | grep -q 'smoke-staff-token\|smoke-api-token' && fail "/readyz에 비밀 값이 나왔다"
 echo "$READY" | grep -q '"response_tables": {"status": "DRAFT_UNCONFIRMED"}' || fail "표 초안 상태가 /readyz에 드러나지 않는다"
 
 [ "$($DOCKER exec "$NAME" id -u | tr -d '\r')" != "0" ] || fail "root로 실행 중"
