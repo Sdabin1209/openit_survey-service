@@ -19,3 +19,11 @@ class TurnIdConflict(SurveyServiceError):
 
 class ReleaseUnavailable(SurveyServiceError):
     """세션이 묶인 릴리스를 쓸 수 없다."""
+
+
+class SessionNotFound(SurveyServiceError):
+    pass
+
+
+class SessionEnded(SurveyServiceError):
+    pass

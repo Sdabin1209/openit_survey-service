@@ -1,5 +1,17 @@
 # 변경 이력
 
+## D85 1단계: subject_ref, 결과 조회, 외부 위험 신호, 직원 식별, 세션 보존 [미출시, 푸시·태그 전]
+
+정의는 boundary-contracts `PUBLIC_API.md` 추가 인터페이스 A~F절. 비어 있는 부분은 표준적인 방법을 골랐다(이유 한 줄씩).
+
+- **A. `subject_ref`**: 시작 본문 선택 필드, `[A-Za-z0-9._:/#=+-]` 1~128자 검증, 알림 DB의 `session_meta`에 저장(세션 문서 스키마 불변). `SURVEY_REQUIRE_SUBJECT_REF` 기본 꺼짐. 로그·알림·푸시·Trace에 넣지 않는다(오케스트레이터에 넘기기 전에 떼어 낸다). 이유: 환자 식별 값은 업무 데이터와 분리해 한 곳에 두고 보존 정리 때 함께 지우기 위해. 문진 스키마 `FrontendMessage.json`의 SESSION_START에 선택 필드 `subject_ref`를 정식으로 추가했다: **정수 CONTRACT_VERSION은 올리지 않는다. 선택 필드 추가라 기존 메시지가 그대로 통과하고(호환 추가), 다른 kind에는 허용하지 않는다.** 시험 `test_frontend_message_schema_accepts_subject_ref_only_on_session_start`.
+- **C. `StaffSessionView`**: 최상위 `subject_ref`, `alerts[].resolved_by`를 더했다(둘 다 필수·null 허용). CR-013은 PUBLIC_API.md C절에 반영됨(상단 표시).
+- **B. 결과 조회** `GET /v1/results/{session_id}`, `GET /v1/results?subject_ref=&status=&updated_after=&limit=&cursor=`(역할 result-reader, 스키마 `SessionResult`). 부분 결과도 상태와 함께, 발화·대화 로그 없음, 호출마다 접근 기록(목록은 돌려주는 세션마다 한 행, 조회 조건은 이름만 `detail`에 남기고 환자 참조 값은 남기지 않는다), 못 남기면 503. 목록 순서는 (updated_at, session_id)이고 cursor는 그 위치다. 이유: 병원 시스템이 `updated_after`로 증분 조회하는 방식이 표준이고 세션 갱신 시각 순서가 그에 맞아서. `/readyz`의 `result_dispatcher`는 NO_TARGET 그대로.
+- **D. 위험 신호** `POST /v1/sessions/{id}/risk-signals`(역할 risk-source, 스키마 `RiskSignal`): `signal_id`로 멱등(재전송 200, 같은 `alert_id`), 세션 없음 404, 끝남 409. 효과는 알림(`rule_id=source:code`)+`PAUSED_RISK`(정지 기록에 신호 출처·코드)이고 직원 콘솔(SSE/푸시)로 전달된다. 내부 규칙 엔진은 같은 표기(`signal:internal:<id>`, rule_id `internal:<id>`)를 쓰는 기본 감지기로 정리했다. 이유(턴 밖 커밋): 신호는 발화 턴과 무관하게 오므로 대화 로그 항목을 만들지 않고 진행 기록의 정지 이력에만 남긴다(세션 문서 스키마를 바꾸지 않으려고). 알림 저장과 신호 기록은 한 트랜잭션이 아니다: 그 사이에 죽으면 같은 `signal_id` 재전송이 알림을 한 번 더 만들 수 있다. 앞선 한계(규칙을 검증 앞에서 평가하는 문제)는 이 API로 대체되어 다루지 않는다.
+- **E. 직원 식별**: 개입에서 `X-Openit-User`를 `staff_id`로 대화 로그 개입 항목(`LogEntry.staff_id`, SessionStore·TurnTrace·OrchestratorOutput의 선택 필드 추가, 정수 버전 불변: 호환 추가)과 알림 `resolved_by`에 남긴다. 헤더 없음 401, 형식 오류 400, 본문의 `staff_id`는 무시. 같은 turn_id 재전송은 처음 기록을 지킨다(멱등).
+- **세션 보존**: `SURVEY_SESSION_RETENTION_DAYS`(기본 없음=삭제 안 함), run-once 잡 `python -m survey_service purge`. 끝난 세션의 세션 문서·턴 기록·환자 참조·시각·신호 기록을 지운다. 접근 기록·알림 행은 남긴다. 알림 DB 쪽을 먼저 지워 중간에 죽어도 다시 돌리면 이어진다(멱등). 이유: 스케줄러가 언제 돌릴지 정하고 서비스는 스스로 깨우지 않는다는 워크스페이스 규칙(D39).
+- 시험: `tests/test_results_signals_retention.py`(18개). 기존 시험은 개입 호출에 `X-Openit-User`를 붙이도록 고쳤다.
+
 ## 직원 세션 조회, 위험 규칙 엔진, 위반 코드 관측, 타임아웃 분류 정정, 결과 전달 대상 없음 [미출시, 푸시·태그 전]
 
 비어 있는 요구사항은 임의로 채우지 않고 표준적인 방법을 골랐다. 고른 이유는 항목마다 한 줄.

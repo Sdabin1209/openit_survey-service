@@ -112,3 +112,9 @@
 - 한계: 위험 규칙은 A 출력 검증을 통과한 턴에서만 평가된다. 알림 DB(`alerts.db`)가 조회의 시각·접근 기록 원본이 되었다(PostgreSQL 이전 때 함께 옮겨야 한다).
 - 미정(헤드): CR-013(PUBLIC_API.md 반영), 정수 버전은 올리지 않았다(근거 CHANGELOG), 규칙을 검증 앞에서 평가할지.
 - 푸시·태그는 하지 않았다.
+
+## 후속 구간 10 (D85 1단계)
+
+- 한 일: subject_ref(A), 결과 조회(B), StaffSessionView 보강(C), 외부 위험 신호(D), 직원 식별 헤더(E), 세션 보존 잡. 자세한 내용과 표준 이유는 CHANGELOG.
+- 시험: `pytest -o addopts=""` 466 통과, `scripts/smoke.sh` SMOKE OK(이 PC 한 환경). 확인하지 못한 것: 실제 게이트웨이를 거친 `X-Openit-User` 전달, 프런트·병원 시스템과의 실제 호출.
+- 다음: 2단계(PostgreSQL).

@@ -57,7 +57,26 @@ CREATE TABLE IF NOT EXISTS staff_access_log (
   at TEXT NOT NULL,
   role TEXT NOT NULL,
   session_id TEXT NOT NULL,
-  outcome TEXT NOT NULL
+  outcome TEXT NOT NULL,
+  detail TEXT
+);
+CREATE TABLE IF NOT EXISTS session_meta (
+  session_id TEXT PRIMARY KEY,
+  subject_ref TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS session_meta_subject ON session_meta(subject_ref);
+CREATE TABLE IF NOT EXISTS risk_signals (
+  session_id TEXT NOT NULL,
+  signal_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  code TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  occurred_at TEXT,
+  alert_n INTEGER NOT NULL,
+  session_status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, signal_id)
 );
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   endpoint TEXT PRIMARY KEY,
@@ -91,8 +110,9 @@ class AlertStore:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA synchronous=FULL")
             self._db.executescript(_SCHEMA)
-            if "rule_id" not in [r[1] for r in self._db.execute("PRAGMA table_info(alerts)").fetchall()]:      # 이전 파일 이행
-                self._db.execute("ALTER TABLE alerts ADD COLUMN rule_id TEXT")
+            for table, col in (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail")):      # 이전 파일 이행
+                if col not in [r[1] for r in self._db.execute(f"PRAGMA table_info({table})").fetchall()]:
+                    self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
         except sqlite3.Error as e:
             raise StoreError(f"알림 DB를 열 수 없다: {type(e).__name__}") from e
 
@@ -145,14 +165,14 @@ class AlertStore:
             return self._event("alert", cur.lastrowid)
         return self._txn(fn)
 
-    def resolve(self, session_id: str, decision: Optional[str]) -> list[dict]:
+    def resolve(self, session_id: str, decision: Optional[str], staff_id: Optional[str] = None) -> list[dict]:
         """그 세션의 열린 알림을 모두 해결한다(멱등: 열린 알림이 없으면 빈 목록). 해결 이벤트 {type: resolved, id, alert} 목록."""
         def fn():
             ns = [r[0] for r in self._db.execute("SELECT n FROM alerts WHERE session_id=? AND status='OPEN' ORDER BY n", (session_id,))]
             events = []
             for n in ns:
-                self._db.execute("UPDATE alerts SET status='RESOLVED', resolved_by_decision=?, resolved_at=? WHERE n=?",
-                                 (decision, _iso(self._clock()), n))
+                self._db.execute("UPDATE alerts SET status='RESOLVED', resolved_by_decision=?, resolved_at=?, resolved_by=? WHERE n=?",
+                                 (decision, _iso(self._clock()), staff_id, n))
                 events.append(self._event("resolved", n))
             return events
         return self._txn(fn)
@@ -188,8 +208,8 @@ class AlertStore:
     # ---- 직원 세션 조회(StaffSessionView)용
     def alerts_of_session(self, session_id: str) -> list[dict]:
         """그 세션의 알림(오래된 것부터). rule_id가 없는 알림은 null."""
-        rows = self._read("SELECT n, kind, status, created_at, rule_id FROM alerts WHERE session_id=? ORDER BY n", (session_id,))
-        return [{"alert_id": f"al-{r[0]}", "kind": r[1], "status": r[2], "created_at": r[3], "rule_id": r[4]} for r in rows]
+        rows = self._read("SELECT n, kind, status, created_at, rule_id, resolved_by FROM alerts WHERE session_id=? ORDER BY n", (session_id,))
+        return [{"alert_id": f"al-{r[0]}", "kind": r[1], "status": r[2], "created_at": r[3], "rule_id": r[4], "resolved_by": r[5]} for r in rows]
 
     def record(self, session_id: str, turn_index: int, turn_id: Optional[str]) -> None:
         """세션 문서에 없는 시각을 남긴다. turn_index -1은 세션 생성, 0 이상은 대화 로그 항목의 위치. 같은 키는 처음 값을 지킨다(멱등)."""
@@ -200,10 +220,58 @@ class AlertStore:
         rows = self._read("SELECT turn_index, turn_id, at FROM session_timeline WHERE session_id=?", (session_id,))
         return {r[0]: {"turn_id": r[1], "at": r[2]} for r in rows}
 
-    def log_access(self, role: str, session_id: str, outcome: str) -> None:
-        """환자 데이터 조회 기록: (시각, 토큰의 역할 이름, session_id, 결과). 토큰 값·발화 내용은 넣지 않는다. 실패하면 StoreError."""
-        self._txn(lambda: self._db.execute("INSERT INTO staff_access_log(at, role, session_id, outcome) VALUES (?,?,?,?)",
-                                           (_iso(self._clock()), role, session_id, outcome)))
+    def log_access(self, role: str, session_id: str, outcome: str, detail: Optional[str] = None) -> None:
+        """환자 데이터 조회 기록: (시각, 토큰의 역할 이름, session_id, 결과, 조회 조건 이름). 토큰 값·발화·환자 참조 값은 넣지 않는다. 실패하면 StoreError."""
+        self.log_access_many(role, [session_id], outcome, detail)
+
+    def log_access_many(self, role: str, session_ids: list, outcome: str, detail: Optional[str] = None) -> None:
+        """목록 조회: 돌려주는 세션마다 한 행을 한 트랜잭션으로 남긴다."""
+        at = _iso(self._clock())
+        def fn():
+            for sid in session_ids:
+                self._db.execute("INSERT INTO staff_access_log(at, role, session_id, outcome, detail) VALUES (?,?,?,?,?)", (at, role, sid, outcome, detail))
+        self._txn(fn)
+
+    # ---- 세션 메타(환자 참조), 위험 신호, 보존
+    def set_subject(self, session_id: str, subject_ref: Optional[str]) -> None:
+        """세션 시작 때 한 번. 이미 있으면 처음 값을 지킨다."""
+        self._txn(lambda: self._db.execute("INSERT OR IGNORE INTO session_meta(session_id, subject_ref, created_at) VALUES (?,?,?)",
+                                           (session_id, subject_ref, _iso(self._clock()))))
+
+    def subject_of(self, session_id: str) -> Optional[str]:
+        rows = self._read("SELECT subject_ref FROM session_meta WHERE session_id=?", (session_id,))
+        return rows[0][0] if rows else None
+
+    def subjects_of(self, session_ids: list) -> dict:
+        out: dict = {}
+        for i in range(0, len(session_ids), 500):
+            chunk = session_ids[i:i + 500]
+            for sid, ref in self._read(f"SELECT session_id, subject_ref FROM session_meta WHERE session_id IN ({','.join('?' * len(chunk))})", chunk):
+                out[sid] = ref
+        return out
+
+    def sessions_of_subject(self, subject_ref: str) -> list[str]:
+        return [r[0] for r in self._read("SELECT session_id FROM session_meta WHERE subject_ref=? ORDER BY session_id", (subject_ref,))]
+
+    def get_signal(self, session_id: str, signal_id: str) -> Optional[dict]:
+        rows = self._read("SELECT alert_n, session_status FROM risk_signals WHERE session_id=? AND signal_id=?", (session_id, signal_id))
+        return {"alert_id": f"al-{rows[0][0]}", "session_status": rows[0][1]} if rows else None
+
+    def record_signal(self, session_id: str, signal: Mapping, alert_n: int, session_status: str) -> None:
+        self._txn(lambda: self._db.execute(
+            "INSERT OR IGNORE INTO risk_signals(session_id, signal_id, source, code, severity, occurred_at, alert_n, session_status, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (session_id, signal["signal_id"], signal["source"], signal["code"], signal.get("severity", "RISK"), signal.get("occurred_at"), alert_n,
+             session_status, _iso(self._clock()))))
+
+    def purge_sessions(self, session_ids: list) -> int:
+        """보존 기간이 지난 세션의 환자 연결 정보(환자 참조, 시각)와 신호 기록을 지운다. 접근 기록(staff_access_log)은 지우지 않는다. 알림은 세션 ID만 담아 둔다."""
+        def fn():
+            n = 0
+            for sid in session_ids:
+                for t in ("session_meta", "session_timeline", "risk_signals"):
+                    n += self._db.execute(f"DELETE FROM {t} WHERE session_id=?", (sid,)).rowcount
+            return n
+        return self._txn(fn)
 
     def access_log(self, session_id: Optional[str] = None, limit: int = 100) -> list[dict]:
         q, args = "SELECT n, at, role, session_id, outcome FROM staff_access_log", []
@@ -330,7 +398,9 @@ class AlertService:
         pushed = self._push(event)
         if live + pushed == 0:
             self._count("delivery_failed")
-            raise DeliveryFailed("알림은 저장됐지만 닿은 전달 경로가 없다")
+            err = DeliveryFailed("알림은 저장됐지만 닿은 전달 경로가 없다")
+            err.alert = event["alert"]                       # 외부 위험 신호 API가 alert_id를 돌려줄 수 있게
+            raise err
         self._count("delivered")
         return event["alert"]
 
@@ -370,8 +440,8 @@ class AlertService:
         return done.count("ACCEPTED")
 
     # ---- 해결
-    def resolve(self, session_id: str, decision: Optional[str]) -> int:
-        events = self.store.resolve(session_id, decision)
+    def resolve(self, session_id: str, decision: Optional[str], staff_id: Optional[str] = None) -> int:
+        events = self.store.resolve(session_id, decision, staff_id)
         for e in events:
             self.hub.publish(e)
         return len(events)

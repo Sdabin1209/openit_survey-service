@@ -43,5 +43,16 @@ class SessionStorePort(Protocol):
     def list_idle(self, before: float) -> list[str]:
         """마지막 기록이 before(epoch 초)보다 오래된 IN_PROGRESS 세션 ID. 유휴 만료에 쓴다."""
 
+    def list_sessions(self, *, status: Optional[str] = None, updated_after: Optional[float] = None, session_ids: Optional[list] = None,
+                      limit: int = 50, after: Optional[tuple] = None) -> list[tuple]:
+        """결과 조회용 목록: (session_id, status, updated_at) 목록을 (updated_at, session_id) 오름차순으로 최대 limit개.
+        updated_after는 epoch 초(초과만), after는 마지막으로 본 (updated_at, session_id)(그 뒤만), session_ids는 후보 제한."""
+
+    def list_ended_before(self, before: float) -> list[str]:
+        """끝난(ENDED_*) 세션 중 마지막 기록이 before(epoch 초)보다 오래된 세션 ID. 보존 기간 정리에 쓴다."""
+
+    def delete_sessions(self, session_ids: list) -> int:
+        """세션 문서와 그 턴 기록을 지운다. 지운 세션 수."""
+
     def open_release_ids(self) -> set[str]:
         """아직 끝나지 않은(진행 중·일시 중지) 세션이 묶인 릴리스 ID 집합."""

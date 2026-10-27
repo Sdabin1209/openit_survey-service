@@ -5,7 +5,8 @@
   모르는 키, 빈 목록, 중복 id, 잘못된 정규식은 시작을 거부한다(ConfigError).
 - 맞춤: 발화와 `contains` 문구는 유니코드 NFC로 맞추고 대소문자를 구분하지 않는다. `regex`는 NFC 발화에 re.search(대소문자 구분).
   규칙은 파일 순서로 보고 처음 걸린 규칙 하나만 쓴다.
-- 걸리면 `RiskSource` 포트 계약대로 StaffAlert(kind RISK)를 돌려준다. 이유(reasons)의 evidence에는 발화 원문이 아니라 `rule:<규칙 id>`만 넣는다.
+- 걸리면 `RiskSource` 포트 계약대로 StaffAlert(kind RISK)를 돌려준다. 이유(reasons)의 evidence에는 발화 원문이 아니라 `signal:internal:<규칙 id>`만 넣는다
+  (외부 감지기 API `POST /v1/sessions/{id}/risk-signals`와 같은 표기. 이 엔진은 서비스 안의 기본 감지기 하나다).
   알림, 푸시, 접근 기록, 로그 어디에도 발화 원문이 가지 않는다.
 """
 from __future__ import annotations
@@ -21,7 +22,8 @@ from typing import Mapping, Optional
 from .settings import ConfigError
 
 RULE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-EVIDENCE_PREFIX = "rule:"
+EVIDENCE_PREFIX = "signal:"      # evidence = "signal:<source>:<code>"; 알림의 rule_id는 "<source>:<code>"
+INTERNAL_SOURCE = "internal"
 MAX_PATTERN = 500
 
 
@@ -135,7 +137,7 @@ class RuleRiskSource:
             return None
         with self._lock:
             self.hits[rid] = self.hits.get(rid, 0) + 1
-        return {"kind": "RISK", "reasons": [{"kind": "RISK_SIGNAL", "evidence": [EVIDENCE_PREFIX + rid]}]}
+        return risk_alert(INTERNAL_SOURCE, rid, "RISK")
 
     def describe(self) -> dict:
         with self._lock:
@@ -144,8 +146,13 @@ class RuleRiskSource:
                 "hits_by_rule": hits}
 
 
+def risk_alert(source: str, code: str, severity: str = "RISK") -> dict:
+    """위험 신호(내부 규칙 엔진과 외부 감지기 API가 함께 쓴다)를 StaffAlert로. 발화 원문은 없고 evidence에 `signal:<source>:<code>`만 담는다."""
+    return {"kind": severity, "reasons": [{"kind": "RISK_SIGNAL", "evidence": [f"{EVIDENCE_PREFIX}{source}:{code}"]}]}
+
+
 def rule_id_of(alert: Mapping) -> Optional[str]:
-    """StaffAlert에서 규칙 id를 꺼낸다(evidence의 `rule:<id>`). 없으면 None."""
+    """StaffAlert에서 `<source>:<code>`를 꺼낸다(evidence의 `signal:<source>:<code>`). 없으면 None."""
     for r in alert.get("reasons") or []:
         for ev in r.get("evidence") or []:
             if isinstance(ev, str) and ev.startswith(EVIDENCE_PREFIX):

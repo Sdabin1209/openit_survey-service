@@ -68,7 +68,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://127.0.0.1:
 
 # 공개 API 한 턴(PUBLIC_API.md): 시작, 발화(같은 turn_id 재시도는 같은 응답), 종료, 인증·404·409
 API="http://127.0.0.1:$PORT"
-post() { curl -sS -o /tmp/smoke-$$.body -w '%{http_code}' -X POST -H "Content-Type: application/json" ${3:+-H "Authorization: Bearer $3"} -d "$2" "$API$1"; }
+post() { curl -sS -o /tmp/smoke-$$.body -w '%{http_code}' -X POST -H "Content-Type: application/json" -H "X-Openit-User: smoke-staff" ${3:+-H "Authorization: Bearer $3"} -d "$2" "$API$1"; }
 [ "$(post /v1/sessions '{"session_id":"smoke-1","kind":"SESSION_START"}')" = 401 ] || fail "토큰 없는 시작이 거부되지 않음"
 [ "$(post /v1/sessions '{"session_id":"smoke-1","kind":"SESSION_START"}' smoke-api-token)" = 200 ] || fail "세션 시작"
 grep -q '"response_text": "' /tmp/smoke-$$.body || fail "시작 응답에 문장이 없다: $(cat /tmp/smoke-$$.body)"
@@ -83,6 +83,7 @@ A=$(cat /tmp/smoke-$$.body); echo "api turn:  $A"
 # 위험으로 멈춘 세션을 직원이 풀어 이어가는 한 바퀴(스모크 전용 위험 입력원 tests.smoke_fakes:risk_source가 잡는다. 실제 입력원은 아직 없다, CR-012), 직원이 끝내는 경우, 역할 분리
 rk() { post "/v1/sessions/$1/turns" "{\"session_id\":\"$1\",\"kind\":\"UTTERANCE\",\"utterance\":\"$2\",\"turn_id\":\"$3\"}" smoke-api-token; }
 iv() { post "/v1/sessions/$1/intervention" "{\"session_id\":\"$1\",\"decision\":\"$2\",\"turn_id\":\"$3\"}" "$4"; }
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" -H "Authorization: Bearer smoke-staff-token" -d '{"session_id":"smoke-1","decision":"RESUME","turn_id":"i-x"}' "$API/v1/sessions/smoke-1/intervention")" = 401 ] || fail "X-Openit-User 없는 개입이 401이 아니다"
 # 전달 경로가 없을 때(SSE 연결도 푸시도 없다): 알림은 저장되지만 DELIVERY_FAILED -> 목록에서는 조회된다
 [ "$(post /v1/sessions '{"session_id":"smoke-3","kind":"SESSION_START"}' smoke-api-token)" = 200 ] || fail "세션 3 시작"
 [ "$(rk smoke-3 "가슴이 너무 아파" r-1)" = 200 ] || fail "위험 발화 턴 3"

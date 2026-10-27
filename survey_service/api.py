@@ -26,6 +26,7 @@ import logging
 import re
 import threading
 import time
+from datetime import datetime
 from typing import Mapping, Optional
 from urllib.parse import parse_qs
 
@@ -36,7 +37,7 @@ from boundary_contracts import PIPELINE_SCHEMA_VERSION
 
 from .alerts import KIND_MAP, AlertService
 from .store.effects import model_key
-from .errors import StoreError, TurnIdConflict
+from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict
 from .orchestrator import Orchestrator
 
 log = logging.getLogger("survey_service.api")
@@ -46,6 +47,10 @@ TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 MAX_BODY = 64 * 1024
 HTTP_CODE = {"INVALID_RECORD": 400, "PERMISSION_DENIED": 401, "NOT_FOUND": 404, "CONFLICT": 409, "UNAVAILABLE": 503}
 STAFF_ROUTES = {"intervention", "staff_session", "alerts", "push_add", "push_del", "push_config"}
+ROLE_OF_ROUTE = {"result": "result-reader", "results": "result-reader", "risk_signal": "risk-source"}     # 그 밖의 직원 경로는 staff, 나머지는 kiosk
+SUBJECT_REF = re.compile(r"^[A-Za-z0-9._:/#=+-]{1,128}$")
+STAFF_ID = re.compile(r"^[A-Za-z0-9._:@/#=+-]{1,128}$")
+SESSION_STATUSES = ("IN_PROGRESS", "PAUSED_RISK", "ENDED_COMPLETE", "ENDED_STAFF", "ENDED_LEFT", "ENDED_USER_STOP")
 START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID = "start", "end", "idle-expire"   # turn_id가 없는 동작의 고정 ID(CR-009)
 RESERVED = (START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID)
 STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
@@ -60,11 +65,16 @@ def _err(code: str, message: str, status: Optional[int] = None, headers: Optiona
 class PublicApi:
     def __init__(self, orchestrator: Orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
                  max_utterance_chars: int = 1000, alerts: Optional[AlertService] = None, max_subscriptions: int = 100,
-                 retry_after_seconds: int = 1, state_poll_min_interval: float = 0.5) -> None:
+                 retry_after_seconds: int = 1, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
+                 risk_token: Optional[str] = None, require_subject_ref: bool = False) -> None:
         if not token:
             raise ValueError("공개 API 토큰이 비어 있다")
         if staff_token is not None and (not staff_token or hmac.compare_digest(staff_token.encode(), token.encode())):
             raise ValueError("직원 토큰은 비어 있지 않고 키오스크 토큰과 달라야 한다")
+        toks = [t for t in (token, staff_token, result_token, risk_token) if t is not None]
+        if (result_token is not None and not result_token) or (risk_token is not None and not risk_token) or len(set(toks)) != len(toks):
+            raise ValueError("토큰은 역할마다 비어 있지 않고 서로 달라야 한다")
+        self.result_token, self.risk_token, self.require_subject_ref = result_token, risk_token, require_subject_ref
         self.orch, self.token, self.staff_token = orchestrator, token, staff_token
         self.alerts, self.max_subscriptions = alerts, max_subscriptions
         self.max_chars = max_utterance_chars
@@ -75,24 +85,29 @@ class PublicApi:
         self._slots = threading.BoundedSemaphore(max_inflight)
         self._msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
         self._dec = jsonschema.Draft202012Validator(survey_schema.load_schema("InterventionDecision"))
+        self._sig = jsonschema.Draft202012Validator(survey_schema.load_schema("RiskSignal"))
 
     # ------------------------------------------------------------------ 진입
-    def handle(self, method: str, path: str, auth: str, raw: bytes) -> tuple[int, dict, dict]:
-        """(상태 코드, 본문, 추가 헤더). /healthz, /readyz는 service.py가 처리한다. 429·503에는 Retry-After(초, 정수)를 붙인다."""
-        status, body, headers = self._handle(method, path, auth, raw)
+    def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None) -> tuple[int, dict, dict]:
+        """(상태 코드, 본문, 추가 헤더). /healthz, /readyz는 service.py가 처리한다. 429·503에는 Retry-After(초, 정수)를 붙인다.
+        user는 게이트웨이가 인증한 계정 ID(X-Openit-User 헤더 값). 직원 개입에서만 쓴다."""
+        status, body, headers = self._handle(method, path, auth, raw, user)
         if status in (429, 503) and "Retry-After" not in headers:
             headers = {**headers, "Retry-After": str(self.retry_after)}
         return status, body, headers
 
-    def _handle(self, method: str, path: str, auth: str, raw: bytes):
+    def _handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None):
         path, _, query = path.partition("?")
         route = self._route(method, path)
         if route is None:
             return _err("NOT_FOUND", "경로가 없다")
+        want = ROLE_OF_ROUTE.get(route[0], "staff" if route[0] in STAFF_ROUTES else "kiosk")
+        if (want == "result-reader" and self.result_token is None) or (want == "risk-source" and self.risk_token is None):
+            return _err("NOT_FOUND", "경로가 없다")                  # 그 역할의 토큰을 설정하지 않았으면 기능이 꺼진 것이다
         role = self._role(auth)
         if role is None:
             return _err("PERMISSION_DENIED", "토큰이 없거나 틀리다", 401, {"WWW-Authenticate": "Bearer"})
-        if (route[0] in STAFF_ROUTES) != (role == "staff"):         # 직원 경로는 staff만, 키오스크 경로는 kiosk만
+        if want != role:                                           # 역할마다 자기 경로만
             return _err("PERMISSION_DENIED", "이 토큰의 역할로는 호출할 수 없다", 403)
         if len(raw) > MAX_BODY:
             return _err("INVALID_RECORD", "본문이 너무 크다")
@@ -104,7 +119,7 @@ class PublicApi:
                 return _err("INVALID_RECORD", "본문이 JSON이 아니다")
             if not isinstance(body, dict):
                 return _err("INVALID_RECORD", "본문이 JSON 객체가 아니다")
-        if route[0] in STAFF_ROUTES - {"intervention"} and self.alerts is None:
+        if (route[0] in STAFF_ROUTES - {"intervention"} or route[0] in ROLE_OF_ROUTE) and self.alerts is None:
             return _err("NOT_FOUND", "경로가 없다")
         if not self._slots.acquire(blocking=False):
             return _err("UNAVAILABLE", "요청이 너무 많다", 429)
@@ -116,6 +131,14 @@ class PublicApi:
                 return getattr(self, "_" + name)(arg)
             if name == "staff_session":
                 return self._staff_session(arg, role)
+            if name == "result":
+                return self._result(arg, role)
+            if name == "results":
+                return self._results(parse_qs(query), role)
+            if name == "intervention":
+                return self._intervention(body, arg, user)
+            if name == "risk_signal":
+                return self._risk_signal(body, arg)
             return getattr(self, "_" + name)(body, arg)
         finally:
             self._slots.release()
@@ -124,14 +147,24 @@ class PublicApi:
         if not auth.startswith("Bearer "):
             return None
         tok = auth[7:].encode()
-        kiosk = hmac.compare_digest(tok, self.token.encode())
-        staff = self.staff_token is not None and hmac.compare_digest(tok, self.staff_token.encode())
-        return "kiosk" if kiosk else ("staff" if staff else None)
+        found = None
+        for role, t in (("kiosk", self.token), ("staff", self.staff_token), ("result-reader", self.result_token), ("risk-source", self.risk_token)):
+            if t is not None and hmac.compare_digest(tok, t.encode()):       # 모든 토큰을 끝까지 비교한다
+                found = role
+        return found
 
     @staticmethod
     def _route(method: str, path: str):
         if method == "GET" and path == "/v1/staff/alerts":
             return ("alerts", None)
+        m = re.fullmatch(r"/v1/results/([^/]+)", path)
+        if method == "GET" and m:
+            return ("result", m.group(1))
+        if method == "GET" and path == "/v1/results":
+            return ("results", None)
+        m = re.fullmatch(r"/v1/sessions/([^/]+)/risk-signals", path)
+        if method == "POST" and m:
+            return ("risk_signal", m.group(1))
         m = re.fullmatch(r"/v1/staff/sessions/([^/]+)", path)
         if method == "GET" and m:
             return ("staff_session", m.group(1))
@@ -208,6 +241,10 @@ class PublicApi:
         rest, tid, err = self._envelope(body, required=False, reserved_ok=True)
         if err:
             return err
+        rest = dict(rest)
+        subject = rest.pop("subject_ref", None)             # 환자 참조는 문진 메시지(FrontendMessage)가 아니라 세션 메타다
+        if subject is not None and (not isinstance(subject, str) or not SUBJECT_REF.match(subject)):
+            return _err("INVALID_RECORD", "subject_ref는 [A-Za-z0-9._:/#=+-] 1~128자 문자열이어야 한다")
         msg, err = self._message(rest, None, "SESSION_START")
         if err:
             return err
@@ -218,6 +255,13 @@ class PublicApi:
                 return _err("UNAVAILABLE", "지금은 세션을 시작할 수 없다")
             if status and status.startswith("ENDED"):
                 return _err("CONFLICT", "이미 끝난 세션이다. 새 세션 ID로 시작해야 한다")
+            if status is None and subject is None and self.require_subject_ref:
+                return _err("INVALID_RECORD", "subject_ref가 필요하다")
+            if status is None and self.alerts is not None:
+                try:
+                    self.alerts.store.set_subject(sid, subject)       # 세션을 만들기 전에 남긴다: 못 남기면 시작하지 않는다
+                except StoreError:
+                    return _err("UNAVAILABLE", "세션 메타를 저장할 수 없다")
         return self._run(sid, tid, msg)
 
     def _turn(self, body: Mapping, path_sid: str):
@@ -259,10 +303,15 @@ class PublicApi:
             self._resolve_ended(sid)
         return res
 
-    def _intervention(self, body: Mapping, path_sid: str):
+    def _intervention(self, body: Mapping, path_sid: str, user: Optional[str] = None):
+        if not user:
+            return _err("PERMISSION_DENIED", "X-Openit-User(직원 계정 ID)가 없다", 401, {"WWW-Authenticate": "Bearer"})
+        if not STAFF_ID.match(user):
+            return _err("INVALID_RECORD", "X-Openit-User 형식이 아니다")
         rest, tid, err = self._envelope(body, required=True, reserved_ok=False)
         if err:
             return err
+        rest = {k: v for k, v in rest.items() if k != "staff_id"}        # 본문의 staff_id는 믿지 않는다(헤더만)
         sid = rest.get("session_id")
         if not isinstance(sid, str) or not SESSION_ID.match(sid):
             return _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
@@ -279,10 +328,10 @@ class PublicApi:
             if status != "PAUSED_RISK":
                 return _err("CONFLICT", "멈춘 세션이 아니다")
         try:
-            out = self.orch.handle_turn(turn_id=tid, intervention_decision=dict(rest))
+            out = self.orch.handle_turn(turn_id=tid, intervention_decision=dict(rest), staff_id=user)
         except TurnIdConflict:
             return _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다")
-        self._resolve_if_applied(out, sid, rest["decision"])
+        self._resolve_if_applied(out, sid, rest["decision"], user)
         return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
 
     # ------------------------------------------------------------------ 세션 상태 (키오스크 폴링)
@@ -318,13 +367,13 @@ class PublicApi:
         return None
 
     # ------------------------------------------------------------------ 해결 표시
-    def _resolve_if_applied(self, out, sid: str, decision: Optional[str]) -> None:
+    def _resolve_if_applied(self, out, sid: str, decision: Optional[str], staff_id: Optional[str] = None) -> None:
         """개입 결정이 성공했으면 그 세션의 열린 알림을 해결한다(멱등: 같은 turn_id 재전송에서도 다시 해 본다)."""
         ir = out.orchestrator_output.get("intervention_result")
         if self.alerts is None or not ir or ir.get("result") != "APPLIED":
             return
         try:
-            self.alerts.resolve(sid, decision)
+            self.alerts.resolve(sid, decision, staff_id)
         except StoreError:
             log.error("알림 해결 표시를 남기지 못했다 session=%s", sid)
 
@@ -354,6 +403,28 @@ class PublicApi:
             return _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다")
         return 200, {"items": items, "next_cursor": nxt}, {}
 
+    # ------------------------------------------------------------------ 환자 데이터 조회 공통
+    @staticmethod
+    def _values(doc: Mapping) -> list:
+        out = []
+        for rec in doc["answer_records"]:
+            cv = rec["current_value"]
+            if isinstance(cv, dict) and "answer" in cv:
+                out.append({"key": model_key(rec["slot"]), "value": cv["answer"],
+                            "status": "CORRECTION" if rec.get("history") else "ANSWERED", "precision": rec.get("precision", "unspecified")})
+        return out
+
+    def _audit(self, role: str, sids: list, outcome: str, detail: Optional[str] = None) -> bool:
+        """접근 기록을 남긴다. 못 남기면 False(호출자는 데이터를 주지 않는다)."""
+        try:
+            self.alerts.store.log_access_many(role, sids, outcome, detail)
+            return True
+        except StoreError:
+            log.error("접근 기록을 남기지 못해 조회를 거부했다 role=%s", role)
+            return False
+
+    _NO_AUDIT = ("UNAVAILABLE", "접근 기록을 남길 수 없어 조회하지 않았다")
+
     # ------------------------------------------------------------------ 직원 세션 조회 (staff)
     def _staff_session(self, sid: str, role: str):
         """StaffSessionView. 환자 데이터를 내보내므로 읽을 때마다 접근 기록(시각, 역할 이름, session_id)을 남긴다.
@@ -363,17 +434,15 @@ class PublicApi:
         status, r = self._state_of(sid)
         if status == "ERROR":
             return _err("UNAVAILABLE", "지금은 조회할 수 없다")
-        try:
-            self.alerts.store.log_access(role, sid, "OK" if r is not None and r["status"] == "OK" else "NOT_FOUND")
-        except StoreError:
-            log.error("접근 기록을 남기지 못해 조회를 거부했다 role=%s session=%s", role, sid)
-            return _err("UNAVAILABLE", "접근 기록을 남길 수 없어 조회하지 않았다")
+        if not self._audit(role, [sid], "OK" if r is not None and r["status"] == "OK" else "NOT_FOUND"):
+            return _err(*self._NO_AUDIT)
         if status is None:
             return _err("NOT_FOUND", "모르는 세션이다")
         doc = r["state"]
         try:
             times = self.alerts.store.timeline(sid)
             alerts = self.alerts.store.alerts_of_session(sid)
+            subject = self.alerts.store.subject_of(sid)
         except StoreError:
             return _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다")
         turns = []
@@ -381,17 +450,95 @@ class PublicApi:
             t = times.get(i) or {}
             turns.append({"turn_index": i, "turn_id": t.get("turn_id"), "at": t.get("at"), "utterance": e["input"]["utterance"],
                           "response_text": e["response_text"], "action": (e.get("extract_output") or {}).get("action")})
-        values = []
-        for rec in doc["answer_records"]:
-            cv = rec["current_value"]
-            if isinstance(cv, dict) and "answer" in cv:
-                values.append({"key": model_key(rec["slot"]), "value": cv["answer"],
-                               "status": "CORRECTION" if rec.get("history") else "ANSWERED", "precision": rec.get("precision", "unspecified")})
-        view = {"session_id": sid, "status": status, "release_id": self.orch.store.release_id_of(sid),
-                "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": values,
-                "alerts": [{"alert_id": a["alert_id"], "kind": {v: k for k, v in KIND_MAP.items()}.get(a["kind"], a["kind"]),
-                            "status": a["status"], "created_at": a["created_at"], "rule_id": a["rule_id"]} for a in alerts]}
+        kinds = {v: k for k, v in KIND_MAP.items()}
+        view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": self.orch.store.release_id_of(sid),
+                "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": self._values(doc),
+                "alerts": [{"alert_id": a["alert_id"], "kind": kinds.get(a["kind"], a["kind"]), "status": a["status"],
+                            "created_at": a["created_at"], "rule_id": a["rule_id"], "resolved_by": a["resolved_by"]} for a in alerts]}
         return 200, view, {}
+
+    # ------------------------------------------------------------------ 결과 조회 (result-reader)
+    def _result_of(self, sid: str, doc: Mapping, subject: Optional[str], times: Mapping) -> dict:
+        prog = doc["progress_record"]
+        log_ = doc["dialogue_log"]
+        ended = prog["session_status"].startswith("ENDED")
+        return {"session_id": sid, "subject_ref": subject, "status": prog["session_status"],
+                "started_at": (times.get(-1) or {}).get("at"),
+                "ended_at": (times.get(len(log_) - 1) or {}).get("at") if ended and log_ else None,
+                "release_id": self.orch.store.release_id_of(sid),
+                "question_bank_version": str(doc["session_info"]["question_bank_version"]),
+                "answers": self._values(doc), "skipped": [e["question_id"] for e in prog["skipped"]]}
+
+    def _result(self, sid: str, role: str):
+        """SessionResult(발화·대화 로그 없음, 부분 결과도 상태와 함께). 접근 기록 fail-closed."""
+        if not SESSION_ID.match(sid):
+            return _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
+        status, r = self._state_of(sid)
+        if status == "ERROR":
+            return _err("UNAVAILABLE", "지금은 조회할 수 없다")
+        if not self._audit(role, [sid], "OK" if status is not None else "NOT_FOUND"):
+            return _err(*self._NO_AUDIT)
+        if status is None:
+            return _err("NOT_FOUND", "모르는 세션이다")
+        try:
+            body = self._result_of(sid, r["state"], self.alerts.store.subject_of(sid), self.alerts.store.timeline(sid))
+        except StoreError:
+            return _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다")
+        return 200, body, {}
+
+    def _results(self, q: dict, role: str):
+        one = lambda k: (q.get(k) or [None])[0]
+        subject, status, after, cursor = one("subject_ref"), one("status"), one("updated_after"), one("cursor")
+        if subject is not None and not SUBJECT_REF.match(subject):
+            return _err("INVALID_RECORD", "subject_ref 형식이 아니다")
+        if status is not None and status not in SESSION_STATUSES:
+            return _err("INVALID_RECORD", "status 값이 아니다")
+        try:
+            limit = int(one("limit") or "50")
+            if not 1 <= limit <= 200:
+                raise ValueError
+            after_ts = None
+            if after is not None:
+                after_ts = datetime.fromisoformat(after.replace("Z", "+00:00")).timestamp()
+            cur = None
+            if cursor is not None:
+                ts, _, csid = cursor.partition("|")
+                cur = (float(ts), csid)
+                if not SESSION_ID.match(csid):
+                    raise ValueError
+        except (ValueError, OverflowError):
+            return _err("INVALID_RECORD", "limit(1~200), updated_after(ISO 8601), cursor가 잘못됐다")
+        try:
+            ids = self.alerts.store.sessions_of_subject(subject) if subject is not None else None
+            rows = self.orch.store.list_sessions(status=status, updated_after=after_ts, session_ids=ids, limit=limit + 1, after=cur)
+            items = []
+            for sid, _st, _ts in rows[:limit]:
+                r = self.orch.store.load(sid)
+                if r["status"] == "OK":
+                    items.append(self._result_of(sid, r["state"], self.alerts.store.subject_of(sid), self.alerts.store.timeline(sid)))
+        except StoreError:
+            return _err("UNAVAILABLE", "저장소를 읽을 수 없다")
+        names = sorted(k for k, v in (("subject_ref", subject), ("status", status), ("updated_after", after), ("cursor", cursor)) if v is not None)
+        if not self._audit(role, [i["session_id"] for i in items] or ["*"], "OK", "list " + ",".join(names)):     # 조건의 값(환자 참조)은 남기지 않는다
+            return _err(*self._NO_AUDIT)
+        nxt = f"{rows[limit - 1][2]!r}|{rows[limit - 1][0]}" if len(rows) > limit else None
+        return 200, {"items": items, "next_cursor": nxt}, {}
+
+    # ------------------------------------------------------------------ 위험 신호 입력 (risk-source)
+    def _risk_signal(self, body: Mapping, sid: str):
+        if not SESSION_ID.match(sid):
+            return _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
+        if list(self._sig.iter_errors(body)):
+            return _err("INVALID_RECORD", "RiskSignal 형식이 아니다(signal_id, source, code 필요. 모르는 필드 불가)")
+        try:
+            fresh, res = self.orch.apply_risk_signal(sid, body, alerts=self.alerts, signals=self.alerts.store)
+        except SessionNotFound:
+            return _err("NOT_FOUND", "모르는 세션이다")
+        except SessionEnded:
+            return _err("CONFLICT", "이미 끝난 세션이다")
+        except StoreError:
+            return _err("UNAVAILABLE", "지금은 처리할 수 없다")
+        return (201 if fresh else 200), res, {}
 
     def _push_config(self, _arg):
         return 200, {"vapid_public_key": self.alerts.public_key()}, {}

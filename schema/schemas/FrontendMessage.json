@@ -13,6 +13,11 @@
             },
             "kind": {
               "const": "SESSION_START"
+            },
+            "subject_ref": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$",
+              "description": "선택. 병원이 정한 불투명 환자·방문 참조(PUBLIC_API.md A절). 서비스는 세션 메타로만 저장하고 세션 문서·Trace·로그에는 넣지 않는다."
             }
           },
           "required": [

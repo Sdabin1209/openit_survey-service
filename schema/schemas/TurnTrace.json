@@ -611,6 +611,11 @@
               "type": "null"
             }
           ]
+        },
+        "staff_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "직원 개입 항목에서 게이트웨이가 인증한 계정 ID(X-Openit-User). 개입이 아닌 항목에는 없다."
         }
       },
       "required": [

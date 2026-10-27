@@ -15,7 +15,7 @@ from typing import Mapping, Optional
 
 from boundary_contracts import canonical
 
-from .errors import StoreError, TurnIdConflict
+from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict
 from .graph import SCHEMA_CONTRACT_VERSION, TRACE_KEYS, Route, TurnCtx, TurnGraph, initial_state, route  # noqa: F401 (재노출)
 import survey_schema
 
@@ -87,7 +87,7 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ 공개
     def handle_turn(self, *, turn_id: str, frontend_message: Optional[Mapping] = None,
-                    intervention_decision: Optional[Mapping] = None) -> TurnOutcome:
+                    intervention_decision: Optional[Mapping] = None, staff_id: Optional[str] = None) -> TurnOutcome:
         """한 턴을 처리한다. 같은 (세션, 턴 ID)는 저장한 결과를 그대로 돌려준다(이중 저장 없음).
 
         frontend_message(FrontendMessage)와 intervention_decision(InterventionDecision) 중 정확히 하나를 준다.
@@ -111,7 +111,7 @@ class Orchestrator:
             replay = self._replay(sid, turn_id, input_hash)
             if replay is not None:
                 return replay
-            out = self._process(sid, turn_id, frontend_message, intervention_decision, input_hash)
+            out = self._process(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id)
             try:
                 if out.cacheable:
                     self.store.save_turn_result(sid, turn_id, input_hash, {
@@ -121,6 +121,52 @@ class Orchestrator:
                 log.error("턴 결과를 멱등 기록에 남기지 못했다 (session=%s turn=%s)", sid, turn_id)
             self._submit_trace(out)
             return out
+
+    # ------------------------------------------------------------------ 외부 위험 신호 (D절)
+    def apply_risk_signal(self, sid: str, signal: Mapping, *, alerts, signals) -> tuple[bool, dict]:
+        """외부 감지기가 보낸 위험 신호를 기존 위험 처리와 같은 효과로 반영한다: 세션을 PAUSED_RISK로 멈추고(정지 기록에 신호 출처·코드)
+        직원 알림을 만든다(rule_id = `source:code`). 환자 발화는 다루지 않는다. 같은 signal_id는 저장된 결과를 돌려준다.
+        돌려주는 값: (새로 처리했는가, {alert_id, session_status}). 세션이 없으면 SessionNotFound, 끝났으면 SessionEnded, 저장 실패는 StoreError.
+        alerts는 raise_alert(session_id, kind, rule_id)를, signals는 get_signal·record_signal을 가진 객체(AlertService, AlertStore)다."""
+        from .graph import _pause_reasons
+        from .risk_rules import risk_alert
+        severity = signal.get("severity", "RISK")
+        with self._locks.hold(sid):
+            prev = signals.get_signal(sid, signal["signal_id"])
+            if prev is not None:
+                return False, prev
+            loaded = self.store.load(sid)
+            if loaded["status"] == "DB_ERROR":
+                raise StoreError("세션을 읽을 수 없다")
+            if loaded["status"] != "OK":
+                raise SessionNotFound(sid)
+            status = loaded["state"]["progress_record"]["session_status"]
+            if status.startswith("ENDED"):
+                raise SessionEnded(sid)
+            alert = risk_alert(signal["source"], signal["code"], severity)
+            if status != "PAUSED_RISK":
+                prog = loaded["state"]["progress_record"]
+                writes = {"answer_updates": [], "progress_record_update": {
+                    "current_question_id": prog["current_question_id"], "open_slots": copy.deepcopy(prog["open_slots"]), "skipped_add": [],
+                    "skipped_remove": [], "session_status": "PAUSED_RISK",
+                    "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(alert) if severity == "RISK" else []}]}}
+                res = self.store.commit({"session_id": sid, "expected_revision": loaded["revision"], "writes": writes},
+                                        turn_id="risk-signal:" + signal["signal_id"], input_hash=canonical.sha256_hash({"risk_signal": dict(signal)}))
+                if res["status"] != "OK":
+                    raise StoreError("세션을 멈추지 못했다")
+                status = "PAUSED_RISK"
+            rule_id = f"{signal['source']}:{signal['code']}"
+            try:
+                a = alerts.raise_alert(sid, severity, rule_id)
+            except Exception as e:                         # 전달 경로가 없어도 알림은 저장돼 있다(DeliveryFailed.alert)
+                a = getattr(e, "alert", None)
+                if a is None:
+                    raise
+                log.warning("위험 신호 알림이 닿은 전달 경로 없음 session=%s", sid)
+                self._count("risk_signal_delivery_failed")
+            signals.record_signal(sid, signal, int(a["alert_id"][3:]), status)
+            self._count("risk_signal_applied")
+            return True, {"alert_id": a["alert_id"], "session_status": status}
 
     # ------------------------------------------------------------------ 멱등
     def _replay(self, sid: str, turn_id: str, input_hash: str) -> Optional[TurnOutcome]:
@@ -144,9 +190,10 @@ class Orchestrator:
                            replayed=True)
 
     # ------------------------------------------------------------------ 처리 (그래프)
-    def _process(self, sid: str, turn_id: str, message: Optional[Mapping], decision: Optional[Mapping], input_hash: str) -> TurnOutcome:
+    def _process(self, sid: str, turn_id: str, message: Optional[Mapping], decision: Optional[Mapping], input_hash: str,
+                 staff_id: Optional[str] = None) -> TurnOutcome:
         st = initial_state(sid, turn_id, input_hash, dict(message) if message is not None else None,
-                           dict(decision) if decision is not None else None)
+                           dict(decision) if decision is not None else None, staff_id)
         final = self._graph.invoke(st, config={"configurable": {"ctx": TurnCtx()}})
         return TurnOutcome(final["orchestrator_output"], final["frontend_input"], final["console_input"], final["trace"],
                            final["out_release_id"], cacheable=final["cacheable"])

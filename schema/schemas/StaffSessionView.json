@@ -95,10 +95,21 @@
           "items": {
             "$ref": "#/$defs/StaffViewAlert"
           }
+        },
+        "subject_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubjectRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "session_id",
+        "subject_ref",
         "status",
         "release_id",
         "created_at",
@@ -239,6 +250,18 @@
               "type": "null"
             }
           ]
+        },
+        "resolved_by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "알림을 해결한 직원 계정 ID. 열려 있거나 개입 없이(이탈 등) 해결됐으면 null."
         }
       },
       "required": [
@@ -246,9 +269,15 @@
         "kind",
         "status",
         "created_at",
-        "rule_id"
+        "rule_id",
+        "resolved_by"
       ],
       "additionalProperties": false
+    },
+    "SubjectRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$",
+      "description": "병원이 정한 불투명 환자·방문 참조."
     }
   }
 }

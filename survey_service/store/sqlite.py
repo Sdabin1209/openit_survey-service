@@ -185,6 +185,49 @@ class SqliteSessionStore:
                                     (before,)).fetchall()
         return [r[0] for r in rows]
 
+    def list_sessions(self, *, status=None, updated_after=None, session_ids=None, limit=50, after=None):
+        conds, args = [], []
+        if status:
+            conds.append("status=?"); args.append(status)
+        if updated_after is not None:
+            conds.append("updated_at>?"); args.append(updated_after)
+        if after is not None:
+            conds.append("(updated_at>? OR (updated_at=? AND session_id>?))"); args += [after[0], after[0], after[1]]
+        if session_ids is not None:
+            if not session_ids:
+                return []
+            conds.append(f"session_id IN ({','.join('?' * len(session_ids))})"); args += list(session_ids)
+        q = "SELECT session_id, status, updated_at FROM sessions" + (" WHERE " + " AND ".join(conds) if conds else "") + " ORDER BY updated_at, session_id LIMIT ?"
+        with self._lock:
+            try:
+                return [tuple(r) for r in self._db.execute(q, args + [limit]).fetchall()]
+            except sqlite3.Error as e:
+                raise StoreError(f"세션 목록을 읽을 수 없다: {type(e).__name__}") from e
+
+    def list_ended_before(self, before: float) -> list[str]:
+        with self._lock:
+            try:
+                return [r[0] for r in self._db.execute("SELECT session_id FROM sessions WHERE status LIKE 'ENDED%' AND updated_at<? ORDER BY updated_at", (before,))]
+            except sqlite3.Error as e:
+                raise StoreError(f"세션 목록을 읽을 수 없다: {type(e).__name__}") from e
+
+    def delete_sessions(self, session_ids: list) -> int:
+        with self._lock:
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                n = 0
+                for sid in session_ids:
+                    n += self._db.execute("DELETE FROM sessions WHERE session_id=?", (sid,)).rowcount
+                    self._db.execute("DELETE FROM turns WHERE session_id=?", (sid,))
+                self._db.execute("COMMIT")
+                return n
+            except sqlite3.Error as e:
+                try:
+                    self._db.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+                raise StoreError(f"세션을 지울 수 없다: {type(e).__name__}") from e
+
     def open_release_ids(self) -> set[str]:
         with self._lock:
             rows = self._db.execute(

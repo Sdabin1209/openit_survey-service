@@ -49,6 +49,10 @@ class Settings:
     staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
     result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
     risk_source: str = ""           # 선택 팩토리(RiskSource). 없으면 직원 알림의 입력원이 없다(v2 A 출력에는 위험 신호가 없다, CR-012). /readyz에 드러난다
+    result_reader_token_env: str = "SURVEY_RESULT_READER_TOKEN"   # 결과 조회(역할 result-reader) 토큰이 든 변수 이름. 값이 없으면 /v1/results는 꺼진다(404)
+    risk_source_token_env: str = "SURVEY_RISK_SOURCE_TOKEN"       # 외부 위험 신호(역할 risk-source) 토큰. 값이 없으면 risk-signals는 꺼진다(404)
+    require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
+    session_retention_days: Optional[int] = None                   # None이면 세션을 지우지 않는다. 값이 있으면 `python -m survey_service purge`가 끝난 세션을 지운다
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
     release_poll_seconds: float = 5.0
     startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
@@ -88,6 +92,9 @@ class Settings:
     outbox_keep_sent_hours: int = 24
     log_level: str = "INFO"
 
+    def alert_db_path(self) -> str:
+        return self.alert_db or os.path.join(os.path.dirname(self.session_db) or ".", "alerts.db")
+
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> "Settings":
         env = os.environ if env is None else env
@@ -98,6 +105,10 @@ class Settings:
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
             result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""), risk_source=env.get("SURVEY_RISK_SOURCE", ""),
             risk_rules_file=env.get("SURVEY_RISK_RULES_FILE", ""),
+            result_reader_token_env=env.get("SURVEY_RESULT_READER_TOKEN_ENV", "SURVEY_RESULT_READER_TOKEN"),
+            risk_source_token_env=env.get("SURVEY_RISK_SOURCE_TOKEN_ENV", "SURVEY_RISK_SOURCE_TOKEN"),
+            require_subject_ref=env.get("SURVEY_REQUIRE_SUBJECT_REF", "").strip().lower() in ("1", "true", "yes", "on"),
+            session_retention_days=(_int(env, "SURVEY_SESSION_RETENTION_DAYS", 0, 1) or None) if env.get("SURVEY_SESSION_RETENTION_DAYS") else None,
             release_reader_url=env.get("SURVEY_RELEASE_READER_URL", ""),
             release_reader_token_env=env.get("SURVEY_RELEASE_READER_TOKEN_ENV", "SURVEY_RELEASE_READER_TOKEN"),
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),

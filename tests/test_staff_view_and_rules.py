@@ -64,7 +64,7 @@ def test_view_matches_schema_and_content(vr):
     converse(vr)
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")
     assert st == 200 and not list(VIEW.iter_errors(body))
-    assert set(body) == {"session_id", "status", "release_id", "created_at", "turns", "values", "alerts"}
+    assert set(body) == {"session_id", "subject_ref", "status", "release_id", "created_at", "turns", "values", "alerts"}
     assert body["session_id"] == "K1" and body["status"] == "IN_PROGRESS" and body["release_id"] == "rel-e2e-1"
     assert body["created_at"].endswith("Z")
     assert [t["turn_index"] for t in body["turns"]] == [0, 1] and [t["turn_id"] for t in body["turns"]] == ["start", "t-1"]
@@ -80,13 +80,13 @@ def test_view_includes_alert_with_rule_id_and_no_raw_text_in_alert_surfaces(vr):
     vr.post("/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": f"저기 {TEST_PHRASE} 입니다", "turn_id": "t-2"})
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")
     assert st == 200 and not list(VIEW.iter_errors(body)) and body["status"] == "PAUSED_RISK"
-    assert [(a["kind"], a["status"], a["rule_id"]) for a in body["alerts"]] == [("RISK", "OPEN", "t-phrase")]
+    assert [(a["kind"], a["status"], a["rule_id"]) for a in body["alerts"]] == [("RISK", "OPEN", "internal:t-phrase")]
     # 알림 저장소(알림·이벤트·접근 기록)와 알림 목록, 정지 기록에 발화 원문이 없다
     st, listing, _ = vr.call("GET", "/v1/staff/alerts")
     assert st == 200 and TEST_PHRASE not in json.dumps(listing, ensure_ascii=False)
     dump = "\n".join(sqlite3.connect(str(vr.store._db.execute("PRAGMA database_list").fetchone()[2])).iterdump())
-    assert TEST_PHRASE not in dump and "저기" not in dump and "rule:t-phrase" in dump.replace("t-phrase", "rule:t-phrase")
-    assert vr.rig.doc("K1")["progress_record"]["pause_history"][0]["reasons"] == [{"kind": "RISK_SIGNAL", "evidence": ["rule:t-phrase"]}]
+    assert TEST_PHRASE not in dump and "저기" not in dump and "internal:t-phrase" in dump
+    assert vr.rig.doc("K1")["progress_record"]["pause_history"][0]["reasons"] == [{"kind": "RISK_SIGNAL", "evidence": ["signal:internal:t-phrase"]}]
 
 
 def test_view_not_found_and_auth(vr):
@@ -120,7 +120,7 @@ def test_read_is_refused_when_access_cannot_be_logged(vr):
     def boom(*a, **k):
         from survey_service.errors import StoreError
         raise StoreError("x")
-    vr.store.log_access = boom
+    vr.store.log_access_many = boom
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")
     assert st == 503 and "turns" not in body and "아니요" not in json.dumps(body, ensure_ascii=False)
 
@@ -188,7 +188,7 @@ def test_matching_contains_and_regex_first_rule_wins():
     assert src.match("xx abc시험 xx") == "r1"                       # 대소문자 무시, 파일 순서
     assert src.match("시험42") == "r2"
     alert = src.check(extract_input={}, extract_output={}, utterance="시험42입니다")
-    assert alert == {"kind": "RISK", "reasons": [{"kind": "RISK_SIGNAL", "evidence": ["rule:r2"]}]}
+    assert alert == {"kind": "RISK", "reasons": [{"kind": "RISK_SIGNAL", "evidence": ["signal:internal:r2"]}]}
     assert src.check(extract_input={}, extract_output={}, utterance="평범") is None
     assert src.describe()["hits_by_rule"] == {"r2": 1}
 
@@ -201,7 +201,7 @@ def test_rule_hit_pauses_session_and_noop_otherwise(vr):
     vr.rig.model.queue.append(RISK_OUT)
     st, body, _ = vr.post("/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "시험정규식77", "turn_id": "t-3"})
     assert st == 200      # 구독자가 없어 전달 판정은 DELIVERY_FAILED일 수 있다(알림은 저장된다)
-    assert [a["rule_id"] for a in vr.store.alerts_of_session("K1")] == ["t-phrase"]
+    assert [a["rule_id"] for a in vr.store.alerts_of_session("K1")] == ["internal:t-phrase"]
     assert vr.rig.doc("K1")["progress_record"]["session_status"] == "PAUSED_RISK"
 
 

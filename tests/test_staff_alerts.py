@@ -46,7 +46,7 @@ class AlertRig:
 
     def call(self, method, path, body=None, auth=STAFF):
         raw = json.dumps(body).encode() if body is not None else b""
-        return self.api.handle(method, path, auth, raw)
+        return self.api.handle(method, path, auth, raw, user="staff-1")
 
     def start(self, sid="K1"):
         return self.call("POST", "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"}, auth=AUTH)
@@ -392,6 +392,7 @@ def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com"
 
 def http_call(port, method, path, body=None, token="test-staff-token", headers=None):
     h = {"Authorization": f"Bearer {token}"} if token else {}
+    h["X-Openit-User"] = "staff-1"           # 게이트웨이가 붙이는 직원 계정 ID(E절)
     h.update(headers or {})
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=json.dumps(body).encode() if body is not None else None, headers=h)
     try:

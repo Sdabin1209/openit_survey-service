@@ -1,5 +1,7 @@
 # CR-013 직원 세션 조회 API (`GET /v1/staff/sessions/{session_id}`)를 PUBLIC_API.md에 추가
 
+> **처리됨: PUBLIC_API.md C절에 반영됐다(D85).** C절은 이 문서의 문구에 최상위 `subject_ref`와 `alerts[].resolved_by`를 더하고, null 허용과 `values[].status`(`ANSWERED|CORRECTION`) 제안을 채택했다. 구현은 그 모양이다(아래 문구는 당시 기록).
+
 상태: **헤드가 PUBLIC_API.md에 반영해 주세요.** 이 영역은 구현을 끝냈다(`survey_service/api.py`, 스키마 `schema/schemas/StaffSessionView.json`). `boundary-contracts`는 헤드 소유라 직접 고치지 않았다.
 
 문진 스키마 정수 버전(`CONTRACT_VERSION`)은 올리지 않았다(이유는 CHANGELOG). 응답 모양은 프론트와 합의된 것을 그대로 따랐고, 아래 "합의된 모양과 다른 점"만 확인이 필요하다.

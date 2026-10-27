@@ -19,6 +19,8 @@ components:
     input: StaffConsoleInput
     output: InterventionDecision
     view: StaffSessionView
+    risk_signal_input: RiskSignal
+    result_view: SessionResult
 - name: Orchestrator
   title: LangGraph
   kind: 흐름 제어

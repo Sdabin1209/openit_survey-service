@@ -94,6 +94,27 @@ class MemorySessionStore:
             return [k for k, s in sorted(self._sessions.items(), key=lambda kv: kv[1]["updated_at"])
                     if s["doc"]["progress_record"]["session_status"] == "IN_PROGRESS" and s["updated_at"] < before]
 
+    def list_sessions(self, *, status=None, updated_after=None, session_ids=None, limit=50, after=None):
+        with self._lock:
+            rows = [(k, s["doc"]["progress_record"]["session_status"], s["updated_at"]) for k, s in self._sessions.items()]
+        rows = [r for r in rows if (not status or r[1] == status) and (updated_after is None or r[2] > updated_after)
+                and (session_ids is None or r[0] in set(session_ids)) and (after is None or (r[2], r[0]) > tuple(after))]
+        return sorted(rows, key=lambda r: (r[2], r[0]))[:limit]
+
+    def list_ended_before(self, before: float) -> list[str]:
+        with self._lock:
+            return [k for k, s in sorted(self._sessions.items(), key=lambda kv: kv[1]["updated_at"])
+                    if s["doc"]["progress_record"]["session_status"].startswith("ENDED") and s["updated_at"] < before]
+
+    def delete_sessions(self, session_ids: list) -> int:
+        with self._lock:
+            n = 0
+            for sid in session_ids:
+                n += 1 if self._sessions.pop(sid, None) is not None else 0
+                for k in [k for k in self._turns if k[0] == sid]:
+                    del self._turns[k]
+            return n
+
     def open_release_ids(self) -> set[str]:
         with self._lock:
             return {s["release_id"] for s in self._sessions.values()

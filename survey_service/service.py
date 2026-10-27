@@ -71,7 +71,7 @@ class App:
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
         self.store = SqliteSessionStore(settings.session_db)
         self.outbox = Outbox(settings.outbox_db)
-        self.alert_store = AlertStore(settings.alert_db or os.path.join(os.path.dirname(settings.session_db) or ".", "alerts.db"))
+        self.alert_store = AlertStore(settings.alert_db_path())
         push = None
         vapid_key = _secret(settings.vapid_private_key_env, "VAPID 비밀키") or ""
         if vapid_key:                                       # 키가 없으면 푸시 없이 SSE만 동작한다
@@ -123,7 +123,12 @@ class App:
             raise ConfigError(f"직원 개입 토큰이 {settings.staff_api_token_env}_FILE(파일) 또는 환경 변수 {settings.staff_api_token_env}에 없다")
         if staff_token == api_token:
             raise ConfigError("직원 개입 토큰은 키오스크 토큰과 달라야 한다")
+        result_token = _secret(settings.result_reader_token_env, "결과 조회 토큰") or None     # 없으면 해당 API가 꺼진다
+        risk_token = _secret(settings.risk_source_token_env, "위험 신호 토큰") or None
+        if result_token in (api_token, staff_token) or risk_token in (api_token, staff_token) or (result_token and result_token == risk_token):
+            raise ConfigError("토큰은 역할마다 서로 달라야 한다")
         self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
+                             result_token=result_token, risk_token=risk_token, require_subject_ref=settings.require_subject_ref,
                              retry_after_seconds=settings.retry_after_seconds, state_poll_min_interval=settings.state_poll_min_interval_seconds,
                              max_inflight=settings.api_max_inflight,
                              max_utterance_chars=settings.api_max_utterance_chars)
@@ -185,7 +190,8 @@ class App:
     def _secret_sources(self) -> dict:
         """비밀 출처만(file|env|unset). 값·파일 경로·변수 이름은 내지 않는다(D84)."""
         st = self.settings
-        names = {"api_token": st.api_token_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env}
+        names = {"api_token": st.api_token_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env,
+                 "result_reader_token": st.result_reader_token_env, "risk_source_token": st.risk_source_token_env}
         if st.inference_url:
             names["inference_token"] = st.inference_token_env
         if st.release_reader == "http":
@@ -260,7 +266,8 @@ def make_handler(app: App):
         def _api(self):
             n = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(n) if 0 < n <= 1_000_000 else b""
-            code, body, hdr = app.api.handle(self.command, self.path, self.headers.get("Authorization", ""), raw)
+            code, body, hdr = app.api.handle(self.command, self.path, self.headers.get("Authorization", ""), raw,
+                                             user=(self.headers.get("X-Openit-User") or "").strip() or None)
             out = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -344,7 +351,14 @@ def serve(app: App, port: int) -> ThreadingHTTPServer:
     return ThreadingHTTPServer(("0.0.0.0", port), make_handler(app))
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["purge"]:
+        from .retention import run_purge
+        return run_purge()
+    if argv:
+        print("알 수 없는 명령: 서버는 인자 없이, 보존 정리는 `purge`", file=sys.stderr)
+        return 2
     try:
         settings = Settings.from_env()
     except ConfigError as e:

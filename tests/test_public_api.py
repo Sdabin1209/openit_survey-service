@@ -28,7 +28,7 @@ FI = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
 
 def call(api, method, path, body=None, auth=AUTH, raw=None):
     data = raw if raw is not None else (json.dumps(body, ensure_ascii=False).encode() if body is not None else b"")
-    return api.handle(method, path, auth, data)
+    return api.handle(method, path, auth, data, user="staff-1")
 
 
 @pytest.fixture

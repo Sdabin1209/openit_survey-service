@@ -92,6 +92,7 @@ class TurnState(TypedDict, total=False):
     input_kind: str
     in_kind: str
     utterance: Optional[str]
+    staff_id: Optional[str]         # 개입 결정을 보낸 직원 계정(게이트웨이가 인증한 X-Openit-User). 개입이 아니면 None
     # 조회와 처리 표
     loaded: dict
     found: bool
@@ -143,7 +144,8 @@ class TurnCtx:
         self.bank: Optional[assembly.Bank] = None
 
 
-def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optional[dict], decision: Optional[dict]) -> TurnState:
+def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optional[dict], decision: Optional[dict],
+                  staff_id: Optional[str] = None) -> TurnState:
     trace = {k: None for k in TRACE_KEYS}
     trace.update(session_id=session_id, turn_id=turn_id, contract_version=SCHEMA_CONTRACT_VERSION,
                  frontend_message=copy.deepcopy(message), intervention_decision=copy.deepcopy(decision))
@@ -153,7 +155,7 @@ def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optio
         input_kind, in_kind, utterance = decision["decision"], "INTERVENTION", None
     return TurnState(
         session_id=session_id, turn_id=turn_id, input_hash=input_hash, message=copy.deepcopy(message),
-        decision=copy.deepcopy(decision), input_kind=input_kind, in_kind=in_kind, utterance=utterance, trace=trace,
+        decision=copy.deepcopy(decision), input_kind=input_kind, in_kind=in_kind, utterance=utterance, staff_id=staff_id if decision is not None else None, trace=trace,
         failed=[], console_calls=[], committed=False, commit_unknown=False, staff_status="NONE", staff_delivery="NOT_APPLICABLE",
         response_text=None, signal=None, intervention_result=None, dispatch_called=False, console_delivered=False,
         console={"staff_alert": None, "turn_failure_signal": None, "intervention_result": None},
@@ -666,7 +668,9 @@ class TurnGraph:
         else:
             result = "COMMITTED"
         decision = st["decision"]
+        extra = {"staff_id": st["staff_id"]} if decision is not None and st.get("staff_id") else {}
         return {
+            **extra,
             "input": {"kind": st["in_kind"], "utterance": st["utterance"], "intervention_decision": decision["decision"] if decision else None},
             "handling": {"handled": handled} if handled else "IGNORED",
             "question_bank_version": bank_version,
