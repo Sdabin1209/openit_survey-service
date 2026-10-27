@@ -27,7 +27,7 @@ from .risk_rules import rule_id_of
 
 log = logging.getLogger("survey_service.alerts")
 
-_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"))
+_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"))
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (
@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS staff_access_log (
   role TEXT NOT NULL,
   session_id TEXT NOT NULL,
   outcome TEXT NOT NULL,
-  detail TEXT
+  detail TEXT,
+  user_id TEXT
 );
 CREATE TABLE IF NOT EXISTS session_meta (
   session_id TEXT PRIMARY KEY,
@@ -231,16 +232,16 @@ class AlertStore:
         rows = self._read("SELECT turn_index, turn_id, at FROM session_timeline WHERE session_id=?", (session_id,))
         return {r[0]: {"turn_id": r[1], "at": r[2]} for r in rows}
 
-    def log_access(self, role: str, session_id: str, outcome: str, detail: Optional[str] = None) -> None:
+    def log_access(self, role: str, session_id: str, outcome: str, detail: Optional[str] = None, user: Optional[str] = None) -> None:
         """환자 데이터 조회 기록: (시각, 토큰의 역할 이름, session_id, 결과, 조회 조건 이름). 토큰 값·발화·환자 참조 값은 넣지 않는다. 실패하면 StoreError."""
-        self.log_access_many(role, [session_id], outcome, detail)
+        self.log_access_many(role, [session_id], outcome, detail, user)
 
-    def log_access_many(self, role: str, session_ids: list, outcome: str, detail: Optional[str] = None) -> None:
+    def log_access_many(self, role: str, session_ids: list, outcome: str, detail: Optional[str] = None, user: Optional[str] = None) -> None:
         """목록 조회: 돌려주는 세션마다 한 행을 한 트랜잭션으로 남긴다."""
         at = _iso(self._clock())
         def fn():
             for sid in session_ids:
-                self._db.execute("INSERT INTO staff_access_log(at, role, session_id, outcome, detail) VALUES (?,?,?,?,?)", (at, role, sid, outcome, detail))
+                self._db.execute("INSERT INTO staff_access_log(at, role, session_id, outcome, detail, user_id) VALUES (?,?,?,?,?,?)", (at, role, sid, outcome, detail, user))
         self._txn(fn)
 
     # ---- 세션 메타(환자 참조), 위험 신호, 보존
@@ -284,12 +285,29 @@ class AlertStore:
             return n
         return self._txn(fn)
 
+    # ---- 보존(D88 U4): 기간이 지난 행을 지운다. 멱등
+    def purge_access_log(self, older_than_ts: float) -> int:
+        cut = _iso(older_than_ts)
+        return self._txn(lambda: self._db.execute("DELETE FROM staff_access_log WHERE at<?", (cut,)).rowcount)
+
+    def purge_resolved_alerts(self, older_than_ts: float) -> int:
+        """해결된 지 older_than_ts보다 오래된 알림과 그 이벤트를 지운다. 열린(OPEN) 알림은 지우지 않는다."""
+        cut = _iso(older_than_ts)
+
+        def fn():
+            ns = [r[0] for r in self._db.execute("SELECT n FROM alerts WHERE status='RESOLVED' AND resolved_at<?", (cut,)).fetchall()]
+            for n in ns:
+                self._db.execute("DELETE FROM alert_events WHERE alert_n=?", (n,))
+                self._db.execute("DELETE FROM alerts WHERE n=?", (n,))
+            return len(ns)
+        return self._txn(fn)
+
     def access_log(self, session_id: Optional[str] = None, limit: int = 100) -> list[dict]:
-        q, args = "SELECT n, at, role, session_id, outcome FROM staff_access_log", []
+        q, args = "SELECT n, at, role, session_id, outcome, user_id FROM staff_access_log", []
         if session_id:
             q += " WHERE session_id=?"; args.append(session_id)
         rows = self._read(q + " ORDER BY n DESC LIMIT ?", args + [limit])
-        return [{"n": r[0], "at": r[1], "role": r[2], "session_id": r[3], "outcome": r[4]} for r in rows]
+        return [{"n": r[0], "at": r[1], "role": r[2], "session_id": r[3], "outcome": r[4], "user_id": r[5]} for r in rows]
 
     # ---- 푸시 구독
     def upsert_subscription(self, sub: Mapping) -> bool:

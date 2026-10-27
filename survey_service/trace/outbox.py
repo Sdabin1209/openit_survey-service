@@ -140,6 +140,11 @@ class Outbox:
                                     (limit,)).fetchall()
         return [{"session_id": r[0], "turn_id": r[1], "error": r[2]} for r in rows]
 
+    def purge_dead(self, older_than: float) -> int:
+        """DEAD로 끝난 지 older_than보다 오래된 행을 지운다(D88 U4: DEAD도 무기한 남기지 않는다)."""
+        with self._lock:
+            return self._db.execute("DELETE FROM outbox WHERE state='DEAD' AND finished_at<?", (older_than,)).rowcount
+
     def purge_sent(self, older_than: float) -> int:
         with self._lock:
             return self._db.execute("DELETE FROM outbox WHERE state='SENT' AND finished_at<?", (older_than,)).rowcount

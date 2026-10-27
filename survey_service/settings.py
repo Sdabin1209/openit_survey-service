@@ -24,6 +24,20 @@ def _int(env: Mapping, key: str, default: int, minimum: int = 0) -> int:
     return v
 
 
+def _retention(env: Mapping, key: str, default: int) -> int:
+    """보존 기간(일). 기본값이 있고 무기한(null·0·빈 값·none)은 거부한다(D88 U4, ADR-0015)."""
+    raw = env.get(key)
+    if raw is None:
+        return default
+    try:
+        v = int(str(raw).strip())
+    except ValueError:
+        raise ConfigError(f"{key}는 1 이상의 정수(일)여야 한다. 무기한은 허용하지 않는다") from None
+    if v < 1:
+        raise ConfigError(f"{key}는 1 이상이어야 한다. 무기한은 허용하지 않는다")
+    return v
+
+
 def _float(env: Mapping, key: str, default: float) -> float:
     raw = env.get(key)
     if raw is None or raw == "":
@@ -52,7 +66,11 @@ class Settings:
     result_reader_token_env: str = "SURVEY_RESULT_READER_TOKEN"   # 결과 조회(역할 result-reader) 토큰이 든 변수 이름. 값이 없으면 /v1/results는 꺼진다(404)
     risk_source_token_env: str = "SURVEY_RISK_SOURCE_TOKEN"       # 외부 위험 신호(역할 risk-source) 토큰. 값이 없으면 risk-signals는 꺼진다(404)
     require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
-    session_retention_days: Optional[int] = None                   # None이면 세션을 지우지 않는다. 값이 있으면 `python -m survey_service purge`가 끝난 세션을 지운다
+    session_retention_days: int = 90                               # 끝난 세션 보존(일). D88 U4 잠정값, 병원 규정이 다르면 설정만 바꾼다. 끌 수 없다(null·0 거부) (ADR-0015)
+    access_log_retention_days: int = 365                           # staff_access_log 보존(일)
+    alert_retention_days: int = 365                                # 해결된 알림 보존(일, 해결 시각 기준). 열린 알림은 지우지 않는다
+    dead_outbox_retention_days: int = 30                           # DEAD로 끝난 Trace 행 보존(일)
+    retention_interval_seconds: int = 3600                         # 서비스 안에서 보존 정리를 도는 주기(초). 0이면 서비스는 돌리지 않는다(deploy의 purge 잡만)
     risk_default_rules: bool = True  # 규칙 파일·입력원이 없으면 임시 기본 목록(임상 검토 전)을 쓴다. SURVEY_RISK_DEFAULT_RULES=off로 끈다 (ADR-0013)
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
     turn_deadline_seconds: float = 6.0            # 서버 턴 총 마감(초). 키오스크 대기 10초보다 짧게. 넘으면 NOT_COMMITTED(FAULT_POLICY 3)
@@ -118,7 +136,11 @@ class Settings:
             result_reader_token_env=env.get("SURVEY_RESULT_READER_TOKEN_ENV", "SURVEY_RESULT_READER_TOKEN"),
             risk_source_token_env=env.get("SURVEY_RISK_SOURCE_TOKEN_ENV", "SURVEY_RISK_SOURCE_TOKEN"),
             require_subject_ref=env.get("SURVEY_REQUIRE_SUBJECT_REF", "").strip().lower() in ("1", "true", "yes", "on"),
-            session_retention_days=(_int(env, "SURVEY_SESSION_RETENTION_DAYS", 0, 1) or None) if env.get("SURVEY_SESSION_RETENTION_DAYS") else None,
+            session_retention_days=_retention(env, "SURVEY_SESSION_RETENTION_DAYS", 90),
+            access_log_retention_days=_retention(env, "SURVEY_ACCESS_LOG_RETENTION_DAYS", 365),
+            alert_retention_days=_retention(env, "SURVEY_ALERT_RETENTION_DAYS", 365),
+            dead_outbox_retention_days=_retention(env, "SURVEY_DEAD_OUTBOX_RETENTION_DAYS", 30),
+            retention_interval_seconds=_int(env, "SURVEY_RETENTION_INTERVAL_SECONDS", 3600, 0),
             release_reader_url=env.get("SURVEY_RELEASE_READER_URL", ""),
             release_reader_token_env=env.get("SURVEY_RELEASE_READER_TOKEN_ENV", "SURVEY_RELEASE_READER_TOKEN"),
             trace_ingest_url=env.get("SURVEY_TRACE_INGEST_URL", ""),

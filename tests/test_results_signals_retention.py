@@ -293,7 +293,7 @@ def test_retention_purges_only_old_ended_sessions_and_keeps_access_log(tmp_path)
 def test_settings_parse_new_options():
     base = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
     s = Settings.from_env(base)
-    assert s.session_retention_days is None and s.require_subject_ref is False
+    assert s.session_retention_days == 90 and s.require_subject_ref is False
     s = Settings.from_env({**base, "SURVEY_SESSION_RETENTION_DAYS": "30", "SURVEY_REQUIRE_SUBJECT_REF": "true"})
     assert s.session_retention_days == 30 and s.require_subject_ref is True
     for bad in ("0", "-3", "abc"):

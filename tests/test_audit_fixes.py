@@ -51,3 +51,74 @@ def test_release_with_blank_fixed_sentence_is_rejected(tmp_path):
             f["sentence"] = "  "
     reg, loader = _loader(tmp_path, bank)
     assert loader.poll_once().code == "MISSING_FIXED_SENTENCE"
+
+
+# ---------------------------------------------------------------- 보존(D88 U4)과 접근 기록의 개인 ID(U7)
+import time
+
+import pytest
+
+from survey_service.alerts import AlertStore
+from survey_service.retention import purge, purge_session
+from survey_service.settings import ConfigError, Settings
+from survey_service.store.sqlite import SqliteSessionStore
+from survey_service.trace import Outbox
+
+BASE_ENV = {"SURVEY_RELEASE_READER": "x", "SURVEY_TRACE_INGEST": "x", "SURVEY_MODEL_BACKEND": "fake"}
+
+
+def test_retention_defaults_are_finite_and_unlimited_is_rejected():
+    s = Settings.from_env(BASE_ENV)
+    assert (s.session_retention_days, s.access_log_retention_days, s.alert_retention_days, s.dead_outbox_retention_days) == (90, 365, 365, 30)
+    for k in ("SURVEY_SESSION_RETENTION_DAYS", "SURVEY_ACCESS_LOG_RETENTION_DAYS", "SURVEY_ALERT_RETENTION_DAYS", "SURVEY_DEAD_OUTBOX_RETENTION_DAYS"):
+        for bad in ("", "0", "none", "null", "-1"):
+            with pytest.raises(ConfigError):
+                Settings.from_env({**BASE_ENV, k: bad})
+    assert Settings.from_env({**BASE_ENV, "SURVEY_SESSION_RETENTION_DAYS": "30"}).session_retention_days == 30
+
+
+def test_purge_removes_old_access_log_resolved_alerts_dead_outbox_and_keeps_recent_and_open(tmp_path):
+    t = [time.time()]
+    alerts = AlertStore(str(tmp_path / "a.db"), clock=lambda: t[0])
+    ob = Outbox(str(tmp_path / "o.db"))
+    store = SqliteSessionStore(str(tmp_path / "s.db"))
+    old = time.time() - 400 * 86400
+    t[0] = old
+    alerts.log_access("staff", "S1", "OK", None, "kim")
+    a_old = alerts.create("S1", "RISK_STOP", None)["alert"]["alert_id"]
+    alerts.resolve("S1", "RESUME", "kim")
+    t[0] = time.time()
+    alerts.log_access("staff", "S2", "OK", None, "lee")
+    alerts.create("S2", "RISK_STOP", None)                                        # 열린 알림
+    ob.enqueue({"session_id": "s", "turn_id": "t1"}, old)
+    ob.mark_dead(1, old, "PERMISSION_DENIED: x")
+    ob.enqueue({"session_id": "s", "turn_id": "t2"}, time.time())
+    ob.mark_dead(2, time.time(), "PERMISSION_DENIED: x")
+    res = purge(store, alerts, 90, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)
+    assert res["purged_access_log"] == 1 and res["purged_alerts"] == 1 and res["purged_dead_outbox"] == 1
+    assert [r["session_id"] for r in alerts.access_log()] == ["S2"] and alerts.access_log()[0]["user_id"] == "lee"
+    assert [a["session_id"] for a in alerts.list(None, 10, None)[0]] == ["S2"] and ob.counts()["DEAD"] == 1
+    assert purge(store, alerts, 90, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)["purged_access_log"] == 0      # 멱등
+
+
+def test_purge_single_session(tmp_path):
+    rig = Rig()
+    rig.start()
+    alerts = AlertStore(str(tmp_path / "a.db"))
+    alerts.set_subject("S1", "patient-ref-1")
+    assert purge_session(rig.store, alerts, "S1") == {"purged_sessions": 1} if hasattr(rig.store, "delete_sessions") else True
+    assert rig.store.load("S1")["status"] == "NOT_FOUND" and alerts.subject_of("S1") is None
+
+
+def test_access_log_records_the_authenticated_user_from_header_or_role_only(tmp_path, monkeypatch):
+    from .test_staff_alerts import http_call, make_app, start_and_risk
+    app, httpd, port = make_app(tmp_path, monkeypatch)
+    try:
+        start_and_risk(port, "K1", "t-1")
+        assert http_call(port, "GET", "/v1/staff/sessions/K1", headers={"X-Openit-User": "nurse.kim"})[0] == 200
+        assert http_call(port, "GET", "/v1/staff/sessions/K1", headers={"X-Openit-User": "bad user;drop"})[0] == 200        # 형식이 어긋나면 개인 ID 없이 역할만
+        rows = app.alert_store.access_log("K1")
+        assert {r["user_id"] for r in rows} == {"nurse.kim", None} and all(r["role"] == "staff" for r in rows)
+        assert "retention" in app.readiness()[1] and app.readiness()[1]["retention"]["indefinite"] is False
+    finally:
+        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()

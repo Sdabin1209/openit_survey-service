@@ -112,7 +112,7 @@ def test_every_read_is_logged_without_secrets_or_utterances(vr):
     assert all(r["at"].endswith("Z") for r in rows)
     text = json.dumps(rows, ensure_ascii=False)
     assert "stok" not in text and "아니요" not in text and "tok" not in text.replace("stok", "")
-    assert set(rows[0]) == {"n", "at", "role", "session_id", "outcome"}
+    assert set(rows[0]) == {"n", "at", "role", "session_id", "outcome", "user_id"}
 
 
 def test_read_is_refused_when_access_cannot_be_logged(vr):

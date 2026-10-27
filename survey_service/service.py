@@ -138,6 +138,7 @@ class App:
                              max_inflight=settings.api_max_inflight,
                              max_utterance_chars=settings.api_max_utterance_chars)
         self._stop = threading.Event()
+        self.last_retention: dict = {}
         self.draining = threading.Event()        # SIGTERM을 받았다: /readyz는 503(shutting_down), 처리 중 요청은 끝낸다
         self._threads: list = []
 
@@ -171,6 +172,23 @@ class App:
         t.start()
         self._threads.append(t)
         first_done.wait(self.settings.startup_wait_seconds)
+        st = self.settings
+        log.info("보존 기간(일) session=%s access_log=%s alerts=%s dead_outbox=%s (잠정 기본값, 병원 규정에 맞게 설정)",
+                 st.session_retention_days, st.access_log_retention_days, st.alert_retention_days, st.dead_outbox_retention_days)
+        if st.retention_interval_seconds > 0:
+            def retention_loop():
+                from .retention import purge
+                while not self._stop.wait(st.retention_interval_seconds):
+                    try:
+                        self.last_retention = purge(self.store, self.alert_store, st.session_retention_days, outbox=self.outbox,
+                                                    access_log_days=st.access_log_retention_days, alert_days=st.alert_retention_days,
+                                                    dead_outbox_days=st.dead_outbox_retention_days)
+                        self.last_retention["at"] = time.time()
+                    except Exception as e:
+                        log.error("보존 정리 실패 error=%s", type(e).__name__)
+            t3 = threading.Thread(target=retention_loop, name="retention", daemon=True)
+            t3.start()
+            self._threads.append(t3)
         if self.settings.session_idle_seconds > 0:
             idle = self.settings.session_idle_seconds
 
@@ -269,6 +287,9 @@ class App:
                                     "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 알림이 만들어지지 않는다(docs/change-requests/CR-012)."}),
             "validation_violations": self.orchestrator.violation_stats(),
             "result_dispatcher": self.orchestrator.dispatcher_status(),
+            "retention": {"session_days": self.settings.session_retention_days, "access_log_days": self.settings.access_log_retention_days,
+                          "alert_days": self.settings.alert_retention_days, "dead_outbox_days": self.settings.dead_outbox_retention_days,
+                          "indefinite": False, "provisional_defaults": True, "last_run": self.last_retention or None},
             "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
             "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
@@ -425,7 +446,7 @@ def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["purge"]:
         from .retention import run_purge
-        return run_purge()
+        return run_purge(argv=argv[1:])
     if argv:
         print("알 수 없는 명령: 서버는 인자 없이, 보존 정리는 `purge`", file=sys.stderr)
         return 2

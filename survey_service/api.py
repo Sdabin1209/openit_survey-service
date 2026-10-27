@@ -65,6 +65,9 @@ def _err(code: str, message: str, status: Optional[int] = None, headers: Optiona
     return status or HTTP_CODE[code], rec, headers or {}
 
 
+USER_ID = re.compile(r"^[A-Za-z0-9._@:+-]{1,128}$")      # X-Openit-User: gateway가 인증한 계정 ID. 형식이 어긋나면 개인 ID 없이 역할만 기록한다
+
+
 class PublicApi:
     def __init__(self, orchestrator: Orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
                  max_utterance_chars: int = 1000, alerts: Optional[AlertService] = None, max_subscriptions: int = 100,
@@ -97,6 +100,7 @@ class PublicApi:
         """(상태 코드, 본문, 추가 헤더). /healthz, /readyz는 service.py가 처리한다. 429·503에는 Retry-After(초, 정수)를 붙인다.
         user는 게이트웨이가 인증한 계정 ID(X-Openit-User 헤더 값). 직원 개입에서만 쓴다."""
         self._tl.t0 = time.monotonic()                      # 턴 총 마감은 요청을 받은 때부터 센다
+        self._tl.user = user if isinstance(user, str) and USER_ID.match(user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
         status, body, headers = self._handle(method, path, auth, raw, user)
         if status in (429, 503) and "Retry-After" not in headers:
             headers = {**headers, "Retry-After": str(self.retry_after)}
@@ -433,7 +437,7 @@ class PublicApi:
     def _audit(self, role: str, sids: list, outcome: str, detail: Optional[str] = None) -> bool:
         """접근 기록을 남긴다. 못 남기면 False(호출자는 데이터를 주지 않는다)."""
         try:
-            self.alerts.store.log_access_many(role, sids, outcome, detail)
+            self.alerts.store.log_access_many(role, sids, outcome, detail, getattr(self._tl, 'user', None))
             return True
         except StoreError:
             log.error("접근 기록을 남기지 못해 조회를 거부했다 role=%s", role)
