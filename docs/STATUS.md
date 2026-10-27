@@ -91,7 +91,7 @@
 
 ## 후속 구간 8 (계약 2.0.0 이전, D74·D75·D76, 브랜치 migrate-contracts-2.0.0)
 
-- 한 일: 서비스를 D74 구조로 바꿨다(design 16~19절). `extract`+`validate_extraction` 노드, 시작은 B만, 1회 재시도(D75), 문항 순서·건너뛰기 표를 문진 스키마로(D76), 표 찾기 초안(ask 틀·칸 설명, 57행 처리), Trace 키 교체, 직원 알림 입력원 비활성 명시(CR-012), 의존 태그 v2.0.0 / v0.3.0 / v0.6.0.
+- 한 일: 서비스를 D74 구조로 바꿨다(design 16~19절). `extract`+`validate_extraction` 노드, 시작은 B만, 1회 재시도(D75), 문항 순서·건너뛰기 표를 문진 스키마로(D76), 표 찾기 초안(ask 틀·칸 설명, 57행 처리), Trace 키 교체, 직원 알림 입력원 비활성 명시(CR-012), 의존 태그 v2.0.0 / v0.3.0 / v0.6.0(당시 값. 현재 기준은 이 절 끝의 "현재 기준" 참조).
 - 시험: `.venv/bin/python -m pytest` 전부 통과(수는 보고서 참조). `scripts/smoke.sh` SMOKE OK, `scripts/smoke_compose.sh` SMOKE(compose) OK(docker 데몬 있음, 이 PC 한 환경에서만 확인).
 - 확인하지 못한 것: 실제 model-runtime 0.6.0 서버 이미지와의 E2E(계약 참조 서버로만 시험), 실제 모델이 57행 문제의 새 `next.text`를 어떻게 다루는지, 두 번째 깨끗한 환경에서의 재현(이 PC 한 곳).
 - 미정(헤드 결정 필요): 직원 알림 입력원과 반복 물음 상한(CR-012), 같은 정수 버전 안의 비호환 스키마 변경을 어떻게 낼지(정수 버전 2 여부, model-runtime이 1만 받는다), 표 초안의 사용자 확인.
@@ -102,3 +102,4 @@
 - 의존·라벨·기대값을 v0.6.1 / prompt-4로. prompt-3 릴리스는 적재하고 경고만. val 대조 결과는 design 17절 끝: A 536/549 글자 일치(불일치 13행은 state 묶음 순서, 원인 미확인), B next.text 제외 549/549.
 - 시험: pytest 403 통과, smoke.sh OK, smoke_compose.sh OK (이 PC 한 곳).
 - 남은 일: A state 묶음 순서 13행의 원인(학습 데이터 생성 규칙 확인 필요), 두 번째 환경 확인.
+- **현재 기준 (2026-10-27 확인, 위 기록은 당시 값)**: 의존 태그는 `requirements.txt` 기준 boundary-contracts v2.0.2 / turn-engine v0.4.0 / model-runtime v0.7.0(커밋 6241d00). 시험은 `pytest --collect-only`로 수집 415개. 403은 당시 통과 수였고 415개의 통과 여부는 이번에 돌리지 않아 미확인. smoke 결과도 이후 갱신 여부 미확인.
