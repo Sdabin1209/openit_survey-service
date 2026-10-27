@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 의존 태그 맞춤: turn-engine v0.3.1 [미출시, 푸시·태그 전]
+
+- 의존을 turn-engine v0.3.1로(requirements, build_wheels 기본 태그, 이미지 라벨, 문서 표기). v0.3.0 태그는 boundary-contracts v2.0.0을 고정해 v2.0.1과 충돌했고, v0.3.1이 boundary v2.0.1을 고정한다. 코드 변경 없음.
+
 ## 의존 태그 맞춤: boundary-contracts v2.0.1, model-runtime v0.6.5 [미출시, 푸시·태그 전]
 
 - 의존을 boundary-contracts v2.0.1, model-runtime v0.6.5로(requirements, build_wheels 기본 태그, 이미지 라벨, 문서 표기). v2.0.1은 ActionExtraction properties 순서만 사전순으로 바꾼 PATCH이고 TraceEnvelope 예시를 v2 trace로 고쳤다. model-runtime v0.6.5는 제약 디코딩 relax-3(if/then를 anyOf로)이며 HTTP 모양은 그대로다. 코드 변경 없음. requirements.lock에는 두 항목이 없어 갱신하지 않았다.

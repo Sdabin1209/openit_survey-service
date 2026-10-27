@@ -285,7 +285,7 @@
 - 직원 접점은 교체 가능하다: 기본은 `AlertStaffConsole`(StaffConsole Protocol 구현), `SURVEY_STAFF_CONSOLE`로 다른 구현을 꽂으면 그것을 쓴다(알림 조회·SSE API는 알림 저장소를 그대로 쓰므로 이 경우 알림은 저장되지 않는다).
 
 
-## 16. D74 구조: 한 턴의 흐름 (계약 2.0.0, turn-engine 0.3.0, model-runtime 0.6.1)
+## 16. D74 구조: 한 턴의 흐름 (계약 2.0.0, turn-engine 0.3.1, model-runtime 0.6.1)
 
 [확인] 정규화·판정·기록·Plan 코드는 서비스에 없다. 모델(LoRA-A)이 값 추출·정규화·절차(action)·다음 문항(next_item)을 한 번에 내고, 서비스는 **검증·저장·전달·표 찾기**만 한다. 판단은 하지 않는다(모델의 출력을 `validate_extraction`이 확인할 뿐이다).
 

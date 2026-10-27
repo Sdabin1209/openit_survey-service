@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BOUNDARY_TAG=${BOUNDARY_TAG:-v2.0.1}
-TURN_ENGINE_TAG=${TURN_ENGINE_TAG:-v0.3.0}
+TURN_ENGINE_TAG=${TURN_ENGINE_TAG:-v0.3.1}
 MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.6.5}
 PIP=${PIP:-.venv/bin/pip}
 rm -rf build && mkdir -p build/wheels build/src

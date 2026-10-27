@@ -26,7 +26,7 @@
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
 | 웹 푸시 | pywebpush 2.5.0(잠금 고정). VAPID 키는 환경 변수 비밀, 없으면 SSE만 |
 | 오케스트레이션 | LangGraph **1.2.15**(잠금 파일에 고정, 이미지 라벨 `io.openit.langgraph`). 외부 추적(LangSmith)은 이미지에서 끈다 |
-| I8 turn-engine | **v0.3.0** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `validate_extraction`, `QuestionFlowTable`(문항 순서·건너뛰기 표는 이 영역이 문진 스키마에서 만들어 넘긴다, D76). 정규화기·판정기·기록기·Plan은 쓰지 않는다 |
+| I8 turn-engine | **v0.3.1** (릴리스의 `turn_engine_version` MAJOR.MINOR가 다르면 적재 거부, PATCH는 경고) `validate_extraction`, `QuestionFlowTable`(문항 순서·건너뛰기 표는 이 영역이 문진 스키마에서 만들어 넘긴다, D76). 정규화기·판정기·기록기·Plan은 쓰지 않는다 |
 | I9 model-runtime | **v0.6.5** (같은 규칙) HTTP 서버 `PUT /v1/releases/{id}`, `POST .../extract`(JSON), `POST .../respond`(text/plain). 매니페스트 기대값: `model_runtime_version` 0.6.x, 역할별 `system_prompt`, serving_config `prompt-4`(D77)·`protect-2`. `prompt-3`(폐기 예정)은 거부하지 않고 적재하며 경고만 남긴다 프로세스 안 `load`는 개발·스모크용 |
 
 버전 고정: Git 태그(`requirements.txt`), 서드파티는 `requirements.lock`, 이미지는 `git archive <태그>`로 만든 wheel. 이미지 라벨: `org.opencontainers.image.revision`(커밋), `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`.
