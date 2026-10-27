@@ -257,9 +257,9 @@ def test_inference_backend_must_be_known():
 
 
 def test_release_expectations_for_contract_2_0_0(env):
-    """헤드 지시(migration-2.0.0): model_runtime_version 0.6.x, prompt-4(D77), protect-2, 역할별 system_prompt를 가진 매니페스트를 적재한다."""
+    """헤드 지시(migration-2.0.0): model_runtime_version 0.7.x, prompt-4(D77), protect-2, 역할별 system_prompt를 가진 매니페스트를 적재한다."""
     reader, reg, loader = env
-    assert INSTALLED["model_runtime_version"].startswith("0.6.") and INSTALLED["turn_engine_version"].startswith("0.3.")
+    assert INSTALLED["model_runtime_version"].startswith("0.7.") and INSTALLED["turn_engine_version"].startswith("0.4.")
     add(reader, "rel-1")
     reader.set_pointer("rel-1")
     assert loader.poll_once().action == "LOADED"
@@ -272,17 +272,16 @@ def test_release_expectations_for_contract_2_0_0(env):
     assert not [w for w in reg.active().warnings if "폐기" in w]
 
 
-def test_release_with_deprecated_prompt_3_is_loaded_with_warning(env):
-    """model-runtime 0.6.1은 prompt-3을 폐기 예정으로만 표시하고 받는다. 서비스도 거부하지 않고 경고만 남긴다."""
+def test_release_with_prompt_3_is_rejected(env):
+    """model-runtime 0.7.0은 prompt-3을 제거했다(prompt_template_versions=['prompt-4']). 이전 릴리스를 유지하고 거부한다."""
     import model_runtime
     reader, reg, loader = env
     cfg = dict(model_runtime.fake_serving_config(), prompt_template_version="prompt-3")
     reader.add_release("rel-1", sample_bank(), serving_config_b=cfg)
     reader.set_pointer("rel-1")
     r = loader.poll_once()
-    assert r.action == "LOADED"
-    ws = [w for w in reg.active().warnings if "폐기" in w]
-    assert len(ws) == 1 and "LORA_B" in ws[0] and "prompt-3" in ws[0]
+    assert r.action == "REJECTED"
+    assert reg.active() is None or reg.active().release_id != "rel-1"
 
 
 def test_release_built_with_model_runtime_0_5_is_rejected(env):

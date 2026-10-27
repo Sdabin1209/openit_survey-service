@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 의존 태그 맞춤: turn-engine v0.4.0, model-runtime v0.7.0 [미출시, 푸시·태그 전]
+
+- 의존을 turn-engine v0.4.0, model-runtime v0.7.0으로(requirements, build_wheels 기본 태그, 이미지 라벨, inference.py 주석, 문서 표기). turn-engine v0.4.0은 v1 폐기 함수를 제거했고 `validate_extraction`·`QuestionFlowTable`·`SkipRule`·`DATASET_V2_FLOW`·`ContractViolation`·`ENGINE_VERSION`은 그대로이며 boundary v2.0.2를 고정한다. model-runtime v0.7.0은 비밀 파일화와 prompt-3 제거(serving_config `prompt_template_versions=['prompt-4']`)이고 `RUNTIME_VERSION`이 0.7이다.
+- 릴리스 기대값은 `model_runtime_version` 0.7.x, `turn_engine_version` 0.4.x. 0.6.x 릴리스 매니페스트는 MAJOR.MINOR가 달라 `VERSION_MISMATCH`로 거부되므로 재생성해야 한다. prompt-3 릴리스는 이제 적재되지 않는다(`UnsupportedServingConfig`, 이전 릴리스 유지). 이전의 "적재하고 경고만" 동작은 v0.6.x 시점의 기록이다.
+- 시험: 버전 기대값을 0.7./0.4.로, prompt-3 시험을 거부 시험으로 바꿨다. 서비스 코드 변경 없음.
+- 문서 정정: design.md 17절 도식과 CR-001의 v1 함수 이름에 '역사 기록' 표시를 붙였다.
+
 ## 되묻기 상한 메커니즘(G12)과 직원 알림 입력원 포트 문서(G01) [미출시, 푸시·태그 전]
 
 - `SURVEY_MAX_CONSECUTIVE_REASK`(기본 0=끔): 연속 REASK·CONFIRM 횟수를 대화 로그에서 세고, 상한을 넘으면 기존 직원 호출 경로로 넘긴다. 값은 정하지 않았다. `/readyz`에 `reask_limit`. 시험 `tests/test_reask_limit.py`.

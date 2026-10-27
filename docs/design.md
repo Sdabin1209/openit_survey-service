@@ -14,7 +14,7 @@
 
 ```
               +-------------------- survey_service (프로세스) ---------------------+
- handle_turn  | Orchestrator --- Engine(turn-engine: normalize/judge/write_record/plan)
+ handle_turn  | Orchestrator --- Engine(turn-engine: normalize/judge/write_record/plan) [역사 기록: v1 구조. turn-engine v0.4.0에서 이 함수들은 제거됐다. 현재는 16절 D74 구조(`validate_extraction`, `QuestionFlowTable`)]
  (라이브러리) |      |      \-- Inference(model-runtime ModelSession: parse/generate)
               |      |                         ^
               |      v                         | 적재
