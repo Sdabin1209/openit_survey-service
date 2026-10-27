@@ -145,3 +145,9 @@
 - 확인한 것(이 PC): 새 시험 `tests/test_turn_idempotency_deadline.py`, `tests/test_readyz_db_outage.py`의 frozen DB 시험(`docker pause`), `tests/test_trace_export.py` 한 개. 개수와 smoke 결과는 아래 보고 시점의 값이 아니라 다시 돌려 확인할 것.
 - 확인하지 못한 것: 실제 compose·gateway 경유, 실제 모델 서버와의 조합, 마감 직전에 시작된 확정이 뒤늦게 반영되는 경합의 실측, 키오스크 재시도와의 맞물림.
 - 남은 일/결정 대기: 위험 신호가 있는 턴의 확정 실패 시 알림(사용자 결정, 코드 불변), DEAD 건의 재전송 도구.
+
+## 2026-10-28 비기능 최소 측정 (N2·N3·N8)
+
+- 한 일: `scripts/load_test.py`로 동시 세션 부하 측정(표와 환경은 docs/boundary.md §6-1), 접속 대기열 128, 우아한 종료(draining, 처리 중 요청 완료 대기).
+- 확인한 것(이 PC, 가짜 모델): PostgreSQL 연결 3개 고정, 한 프로세스가 CPU 한계로 약 12~14 턴/초 포화, 동시 50 세션까지 8초 마감 안(max 4.1초), 100 세션에서 max 9.3초와 NOT_COMMITTED 7건.
+- 확인하지 못한 것: 실제 LLM 지연과의 조합, 복제 구성, gateway·컨테이너 자원 한도, 실제 `docker stop` 중 요청, 접속 대기열의 미수락 연결 처리.

@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 부하 측정, 접속 대기열, 우아한 종료 (N2·N3·N8) [미출시, 푸시·태그 전]
+
+- `scripts/load_test.py` 추가(측정 결과와 환경은 docs/boundary.md §6-1). 접속 대기열 `request_queue_size` 5 -> 128(동시 접속이 몰릴 때 연결 재설정·세션 시작 실패의 원인). SIGTERM: `/readyz` 503 `shutting_down`, 처리 중 요청을 끝낸 뒤 종료(이전에는 저장소를 닫아 처리 중 턴이 NOT_COMMITTED), SSE 스트림은 0.5초 안에 종료. 연결 풀은 만들지 않았다(병목이 연결이 아니라 CPU임을 측정으로 확인).
+
 ## 장애 정책 구현 1단계 (FAULT_POLICY 2·3·4·9) [미출시, 푸시·태그 전]
 
 - 같은 turn_id가 처리 중이면 `409`(`code: CONFLICT`, `details.reason: TURN_IN_PROGRESS`) + `Retry-After`(HTTP.md 409 사유 규약, CR-015 처리됨). 서버 턴 총 마감 `SURVEY_TURN_DEADLINE_SECONDS`(기본 8). DB 주 연결 `SURVEY_DB_CONNECT_TIMEOUT_SECONDS`(기본 3, 이전 10)·`SURVEY_DB_STATEMENT_TIMEOUT_SECONDS`(기본 3)와 무응답 DB 강제 끊기. `/readyz`의 `trace_outbox.dead_by_code`. 자세한 내용과 한계는 docs/boundary.md §5·§6.

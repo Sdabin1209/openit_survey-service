@@ -133,6 +133,7 @@ class App:
                              max_inflight=settings.api_max_inflight,
                              max_utterance_chars=settings.api_max_utterance_chars)
         self._stop = threading.Event()
+        self.draining = threading.Event()        # SIGTERM을 받았다: /readyz는 503(shutting_down), 처리 중 요청은 끝낸다
         self._threads: list = []
 
     # ------------------------------------------------------------------ 수명
@@ -238,6 +239,8 @@ class App:
 
     def readiness(self) -> tuple[bool, dict]:
         problems = self._db_problems()
+        if self.draining.is_set():
+            problems.append("shutting_down")
         dbs = self._db_stats(not problems)
         active = self.registry.active_id()
         retrying = self.loader.retry_info()
@@ -334,12 +337,15 @@ def make_handler(app: App):
                     for ev in store.events_after(sent):
                         self._sse(ev)
                         sent = ev["id"]
-                while not app._stop.is_set() and not getattr(q, "overflowed", False):
+                last_ping = time.monotonic()
+                while not app._stop.is_set() and not app.draining.is_set() and not getattr(q, "overflowed", False):
                     try:
-                        ev = q.get(timeout=app.settings.sse_heartbeat_seconds)
+                        ev = q.get(timeout=min(app.settings.sse_heartbeat_seconds, 0.5))      # 종료 신호를 0.5초 안에 본다(우아한 종료가 스트림을 기다리지 않게)
                     except queue.Empty:
-                        self.wfile.write(b": ping\n\n")
-                        self.wfile.flush()
+                        if time.monotonic() - last_ping >= app.settings.sse_heartbeat_seconds:
+                            self.wfile.write(b": ping\n\n")
+                            self.wfile.flush()
+                            last_ping = time.monotonic()
                         continue
                     if ev["id"] > sent:                          # 이어 받기 구간과 겹치는 이벤트는 건너뛴다
                         self._sse(ev)
@@ -373,8 +379,16 @@ def make_handler(app: App):
     return Handler
 
 
+class _Server(ThreadingHTTPServer):
+    # 우아한 종료: 요청 스레드는 데몬이 아니고 server_close()가 처리 중인 요청이 끝나기를 기다린다(턴은 총 마감 안에 끝난다).
+    daemon_threads = False
+    block_on_close = True
+    # socketserver 기본 대기열(request_queue_size)은 5라, 동시에 접속이 몰리면 연결이 거부·재설정된다(부하 측정 N=50에서 확인). 일반적인 값으로 올린다.
+    request_queue_size = 128
+
+
 def serve(app: App, port: int) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer(("0.0.0.0", port), make_handler(app))
+    return _Server(("0.0.0.0", port), make_handler(app))
 
 
 def main(argv=None) -> int:
@@ -399,7 +413,10 @@ def main(argv=None) -> int:
     app.start()
     httpd = serve(app, settings.port)
     log.info("시작 port=%s version=%s", settings.port, SERVICE_VERSION)
-    signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=httpd.shutdown, daemon=True).start())
+    def on_term(*_):
+        app.draining.set()                      # /readyz가 먼저 503이 되어 로드 밸런서가 새 요청을 보내지 않게 한다
+        threading.Thread(target=httpd.shutdown, daemon=True).start()
+    signal.signal(signal.SIGTERM, on_term)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

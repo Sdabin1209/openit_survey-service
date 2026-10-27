@@ -168,3 +168,46 @@ def test_turn_ends_not_committed_within_deadline_when_db_is_frozen(request):
     rig.model.queue.append(ANSWER_OUT)
     out = rig.say("안 피움", turn_id="t-frozen")                                 # 풀린 뒤 같은 turn_id 재전송은 처리된다
     assert out.frontend_input["turn_failure_signal"] is None
+
+
+def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, monkeypatch):
+    """N8: SIGTERM 처리 순서(main과 같다: draining 표시 -> shutdown -> server_close -> app.stop). 처리 중 턴은 끝까지 처리되고, 그동안 /readyz는 503 shutting_down이다."""
+    import http.client
+    from survey_service.service import serve
+    monkeypatch.setenv("SURVEY_API_TOKEN", "tok")
+    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "stok")
+    app = _app(tmp_path, monkeypatch)
+    httpd = serve(app, 0)
+    assert httpd.request_queue_size >= 64          # 기본 5면 동시 접속이 몰릴 때 연결이 거부된다(부하 측정에서 확인)
+    port = httpd.server_address[1]
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    sess = app.registry.active().session
+    real, gate, entered = sess.extract, threading.Event(), threading.Event()
+
+    def slow(req):
+        entered.set()
+        gate.wait(10)
+        return real(req)
+    sess.extract = slow
+
+    def post(path, body):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+        c.request("POST", path, json.dumps(body).encode(), {"Authorization": "Bearer tok"})
+        r = c.getresponse()
+        return r.status, json.loads(r.read())
+    assert post("/v1/sessions", {"session_id": "G1", "kind": "SESSION_START"})[0] == 200
+    res: list = []
+    th = threading.Thread(target=lambda: res.append(post("/v1/sessions/G1/turns", {"session_id": "G1", "kind": "UTTERANCE", "utterance": "안 피워요", "turn_id": "u1"})))
+    th.start()
+    assert entered.wait(5)
+    app.draining.set()                             # SIGTERM
+    ok, body = app.readiness()
+    assert ok is False and "shutting_down" in body["problems"]
+    stopper = threading.Thread(target=lambda: (httpd.shutdown(), httpd.server_close(), app.stop()))
+    stopper.start()
+    time.sleep(0.5)
+    assert stopper.is_alive() and not res          # 처리 중인 요청을 기다린다
+    gate.set()
+    stopper.join(10)
+    th.join(10)
+    assert not stopper.is_alive() and res and res[0][0] == 200 and res[0][1]["turn_failure_signal"] is None
