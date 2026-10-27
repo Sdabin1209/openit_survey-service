@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 설치 줄을 태그 기준으로 고침 [미출시, 푸시·태그 전]
+
+- 증상(새 venv, 이 PC에서 재현): README/runbook의 `pip install -e ../boundary-contracts ../turn-engine ../model-runtime -e schema -e . ...`가 `ResolutionImpossible`. 원인: turn-engine이 boundary-contracts를 Git 태그 v2.0.2로 요구하는데 같은 줄에서 로컬 경로로도 요구했다. 고침: `pip install -c requirements.lock -r requirements.txt -e .`. 이웃 라이브러리는 원격 태그(워크스페이스 규칙, 이미지·build_wheels와 같은 방식, 옆 폴더 비의존)에서 설치한다. `requirements.txt`의 `./schema`를 `-e ./schema`로(시험이 리포의 schema/ 경로를 확인), `setuptools`·`wheel`을 추가(시험이 `--no-build-isolation`으로 wheel을 빌드), 잠금 파일을 제약으로 쓴다(없으면 langgraph가 1.2.18로 풀려 잠금 값을 확인하는 시험이 실패).
+
 ## 의존 태그 올림: model-runtime v0.7.1 -> v0.7.2 [미출시, 푸시·태그 전]
 
 - model-runtime 의존을 v0.7.2로(requirements.txt, build_wheels 기본 태그, inference.py 주석, boundary·STATUS의 현재 기준 표기). v0.7.2는 가짜 A에 정정 출력을 추가한 하위 호환 변경이다. `requirements.lock`에는 model-runtime 줄이 없어(서드파티만 고정, 이웃은 wheel) 바뀌지 않는다. `scripts/build_wheels.sh`는 이웃 폴더의 `git archive` 대신 원격 태그를 얕게 clone해 wheel을 만든다(이웃 폴더를 읽지 않는다).

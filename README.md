@@ -50,11 +50,11 @@ flowchart LR
 
 ## 실행 방법
 
-전제: Python 3.10 이상, git(이웃 리포 `../boundary-contracts`, `../turn-engine`, `../model-runtime`가 옆에 있어야 설치된다), 스모크에는 Docker 데몬 접근 권한. 아래 `pip install` 줄은 docs/runbook.md §5 그대로다.
+전제: Python 3.10 이상, git과 GitHub ssh 접근(이웃 라이브러리 boundary-contracts, turn-engine, model-runtime은 `requirements.txt`의 Git 태그에서 설치하고 옆 폴더를 쓰지 않는다), 스모크에는 Docker 데몬 접근 권한. 아래 `pip install` 줄은 docs/runbook.md §5 그대로다.
 
 ```bash
 # 1) 설치
-python3 -m venv .venv && .venv/bin/pip install -e ../boundary-contracts ../turn-engine ../model-runtime -e schema -e . pytest pyyaml
+python3 -m venv .venv && .venv/bin/pip install -c requirements.lock -r requirements.txt -e .
 # 2) 시험
 .venv/bin/python -m pytest
 # 3) 이미지 스모크 (빌드 + /healthz /readyz + 비root + 라벨 + 한 턴)
