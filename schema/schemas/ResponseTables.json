@@ -5,65 +5,209 @@
   "$defs": {
     "ResponseTables": {
       "type": "object",
-      "description": "LoRA-B 입력(ResponseRequest)의 topic·known·ask·previous·current·hold와 남은 칸 문장을 만드는 표. table_status가 DRAFT_UNCONFIRMED이면 사용자 확인 전의 초안이다.",
+      "description": "LoRA-B 입력(ResponseRequest)의 topic·known·ask·previous·current·hold를 만드는 어휘와 고정 문장 표. 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이다. 조합 로직은 서비스 코드(response_tables.py)에 있다. table_status가 DATASET_RULES_UNCONFIRMED이면 데이터셋 담당의 확인 대기다.",
       "properties": {
-        "table_status": {"enum": ["DRAFT_UNCONFIRMED", "CONFIRMED"]},
-        "note": {"type": "string"},
-        "questions": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/QuestionEntry"}},
-        "beverages": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
-        "units": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
-        "periods": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
-        "approx_suffix": {"type": "string"},
-        "value_phrases": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/ValuePhrase"}},
-        "ask": {"type": "array", "items": {"$ref": "#/$defs/AskRule"}, "minItems": 1}
+        "table_status": {
+          "enum": [
+            "DATASET_RULES_UNCONFIRMED",
+            "CONFIRMED"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1
+            },
+            "date": {
+              "type": "string",
+              "minLength": 1
+            },
+            "owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approval": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "file",
+            "date",
+            "owner",
+            "approval"
+          ],
+          "additionalProperties": false
+        },
+        "diseases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "topic_templates": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "short_topic_templates": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "topics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "short_topics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "field_short": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "beverages": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "drink_units": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "periods": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "use_pattern": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "approx_suffix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "texts": {
+          "type": "object",
+          "description": "고정 문장과 문장 틀(str.format 자리표시, {이름:을/를}은 조사). 키마다 쓰이는 곳은 response_tables.py.",
+          "minProperties": 1
+        },
+        "remaining": {
+          "type": "object",
+          "description": "원본에 없는 서비스 쪽 판단(57행 문제): 일부 칸이 저장된 문항의 남은 칸 문장. 학습 분포 밖.",
+          "additionalProperties": {
+            "$ref": "#/$defs/Remaining"
+          }
+        }
       },
-      "required": ["table_status", "questions", "beverages", "units", "periods", "value_phrases", "ask"],
+      "required": [
+        "table_status",
+        "note",
+        "source",
+        "diseases",
+        "topic_templates",
+        "short_topic_templates",
+        "topics",
+        "short_topics",
+        "field_short",
+        "beverages",
+        "drink_units",
+        "periods",
+        "use_pattern",
+        "approx_suffix",
+        "texts",
+        "remaining"
+      ],
       "additionalProperties": false
     },
-    "QuestionEntry": {
+    "Remaining": {
       "type": "object",
       "properties": {
-        "topic": {"type": "string", "minLength": 1},
-        "name": {"type": "string", "minLength": 1, "description": "hold와 다른 문항 값 앞의 이름표"},
-        "hold_by_targets": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
-        "slots": {"type": "array", "items": {"$ref": "#/$defs/SlotDesc"}},
-        "remaining_lead": {"type": "string"}
+        "lead": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SlotDesc"
+          }
+        }
       },
-      "required": ["topic", "name"],
+      "required": [
+        "lead",
+        "slots"
+      ],
       "additionalProperties": false
     },
     "SlotDesc": {
       "type": "object",
       "properties": {
-        "slot": {"type": "string", "minLength": 1},
-        "desc": {"type": "string", "minLength": 1},
-        "only_if": {"type": "object", "properties": {"slot": {"type": "string"}, "value": {"type": ["boolean", "number", "string"]}}, "required": ["slot", "value"], "additionalProperties": false}
+        "slot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "desc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "only_if": {
+          "type": "object",
+          "properties": {
+            "slot": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "boolean",
+                "number",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "slot",
+            "value"
+          ],
+          "additionalProperties": false
+        }
       },
-      "required": ["slot", "desc"],
-      "additionalProperties": false
-    },
-    "ValuePhrase": {
-      "type": "object",
-      "properties": {
-        "kind": {"enum": ["bool", "enum", "number", "minutes", "frequency", "unit_only", "amount", "amount_unit"]},
-        "true": {"type": "string"}, "false": {"type": "string"},
-        "map": {"type": "object", "additionalProperties": {"type": "string"}},
-        "template": {"type": "string"}, "template_no_unit": {"type": "string"},
-        "special": {"type": "object", "additionalProperties": {"type": "string"}},
-        "unit_slot": {"type": "string"}
-      },
-      "required": ["kind"],
-      "additionalProperties": false
-    },
-    "AskRule": {
-      "type": "object",
-      "properties": {
-        "reason": {"type": "string", "minLength": 1},
-        "slots": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-        "template": {"type": "string", "minLength": 1},
-        "note": {"type": "string"}
-      },
-      "required": ["reason", "template"],
+      "required": [
+        "slot",
+        "desc"
+      ],
       "additionalProperties": false
     }
   }

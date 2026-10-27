@@ -124,3 +124,10 @@
 - 한 일: 세션 저장소·outbox·알림 DB(알림, 시각, 접근 기록, 세션 메타, 위험 신호, 푸시 구독)에 PostgreSQL 구현. `SURVEY_DATABASE_URL`이 있으면 PostgreSQL, 없으면 SQLite. 끊긴 연결 재접속, 접속 문자열 비노출, `/readyz`의 `database.kind`. 이유와 한계는 CHANGELOG.
 - 시험: `TEST_DATABASE_URL`(`../deploy/scripts/dev-postgres.sh up survey`, 일회용 PostgreSQL 16)를 주고 `pytest -o addopts=""`: 502 통과(SKIP 0). 같은 구성의 앞선 한 번의 실행에서 `test_webpush_sender_against_local_push_service[410-GONE]`가 한 번 실패했고(PostgreSQL과 무관한 로컬 푸시 서비스 시험, 3번 따로 돌리면 통과, 타이밍 의심, 원인 미확인) 최종 실행은 통과. 없이 돌리면 472 통과 + 30 SKIP. `scripts/smoke.sh` SMOKE OK, `SMOKE_PG=1`도 OK(이 PC 한 환경). deploy `check-all.sh` FAIL 0.
 - 확인하지 못한 것: 운영 compose에서 `db-survey-dsn` 비밀을 마운트한 실제 서비스 기동(deploy 쪽 일), PostgreSQL 서버 재시작(컨테이너 재시작) 상황(연결 강제 종료로만 시험), 두 번째 깨끗한 환경.
+
+## 후속 구간 12 (B 입력 표 찾기를 데이터셋 담당의 labels.py 규칙으로 교체)
+
+- 한 일: 역으로 읽은 초안 표를 데이터셋 담당의 원본 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 표 찾기로 교체. 이유와 바뀐 동작은 CHANGELOG, 설명은 design 18절.
+- 확인한 것: 학습 데이터 B 입력 5,077/5,077행(START 제외, train 3,982 + val 549 + test 546) 글자 단위 일치, START 110/110, 원본 코드와 조합 비교(ask 20,332, value 1,134, 무작위 b_input 40,000) 전부 일치.
+- 확인하지 못한 것: 데이터셋 담당의 표 승인(기록 미확인, 확인 대기), 실제 문항 세트 문장으로 만든 `next.text`와 모델의 결합, B 모델이 57행 문제의 남은 칸 문장을 어떻게 다루는지.
+- 시험 수와 스모크는 이 절 아래 보고 참조가 아니라 CHANGELOG의 시험 항목과 커밋 메시지를 본다(E2E 수는 쓰지 않는다).

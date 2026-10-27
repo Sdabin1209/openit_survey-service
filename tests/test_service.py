@@ -149,7 +149,7 @@ def test_readyz_says_the_staff_alert_source_is_missing_instead_of_silently_disab
     src = body["staff_alert_source"]
     assert src["active"] is False and src["reason"] == "NO_INPUT_SOURCE_IN_V2_EXTRACTION" and "CR-012" in src["detail"]
     assert "staff_alerts" in body                                              # 저장·전달 경로의 통계는 그대로 있다
-    assert body["response_tables"] == {"status": "DRAFT_UNCONFIRMED"} and body["question_flow"] == {"flow_id": "dataset_v2", "items": 31}
+    assert body["response_tables"]["status"] == "DATASET_RULES_UNCONFIRMED" and set(body["response_tables"]["counters"]) == {"ask_fallback", "phrase_fallback", "ask_generic", "phrase_generic"} and body["question_flow"] == {"flow_id": "dataset_v2", "items": 31}
 
 
 def test_risk_source_factory_setting_activates_the_alert_path(tmp_path):

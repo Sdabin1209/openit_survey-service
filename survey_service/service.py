@@ -234,7 +234,7 @@ class App:
             "validation_violations": self.orchestrator.violation_stats(),
             "result_dispatcher": self.orchestrator.dispatcher_status(),
             "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
-            "response_tables": {"status": self.orchestrator.tables.status},
+            "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,

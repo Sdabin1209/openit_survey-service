@@ -328,20 +328,23 @@ A 입력 `state`의 규칙은 학습 데이터(train·val·test의 A 입력 5,07
 - A: 입력 객체 549/549 같음(state 키 집합, 값 내부 키 순서 `value, status`도 549/549). state 키 **순서**와 그에 따른 `json.dumps` 및 prompt-4 user 글자는 536/549 같음. 불일치 13행은 모두 state 안 묶음 순서다: Q10 4행(val은 Q9_1 -> Q9_2, 서비스는 직전 문항 Q9_2 먼저), Q9_2 2행(val은 참조 Q8_2 먼저), Q6 4행(참조 Q5 먼저), Q6 3행(Q5_1 칸이 알파벳 순). 같은 문항에서 같은 규칙으로 맞는 행도 많아(Q10 34행, Q9_2 18행, Q6 6행) 문서에서 읽을 수 있는 기준을 찾지 못했다 [미확인, 고치지 않음: 규칙 없이 맞추면 다수 행이 깨진다].
 - B: A와 짝지은 549행(짝 없는 11행은 START)의 키 집합과 값 형태 549/549 같음. START 11행도 키 집합 같음. 글자는 `next.text`를 뺀 나머지가 549/549 같고, `next.text`만 다르다(문항 은행 문장 대 데이터의 바꿔 쓴 문장, 이 시험은 시험용 문항 세트라 더 다르다. 18절 설명대로 데이터를 따르지 않는 것이 의도이고 실제 문항 세트 문장으로는 확인하지 않았다).
 
-## 18. 표 찾기와 B 입력: `ask` 문장 틀·칸 설명표 초안 (**미확정, 사용자 확인 필요**)
+## 18. 표 찾기와 B 입력: 데이터셋 담당의 규칙을 옮김 (**데이터셋 담당 확인 대기, 승인 기록 미확인**)
 
-IO_SPEC 7장이 미정으로 둔 표를 B 입력의 학습 데이터에서 **역으로 읽어** 초안으로 만들었다(`schema/data/response_tables.json`, 계약 `ResponseTables`, 파일 안 `table_status: DRAFT_UNCONFIRMED`, `/readyz`의 `response_tables.status`). 구현은 `survey_service/response_tables.py`, 조립은 `extraction.py`. 서비스가 하는 표 찾기는 다음이다.
+B 입력의 문장 필드는 **데이터셋 담당의 규칙**을 따른다. 학습 서버 `~/WS/dataset/scripts/labels.py`(2026-10-14)의 `topic`, `short_topic`, `value_text`, `_group_texts`, `ask_text`(`_ask_missing`, `_ask_option`, `_ask_number`), `_known_texts`, `hold_text`, `previous_text`, `_conflict_rows`, `b_input`이 학습 데이터 B 입력의 생성기이고 그 README가 이것을 '서비스 표 찾기의 기준 구현'이라 부른다(같은 서버의 `docs/LABEL_TABLES.md`는 같은 규칙의 표 문서). 이전 판은 표를 학습 샘플에서 역으로 읽은 초안이었고 이 원본을 모르고 만든 것이었다. 지금은 원본을 옮겼다: 어휘와 고정 문장은 `schema/data/response_tables.json`(계약 `ResponseTables`, `table_status: DATASET_RULES_UNCONFIRMED`, `/readyz`의 `response_tables.status`), 조합 로직(그룹핑, 조사, 시간·년 표기, 술 단위, previous/current)은 `survey_service/response_tables.py`(`b_fields`), 조립은 `extraction.py`다. 확정 여부: 표 승인 기록을 찾지 못했다(IO_SPEC 7장 2번은 미정). 서비스가 따를 기준은 학습 데이터가 이 규칙으로 만들어졌다는 점이다. 서버 파일의 내용은 리포에 복사하지 않았고 출처만 적었다(시험용 대표 쌍 `tests/data/response_tables_golden.json`은 규칙 함수의 출력이지 학습 데이터 원문이 아니다).
 
-| B 입력 | 만드는 법 [제안, 데이터와의 일치로 확인] |
+| B 입력 | 만드는 법 (원본 규칙) |
 |---|---|
-| `topic` | 표의 문항별 문구. 어느 문항이냐: **첫 값(`values[0]`)의 문항**, 값이 없으면(REDIRECT) 입력 `question_id`. 5,077행 전수 일치 |
-| `known` | NEXT·CORRECT·REASK에서 이번 말에서 저장된 값(`save=true`)을 칸별 문장으로 이어 쓴다(`진단 받음, 지금 약 먹음`). 첫 문항은 이름 없이, 다른 문항은 `이름: 문장`. 근사값은 `쯤`(수 칸만). 주기·단위 칸은 짝 칸에 합친다(`일주일에 7번`, `소주 2병`). 양만 있고 단위가 없으면 `소주 1 (단위는 아직 모름)`. 그 밖의 action은 빈 문자열 |
-| `ask` | REASK·CONFIRM의 사유와 대상 칸으로 고르는 문장 틀(`{bev:을/를}` 같은 조사 지정). 표에 없으면 그 문항의 `topic`을 쓴다(폴백, 건수를 센다) |
-| `previous`, `current` | CONFIRM: 현재 값은 CONFLICT 값(짝 단위 포함), 이전 값은 state의 저장 값. `평소 ` 접두(CONFLICT_MAX_BELOW_USUAL), DOES_NOT_DRINK는 값에서 |
-| `hold` | HOLD·SKIP: 문항 이름표, 대상이 부분 칸이면 그 칸 이름(Q4_1.status -> `일반담배 중 지금 피우는지`) |
-| `next.text` | **문항 은행의 질문 문장**(데이터의 `next.text`는 같은 문항도 여러 문장으로 바꿔 쓴 것이라 데이터를 따르지 않는다). 아래 57행 처리만 다르다 |
+| `topic` | 지금 다루는 문항: 대상 칸(`targets[0]`)의 문항, 없으면 첫 값(`values[0]`)의 문항, 없으면 입력 `question_id`. 문항별 문구는 표(질환 문항은 질환 이름 틀) |
+| `known` | CONFIRM이면 빈 문자열. 그 밖에는 상태가 ANSWERED·CORRECTION이고 값이 있는 모든 값(`save` 여부와 무관)을 칸별 문장으로 이어 쓴다. 같은 문항의 횟수+기준, 술 종류+양+단위는 한 덩어리(`일주일에 7번`, `소주 2병쯤`). 지금 문항이 아닌 문항 값 앞에는 짧은 이름(`일반담배: ...`). 근사값은 숫자 뒤 `쯤`(술은 단위 뒤) |
+| `ask` | REASK·CONFIRM: 사유와 대상 칸별 문장을 `, `로 잇고 같은 문장은 하나로. 문장은 칸과 맥락(술 종류, 이미 말한 단위·양, Q7 횟수·기준)으로 정해진다. 원본에 없는 사유는 원본의 일반 분기(`<칸 이름:을/를> 다시`) |
+| `previous`, `current` | CONFIRM: current는 CONFLICT 값(술은 단위 포함, Q7 횟수만이면 저장된 기준 기간), previous는 대상 칸의 저장 값. 사유별 예외(`평소 ...`, `지난 1년 술 안 마심`) |
+| `hold` | HOLD·SKIP: 대상 문항의 짧은 이름. 흡연(Q4_1·Q5_1)과 질환(Q1.*) 문항에서 한 칸만 비우면 `일반담배 중 피운 기간` |
+| `note` | A 출력의 note가 있으면 그대로 |
+| `next` | **문항 은행의 질문 문장**(데이터의 `next.text`는 같은 문항도 여러 문장으로 바꿔 쓴 것이라 데이터를 따르지 않는다). END, SAME(REASK·CONFIRM·REDIRECT), NEXT. 아래 57행 처리만 다르다 |
 
-**일치율** [확인: `scripts/table_agreement.py`로 학습 서버 `dataset_10_14`의 train·val·test 전수를 표준출력으로 흘려 이 PC에서 센 값, 데이터는 저장하지 않았다]: topic 5,077/5,077, hold 392/392, known(NEXT 3,073, CORRECT 446, REASK 601) 전수, ask(REASK 601, CONFIRM 333) 전수, previous·current 333/333. **한계**: 규칙을 이 데이터를 보고 만들었으므로(in-sample) 일치는 "표가 데이터와 같은 문장을 낸다"는 뜻이지 "표가 옳다"는 뜻이 아니다. 데이터에 없는 경우(새 사유, 새 칸 조합)는 폴백으로 간다. 사용자 확인이 필요한 곳: (1) CONFLICT_WITH_PREVIOUS의 `ask`가 데이터에서 279/279 같은 문장 `이번에 말한 값(current)이 맞는지, 아까 말한 값(previous)이 맞는지`(괄호 속 영문이 그대로)라는 점, (2) 술 종류 이름 `양주(위스키 등)`, (3) 칸 이름표(`일반담배`, `숨이 약간 차는 운동 하는 날 수` 등), (4) 가장 많이 마신 날 CONFIRM 문장.
+**확인한 것** [`scripts/table_agreement.py`: 학습 서버 `~/WS/dataset/data/final/lora_a_*.jsonl`, `lora_b_*.jsonl`의 train·val·test를 표준출력으로 흘려 이 PC에서 계산했고 저장하지 않았다. A 행과 B 행은 `scenario_id`·발화·action·reason으로 짝지었고 모든 B 행이 A 행과 정확히 하나로 짝지어졌다]: START를 뺀 B 입력 5,077/5,077행(train 3,982, val 549, test 546)에서 서비스가 만든 `next`를 뺀 필드가 글자 단위로 같고, START 110/110행의 `topic`·`next.type`·`next.question_id`가 같고, `next.type`·`next.question_id`가 5,077/5,077 같다. 원본 코드와의 조합 비교(서버 데이터 없이): `ask_text` 20,332 조합(사유 x 대상 칸 x 맥락)과 다중 대상 136개, `value_text` 칸 x 값 x precision 930개와 표 밖 값 204개, 무작위 `b_input` 40,000개가 전부 같았다(원본이 예외를 던지는 16개는 서비스도 같은 예외 종류). **한계**: 일치는 '학습 데이터와 같은 문장을 낸다'는 뜻이고 표가 옳다는 뜻이 아니다(데이터셋 담당의 승인 필요). `next.text`는 학습 데이터와 다르다(문항 은행 문장).
+
+**폴백**: 원본의 일반 분기(`else`)가 만드는 문장은 원본이 만드는 문장이라 폴백이 아니다(`/readyz`에 따로 세지 않고 `stats.ask_generic`). 학습 데이터 전수에서 이런 (사유, 칸) 조합은 `UNPARSED_VALUE` x `Q10.days` 2건뿐이다(문장 `날 수를 다시`). `ask_fallback`, `phrase_fallback`은 **원본 규칙이 예외를 던질 입력**(표에 없는 문항, 표에 없는 Q3 값)에서만 센다: 이때 서비스는 문장을 지어내지 않고 topic 또는 칸 이름 문장으로 대신한다. 학습 데이터 전수에서 두 카운터는 0이다.
 
 **57행 문제**(같은 말에서 일부 칸이 이미 채워진 문항으로 NEXT; 데이터에서 Q4->Q4_1 25+3건, Q5->Q5_1 28+1건 모두 `Q4_1.status`/`Q5_1.status`가 이미 저장됨): 학습 데이터의 `next.text`는 이미 저장된 칸을 다시 묻는 문장(`요즘 일반담배를 피우고 계신가요?`)이라 모델이 받은 내용을 다시 묻는다. 서비스는 **남은 칸만 묻도록** 조립한다: 표의 문항 칸 설명(`slots`, `only_if`)에서 저장된 칸을 빼고 `일반담배는 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 말씀해 주세요.`처럼 만든다(현재 흡연자면 `끊은 지`는 묻지 않는다). 근거: (a) 같은 말에서 저장했다고 `known`에 말한 값을 곧바로 다시 묻는 것은 사용자에게 틀린 응대고 저장 기록(이미 있음)과 어긋난다, (b) 계약은 이 NEXT를 허용한다(V2_DRAFT 3장), (c) 서비스는 값을 지어내지 않고 표에서 문장을 만든다. **위험**: 이 문장은 학습 분포에 없다(학습 데이터는 이미 답한 칸을 다시 묻는다). B 모델이 이 `next.text`를 어떻게 다루는지는 확인하지 못했다. 남은 칸이 없으면(모든 칸이 이미 저장) 문항 은행 문장 그대로 보낸다(이때 A가 이미 다 채워진 문항을 다음으로 지목한 것이라 건너뛰기는 A의 몫이다). 칸 설명이 표에 있는 문항은 Q4_1·Q5_1뿐이다(데이터에서 이 현상이 나온 곳).
 

@@ -99,5 +99,5 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 
 - **직원 알림이 안 나온다**: `/readyz`의 `staff_alert_source`를 보라. `active: false`면 v2에 입력원이 없는 것이다(CR-012). 고장이 아니다. 입력원이 정해지면 `SURVEY_RISK_SOURCE=모듈:함수`로 꽂는다.
 - **턴이 `LoRA-A` 또는 `VALIDATE`로 실패한다**: 로그의 `step=`과 Trace의 `extract_status`(`OUTPUT_INVALID` 서버가 형식을 못 지킴, `VIOLATION` 의미 검증 위반, `ERROR` 호출·입력 오류), `validation_violations`의 `code`를 본다(값은 없다). 같은 요청을 한 번 더 보낸 뒤의 실패다. 세션 상태는 그대로이고 사용자는 다시 말하면 된다. 반복되면 모델 패키지(어댑터, 프롬프트)와 문진 스키마 정수 버전, 문항 순서 표(`question_flow`) 일치를 확인한다.
-- **`ask_fallback` 건수가 늘어난다**: 표(`ResponseTables`)에 없는 (사유, 칸) 조합이다. 폴백은 문항의 `topic`을 `ask`로 쓴다. 표 초안 보강 대상이다(미확정 표).
+- **`/readyz`의 `response_tables.counters`의 `ask_fallback`·`phrase_fallback`이 늘어난다**: 데이터셋 담당의 규칙(labels.py)이 예외를 던질 입력이다(표에 없는 문항, 표에 없는 Q3 값 등). 서비스는 문장을 지어내지 않고 `topic`(또는 칸 이름)으로 대신한다. A 출력이 문항 세트와 어긋났다는 신호이므로 모델 패키지와 문항 세트 일치를 확인한다. `ask_generic`(원본의 일반 분기)은 오류가 아니다.
 - 표 일치율 재계산(학습 서버 읽기 전용): `PYTHONPATH=. python scripts/table_agreement.py <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_a_val.jsonl') <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_b_val.jsonl')`. 데이터는 저장되지 않는다.

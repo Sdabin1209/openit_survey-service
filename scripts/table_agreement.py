@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""표 초안(schema/data/response_tables.json)이 학습 데이터셋 v2의 B 입력과 얼마나 같은 문장을 내는지 센다.
+"""서비스의 표 찾기(`ResponseTables.b_fields`)가 학습 데이터의 B 입력(next 제외)과 글자 단위로 같은 문장을 내는지 전수로 센다.
 
-데이터는 저장하지 않고 표준 입력·프로세스 치환으로만 읽는다(학습 서버 읽기 전용 규칙). 예(두 파일은 같은 split):
+학습 서버 파일은 읽기 전용이다. 표준출력으로 흘려 이 PC에서만 계산하고 저장하지 않는다(서버에는 cat만). 예(같은 split의 A·B 파일):
 
-    python scripts/table_agreement.py <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_a_val.jsonl') \\
-                                      <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_b_val.jsonl')
+    python scripts/table_agreement.py <(ssh openit 'cat ~/WS/dataset/data/final/lora_a_val.jsonl') \\
+                                      <(ssh openit 'cat ~/WS/dataset/data/final/lora_b_val.jsonl')
 
-A 행과 B 행은 환자 말·action·reason으로 짝짓는다. 출력은 필드별 일치 수/전체와 틀린 예 몇 건이다. 일치율은 표를 만든 데이터에 대한 것(in-sample)이라
-표가 옳다는 증거가 아니라 "데이터와 같은 문장을 낸다"는 뜻이다. 이웃 영역의 표가 정해지면 그 표로 바꿔 다시 센다.
+A 행(입력+정답)과 B 행은 scenario_id와 환자 말·action·reason으로 짝짓는다. START 행은 A가 없어 topic과 next만 본다.
+출력은 필드별 대조 수와 불일치 수, 불일치 예 몇 건(문장 포함: 가공 데이터지만 환자 발화는 없다). 서비스가 따르는 기준은 데이터셋 담당의 규칙(labels.py)이고,
+이 일치는 '학습 데이터와 같은 문장을 낸다'는 뜻이다(표 승인 여부와는 별개).
 """
 from __future__ import annotations
 
@@ -16,18 +17,17 @@ import json
 import sys
 
 import survey_schema
-from survey_service import extraction
-from survey_service.response_tables import ResponseTables, item_of
+from survey_service.response_tables import ResponseTables
+
+FIELDS = ("action", "reason", "topic", "user_utterance", "known", "ask", "previous", "current", "hold", "note")
 
 
 def rows(path):
-    out = []
     with open(path, encoding="utf-8") as f:
         for line in f:
-            r = json.loads(line)
-            m = r["messages"]
-            out.append((json.loads(m[1]["content"]), m[2]["content"]))
-    return out
+            if line.strip():
+                r = json.loads(line)
+                yield r.get("scenario_id"), json.loads(r["messages"][1]["content"]), r["messages"][2]["content"]
 
 
 def main(argv) -> int:
@@ -35,50 +35,41 @@ def main(argv) -> int:
         print(__doc__)
         return 2
     tables = ResponseTables(survey_schema.load_data("response_tables"))
-    a_rows = {}
-    for ai, ao in rows(argv[1]):
-        a_rows.setdefault(ai["user_utterance"], []).append((ai, json.loads(ao)))
-    res = collections.defaultdict(lambda: [0, 0])
-    bad = collections.defaultdict(list)
-
-    def chk(name, got, want, ctx):
-        res[name][1] += 1
-        if got == want:
-            res[name][0] += 1
-        else:
-            bad[name].append((got, want, ctx))
-    unmatched = 0
-    for bi, _ in rows(argv[2]):
+    a_rows = collections.defaultdict(list)
+    for sid, ai, ao in rows(argv[1]):
+        a_rows[sid].append((ai, json.loads(ao)))
+    tot, bad = collections.Counter(), collections.defaultdict(list)
+    for sid, bi, _ in rows(argv[2]):
+        tot["B 행"] += 1
         if bi["action"] == "START":
+            ok = bi.get("topic") == tables.topic("Q1.D01") and bi["next"]["question_id"] == "Q1.D01" and bi["next"]["type"] == "NEXT"
+            tot["START 일치" if ok else "START 불일치"] += 1
             continue
-        c = [x for x in a_rows.get(bi["user_utterance"], []) if x[1]["action"] == bi["action"] and x[1].get("reason") == bi.get("reason")]
-        if not c:
-            unmatched += 1
-            continue
+        c = [x for x in a_rows.get(sid, []) if x[0]["user_utterance"] == bi["user_utterance"] and x[1]["action"] == bi["action"] and x[1].get("reason") == bi.get("reason")]
+        if len(c) != 1:
+            tot[f"짝 {len(c)}개"] += 1
+            if not c:
+                continue
         ai, ao = c[0]
-        state = {k: v["value"] for k, v in ai["state"].items()}
-        vals, act = ao["values"], bi["action"]
-        chk("topic", tables.topic(item_of(vals[0]["key"]) if vals else ai["question_id"]), bi["topic"], ao["next_item"])
-        saved = [v for v in vals if v["save"]]
-        if act in ("NEXT", "CORRECT", "REASK"):
-            chk("known_" + act, tables.known(saved, state), bi["known"], [(v["key"], v["value"], v["status"]) for v in vals])
-        if act in ("HOLD", "SKIP"):
-            chk("hold", tables.hold(ao["targets"]), bi["hold"], ao["targets"])
-        if act in ("REASK", "CONFIRM"):
-            chk("ask_" + act, tables.ask(ao["reason"], ao["targets"], vals, state), bi["ask"], (ao["reason"], ao["targets"]))
-        if act == "CONFIRM":
-            prev, cur = extraction._confirm_texts(tables, ao, ai["state"])
-            chk("previous", prev, bi["previous"], ao["reason"])
-            chk("current", cur, bi["current"], ao["reason"])
-    for k, (ok, n) in sorted(res.items()):
-        print(f"{k:14s} {ok}/{n}  {100 * ok / n:.1f}%")
-    print("짝을 못 찾은 B 행:", unmatched)
-    for k in sorted(bad):
-        print("---", k, len(bad[k]))
-        for g, w, c in bad[k][:3]:
-            print("   got ", g)
-            print("   want", w)
-            print("   ctx ", str(c)[:200])
+        got = tables.b_fields(ao, ai["question_id"], ai["user_utterance"], ai["state"])
+        want = {k: v for k, v in bi.items() if k != "next"}
+        tot["대조한 행"] += 1
+        tot["일치 행" if got == want else "불일치 행"] += 1
+        for k in FIELDS:
+            if k in got or k in want:
+                tot[f"필드 {k} 대조"] += 1
+                if got.get(k) != want.get(k):
+                    tot[f"필드 {k} 불일치"] += 1
+                    if len(bad[k]) < 3:
+                        bad[k].append((got.get(k), want.get(k), ao.get("reason"), ao.get("targets")))
+    for k in sorted(tot):
+        print(f"{k}: {tot[k]}")
+    print("폴백 카운터:", tables.stats)
+    for k, v in bad.items():
+        print("---", k)
+        for g, w, r, t in v:
+            print("  서비스:", g)
+            print("  데이터:", w, "|", r, t)
     return 0
 
 

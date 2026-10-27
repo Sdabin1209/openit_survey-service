@@ -75,7 +75,7 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 - 문서가 기록한 결과(docs/STATUS.md 마지막 기록): pytest 403 통과, `smoke.sh` OK, `smoke_compose.sh` OK, 모두 "이 PC 한 곳"에서만 확인.
 - 수집 결과는 415개이고 STATUS의 403은 구간 8 당시 값이다(STATUS "현재 기준"에 정리). 415개의 통과 여부는 돌리지 않아 미확인.
 - 확인하지 못한 것(STATUS, OPEN_GAPS): 실제 model-runtime 서버 이미지와의 E2E, 두 번째 깨끗한 환경에서의 재현, 실제 브라우저·푸시 서비스, 실제 모델로 한 턴을 통과시키는 일(U07), 부하·동시성, 세션 문서 암호화·보존 기간.
-- 표 찾기 표(`ask` 틀, 칸 설명)는 미확정 초안이다(`schema/data/response_tables.json`의 `table_status: DRAFT_UNCONFIRMED`).
+- 표 찾기는 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 확인 대기다(`schema/data/response_tables.json`의 `table_status: DATASET_RULES_UNCONFIRMED`, 승인 기록 미확인).
 - 직원 알림 API·SSE·푸시는 살아 있으나 알림을 만드는 입력원이 없어 알림은 나오지 않는다(`/readyz`의 `staff_alert_source.active=false`, docs/boundary.md §5).
 
 ## 이 영역의 열린 항목 (head/docs/OPEN_GAPS.md, 읽기 전용으로 확인)
@@ -84,8 +84,8 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 |---|---|---|
 | G01 | 직원 알림의 입력원이 없다. 포트(`SURVEY_RISK_SOURCE`)와 시험은 있고 입력원은 비어 있다. 환자 안전과 닿는다 | 사용자 결정 |
 | G12 | 재질문 상한: 메커니즘(`SURVEY_MAX_CONSECUTIVE_REASK`, 기본 0=끔)은 구현됨. 값 N과 정지 이름 재사용 여부 미정, 지금은 무한 되묻기 가능 | 사용자 결정 |
-| G03 | `ask` 문장 틀·칸 설명표가 학습 데이터에서 역으로 읽은 초안 | 다른 영역(데이터셋 담당 확인) |
-| G13 | 표 초안 `DRAFT_UNCONFIRMED`, 57행 문제용 `next.text`를 B 모델이 어떻게 다루는지 미확인, A 입력 state 묶음 순서 13/549행 불일치 | 다른 영역(데이터셋)·GPU(모델 확인) |
+| G03 | 표 찾기는 데이터셋 담당의 labels.py 규칙을 옮김, 표 승인 기록 미확인(IO_SPEC 7장 2번 미정) | 다른 영역(데이터셋 담당 확인) |
+| G13 | 표 `DATASET_RULES_UNCONFIRMED`, 57행 문제용 `next.text`를 B 모델이 어떻게 다루는지 미확인, A 입력 state 묶음 순서 13/549행 불일치 | 다른 영역(데이터셋)·GPU(모델 확인) |
 | G11 | 정수 버전 1 안에서 비호환 변경. ops-feedback과 같은 잠금으로 함께 배포해야 한다 | 다른 영역(ops-feedback), 사용자 결정 |
 | U07 | 실제 LLM 데모에서 학습 안 된 모델이 없는 slot key를 지어내 14턴 모두 실패 | GPU·학습 쪽 |
 | U14 | 제약 디코딩이 slot key를 현재 문항 범위로 제한하지 못함(계약 변경 필요) | 헤드 판단 대기(계약), 다른 영역 |

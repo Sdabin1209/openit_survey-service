@@ -51,12 +51,15 @@ def test_flow_follows_skips_for_next_item():
     assert FLOW.previous_item("Q1.D01", {}) is None
 
 
-def test_tables_data_validate_against_contract_and_are_marked_unconfirmed():
+def test_tables_data_validate_against_contract_and_state_the_source_and_unconfirmed_status():
     import jsonschema
     data = survey_schema.load_data("response_tables")
     jsonschema.validate(data, survey_schema.load_schema("ResponseTables"))
-    assert data["table_status"] == "DRAFT_UNCONFIRMED" and "사용자 확인 필요" in data["note"]
-    assert set(data["questions"]) == set(FLOW.table.order)
+    assert data["table_status"] == "DATASET_RULES_UNCONFIRMED" and "확인 대기" in data["note"] and "labels.py" in data["note"] and "2026-10-14" in data["note"]
+    assert data["source"]["file"].endswith("labels.py") and data["source"]["approval"] == "승인 기록 미확인"
+    assert "학습 분포 밖" in data["note"]                                     # 원본에 없는 서비스 쪽 판단(remaining)을 숨기지 않는다
+    for item in FLOW.table.order:                                            # 모든 문항에 topic과 짧은 이름이 있다
+        assert TABLES.topic(item) and TABLES.short_topic(item)
 
 
 # ---------------------------------------------------------------- A 입력
@@ -186,9 +189,13 @@ def test_start_request_is_valid_and_has_no_user_fields():
     assert req["next"] == {"question_id": "Q1.D01", "text": BANK.sentence("Q1.D01"), "type": "NEXT"}
 
 
-def test_ask_falls_back_to_the_topic_and_counts_when_the_table_has_no_rule():
+def test_ask_uses_the_datasets_rule_and_only_falls_back_when_that_rule_cannot_produce_a_sentence():
     n = TABLES.stats["ask_fallback"]
-    assert TABLES.ask_or_topic("MISSING", ["Q3.answer"], [], {}, "Q3") == TABLES.topic("Q3")
+    # 예전 초안은 이 조합에 규칙이 없어 폴백이었다. 원본 규칙은 문장을 만든다
+    assert TABLES.ask_or_topic("MISSING", ["Q3.answer"], {}, "Q3") == "answer"          # 원본 _ask_missing의 마지막 분기(칸 이름이 없으면 칸 코드)
+    assert TABLES.stats["ask_fallback"] == n
+    # 원본이 예외를 던질 입력(표에 없는 문항의 진단 칸)만 폴백하고 센다
+    assert TABLES.ask_or_topic("MISSING", ["Q1.D99.diagnosed"], {}, "Q3") == TABLES.topic("Q3")
     assert TABLES.stats["ask_fallback"] == n + 1
 
 
@@ -199,9 +206,12 @@ def test_josa(word, pair, want):
 
 
 def test_values_of_each_kind_become_phrases():
-    p = lambda key, value, prec="exact": TABLES.known([{"key": key, "value": value, "precision": prec}], {})
+    def p(key, value, prec="exact"):
+        out = {"values": [{"key": key, "value": value, "precision": prec, "status": "ANSWERED", "save": True}], "action": "NEXT", "next_item": "END"}
+        return TABLES.b_fields(out, key.split(".")[0].split("[")[0], "발화", {})["known"]
     assert p("Q10.days", 3, "approximate") == "최근 일주일 3일쯤" and p("Q9_2.duration_minutes", 135) == "하루 2시간 15분"
     assert p("Q5_1.years_since_quit", 0.5) == "끊은 지 반년" and p("Q6_1.use_pattern", "daily") == "최근 한 달 매일 씀"
     assert p("Q7_1[spirits].amount", 7) == "양주(위스키 등) 7 (단위는 아직 모름)"
-    assert TABLES.known([{"key": "Q7_1[beer].amount", "value": 1, "precision": "exact"},
-                         {"key": "Q7_1[beer].unit", "value": "can", "precision": "exact"}], {}) == "맥주 1캔"
+    both = {"values": [{"key": "Q7_1[beer].amount", "value": 1, "precision": "exact", "status": "ANSWERED", "save": True},
+                       {"key": "Q7_1[beer].unit", "value": "can", "precision": "exact", "status": "ANSWERED", "save": True}], "action": "NEXT", "next_item": "Q7_2"}
+    assert TABLES.b_fields(both, "Q7_1", "발화", {})["known"] == "맥주 1캔"

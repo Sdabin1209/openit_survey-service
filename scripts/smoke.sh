@@ -54,7 +54,7 @@ echo "$READY" | grep -q '"contract_version": 1' || fail "계약 버전"
 echo "$READY" | grep -q '"staff_alert_source": {"active": true}' || fail "스모크의 위험 입력원이 /readyz에 드러나지 않는다"
 echo "$READY" | grep -q '"secrets": {"api_token": "env", "staff_api_token": "file"' || fail "비밀 출처(file|env)가 /readyz에 드러나지 않는다"
 echo "$READY" | grep -q 'smoke-staff-token\|smoke-api-token' && fail "/readyz에 비밀 값이 나왔다"
-echo "$READY" | grep -q '"response_tables": {"status": "DRAFT_UNCONFIRMED"}' || fail "표 초안 상태가 /readyz에 드러나지 않는다"
+echo "$READY" | grep -q '"response_tables": {"status": "DATASET_RULES_UNCONFIRMED"' || fail "표 상태가 /readyz에 드러나지 않는다"
 
 [ "$($DOCKER exec "$NAME" id -u | tr -d '\r')" != "0" ] || fail "root로 실행 중"
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")

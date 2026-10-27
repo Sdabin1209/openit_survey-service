@@ -1,5 +1,14 @@
 # 변경 이력
 
+## B 입력의 표 찾기를 데이터셋 담당의 원본 규칙으로 교체 [미출시, 푸시·태그 전]
+
+- 이전 `response_tables.json`(`DRAFT_UNCONFIRMED`)은 학습 샘플에서 역으로 읽은 초안이었고 원본을 모르고 만든 것이었다. 원본은 학습 서버 `~/WS/dataset/scripts/labels.py`(2026-10-14, 데이터셋 담당; README가 '서비스 표 찾기의 기준 구현'이라 부른다)다. 이 규칙을 옮겼다: 어휘와 고정 문장은 `schema/data/response_tables.json`(`ResponseTables` 스키마를 새 구조로), 조합 로직(그룹핑, 조사, 시간·년 표기, 술 단위, previous/current)은 `survey_service/response_tables.py`의 `b_fields`. 서버 파일 내용은 리포에 복사하지 않았고 출처만 적었다. 이유(기준 선택): 학습 데이터가 이 규칙으로 만들어졌으므로 서비스가 이 규칙을 따라야 모델이 학습한 입력 분포를 받는다.
+- 상태: `table_status = DATASET_RULES_UNCONFIRMED`(데이터셋 담당 확인 대기). 표 승인 기록은 찾지 못했다(IO_SPEC 7장 2번은 미정). 원본에 없는 서비스 쪽 판단은 57행 문제의 남은 칸 문장(`remaining`)뿐이고 학습 분포 밖이라는 점을 파일 `note`와 design 18절에 그대로 적었다.
+- 동작이 바뀐 곳(원본을 따르므로): `topic`은 대상 칸(`targets[0]`)이 있으면 그 문항(이전: 첫 값의 문항), `known`은 CONFIRM만 빈 문자열이고 나머지 action은 ANSWERED·CORRECTION 값 전부(이전: NEXT·CORRECT·REASK의 `save=true` 값만), 조사는 원본 규칙(숫자 끝소리 대략). `extraction.build_response_request`는 문장 필드를 `ResponseTables.b_fields`에서 받고 `next`만 붙인다. 이전의 `_confirm_texts`와 표 규칙 매칭(`fnmatch`)은 없앴다.
+- 폴백: 이전에는 표에 규칙이 없는 (사유, 칸) 199개 조합이 폴백이었다. 원본의 일반 분기(`else`)가 만드는 문장은 원본의 문장이므로 폴백이 아니다(`counters.ask_generic`). `ask_fallback`·`phrase_fallback`은 원본 규칙이 예외를 던질 입력(표에 없는 문항, 표에 없는 Q3 값)에서만 늘고 지어내지 않는다. `/readyz`의 `response_tables`에 `counters`가 나온다.
+- 확인(서버 데이터는 표준출력으로 흘려 이 PC에서만 계산, 저장하지 않음, 서버에는 `cat`과 `ls`만): 학습 데이터 train·val·test의 START를 뺀 B 입력 5,077/5,077행(train 3,982, val 549, test 546)에서 `next`를 뺀 필드 글자 단위 일치, START 110/110, 폴백 카운터 0. 원본 코드와의 조합 비교: ask 20,332 조합, 다중 대상 136, value_text 930 + 표 밖 값 204, 무작위 b_input 40,000 전부 같음. 시험으로 남긴 것: 서버 데이터 없이 도는 대표 쌍(`tests/data/response_tables_golden.json`, 규칙 함수의 출력, 출력 문장마다 하나씩 ask 191 + value 128 + b_input 160)과 `tests/test_response_tables_rules.py`. `scripts/table_agreement.py`는 새 방식(전수 대조)으로 다시 썼다.
+- `/readyz`의 `response_tables.status`와 smoke 검사를 `DATASET_RULES_UNCONFIRMED`로 바꿨다.
+
 ## D85 2단계: 저장소를 PostgreSQL로(세션, outbox, 알림) [미출시, 푸시·태그 전]
 
 - 설정 `SURVEY_DATABASE_URL`(`read_secret`, `_FILE` 우선). 있으면 PostgreSQL, 없으면 기존 SQLite(기본 그대로). 세 저장소(`PgSessionStore`, `PgOutbox`, `PgAlertStore`)는 SQLite 구현을 상속해 **같은 SQL 본문**을 쓰고 연결·스키마 방언만 다르다(`survey_service/pg.py`, `store/postgres.py`, `trace/pg_outbox.py`, `alerts.py`의 `PgAlertStore`, 선택은 `db.py`). 이유: SQL을 두 벌 두면 어긋나므로 한 벌을 두 방언에서 같은 시험으로 검증한다. 이를 위해 SQLite 쪽도 `INSERT OR IGNORE`를 `ON CONFLICT DO NOTHING`으로, `lastrowid`를 `RETURNING`으로 바꿨다(SQLite 3.35+).

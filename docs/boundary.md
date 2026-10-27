@@ -5,7 +5,7 @@
 ## 1. 소유하는 것
 
 - 소유 저장소: **Session Store**(서비스 내부, 기본 SQLite 파일 `SURVEY_SESSION_DB`)와 **Trace outbox**(SQLite 파일 `SURVEY_OUTBOX_DB`). 이웃은 두 파일을 읽지 않는다.
-- 유지하는 것: `schema/`(문진 스키마, 정수 버전 `CONTRACT_VERSION`=1, 문항 순서·건너뛰기 표 `QuestionFlow`와 표 찾기 표 `ResponseTables` 초안 포함). 변경은 다른 영역의 변경 요청을 받아 반영하고, 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다(D21).
+- 유지하는 것: `schema/`(문진 스키마, 정수 버전 `CONTRACT_VERSION`=1, 문항 순서·건너뛰기 표 `QuestionFlow`와 표 찾기 어휘표 `ResponseTables`(데이터셋 담당 규칙을 옮김, 확인 대기) 포함). 변경은 다른 영역의 변경 요청을 받아 반영하고, 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다(D21).
 
 ## 2. 제공하는 것
 
@@ -51,7 +51,7 @@
 - **환자 참조와 보존**: `subject_ref`는 세션 문서가 아니라 알림 DB의 `session_meta`에 두고 로그·알림·푸시에 넣지 않는다. `SURVEY_SESSION_RETENTION_DAYS`(기본 없음=삭제 안 함)를 주면 `python -m survey_service purge`가 끝난 세션과 환자 참조·시각·신호 기록을 지운다(접근 기록은 지우지 않는다).
 - **외부 위험 신호**: 효과는 내부 규칙 엔진과 같은 표기(`signal:<source>:<code>`, 알림 rule_id `source:code`)와 같은 정지(PAUSED_RISK)다. 내부 규칙 엔진은 source `internal`인 기본 감지기이고, 턴 안에서 평가되므로 정지·고정 문장이 그 턴의 쓰기와 한 트랜잭션이다. 외부 신호는 턴 밖에서 정지만 커밋한다(대화 로그 항목은 만들지 않고 정지 기록에 남는다).
 - **결과 전달 대상 없음은 오류가 아니다**: 결과 전달은 붙을 예정이라 대상이 없는 것이 지금의 정상 구성이다. 세션이 끝날 때 INFO 로그 `결과 전달 대상 없음`과 `/readyz`의 `result_dispatcher: {attached: false, status: NO_TARGET}`로 드러내고, 세션의 전달 기록은 `succeeded=false`로 남는다. 대상을 꽂았는데 실패하면 그때는 `결과 전달 실패`(경고)다.
-- 표 찾기 표(`ask` 문장 틀, 칸 설명)는 **미확정 초안**이다(`/readyz`의 `response_tables.status`).
+- 표 찾기(B 입력의 `topic`, `known`, `ask`, `previous`, `current`, `hold`)는 **데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 데이터셋 담당의 확인 대기, 승인 기록 미확인**이다(`/readyz`의 `response_tables.status` = `DATASET_RULES_UNCONFIRMED`). 원본에 없는 서비스 쪽 판단은 57행 문제의 남은 칸 문장뿐이고 학습 분포 밖이다.
 
 - 직원 개입은 위험으로 멈춘 세션에만 된다. 쓰기 반영 여부를 알 수 없는 커밋(`write_outcome: UNKNOWN`)은 결과를 고정하지 않으므로 같은 턴 ID 재시도가 다시 처리될 수 있다.
 - 실패한 턴(`NOT_COMMITTED`)의 결과도 같은 턴 ID로는 같게 돌아온다. 다시 시도하려면 새 턴 ID가 필요하다 [제안, CR-003의 `turn_id` 항목과 함께 O06에서 확정].

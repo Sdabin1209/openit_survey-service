@@ -144,40 +144,6 @@ def sorted_deep(x: Any) -> Any:
     return x
 
 
-def _flat_state(state: Mapping) -> dict:
-    return {k: v["value"] for k, v in state.items()}
-
-
-def _confirm_texts(tables: ResponseTables, out: Mapping, state: Mapping) -> tuple[str, str]:
-    """CONFIRM의 (previous, current). 데이터에서 읽은 규칙: current는 CONFLICT 값(짝 단위 포함), previous는 저장된 값."""
-    reason, values = out["reason"], out["values"]
-    flat = _flat_state(state)
-    confl = [v for v in values if v["status"] == "CONFLICT" and not (reason == "CONFLICT_DOES_NOT_DRINK" and v["key"] == "Q7.does_not_drink")]
-    cur = list(confl)
-    for v in confl:
-        if v["key"].endswith(".amount"):
-            uk = v["key"][: -len("amount")] + "unit"
-            cur += [x for x in values if x["key"] == uk and x not in cur]
-    current = tables.value_text(cur, flat)
-    if reason == "CONFLICT_MAX_BELOW_USUAL":
-        prev = [{"key": v["key"].replace("Q7_2", "Q7_1"), "value": flat[v["key"].replace("Q7_2", "Q7_1")], "precision": "exact"}
-                for v in confl if v["key"].replace("Q7_2", "Q7_1") in flat]
-        previous = tables.value_text(prev, flat, "평소 ")
-    elif reason == "CONFLICT_DOES_NOT_DRINK":
-        previous = tables.value_text([v for v in values if v["key"] == "Q7.does_not_drink"], flat)
-    else:
-        prev = []
-        for v in confl:
-            if v["key"] in flat:
-                prev.append({"key": v["key"], "value": flat[v["key"]], "precision": "exact"})
-            if v["key"].endswith(".amount"):
-                uk = v["key"][: -len("amount")] + "unit"
-                if uk in flat:
-                    prev.append({"key": uk, "value": flat[uk], "precision": "exact"})
-        previous = tables.value_text(prev, flat)
-    return previous, current
-
-
 def _next_text(item: str, bank: Bank, tables: ResponseTables, filled: Mapping[str, Any], partial_ok: bool) -> str:
     text = bank.sentence(item)
     if text is None:
@@ -199,32 +165,14 @@ def build_start_request(bank: Bank, tables: ResponseTables, first_item: str) -> 
 
 
 def build_response_request(out: Mapping, extract_input: Mapping, doc_after: Mapping, bank: Bank, tables: ResponseTables) -> dict:
-    """ResponseRequest(START 외). 표 찾기만 한다."""
-    action, values, nxt = out["action"], out["values"], out["next_item"]
-    state = extract_input["state"]
-    flat = _flat_state(state)
-    base = item_of(values[0]["key"]) if values else extract_input["question_id"]
-    req: dict[str, Any] = {"action": action, "topic": tables.topic(base), "user_utterance": extract_input["user_utterance"]}
-    saved = [v for v in values if v["save"]]
-    if action in ("NEXT", "CORRECT", "REASK"):
-        req["known"] = tables.known(saved, flat)
-    else:
-        req["known"] = ""
-    if "reason" in out:
-        req["reason"] = out["reason"]
-    targets = out.get("targets", [])
-    if action in ("REASK", "CONFIRM"):
-        req["ask"] = tables.ask_or_topic(out["reason"], targets, values, flat, item_of(targets[0]) if targets else base)
-    if action == "CONFIRM":
-        req["previous"], req["current"] = _confirm_texts(tables, out, state)
-    if action in ("HOLD", "SKIP"):
-        req["hold"] = tables.hold(targets)
-    if action == "REDIRECT" and "note" in out:
-        req["note"] = out["note"]
-    if action in SAME_ACTIONS:
-        req["next"] = {"type": "SAME", "question_id": nxt, "text": _next_text(nxt, bank, tables, {}, False)}
-    elif nxt == "END":
+    """ResponseRequest(START 외). 표 찾기만 한다. 문장 필드(topic, known, ask, previous, current, hold)는 데이터셋 담당의 규칙을 옮긴
+    `ResponseTables.b_fields`가 만들고, 여기서는 `next`만 붙인다(문항 은행의 질문 문장, 57행 문제는 남은 칸 문장)."""
+    nxt = out["next_item"]
+    req: dict[str, Any] = tables.b_fields(out, extract_input["question_id"], extract_input["user_utterance"], extract_input["state"])
+    if nxt == "END":
         req["next"] = {"type": "END"}
+    elif out["action"] in SAME_ACTIONS:
+        req["next"] = {"type": "SAME", "question_id": nxt, "text": _next_text(nxt, bank, tables, {}, False)}
     else:
         filled = {k: v[0] for k, v in effects.answers_by_key(doc_after["answer_records"]).items() if item_of(k) == nxt}
         req["next"] = {"type": "NEXT", "question_id": nxt, "text": _next_text(nxt, bank, tables, filled, True)}
