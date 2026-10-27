@@ -1,5 +1,9 @@
 # 변경 이력
 
+## model-runtime v0.6.4 맞춤 [미출시, 푸시·태그 전]
+
+- 의존을 model-runtime v0.6.4로(requirements, build_wheels 기본 태그, 이미지 라벨, 문서 표기). v0.6.4는 제약 디코딩 정책 relax-2(pattern/minItems 전달)와 OUTPUT_INVALID 응답 `details.violations` 추가이며 HTTP 모양은 그대로다. 코드 변경 없음. OUTPUT_INVALID 처리는 기존대로 재시도 1회 후 turn_failure_signal. relax-1이나 `details.violations`에 의존하는 코드·문서는 없었다.
+
 ## model-runtime v0.6.3 맞춤 [미출시, 푸시·태그 전]
 
 - 의존을 model-runtime v0.6.3으로(requirements, build_wheels 기본 태그, 이미지 라벨, 문서 표기). 코드 변경 없음.
