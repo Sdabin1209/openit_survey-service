@@ -14,9 +14,25 @@ from urllib.parse import urlsplit
 _INTERNAL_SUFFIXES = (".local", ".localdomain", ".internal", ".lan", ".home", ".corp", ".intranet")
 
 
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+_NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
+_SIX_TO_FOUR = ipaddress.ip_network("2002::/16")
+_TEREDO = ipaddress.ip_network("2001::/32")
+
+
 def _ip_public(ip) -> bool:
+    """공개(전역) 주소인가. IPv6에 IPv4를 품은 형태(IPv4-mapped, NAT64, 6to4, IPv4-compatible)는 품은 IPv4까지 공개여야 하고, Teredo와 NAT64 로컬 접두는 막는다."""
     if getattr(ip, "ipv4_mapped", None) is not None:
-        ip = ip.ipv4_mapped
+        return _ip_public(ip.ipv4_mapped)
+    if ip.version == 6:
+        if ip in _TEREDO or ip in _NAT64_LOCAL:
+            return False
+        if ip in _NAT64:
+            return _ip_public(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
+        if ip in _SIX_TO_FOUR:
+            return _ip_public(ipaddress.IPv4Address((int(ip) >> 80) & 0xFFFFFFFF))
+        if int(ip) >> 32 == 0:                       # ::/96 IPv4-compatible(::a.b.c.d)
+            return False
     return ip.is_global and not ip.is_multicast
 
 

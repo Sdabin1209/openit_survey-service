@@ -512,8 +512,8 @@ class _Server(ThreadingHTTPServer):
         if not sem.acquire(blocking=False):
             try:
                 request.settimeout(1)
-                body = b'{"code":"UNAVAILABLE","message":"too many connections","retryable":true}'
-                request.sendall(b"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 1\r\nContent-Type: application/json\r\nContent-Length: "
+                body = ('{"pipeline_schema_version":"%s","code":"UNAVAILABLE","message":"too many connections","retryable":true}' % PIPELINE_SCHEMA_VERSION).encode()
+                request.sendall(b"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 1\r\nX-Request-Id: " + uuid.uuid4().hex[:16].encode() + b"\r\nContent-Type: application/json\r\nContent-Length: "
                                 + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
             except OSError:
                 pass

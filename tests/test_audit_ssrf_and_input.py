@@ -194,3 +194,46 @@ def test_sse_connection_cap(tmp_path, monkeypatch):
         first.close()
     finally:
         _shutdown(app, httpd)
+
+
+# ---------------------------------------------------------------- 2차 점검 L1·L2·L7
+@pytest.mark.parametrize("url", [
+    "https://[64:ff9b::7f00:1]/x", "https://[64:ff9b::a9fe:a9fe]/x", "https://[64:ff9b::a00:1]/x", "https://[2002:a9fe:a9fe::1]/x", "https://[2002:7f00:1::1]/x",
+    "https://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/x", "https://[64:ff9b:1::1]/x", "https://[::ffff:169.254.169.254]/x", "https://[::a9fe:a9fe]/x"])
+def test_ssrf_guard_unwraps_embedded_ipv4(url):
+    assert netguard.endpoint_syntax_error(url)
+    assert netguard.host_is_public(url) is False
+
+
+def test_ssrf_guard_allows_embedded_public_ipv4():
+    assert netguard.endpoint_syntax_error("https://[64:ff9b::808:808]/x") is None          # NAT64로 감싼 8.8.8.8: 공개
+
+
+def test_deeply_nested_body_is_400_not_a_dropped_connection(tmp_path, monkeypatch):
+    app, httpd, port = make_app(tmp_path, monkeypatch)
+    try:
+        for depth in (600, 5000, 100000):
+            body = ("[" * depth + "]" * depth).encode()
+            r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+            assert b" 400 " in r.split(b"\r\n", 1)[0], (depth, r[:80])
+        from survey_service.api import _has_surrogate
+        deep = cur = []
+        for _ in range(20000):
+            nxt = []
+            cur.append(nxt)
+            cur = nxt
+        assert _has_surrogate(deep) is False and _has_surrogate({"a": ["\ud800"]}) is True
+    finally:
+        _shutdown(app, httpd)
+
+
+def test_connection_cap_503_has_request_id_and_schema_version(tmp_path, monkeypatch):
+    app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_SOCKET_TIMEOUT_SECONDS": "5", "SURVEY_MAX_CONNECTIONS": "1"})
+    try:
+        idle = socket.create_connection(("127.0.0.1", port))
+        time.sleep(0.2)
+        r = _raw(port, b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+        assert b" 503 " in r.split(b"\r\n", 1)[0] and b"X-Request-Id: " in r and b"pipeline_schema_version" in r
+        idle.close()
+    finally:
+        _shutdown(app, httpd)

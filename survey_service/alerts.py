@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import base64
+import contextvars
 import json
 import logging
 import queue
@@ -27,7 +28,7 @@ from .risk_rules import rule_id_of
 
 log = logging.getLogger("survey_service.alerts")
 
-_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"), ("session_meta", "device_id"))
+_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"), ("session_meta", "device_id"), ("alerts", "turn_id"))
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (
@@ -37,7 +38,8 @@ CREATE TABLE IF NOT EXISTS alerts (
   created_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','RESOLVED')),
   resolved_by_decision TEXT,
-  resolved_at TEXT
+  resolved_at TEXT,
+  turn_id TEXT
 );
 CREATE INDEX IF NOT EXISTS alerts_status ON alerts(status, n);
 CREATE INDEX IF NOT EXISTS alerts_session ON alerts(session_id, status);
@@ -88,6 +90,9 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   updated_at TEXT NOT NULL
 );
 """
+
+
+CURRENT_TURN: contextvars.ContextVar = contextvars.ContextVar("survey_current_turn", default=None)      # (session_id, turn_id): 알림 생성의 멱등 키
 
 
 class DeliveryFailed(SurveyServiceError):
@@ -165,12 +170,20 @@ class AlertStore:
                                (etype, n, json.dumps(alert, ensure_ascii=False))).fetchone()[0]
         return {"type": etype, "id": eid, "alert": alert}      # SSE의 id는 이벤트 순번이다(알림·해결 이벤트가 각각 하나씩 증가)
 
-    def create(self, session_id: str, kind: str, rule_id: Optional[str] = None) -> dict:
+    def find_by_turn(self, session_id: str, turn_id: str) -> Optional[dict]:
+        """같은 (세션, 턴)에서 이미 만든 알림(M2: 같은 turn_id 재전송이 알림을 쌓지 않게)."""
+        rows = self._read("SELECT n FROM alerts WHERE session_id=? AND turn_id=? ORDER BY n LIMIT 1", (session_id, turn_id))
+        if not rows:
+            return None
+        got = self._read("SELECT n, session_id, kind, created_at, status, resolved_by_decision, resolved_at FROM alerts WHERE n=?", (rows[0][0],))
+        return _row_to_alert(got[0]) if got else None
+
+    def create(self, session_id: str, kind: str, rule_id: Optional[str] = None, turn_id: Optional[str] = None) -> dict:
         """알림 행과 이벤트 행을 한 트랜잭션으로 쓴다. 돌려주는 값: 이벤트 {type: alert, id: 이벤트 순번, alert}.
         rule_id(위험 규칙 id, 발화 원문 아님)는 알림 행에만 남고 목록·SSE의 알림 모양은 그대로다(직원 세션 조회가 읽는다)."""
         def fn():
-            n = self._db.execute("INSERT INTO alerts(session_id, kind, created_at, rule_id) VALUES (?,?,?,?) RETURNING n",
-                                 (session_id, kind, _iso(self._clock()), rule_id)).fetchone()[0]
+            n = self._db.execute("INSERT INTO alerts(session_id, kind, created_at, rule_id, turn_id) VALUES (?,?,?,?,?) RETURNING n",
+                                 (session_id, kind, _iso(self._clock()), rule_id, turn_id)).fetchone()[0]
             return self._event("alert", n)
         return self._txn(fn)
 
@@ -422,7 +435,7 @@ class AlertService:
     def __init__(self, store: AlertStore, hub: Optional[AlertHub] = None, push: Optional[PushSender] = None,
                  push_timeout: float = 3.0) -> None:
         self.store, self.hub, self.push, self.push_timeout = store, hub or AlertHub(), push, push_timeout
-        self.stats = {"created": 0, "delivered": 0, "delivery_failed": 0, "push_accepted": 0, "push_failed": 0, "push_gone": 0}
+        self.stats = {"deduplicated": 0, "created": 0, "delivered": 0, "delivery_failed": 0, "push_accepted": 0, "push_failed": 0, "push_gone": 0}
         self._slock = threading.Lock()
 
     def _count(self, k: str, n: int = 1) -> None:
@@ -433,7 +446,14 @@ class AlertService:
     def raise_alert(self, session_id: str, staff_alert_kind: str, rule_id: Optional[str] = None) -> dict:
         """알림을 저장하고 구독자에게 보낸다. 닿은 경로가 없으면 DeliveryFailed(알림은 저장된 채)."""
         kind = KIND_MAP.get(staff_alert_kind, staff_alert_kind)
-        event = self.store.create(session_id, kind, rule_id)         # StoreError는 그대로 올라간다(저장 실패 = 전달 실패)
+        cur = CURRENT_TURN.get()
+        turn_id = cur[1] if cur and cur[0] == session_id else None
+        if turn_id is not None:                  # 같은 (세션, 턴)의 재전송은 기존 알림을 재사용한다(알림이 쌓이지 않는다)
+            prev = self.store.find_by_turn(session_id, turn_id)
+            if prev is not None:
+                self._count("deduplicated")
+                return prev
+        event = self.store.create(session_id, kind, rule_id, turn_id)         # StoreError는 그대로 올라간다(저장 실패 = 전달 실패)
         self._count("created")
         live = self.hub.publish(event)
         pushed = self._push(event)

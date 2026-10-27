@@ -253,3 +253,42 @@ def test_one_utterance_may_answer_several_following_items_up_to_next_item():
     assert extraction.check_values(out, doc, bank, flow) == []
     out2 = ext("NEXT", "Q8_2", val("Q8_1.days", 3), val("Q1.D01.diagnosed", True))                 # 앞 문항(범위 밖)은 여전히 거부
     assert [v.code for v in extraction.check_values(out2, doc, bank, flow)] == ["OUT_OF_CURRENT_ITEM"]
+
+
+# ---------------------------------------------------------------- 2차 점검 M1·M2
+def test_risk_phrase_on_unknown_session_sends_no_alert_but_store_outage_still_alerts():
+    from survey_service.risk_rules import RuleRiskSource
+    rig = Rig(risk_source=RuleRiskSource.provisional_default())
+    out = rig.orch.handle_turn(turn_id="x1", frontend_message={"session_id": "NOPE", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    assert not [c for c in rig.console.inputs if c.get("staff_alert")] and rig.orch.counters.get("risk_prescreen_unknown_session") == 1
+    assert out.frontend_input["turn_failure_signal"]["staff_alert"] == "NONE"
+    rig.start("S2")
+    real = rig.store.load
+    rig.store.load = lambda sid: {"session_id": sid, "status": "DB_ERROR", "revision": None, "state": None}        # 세션 저장소 장애: 확인을 건너뛰고 선별은 계속한다
+    rig.orch.handle_turn(turn_id="x2", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    assert len([c for c in rig.console.inputs if c.get("staff_alert")]) == 1
+    rig.store.load = real
+
+
+def test_same_turn_resend_reuses_the_alert(tmp_path):
+    from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole
+    from survey_service.risk_rules import RuleRiskSource
+    store = AlertStore(str(tmp_path / "a.db"))
+    svc = AlertService(store, AlertHub())
+    rig = Rig(risk_source=RuleRiskSource.provisional_default())
+    rig.orch.staff_console = AlertStaffConsole(svc)
+    svc.hub.subscribe()
+    rig.start()
+    rig.store.commit = lambda *a, **k: {"status": "DB_ERROR", "write_outcome": "NOT_WRITTEN", "revision": None}      # 확정 실패(NOT_COMMITTED): 같은 turn_id가 다시 처리된다
+    for _ in range(3):
+        rig.orch.handle_turn(turn_id="dup", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    assert len(store.list(None, 10, None)[0]) == 1 and svc.stats["deduplicated"] >= 1
+    rig.orch.handle_turn(turn_id="other", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    assert len(store.list(None, 10, None)[0]) == 2                                      # 다른 턴은 새 알림
+
+
+def test_device_token_cannot_touch_sessions_without_a_recorded_owner(tmp_path):
+    rig, api, call = _device_api(tmp_path, shared="shared-tok-0123456789")
+    assert call("shared-tok-0123456789", "POST", "/v1/sessions", {"session_id": "L9", "kind": "SESSION_START"})[0] == 200
+    assert call("tok-device-a-0123456789", "GET", "/v1/sessions/L9/state")[0] == 404           # 공유 토큰이 만든 세션: 기기 토큰은 접근 불가
+    assert call("shared-tok-0123456789", "GET", "/v1/sessions/L9/state")[0] == 200

@@ -70,16 +70,20 @@ USER_ID = re.compile(r"^[A-Za-z0-9._@:+-]{1,128}$")      # X-Openit-User: gatewa
 
 
 def _has_surrogate(x) -> bool:
-    if isinstance(x, str):
-        try:
-            x.encode("utf-8")
-            return False
-        except UnicodeEncodeError:
-            return True
-    if isinstance(x, dict):
-        return any(_has_surrogate(k) or _has_surrogate(v) for k, v in x.items())
-    if isinstance(x, list):
-        return any(_has_surrogate(v) for v in x)
+    """본문 안의 모든 문자열(키 포함)이 UTF-8로 인코딩되는가를 **반복**으로 본다(깊이 제한 없음: 재귀는 깊은 중첩에서 RecursionError)."""
+    stack = [x]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, str):
+            try:
+                v.encode("utf-8")
+            except UnicodeEncodeError:
+                return True
+        elif isinstance(v, dict):
+            stack.extend(v.keys())
+            stack.extend(v.values())
+        elif isinstance(v, list):
+            stack.extend(v)
     return False
 
 
@@ -162,8 +166,8 @@ class PublicApi:
         if method == "POST":
             try:
                 body = json.loads(raw.decode("utf-8")) if raw else None
-            except (ValueError, UnicodeDecodeError):
-                return _err("INVALID_RECORD", "본문이 JSON이 아니다")
+            except (ValueError, UnicodeDecodeError, RecursionError):          # 아주 깊은 중첩은 json 자체가 RecursionError를 낸다
+                return _err("INVALID_RECORD", "본문이 JSON이 아니거나 중첩이 너무 깊다")
             if not isinstance(body, dict):
                 return _err("INVALID_RECORD", "본문이 JSON 객체가 아니다")
             if _has_surrogate(body):          # UTF-8로 인코딩할 수 없는 문자(짝 없는 서로게이트): 저장·전송에서 터지기 전에 400
@@ -179,7 +183,7 @@ class PublicApi:
                 if denied:
                     return denied
             if role == "kiosk" and name == "start" and isinstance(body, dict):
-                denied = self._device_denied(body.get("session_id") if isinstance(body.get("session_id"), str) else None)
+                denied = self._device_denied(body.get("session_id") if isinstance(body.get("session_id"), str) else None, allow_new=True)
                 if denied:
                     return denied
             if name in ("alerts", "push_del"):
@@ -214,7 +218,7 @@ class PublicApi:
                 found, self._tl.device = "kiosk", dev
         return found
 
-    def _device_denied(self, sid: Optional[str]):
+    def _device_denied(self, sid: Optional[str], allow_new: bool = False):
         """기기별 토큰(U8): 세션을 만든 기기 토큰으로만 접근한다. 다른 기기 토큰(또는 공유 토큰)이면 세션이 없는 것처럼 404. 세션에 기기가 기록돼 있지 않으면(공유 토큰으로 만든 세션) 막지 않는다."""
         if self.alerts is None or not sid or not self.device_tokens:         # 기기별 토큰을 쓰지 않는 구성(공유 토큰만)은 확인하지 않는다(하위 호환)
             return None
@@ -222,7 +226,8 @@ class PublicApi:
             owner = self.alerts.store.device_of(sid)
         except StoreError:
             return _err("UNAVAILABLE", "지금은 처리할 수 없다")
-        if owner is not None and owner != getattr(self._tl, "device", None):
+        dev = getattr(self._tl, "device", None)
+        if owner != dev and (owner is not None or dev is not None) and not (allow_new and owner is None):       # 기기 토큰은 기록된 소유가 없는 세션(공유 토큰이 만든 것, 메타 없음)에도 접근하지 못한다
             log.warning("다른 기기의 세션 접근을 거부했다 route_session=%s", "*")
             return _err("NOT_FOUND", "모르는 세션이다")
         return None

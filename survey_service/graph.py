@@ -286,13 +286,30 @@ class TurnGraph:
             return {}
         if alert is None:
             return {}
-        self.o._count("risk_prescreen_hit")
         sid = st["session_id"]
+        # 없는 세션 ID(잘못된 요청)로 허위 알림이 나가지 않게 존재를 확인한다. 저장소가 장애이거나 느리면(짧은 한도 안에 못 끝나면) 확인을 건너뛰고 알림은 보낸다(fail-safe)
+        ctx = _ctx(config)
+        budget = min(1.0, max(0.1, (ctx.deadline - time.monotonic()) * 0.3)) if ctx.deadline is not None else 1.0
+        box: dict = {}
+
+        def probe() -> None:
+            try:
+                box["s"] = self.o.store.load(sid)["status"]
+            except Exception:
+                box["s"] = "DB_ERROR"
+        th = threading.Thread(target=probe, daemon=True)
+        th.start()
+        th.join(budget)
+        known = box.get("s", "DB_ERROR")
+        if known == "NOT_FOUND":
+            self.o._count("risk_prescreen_unknown_session")
+            return {}
+        self.o._count("risk_prescreen_hit")
         console = copy.deepcopy(st["console"])
         console["staff_alert"] = {"session_id": sid, "staff_alert": copy.deepcopy(alert)}
         upd: dict = {"prescreen_hit": True, "alert": alert, "alert_sent": True, "console": console, "console_calls": [copy.deepcopy(console)]}
         try:
-            self.o.staff_console.deliver(copy.deepcopy(console))
+            self._deliver(console, sid, st["turn_id"])
             upd.update(console_delivered=True, staff_status="DELIVERED", staff_delivery="SUCCESS")
         except Exception as e:
             log.warning("직원 콘솔 전달 실패(선별) session=%s turn=%s error=%s", sid, st["turn_id"], type(e).__name__)
@@ -300,6 +317,15 @@ class TurnGraph:
             console["staff_alert"] = None
             upd.update(staff_status="DELIVERY_FAILED", staff_delivery="FAILURE")      # finalize가 DELIVERY_FAILED 신호를 낸다 → 키오스크가 현장 직원 호출 화면을 보인다
         return upd
+
+    def _deliver(self, console: dict, sid: str, turn_id: str) -> None:
+        """직원 접점에 전달한다. 알림 생성은 (세션, 턴)으로 멱등이다(같은 turn_id 재전송이 알림을 쌓지 않는다)."""
+        from .alerts import CURRENT_TURN
+        tok = CURRENT_TURN.set((sid, turn_id))
+        try:
+            self.o.staff_console.deliver(copy.deepcopy(console))
+        finally:
+            CURRENT_TURN.reset(tok)
 
     def n_plan_risk(self, st, config):
         """선별에서 걸린 턴: 값은 저장하지 않고(모델을 부르지 않는다) 세션을 위험 정지로 기록하고 RISK_NOTICE를 안내한다."""
@@ -648,7 +674,7 @@ class TurnGraph:
         if alert is not None or intervention_result is not None:
             upd["console_calls"] = [copy.deepcopy(console)]
             try:
-                self.o.staff_console.deliver(copy.deepcopy(console))
+                self._deliver(console, sid, st["turn_id"])
                 upd["console_delivered"] = True
                 if alert is not None:
                     upd.update(staff_status="DELIVERED", staff_delivery="SUCCESS")
