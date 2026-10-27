@@ -25,6 +25,7 @@ except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
     psycopg = None           # type: ignore[assignment]
     DRIVER_ERRORS = ()
 
+DEFAULT_PROBE_TIMEOUT = 2.0  # /readyz의 DB 확인 상한 기본값(초). libpq의 connect_timeout 최소 단위가 2초라 이보다 작게 의미가 없다
 _LOCK_KEY = 7264002          # 스키마 생성용 advisory lock 키(이 영역 고정값)
 
 
@@ -42,6 +43,7 @@ class PgConn:
             raise StoreError(f"{what}: psycopg 드라이버가 없다")
         self._url, self._what = url, what          # 어디에도 출력하지 않는다
         self._in_txn = False
+        self.probe_timeout = DEFAULT_PROBE_TIMEOUT      # /readyz 확인용 상한(초). open_stores가 설정 값으로 덮어쓴다
         self._lock = threading.RLock()
         self._conn = self._connect(initial=True)
 
@@ -117,6 +119,15 @@ class PgConn:
         finally:
             if advisory:
                 self.execute("SELECT pg_advisory_unlock(%s)" % _LOCK_KEY)
+
+    def probe(self, table: str) -> None:
+        """/readyz용 DB 확인. **이 객체의 연결·락을 쓰지 않는다**: 요청 처리나 outbox 전송이 연결을 쥐고 오래 기다리는 중이어도
+        막히지 않고, 접속 시도가 `probe_timeout` 안에 끝난다(connect_timeout + 서버 쪽 statement_timeout).
+        실패하면 드라이버 오류를 올린다(메시지에 접속 정보가 들어갈 수 있어 호출자가 클래스 이름만 쓴다)."""
+        secs = max(1, int(self.probe_timeout + 0.999))
+        with psycopg.connect(self._url, autocommit=True, connect_timeout=secs,
+                             options=f"-c statement_timeout={int(self.probe_timeout * 1000)}") as c:
+            c.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchall()      # table은 코드가 정한 상수
 
     def kill_backend_pid(self) -> int:
         return self._conn.info.backend_pid

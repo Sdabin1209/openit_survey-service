@@ -1,5 +1,12 @@
 # 변경 이력
 
+## /readyz가 PostgreSQL 장애 때 상한 안에 503으로 답한다 (CR-D23) [미출시, 푸시·태그 전]
+
+- 원인(이 PC에서 측정, 로컬 PostgreSQL 컨테이너): `/readyz`가 세 저장소의 `ping`을 **직렬로, 요청 경로와 같은 연결·락으로** 불렀다. 연결 불가(응답 없는 주소) 시 한 확인이 `connect_timeout=10`초를 그대로 기다려 **세 확인 30.0초**(10.0+10.0+10.0, 두 번 반복해도 같음)였다. outbox 전송 스레드가 같은 락을 쥐고 접속을 시도하면 거기에 더 기다린다(관찰한 37초와 같은 자릿수, 추정). 컨테이너를 `docker pause`(연결은 서버가 붙잡고 응답 없음)하면 주 연결 질의에 상한이 없어 120초 넘게 응답하지 않았다. 또 DB를 읽는 보조 수치(`exporter.stats`, `alerts.status`)의 예외가 처리되지 않아 핸들러가 죽고 연결이 끊겼다(RemoteDisconnected의 직접 원인으로 보이나 컨테이너 환경에서는 재측정 전). `docker stop`(연결 거부)만은 이전에도 0~4초였다.
+- 고침: PostgreSQL 확인은 **별도 짧은 연결**(`PgConn.probe`, 주 연결·락 불사용, connect_timeout과 서버 statement_timeout = `SURVEY_READYZ_DB_TIMEOUT_SECONDS` 기본 2초)로 세 저장소 동시에, 전체 +1초 하드 상한. 보조 수치는 DB 정상일 때만 1초 한도로 읽고 아니면 마지막 값에 `db_stats_stale: true`. 503 본문에 `database.status=UNAVAILABLE`, `detail="db unavailable"`(접속 정보 없음). 바꾸지 않은 것: 턴 처리 경로, 재접속·재시도 규칙, 연결 timeout 10초, SQLite 동작, 기존 `problems` 이름.
+- 시험: `tests/test_readyz_db_outage.py` 4개(연결 불가 시 상한 안 503과 복구 후 200, 주 연결 락을 쥐고 있어도 막히지 않음, 확인이 멈춰도 하드 상한, 설정 값).
+- 못 한 것: 실제 compose 환경 재측정(deploy E2E 5p에서 헤드). 응답 없는 DB에서 요청 경로가 최대 10초 기다리는 점은 그대로(바꾸면 환자 경로 의미가 바뀌어 제안만: 요청 경로의 연결 timeout 단축은 별도 결정).
+
 ## B 입력의 표 찾기를 데이터셋 담당의 원본 규칙으로 교체 [미출시, 푸시·태그 전]
 
 - 이전 `response_tables.json`(`DRAFT_UNCONFIRMED`)은 학습 샘플에서 역으로 읽은 초안이었고 원본을 모르고 만든 것이었다. 원본은 학습 서버 `~/WS/dataset/scripts/labels.py`(2026-10-14, 데이터셋 담당; README가 '서비스 표 찾기의 기준 구현'이라 부른다)다. 이 규칙을 옮겼다: 어휘와 고정 문장은 `schema/data/response_tables.json`(`ResponseTables` 스키마를 새 구조로), 조합 로직(그룹핑, 조사, 시간·년 표기, 술 단위, previous/current)은 `survey_service/response_tables.py`의 `b_fields`. 서버 파일 내용은 리포에 복사하지 않았고 출처만 적었다. 이유(기준 선택): 학습 데이터가 이 규칙으로 만들어졌으므로 서비스가 이 규칙을 따라야 모델이 학습한 입력 분포를 받는다.

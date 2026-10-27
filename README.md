@@ -76,6 +76,7 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 - 수집 결과는 415개이고 STATUS의 403은 구간 8 당시 값이다(STATUS "현재 기준"에 정리). 415개의 통과 여부는 돌리지 않아 미확인.
 - 확인하지 못한 것(STATUS, OPEN_GAPS): 실제 model-runtime 서버 이미지와의 E2E, 두 번째 깨끗한 환경에서의 재현, 실제 브라우저·푸시 서비스, 실제 모델로 한 턴을 통과시키는 일(U07), 부하·동시성, 세션 문서 암호화·보존 기간.
 - 표 찾기는 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 확인 대기다(`schema/data/response_tables.json`의 `table_status: DATASET_RULES_UNCONFIRMED`, 승인 기록 미확인).
+- `/readyz`는 PostgreSQL이 죽거나 응답이 없어도 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본 2초)+약 2초 안에 503(db unavailable)으로 답하고 복구 뒤 200이 된다(CR-D23, docs/boundary.md §5·§6). 이 PC에서 로컬 PostgreSQL 컨테이너로 확인했고, 실제 compose 환경의 재측정은 deploy E2E 5p에서 헤드가 한다.
 - 직원 알림 API·SSE·푸시는 살아 있으나 알림을 만드는 입력원이 없어 알림은 나오지 않는다(`/readyz`의 `staff_alert_source.active=false`, docs/boundary.md §5).
 
 ## 이 영역의 열린 항목 (head/docs/OPEN_GAPS.md, 읽기 전용으로 확인)

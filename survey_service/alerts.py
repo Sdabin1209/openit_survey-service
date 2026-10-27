@@ -491,6 +491,13 @@ class PgAlertStore(AlertStore):
         for table, col in _NEW_COLUMNS:           # 이전 스키마 이행(멱등)
             self._db.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} TEXT")
 
+    def ping(self) -> None:
+        """/readyz용. 주 연결과 락을 쓰지 않는 별도 짧은 연결로 확인한다."""
+        try:
+            self._db.probe("alerts")
+        except self._ERRORS as e:
+            raise StoreError(f"알림 DB를 읽을 수 없다: {type(e).__name__}") from None
+
 
 try:
     from .pg import DRIVER_ERRORS as _PG_ERRORS

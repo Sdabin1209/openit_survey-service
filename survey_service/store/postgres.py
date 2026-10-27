@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from ..errors import StoreError
 from ..pg import DRIVER_ERRORS, PgConn, pg_ddl
 from .sqlite import _SCHEMA, SqliteSessionStore
 
@@ -18,3 +19,10 @@ class PgSessionStore(SqliteSessionStore):
         self._db = PgConn(url, "세션 DB")
         self._db.script(pg_ddl(_SCHEMA))
         self._db.execute("CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(status, updated_at)")
+
+    def ping(self) -> None:
+        """/readyz용. 주 연결과 락을 쓰지 않는 별도 짧은 연결로 확인한다(DB가 멈춰도 상한 안에 끝난다)."""
+        try:
+            self._db.probe("sessions")
+        except self._ERRORS as e:
+            raise StoreError(f"세션 DB를 읽을 수 없다: {type(e).__name__}") from None

@@ -199,20 +199,45 @@ class App:
             names["trace_ingest_token"] = st.trace_ingest_token_env
         return {k: secret_source(v) for k, v in names.items()}
 
+    def _bounded(self, fns: dict, budget: float) -> dict:
+        """함수들을 데몬 스레드에서 동시에 돌리고 `budget`초 안에 끝난 것만 {이름: ("ok", 값) | ("error", None)}로 돌려준다(못 끝낸 것은 빠진다).
+        /readyz가 DB 호출 하나 때문에 오래 붙잡히지 않게 하는 마지막 상한이다."""
+        out: dict = {}
+
+        def run(name, fn):
+            try:
+                out[name] = ("ok", fn())
+            except Exception:
+                out[name] = ("error", None)
+        ts = [threading.Thread(target=run, args=(n, f), name="readyz-" + n, daemon=True) for n, f in fns.items()]
+        for t in ts:
+            t.start()
+        end = time.monotonic() + budget
+        for t in ts:
+            t.join(max(0.0, end - time.monotonic()))
+        return dict(out)
+
+    def _db_problems(self) -> list:
+        """세 저장소를 **동시에** 확인한다(직렬이면 연결 불가 때 시간이 저장소 수만큼 곱해진다). PostgreSQL의 각 확인은 주 연결·락을
+        쓰지 않는 별도 짧은 연결이고 자체 상한(`readyz_db_timeout_seconds`)이 있다. 그래도 안 끝나면 여유 1초 뒤 실패로 센다."""
+        res = self._bounded({"session_db": self.store.ping, "outbox_db": self.outbox.ping, "alert_db": self.alert_store.ping},
+                            self.settings.readyz_db_timeout_seconds + 1.0)
+        return [n for n in ("session_db", "outbox_db", "alert_db") if res.get(n, ("error",))[0] != "ok"]
+
+    def _db_stats(self, db_ok: bool) -> dict:
+        """DB를 읽는 보조 수치(outbox 건수, 구독 수). 주 연결을 쓰므로 DB가 정상일 때만 읽고, 1초 안에 못 읽거나 DB가 비정상이면
+        마지막으로 읽은 값에 `stale=true`를 붙여 돌려준다. 이 읽기가 실패해도 /readyz는 응답한다(예외가 핸들러를 끊지 않게)."""
+        if db_ok:
+            res = self._bounded({"stats": lambda: {"trace_outbox": self.exporter.stats(), "staff_alerts": self.alerts.status()}}, 1.0)
+            if res.get("stats", ("error",))[0] == "ok":
+                self._db_stats_cache = res["stats"][1]
+                return dict(self._db_stats_cache, stale=False)
+        c = getattr(self, "_db_stats_cache", None)
+        return dict(c, stale=True) if c else {"trace_outbox": None, "staff_alerts": None, "stale": True}
+
     def readiness(self) -> tuple[bool, dict]:
-        problems = []
-        try:
-            self.store.ping()
-        except Exception:
-            problems.append("session_db")
-        try:
-            self.outbox.ping()
-        except Exception:
-            problems.append("outbox_db")
-        try:
-            self.alert_store.ping()
-        except Exception:
-            problems.append("alert_db")
+        problems = self._db_problems()
+        dbs = self._db_stats(not problems)
         active = self.registry.active_id()
         retrying = self.loader.retry_info()
         if active is None:
@@ -220,11 +245,12 @@ class App:
             if retrying is not None:
                 problems.append("release_loading")      # 거부가 아니라 일시적 실패로 재시도 중이다(release_loader.retrying)
         body = {
-            "ready": not problems, "problems": problems, "database": {"kind": self.db_kind}, "service_version": SERVICE_VERSION,
+            "ready": not problems, "problems": problems, "database": ({"kind": self.db_kind} if not any(p.endswith("_db") for p in problems) else
+                         {"kind": self.db_kind, "status": "UNAVAILABLE", "detail": "db unavailable"}), "service_version": SERVICE_VERSION,
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
-            "staff_alerts": self.alerts.status(),
+            "staff_alerts": dbs["staff_alerts"],
             "secrets": self._secret_sources(),
             # D74: v2의 A 출력에는 위험 신호 필드가 없어 직원 알림의 입력원이 없다. 조용히 끄지 않고 여기에 드러낸다(CR-012, 헤드 결정 대기).
             "staff_alert_source": ((self.orchestrator.risk_source.describe() if hasattr(self.orchestrator.risk_source, "describe")
@@ -242,7 +268,7 @@ class App:
                                "last_pointer_version": self.loader.status.last_pointer_version,
                                "last_poll_error": self.loader.status.last_poll_error,
                                "rejections": self.loader.status.rejections[-5:], "warnings": self.loader.status.warnings[-5:]},
-            "trace_outbox": self.exporter.stats(),
+            "trace_outbox": dbs["trace_outbox"], "db_stats_stale": dbs["stale"],
         }
         return not problems, body
 
