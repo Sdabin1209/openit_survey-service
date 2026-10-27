@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 되묻기 상한 메커니즘(G12)과 직원 알림 입력원 포트 문서(G01) [미출시, 푸시·태그 전]
+
+- `SURVEY_MAX_CONSECUTIVE_REASK`(기본 0=끔): 연속 REASK·CONFIRM 횟수를 대화 로그에서 세고, 상한을 넘으면 기존 직원 호출 경로로 넘긴다. 값은 정하지 않았다. `/readyz`에 `reask_limit`. 시험 `tests/test_reask_limit.py`.
+- 직원 알림 입력원 포트(`RiskSource`)와 `SURVEY_RISK_SOURCE` 선택을 문서로 고정하고 가짜 입력원 시험을 추가했다(`tests/test_alert_source_port.py`). 입력원은 정하지 않았다.
+
 ## 비밀 파일화(D84), boundary-contracts v2.0.2 [미출시, 푸시·태그 전]
 
 - 모든 토큰·비밀을 `boundary_contracts.read_secret`으로 읽는다(`NAME_FILE` 우선, 없으면 `NAME`). `*_TOKEN_ENV` 간접 지정은 의미를 보존한다. `/readyz`에 `secrets`(출처만 file|env|unset) 추가. 값이 로그·`/readyz`·오류·저장소 파일에 없는 시험 추가(`tests/test_secrets.py`).

@@ -88,6 +88,9 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 
 ## D74 구조 운영 메모
 
+- **되묻기 상한(G12, 메커니즘만, 값 미정)**: `SURVEY_MAX_CONSECUTIVE_REASK`(정수, 기본 0=끔). 켜면 A가 REASK·CONFIRM을 연달아 낸 횟수를 세션의 대화 로그에서 센다(재시작·재전송에도 같다). 이미 N번 연달아 되물은 뒤 또 REASK·CONFIRM이 나오면 되묻는 대신 기존 직원 호출 경로를 쓴다: 세션 정지(키오스크 `state`는 기존 `PAUSED_RISK`), `CALL_STAFF` 알림(알림 저장·SSE·푸시), 응답은 문항 세트의 고정 문장 `CALL_STAFF`(새 문구 없음). 직원이 `RESUME`하면 연속 횟수는 다시 센다. 다른 action이나 재개·시작이 연속을 끊는다. 상한에 닿은 횟수는 카운터 `reask_limit_reached`, 설정은 `/readyz`의 `reask_limit`. 값은 사용자가 정한다(CR-012, G12). 문항 세트에 `CALL_STAFF` 고정 문장이 없으면 응답 단계가 실패로 기록된다(문항 저작 쪽 확인 사항).
+- **직원 알림 입력원 자리(G01)**: `SURVEY_RISK_SOURCE=모듈:함수`가 `RiskSource` 구현을 만든다(포트 계약은 `docs/boundary.md` 4절). 비우면 입력원 없음이고 `/readyz`의 `staff_alert_source.active`는 false다. 입력원은 정해지지 않았다.
+
 - **직원 알림이 안 나온다**: `/readyz`의 `staff_alert_source`를 보라. `active: false`면 v2에 입력원이 없는 것이다(CR-012). 고장이 아니다. 입력원이 정해지면 `SURVEY_RISK_SOURCE=모듈:함수`로 꽂는다.
 - **턴이 `LoRA-A` 또는 `VALIDATE`로 실패한다**: 로그의 `step=`과 Trace의 `extract_status`(`OUTPUT_INVALID` 서버가 형식을 못 지킴, `VIOLATION` 의미 검증 위반, `ERROR` 호출·입력 오류), `validation_violations`의 `code`를 본다(값은 없다). 같은 요청을 한 번 더 보낸 뒤의 실패다. 세션 상태는 그대로이고 사용자는 다시 말하면 된다. 반복되면 모델 패키지(어댑터, 프롬프트)와 문진 스키마 정수 버전, 문항 순서 표(`question_flow`) 일치를 확인한다.
 - **`ask_fallback` 건수가 늘어난다**: 표(`ResponseTables`)에 없는 (사유, 칸) 조합이다. 폴백은 문항의 `topic`을 `ask`로 쓴다. 표 초안 보강 대상이다(미확정 표).

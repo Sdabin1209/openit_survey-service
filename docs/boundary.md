@@ -39,6 +39,9 @@
 - 같은 (세션 ID, 턴 ID)의 재전송은 같은 결과(이중 저장 없음). 같은 턴 ID에 다른 입력이면 `TurnIdConflict`.
 - 한 턴 동안 문항 저작·합성 데이터·모델 개발·게이트를 호출하지 않는다.
 
+- **직원 알림 입력원 포트(G01)**: `survey_service.ports.RiskSource.check(*, extract_input, extract_output, utterance) -> Optional[Mapping]`. 발화가 검증을 통과한 턴마다 불리고, `StaffAlert`(`{"kind": "RISK"|"CALL_STAFF"|"USER_CALLED_STAFF", "reasons": [...]}`) 또는 None을 돌려준다. `RISK`는 세션을 정지시키고 고정 문장 `RISK_NOTICE`를 쓴다(reasons는 `RISK_SIGNAL`/`RISK_RULE`). 다른 kind는 정지 없이 알림만 낸다. 예외를 던지면 그 턴은 알림 없이 진행하고 `risk_source_error`를 센다. 같은 입력에는 같은 결과를 내야 하고 환자 발화 원문을 알림에 담지 않는다. 구현은 `SURVEY_RISK_SOURCE=모듈:함수`(인자 없는 팩토리)로 고르고, 기본은 없음(비활성)이다. 어떤 입력원을 쓸지는 정해지지 않았다.
+- **되묻기 상한(G12)**: `SURVEY_MAX_CONSECUTIVE_REASK`(기본 0=끔). 켜면 상한을 넘는 REASK·CONFIRM 대신 기존 직원 호출 경로(정지 `PAUSED_RISK`, `CALL_STAFF` 알림, 고정 문장 `CALL_STAFF`)를 쓴다. 값은 미정이다.
+
 ## 5. 이웃이 이 영역에 기대해서는 안 되는 것
 
 - **직원 알림은 지금 만들어지지 않는다**: v2의 A 출력에 위험 신호가 없어 입력원이 없다(CR-012, 헤드 결정 대기). `/readyz`의 `staff_alert_source.active`가 false다. 알림 API·SSE·푸시는 살아 있다.
