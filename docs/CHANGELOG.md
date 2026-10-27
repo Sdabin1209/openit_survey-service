@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 의존 태그 올림: model-runtime v0.7.1 -> v0.7.2 [미출시, 푸시·태그 전]
+
+- model-runtime 의존을 v0.7.2로(requirements.txt, build_wheels 기본 태그, inference.py 주석, boundary·STATUS의 현재 기준 표기). v0.7.2는 가짜 A에 정정 출력을 추가한 하위 호환 변경이다. `requirements.lock`에는 model-runtime 줄이 없어(서드파티만 고정, 이웃은 wheel) 바뀌지 않는다. `scripts/build_wheels.sh`는 이웃 폴더의 `git archive` 대신 원격 태그를 얕게 clone해 wheel을 만든다(이웃 폴더를 읽지 않는다).
+
 ## /readyz가 PostgreSQL 장애 때 상한 안에 503으로 답한다 (CR-D23) [미출시, 푸시·태그 전]
 
 - 원인(이 PC에서 측정, 로컬 PostgreSQL 컨테이너): `/readyz`가 세 저장소의 `ping`을 **직렬로, 요청 경로와 같은 연결·락으로** 불렀다. 연결 불가(응답 없는 주소) 시 한 확인이 `connect_timeout=10`초를 그대로 기다려 **세 확인 30.0초**(10.0+10.0+10.0, 두 번 반복해도 같음)였다. outbox 전송 스레드가 같은 락을 쥐고 접속을 시도하면 거기에 더 기다린다(관찰한 37초와 같은 자릿수, 추정). 컨테이너를 `docker pause`(연결은 서버가 붙잡고 응답 없음)하면 주 연결 질의에 상한이 없어 120초 넘게 응답하지 않았다. 또 DB를 읽는 보조 수치(`exporter.stats`, `alerts.status`)의 예외가 처리되지 않아 핸들러가 죽고 연결이 끊겼다(RemoteDisconnected의 직접 원인으로 보이나 컨테이너 환경에서는 재측정 전). `docker stop`(연결 거부)만은 이전에도 0~4초였다.

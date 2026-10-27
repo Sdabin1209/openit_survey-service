@@ -5,13 +5,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 BOUNDARY_TAG=${BOUNDARY_TAG:-v2.0.2}
 TURN_ENGINE_TAG=${TURN_ENGINE_TAG:-v0.4.0}
-MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.7.1}
+MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.7.2}
 PIP=${PIP:-.venv/bin/pip}
 rm -rf build && mkdir -p build/wheels build/src
 for spec in "boundary-contracts:$BOUNDARY_TAG" "turn-engine:$TURN_ENGINE_TAG" "model-runtime:$MODEL_RUNTIME_TAG"; do
   name=${spec%%:*}; tag=${spec#*:}
-  mkdir -p "build/src/$name"
-  git -C "../$name" archive "$tag" | tar -x -C "build/src/$name"
+  # 원격 태그에서 받는다(이웃 폴더를 읽지 않는다). 리포 이름은 openit_<name>
+  git clone -q --depth 1 --branch "$tag" "git@github.com:Sdabin1209/openit_$name.git" "build/src/$name"
+  rm -rf "build/src/$name/.git"
   $PIP wheel -q --no-deps --no-build-isolation -w build/wheels "build/src/$name"
 done
 $PIP wheel -q --no-deps --no-build-isolation -w build/wheels ./schema
