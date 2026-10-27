@@ -66,7 +66,8 @@ class Orchestrator:
     def __init__(self, store: SessionStorePort, releases: ReleaseProvider, *, flow: Optional[Flow] = None,
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
-                 frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None) -> None:
+                 frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
+                 max_consecutive_reask: int = 0) -> None:
         self.store = store
         self.releases = releases
         self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
@@ -75,6 +76,7 @@ class Orchestrator:
         self.staff_console = staff_console or UnconfiguredStaffConsole()
         self.dispatcher = dispatcher or UnattachedDispatcher()
         self.frontend_sink = frontend_sink
+        self.max_consecutive_reask = max(0, int(max_consecutive_reask))   # 0이면 끔(G12). 값은 헤드 결정 대기(CR-012)
         self.trace_sink = trace_sink
         self._locks = _SessionLocks()
         self.counters: dict[str, int] = {}

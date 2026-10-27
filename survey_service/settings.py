@@ -80,6 +80,7 @@ class Settings:
     inference_timeout_seconds: float = 4.0      # 호출 하나(extract 또는 respond)의 읽기 타임아웃. 프론트 타임아웃 10초 안에 두 호출이 들어가게
     inference_load_timeout_seconds: float = 600.0   # 릴리스 적재(모델 로딩)를 기다리는 시간
     inference_retries: int = 1
+    max_consecutive_reask: int = 0              # REASK·CONFIRM 연속 상한(G12). 0이면 끔. 값은 정해지지 않았다(CR-012)
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
@@ -122,6 +123,7 @@ class Settings:
             release_retry_base_seconds=_float(env, "SURVEY_RELEASE_RETRY_BASE_SECONDS", 5.0),
             release_retry_max_seconds=_float(env, "SURVEY_RELEASE_RETRY_MAX_SECONDS", 60.0),
             release_retry_give_up_seconds=float(env.get("SURVEY_RELEASE_RETRY_GIVE_UP_SECONDS", "0")),
+            max_consecutive_reask=_int(env, "SURVEY_MAX_CONSECUTIVE_REASK", 0, 0),
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),
             export_backoff_max_seconds=_float(env, "SURVEY_EXPORT_BACKOFF_MAX_SECONDS", 60.0),

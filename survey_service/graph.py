@@ -445,7 +445,33 @@ class TurnGraph:
                     pu["session_status"] = "PAUSED_RISK"
                     pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(alert)}]
                     upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
+        if "alert" not in upd:
+            esc = self._reask_escalation(st, ctx, out)
+            if esc is not None:
+                upd.update(esc)
+                pu = writes["progress_record_update"]
+                pu["session_status"] = "PAUSED_RISK"           # 기존 직원 호출 경로: 정지 + CALL_STAFF 알림 + 문항 세트의 고정 문장
+                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": []}]
         return upd
+
+    def _reask_escalation(self, st, ctx, out) -> Optional[dict]:
+        """G12: A가 REASK·CONFIRM을 연달아 내는 횟수를 대화 로그에서 센다(세션 문서에서 계산하므로 재시작·재전송에도 같다).
+        상한(SURVEY_MAX_CONSECUTIVE_REASK, 0이면 끔)을 넘는 REASK·CONFIRM이 나오면 되묻는 대신 직원을 부른다."""
+        cap = self.o.max_consecutive_reask
+        if cap <= 0 or out["action"] not in ("REASK", "CONFIRM"):
+            return None
+        n = 0
+        for e in reversed(st["state_doc"]["dialogue_log"]):
+            if e["turn_result"] != "COMMITTED":              # 실패·무시된 턴은 연속을 끊지 않는다
+                continue
+            ex = e.get("extract_output")
+            if ex is None or ex["action"] not in ("REASK", "CONFIRM"):
+                break                                        # 다른 action, 재개·시작 같은 턴이 연속을 끊는다
+            n += 1
+        if n < cap:
+            return None
+        self.o._count("reask_limit_reached")
+        return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF")}
 
     @staticmethod
     def _fixed(ctx, key: str) -> dict:

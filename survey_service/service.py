@@ -106,7 +106,8 @@ class App:
         if risk_source is None and settings.risk_source:
             risk_source = load_factory(settings.risk_source)()
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
-                                         trace_sink=OutboxTraceSink(self.outbox))
+                                         trace_sink=OutboxTraceSink(self.outbox),
+                                         max_consecutive_reask=settings.max_consecutive_reask)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         if not api_token:
             raise ConfigError(f"공개 API 토큰이 {settings.api_token_env}_FILE(파일) 또는 환경 변수 {settings.api_token_env}에 없다")
@@ -217,6 +218,7 @@ class App:
             "staff_alert_source": ({"active": True} if self.orchestrator.risk_source is not None else
                                    {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",
                                     "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 알림이 만들어지지 않는다(docs/change-requests/CR-012)."}),
+            "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
             "response_tables": {"status": self.orchestrator.tables.status},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
