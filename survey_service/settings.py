@@ -73,14 +73,14 @@ class Settings:
     retention_interval_seconds: int = 3600                         # 서비스 안에서 보존 정리를 도는 주기(초). 0이면 서비스는 돌리지 않는다(deploy의 purge 잡만)
     risk_default_rules: bool = True  # 규칙 파일·입력원이 없으면 임시 기본 목록(임상 검토 전)을 쓴다. SURVEY_RISK_DEFAULT_RULES=off로 끈다 (ADR-0013)
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
-    turn_deadline_seconds: float = 6.0            # 서버 턴 총 마감(초). 키오스크 대기 10초보다 짧게. 넘으면 NOT_COMMITTED(FAULT_POLICY 3)
-    db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초
-    db_statement_timeout_seconds: float = 2.0     # 문장 하나의 상한(초). 서버 statement_timeout + 클라이언트 강제 끊기
-    db_reconnect_backoff_seconds: float = 1.0     # 접속 실패 뒤 이 시간 동안은 재접속을 시도하지 않고 바로 실패(빠른 실패)
+    turn_deadline_seconds: float = 6.0            # 서버 턴 총 마감(초). 키오스크 대기 10초보다 짧게. 넘으면 NOT_COMMITTED(FAULT_POLICY 3)  [근거: ADR-0008, 6초는 DB 장애 pause 5.0초 측정과 gateway 상한에서 정함]
+    db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초  [근거: ADR-0011]
+    db_statement_timeout_seconds: float = 2.0     # 문장 하나의 상한(초). 서버 statement_timeout + 클라이언트 강제 끊기  [근거: ADR-0011]
+    db_reconnect_backoff_seconds: float = 1.0     # 접속 실패 뒤 이 시간 동안은 재접속을 시도하지 않고 바로 실패(빠른 실패)  [근거: ADR-0011]
     extract_input_max_chars: int = 2400           # 추출 입력(JSON) 길이 상한. model-runtime v0.7.3의 상한 2500자보다 약간 낮게(여유 100). 넘으면 발화를 줄여 보낸다 (ADR-0012)
     socket_timeout_seconds: float = 15.0          # HTTP 요청 소켓 읽기 제한(초). 정상 요청은 수 ms~수 초, 길게 매달린 연결은 끊는다 (ADR-0018, 측정 안 함)
-    max_connections: int = 256                    # 동시 접속 상한(SSE 포함). 넘으면 503을 쓰고 끊는다. 처리 단계 상한(api_max_inflight 32)과 별개
-    max_sse_connections: int = 50                 # 직원 알림 스트림 동시 연결 상한
+    max_connections: int = 256                    # 동시 접속 상한(SSE 포함). 넘으면 503을 쓰고 끊는다. 처리 단계 상한(api_max_inflight 32)과 별개  [근거: ADR-0018, 값은 측정 안 함]
+    max_sse_connections: int = 50                 # 직원 알림 스트림 동시 연결 상한  [근거: ADR-0018, 값은 측정 안 함]
     readyz_db_timeout_seconds: float = 2.0        # /readyz가 PostgreSQL을 확인하는 데 쓰는 상한(초). 넘으면 503 db unavailable. SQLite에는 해당 없음
     release_poll_seconds: float = 5.0
     startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
@@ -106,7 +106,7 @@ class Settings:
     max_push_subscriptions: int = 100
     kiosk_device_tokens_env: str = "SURVEY_KIOSK_DEVICE_TOKENS"   # 기기별 키오스크 토큰 표(`device_id=토큰` 줄). NAME_FILE이 있으면 파일 내용 (D88 U8)
     staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
-    api_max_inflight: int = 32
+    api_max_inflight: int = 32  # [근거: ADR-0004, 부하 측정 boundary.md §6-1 (기본 32)]
     api_max_utterance_chars: int = 1000
     session_idle_seconds: int = 300          # 0이면 유휴 만료를 하지 않는다
     # 모델 런타임을 HTTP 경계 뒤에 둘 때(추론 컨테이너): 비우면 프로세스 안에서 적재한다
@@ -119,7 +119,7 @@ class Settings:
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
-    outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다). 0이면 상한 없음
+    outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다). 0이면 상한 없음  [근거: ADR-0009, 크기는 추정]
     outbox_keep_sent_hours: int = 24
     outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다, trace_outbox.dropped_full). 0이면 상한 없음
     log_level: str = "INFO"
