@@ -183,7 +183,7 @@ def test_skip_and_hold_record_skipped_questions_and_end_dispatches():
             {"values": [val("Q1.D01.diagnosed", None, "UNKNOWN"), val("Q1.D01.on_medication", None, "UNKNOWN")]})
     assert rig.doc()["progress_record"]["skipped"] == [{"question_id": "Q1.D01", "reason": "REQUEST_SKIP"}]
     assert rig.session.respond_requests[-1]["hold"] == "뇌졸중(중풍)"
-    o = rig.say("그만", out=ext("NEXT", "END", val("Q10.days", 2)))
+    o = rig.say("그만", out=ext("NEXT", "END", val("Q10.days", 2, "CORRECTION")))
     assert rig.doc()["progress_record"]["session_status"] == "ENDED_COMPLETE" and o.orchestrator_output["dispatch_called"] is True
     assert rig.dispatcher.inputs[0]["session_status"] == "ENDED_COMPLETE" and rig.dispatcher.inputs[0]["skipped"]
     assert rig.session.respond_requests[-1]["next"] == {"type": "END"}

@@ -99,6 +99,72 @@ def check_slots(output: Mapping, records: list) -> list[Violation]:
     return out
 
 
+_MAX_NUM = 1_000_000          # 값 타당성의 거친 상한(사람이 답하는 양·횟수·나이·일수). 넘으면 지어낸 값으로 본다 (ADR-0017)
+_MAX_STR = 200
+
+
+def _family(item: str) -> str:
+    return item.split("_", 1)[0].split(".", 1)[0]
+
+
+def _slot_def(bank: Bank, ref: Mapping) -> Optional[Mapping]:
+    q = bank.by_id.get(ref["question_id"])
+    return next((x for x in (q or {}).get("slots", []) if x["slot_id"] == ref["slot_id"]), None)
+
+
+def _is_num(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x and abs(x) <= _MAX_NUM
+
+
+def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank]) -> list[Violation]:
+    """turn-engine의 validate_extraction 뒤에 서비스가 한 번 더 보는 값 타당성(감사 TE-1, D88): 위반이면 값을 저장하지 않고 같은 요청을 1회 재시도, 그래도면 턴 NOT_COMMITTED.
+    (1) 저장하는 값의 칸이 현재 문항이어야 한다(정정은 예외: status CORRECTION 또는 action CORRECT). (2) 값이 Value 형식이고 합리적인 크기다.
+    (3) 슬롯 정의가 아는 만큼 타입이 맞는다: choices는 그 목록의 문자열, yes_no_map은 불리언(또는 yes/no 문자열), units는 단위가 목록에 있는 양 또는 숫자.
+    (4) 이미 저장된 값이 있으면 같은 종류(불리언/숫자/문자열/양)여야 한다. 한계: QuestionBank에 칸의 값 타입 필드가 없어 처음 쓰는 자유 칸의 타입은 알 수 없다(CR-017)."""
+    out: list[Violation] = []
+    if bank is None:
+        return out
+    cur_q = doc["progress_record"]["current_question_id"]
+    # 한 발화가 문항과 그 후속 문항(Q4와 Q4_1, Q1.D01과 Q1.D02)을 함께 채우는 것은 정상이다: 현재 문항과 next_item의 같은 계열(Q4_1 -> Q4, Q1.D01 -> Q1)까지 허용한다
+    fams = {_family(cur_q)} | ({_family(output["next_item"])} if output.get("next_item") not in (None, "END") else set())
+    answers = effects.answers_by_key(doc["answer_records"])
+    is_corr_action = output.get("action") == "CORRECT"
+    for i, v in enumerate(output["values"]):
+        if not v["save"]:
+            continue
+        path = f"values/{i}"
+        ref = effects.slot_ref(v["key"])
+        if _family(ref["question_id"]) not in fams and not (is_corr_action or v["status"] == "CORRECTION"):
+            out.append(Violation("OUT_OF_CURRENT_ITEM", f"{path}/key", "현재 문항이 아닌 칸을 정정이 아닌데 저장하려 한다"))
+            continue
+        val = v["value"]
+        slot = _slot_def(bank, ref)
+        kind = ("bool" if isinstance(val, bool) else "num" if _is_num(val) else "amount" if isinstance(val, dict) and "amount" in val and "unit" in val
+                else "str" if isinstance(val, str) and 0 < len(val) <= _MAX_STR else "coded" if isinstance(val, dict) and "amount" not in val and val else None)
+        if kind is None:
+            out.append(Violation("VALUE_INVALID", f"{path}/value", "값 형식이 아니거나 비합리적이다(숫자 상한 초과, 빈 문자열, 너무 긴 문자열)"))
+            continue
+        if kind == "amount" and (not _is_num(val["amount"]) or not isinstance(val["unit"], str)):
+            out.append(Violation("VALUE_INVALID", f"{path}/value", "양 값의 amount·unit이 올바르지 않다"))
+            continue
+        if slot is not None:
+            choices, units = slot.get("choices") or [], slot.get("units") or []
+            catalog = {c.get("id") for c in slot.get("choice_catalog") or [] if isinstance(c, dict)}
+            if choices and not (kind == "str" and (val in choices or val in catalog)) and kind != "coded":
+                out.append(Violation("VALUE_TYPE_MISMATCH", f"{path}/value", "선택지 칸에 선택지 밖의 값이다"))
+            elif slot.get("yes_no_map") and kind not in ("bool", "str"):
+                out.append(Violation("VALUE_TYPE_MISMATCH", f"{path}/value", "예/아니오 칸에 맞지 않는 값이다"))
+            elif units and kind == "amount" and val["unit"] not in {u.get("unit") for u in units if isinstance(u, dict)} | {u.get("unit_code") for u in units if isinstance(u, dict)}:
+                out.append(Violation("VALUE_TYPE_MISMATCH", f"{path}/value", "단위가 칸의 단위 목록에 없다"))
+        prev = answers.get(v["key"])
+        if prev is not None and prev[0] is not None:
+            pk = ("bool" if isinstance(prev[0], bool) else "num" if _is_num(prev[0]) else "amount" if isinstance(prev[0], dict) and "amount" in prev[0]
+                  else "str" if isinstance(prev[0], str) else "coded")
+            if pk != kind and {pk, kind} != {"num", "amount"}:
+                out.append(Violation("VALUE_TYPE_MISMATCH", f"{path}/value", "이미 저장된 값과 종류가 다르다"))
+    return out
+
+
 def plan_writes(doc: Mapping, output: Mapping) -> dict:
     """TurnWriteSet. 입력 문서는 바꾸지 않는다."""
     answers = effects.answers_by_key(doc["answer_records"])

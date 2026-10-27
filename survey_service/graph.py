@@ -468,6 +468,7 @@ class TurnGraph:
         try:
             viol = list(validate_extraction(inp, out, self.o.flow.table))
             viol += extraction.check_slots(out, doc["answer_records"])
+            viol += extraction.check_values(out, doc, ctx.bank)                # 값 타당성(TE-1): 타입·크기·현재 문항 밖 저장 (ADR-0017)
         except ContractViolation as e:                       # 우리가 만든 입력이 계약을 어겼다: 재시도해도 같다
             return {"extract_next": "finalize", "failed": self._fail(st, "VALIDATE", e),
                     "trace": {"extract_status": "ERROR", "validation_ok": False, "validation_violations": None}}

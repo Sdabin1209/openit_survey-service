@@ -169,3 +169,63 @@ def test_shared_token_still_works_for_sessions_it_created_and_device_flag_in_rea
     monkeypatch.setenv("TOKS", "a=short")
     with pytest.raises(ConfigError):
         _device_tokens("TOKS")
+
+
+# ---------------------------------------------------------------- 값 타당성 (TE-1, ADR-0017)
+from .e2e_support import ext, val
+
+
+def _answer(rig):
+    return rig.doc()["answer_records"][0]["current_value"]
+
+
+def test_value_from_outside_the_current_item_is_not_saved_unless_it_is_a_correction():
+    rig = Rig()
+    rig.start()
+    rig.say("네", out=ANSWER_OUT)                                           # Q1.D01 답, 현재 문항은 Q1.D02
+    bad = ext("NEXT", "Q1.D03", val("Q4.answer", True))                     # 현재 문항이 아닌 Q4 칸 저장(정정 아님)
+    before = rig.doc()["answer_records"]
+    out = rig.say("아무 말", out=bad)
+    rig.model.queue.clear()
+    assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
+    assert rig.doc()["answer_records"] == before                             # 값을 저장하지 않았다
+    assert rig.orch.violations.get("OUT_OF_CURRENT_ITEM", 0) >= 1
+
+
+def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_value():
+    bank = copy.deepcopy(__import__("tests.sample_bank", fromlist=["sample_bank"]).sample_bank())
+    for q in bank["questions"]:
+        for s_ in q["slots"]:
+            if (q["question_id"], s_["slot_id"]) == ("Q1.D01", "on_medication"):
+                s_["choices"] = ["복용", "중단"]
+    rig = Rig(bank=bank)
+    rig.start()
+    for value, code in [("열대여섯", None), (123456789, "VALUE_INVALID"), ("", "VALUE_INVALID"), ("x" * 500, "VALUE_INVALID")]:
+        n = rig.orch.violations.get(code, 0) if code else 0
+        before = rig.doc()["answer_records"]
+        out = rig.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", value)))
+        rig.model.queue.clear()
+        if code:
+            assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", value
+            assert rig.doc()["answer_records"] == before and rig.orch.violations.get(code, 0) > n
+        else:
+            # 자유 칸의 처음 쓰는 값은 타입을 알 수 없어 통과한다(한계, CR-017). 저장된 뒤에는 종류가 달라지면 막힌다
+            assert out.frontend_input["turn_failure_signal"] is None
+    rig2 = Rig(bank=bank)
+    rig2.start()
+    out = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "아무거나")))             # 선택지 밖
+    rig2.model.queue.clear()
+    assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
+    ok = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "복용")), turn_id="ok")
+    assert ok.frontend_input["turn_failure_signal"] is None
+
+
+def test_saved_value_kind_cannot_change_to_another_kind():
+    rig = Rig()
+    rig.start()
+    rig.say("안 피움", out=ANSWER_OUT)                                                   # Q1.D01.diagnosed=False 저장
+    out = rig.say("아니 열대여섯", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", "열대여섯", "CORRECTION")))
+    rig.model.queue.clear()
+    assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED" and _answer(rig) == {"answer": False}
+    ok = rig.say("아니 먹어요", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", True, "CORRECTION")), turn_id="ok")
+    assert ok.frontend_input["turn_failure_signal"] is None and _answer(rig) == {"answer": True}
