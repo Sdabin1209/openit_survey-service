@@ -94,7 +94,9 @@ class Settings:
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
+    outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다). 0이면 상한 없음
     outbox_keep_sent_hours: int = 24
+    outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다, trace_outbox.dropped_full). 0이면 상한 없음
     log_level: str = "INFO"
 
     def alert_db_path(self) -> str:
@@ -150,6 +152,7 @@ class Settings:
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),
             export_backoff_max_seconds=_float(env, "SURVEY_EXPORT_BACKOFF_MAX_SECONDS", 60.0),
+            outbox_max_pending=_int(env, "SURVEY_OUTBOX_MAX_PENDING", 20000, 0),
             outbox_keep_sent_hours=_int(env, "SURVEY_OUTBOX_KEEP_SENT_HOURS", 24, 1), log_level=env.get("SURVEY_LOG_LEVEL", "INFO").upper())
         missing = [n for n, v in (("SURVEY_RELEASE_READER", s.release_reader), ("SURVEY_TRACE_INGEST", s.trace_ingest),
                                   ("SURVEY_MODEL_BACKEND", s.model_backend or s.inference_url)) if not v]

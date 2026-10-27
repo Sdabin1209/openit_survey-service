@@ -115,7 +115,12 @@ class TraceExporter:
             try:
                 r = self.ingest.send(row.envelope)
             except BoundaryError as e:
-                if e.retryable:
+                if e.code == "INTEGRITY_ERROR" and row.attempts + 1 >= self.max_unexpected:
+                    self.outbox.mark_dead(row.id, now, f"{e.code}: 수집 서버의 응답이 계속 깨져 있다")       # 정책 10: 깨진 응답은 성공이 아니고, 한도까지 다시 시도한 뒤에야 DEAD
+                    self.last_error = e.code
+                    res.dead += 1
+                    continue
+                if e.retryable or e.code == "INTEGRITY_ERROR":          # 깨진 응답(프록시 오류 페이지 등)은 5xx와 같이 실패로 다룬다. 수집이 (세션, 턴)으로 멱등이라 다시 보내도 안전하다
                     self.consecutive_unavailable += 1
                     delay = min(self.max_delay, self.base_delay * 2 ** (self.consecutive_unavailable - 1))
                     self.pause_until = now + delay
@@ -172,6 +177,7 @@ class TraceExporter:
         now = self.clock()
         c = self.outbox.counts()
         return {"pending": c["PENDING"], "sent": c["SENT"], "dead": c["DEAD"],
+                "dropped_full": getattr(self.outbox, "dropped_full", 0),
                 "dead_by_code": self.outbox.dead_by_code() if c["DEAD"] else {},
                 "oldest_pending_age_seconds": self.outbox.oldest_pending_age(now),
                 "consecutive_unavailable": self.consecutive_unavailable, "last_error": self.last_error}

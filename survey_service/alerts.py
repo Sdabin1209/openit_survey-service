@@ -204,6 +204,10 @@ class AlertStore:
         rows = self._read("SELECT id, type, payload FROM alert_events WHERE id>? ORDER BY id LIMIT ?", (last_id, limit))
         return [{"id": r[0], "type": r[1], "alert": json.loads(r[2])} for r in rows]
 
+    def oldest_event_id(self) -> Optional[int]:
+        r = self._read("SELECT MIN(id) FROM alert_events")[0][0]
+        return None if r is None else int(r)
+
     def latest_event_id(self) -> int:
         return self._read("SELECT COALESCE(MAX(id),0) FROM alert_events")[0][0]
 

@@ -44,6 +44,10 @@ class Outbox:
 
     def __init__(self, path: str) -> None:
         self._lock = threading.RLock()
+        self.max_pending = 0           # 0이면 상한 없음. 서비스는 SURVEY_OUTBOX_MAX_PENDING을 준다(수집이 오래 멈췄을 때 디스크가 무한히 차지 않게)
+        self.dropped_full = 0          # 가득 차서 넣지 못한 건수(프로세스 시작 이후)
+        self._since_check = 0
+        self._full = False
         try:
             self._open(path)
         except self._ERRORS as e:
@@ -68,6 +72,16 @@ class Outbox:
 
     def enqueue(self, envelope: dict, now: float) -> bool:
         """처음 넣으면 True, 이미 있으면 False(먼저 넣은 것을 유지한다)."""
+        if self.max_pending > 0:
+            with self._lock:
+                self._since_check += 1
+                if self._full or self._since_check >= max(1, min(100, self.max_pending // 10)):   # 세는 비용을 줄이려고 상한의 1/10(최대 100건)마다, 가득 찼을 때는 매번 센다
+                    self._since_check = 0
+                    n = self._db.execute("SELECT COUNT(*) FROM (SELECT 1 FROM outbox WHERE state='PENDING' LIMIT ?)", (self.max_pending,)).fetchone()[0]
+                    self._full = n >= self.max_pending
+                if self._full:
+                    self.dropped_full += 1
+                    raise StoreError("outbox가 가득 찼다(보내지 못한 Trace가 상한만큼 쌓여 있다)")
         try:
             with self._lock:
                 cur = self._db.execute(

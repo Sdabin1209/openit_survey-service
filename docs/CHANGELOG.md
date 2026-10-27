@@ -1,5 +1,9 @@
 # 변경 이력
 
+## FAULT_MATRIX A6·A8·A10 [미출시, 푸시·태그 전]
+
+- 깨진 응답은 한도까지 재시도 뒤 DEAD(이전: 즉시 DEAD), outbox 상한 `SURVEY_OUTBOX_MAX_PENDING`(기본 20000)과 `dropped_full`, 볼륨 쓰기 불가는 `STORAGE_UNAVAILABLE` 재시도로 드러남, SSE `resync` 이벤트·알림 DB 장애 시 503/정상 종료·`alert_events` 주기 정리. 자세한 내용은 docs/boundary.md §5·§6. SSE에 이름 있는 `heartbeat` 이벤트 추가(CR-016, 하위 호환).
+
 ## DB 장애 때 턴이 빨리 끝나도록: 재접속 유예, 기본값 조정 [미출시, 푸시·태그 전]
 
 - 원인(측정): 턴 하나가 API 사전 확인·멱등 확인·세션 읽기에서 접속 시도를 연달아 끝까지 기다렸고, 총 마감은 사전 확인을 덮지 않았다. 중지 3.0초, pause 10.0초(마감 8초 초과). 고침: 접속 실패 뒤 1초 재접속 유예(`SURVEY_DB_RECONNECT_BACKOFF_SECONDS`), 접속·문장 상한 3→2초, 턴 마감 8→6초(요청 수신 시점부터 센다). 결과 중지 2.0초, pause 5.0초. 불변식과 한계는 docs/boundary.md §5. 시험 `tests/test_turn_db_outage_bounds.py`.

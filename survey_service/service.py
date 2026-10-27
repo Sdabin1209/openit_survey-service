@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 import logging
 import os
 import queue
@@ -20,7 +21,7 @@ from boundary_contracts import PIPELINE_SCHEMA_VERSION, SecretError, read_secret
 
 from . import SERVICE_VERSION
 from .alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, WebPushSender
-from .api import PublicApi
+from .api import PublicApi, _err
 from .inference import InferenceServer
 from .remote import RemoteInference
 from .orchestrator import Orchestrator
@@ -71,6 +72,7 @@ class App:
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
         self.store, self.outbox, self.alert_store, self.db_kind = open_stores(settings)
+        self.outbox.max_pending = settings.outbox_max_pending
         push = None
         vapid_key = _secret(settings.vapid_private_key_env, "VAPID 비밀키") or ""
         if vapid_key:                                       # 키가 없으면 푸시 없이 SSE만 동작한다
@@ -156,6 +158,7 @@ class App:
                     n += 1
                     if n % 60 == 0:
                         self.outbox.purge_sent(time.time() - self.settings.outbox_keep_sent_hours * 3600)
+                        self.alert_store.trim_events(keep=10000)      # SSE 이어 받기 범위(최근 1만 건) 밖의 이벤트를 지운다. 알림 행은 남는다
                 except Exception as e:
                     log.error("릴리스 폴링 실패 error=%s", type(e).__name__)
                 if first:
@@ -324,16 +327,32 @@ def make_handler(app: App):
             last = (self.headers.get("Last-Event-ID") or "").strip()
             q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
             try:
+                try:
+                    latest, oldest = store.latest_event_id(), store.oldest_event_id()
+                except StoreError:                             # 알림 DB가 죽어 있으면 200 스트림을 열지 않고 503(클라이언트는 Retry-After 뒤 Last-Event-ID로 다시 연결)
+                    code, body, hdr = _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다", 503, {"Retry-After": str(app.settings.retry_after_seconds)})
+                    out = json.dumps(body, ensure_ascii=False).encode()
+                    self.send_response(code)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(out)))
+                    for k, v in hdr.items():
+                        self.send_header(k, v)
+                    self.end_headers()
+                    self.wfile.write(out)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache")
                 self.send_header("X-Accel-Buffering", "no")
                 self.end_headers()
                 self.wfile.write(b"retry: 3000\n\n")
-                self.wfile.flush()
+                self._heartbeat()                                  # 연결 직후에도 한 번(콘솔이 '연결됨'을 확인할 수 있게)
                 sent = -1
                 if last.isdigit():                               # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
                     sent = int(last)
+                    if sent > latest or (oldest is not None and sent < oldest - 1):      # 이어 받을 수 없다(오래된 이벤트가 지워졌거나 순번이 앞섰다): 목록 API로 다시 맞추게 알린다
+                        self.wfile.write(b'event: resync\ndata: {"reason":"EVENTS_NOT_RESUMABLE"}\n\n')
+                        self.wfile.flush()
                     for ev in store.events_after(sent):
                         self._sse(ev)
                         sent = ev["id"]
@@ -343,8 +362,7 @@ def make_handler(app: App):
                         ev = q.get(timeout=min(app.settings.sse_heartbeat_seconds, 0.5))      # 종료 신호를 0.5초 안에 본다(우아한 종료가 스트림을 기다리지 않게)
                     except queue.Empty:
                         if time.monotonic() - last_ping >= app.settings.sse_heartbeat_seconds:
-                            self.wfile.write(b": ping\n\n")
-                            self.wfile.flush()
+                            self._heartbeat()
                             last_ping = time.monotonic()
                         continue
                     if ev["id"] > sent:                          # 이어 받기 구간과 겹치는 이벤트는 건너뛴다
@@ -352,8 +370,17 @@ def make_handler(app: App):
                         sent = ev["id"]
             except OSError:                                    # 클라이언트가 끊었다
                 pass
+            except StoreError:                                 # 알림 DB 오류: 스트림을 끝낸다(클라이언트는 Last-Event-ID로 다시 연결한다)
+                log.warning("알림 스트림을 DB 오류로 끝낸다")
             finally:
                 hub.unsubscribe(q)
+
+        def _heartbeat(self) -> None:
+            """주석 줄(`: ping`, 프록시·연결 유지용)과 이름 있는 이벤트 `heartbeat`(브라우저 EventSource가 앱 코드에서 볼 수 있다, id 없음 = Last-Event-ID를 바꾸지 않는다).
+            DB를 읽지 않는다: 알림 DB·상류가 느리거나 죽어도 스트림 스레드는 하트비트를 계속 보낸다. 기존 클라이언트는 모르는 이벤트 이름을 무시한다(CR-016)."""
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            self.wfile.write(b": ping\n\nevent: heartbeat\ndata: " + json.dumps({"ts": ts}).encode() + b"\n\n")
+            self.wfile.flush()
 
         def _sse(self, ev: dict) -> None:
             self.wfile.write(f"id: {ev['id']}\nevent: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode())

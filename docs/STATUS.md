@@ -151,3 +151,9 @@
 - 한 일: `scripts/load_test.py`로 동시 세션 부하 측정(표와 환경은 docs/boundary.md §6-1), 접속 대기열 128, 우아한 종료(draining, 처리 중 요청 완료 대기).
 - 확인한 것(이 PC, 가짜 모델): PostgreSQL 연결 3개 고정, 한 프로세스가 CPU 한계로 약 12~14 턴/초 포화, 동시 50 세션까지 8초 마감 안(max 4.1초), 100 세션에서 max 9.3초와 NOT_COMMITTED 7건.
 - 확인하지 못한 것: 실제 LLM 지연과의 조합, 복제 구성, gateway·컨테이너 자원 한도, 실제 `docker stop` 중 요청, 접속 대기열의 미수락 연결 처리.
+
+## 2026-10-28 FAULT_MATRIX A6·A8·A10
+
+- 한 일/확인: docs/boundary.md §5·§6와 CHANGELOG 참조. 시험 `tests/test_fault_a6_a8_a10.py`.
+- 확인하지 못한 것: 실제 compose의 수집 서버·gateway를 거친 동작, SSE의 gateway·브라우저 재연결, 동시 SSE 연결 수 상한(없음), 사본이 있어도 I4 없이는 시작 직후 적재하지 못하는 한계의 설계 결정.
+- gpu-dev의 test_graph 실패: 이 PC에서 lock 제약 없이 설치하면 langgraph가 1.2.18로 풀려 같은 시험이 실패함을 재현했다(`-c requirements.lock`으로 설치하면 통과). gpu-dev 접속은 하지 않았다.

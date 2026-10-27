@@ -174,10 +174,13 @@ class ReleaseLoader:
         manifest = self.reader.get_release(rid)
         self._check_manifest(manifest, rid)
         self._check_decision(manifest)
-        self.workdir.mkdir(parents=True, exist_ok=True)
         # 클라이언트가 dest/<릴리스 ID>에 풀고 모든 해시를 검증한다. PASS가 아니면 FAILED_PRECONDITION(BoundaryError).
-        # 어댑터와 질문지는 번들이 돌려준 경로·내용을 그대로 쓴다.
-        bundle = self.reader.load_bundle(rid, dest=self.workdir)
+        # 어댑터와 질문지는 번들이 돌려준 경로·내용을 그대로 쓴다. 로컬 사본은 재사용하지 않고 매번 새로 받아 검증한 뒤 교체한다(손상된 사본은 덮어쓴다).
+        try:
+            self.workdir.mkdir(parents=True, exist_ok=True)
+            bundle = self.reader.load_bundle(rid, dest=self.workdir)
+        except OSError as e:               # 볼륨을 쓸 수 없다(읽기 전용, 가득 참, 권한): 폴링 스레드를 죽이지 않고 일시 실패로 다시 시도한다
+            raise LoadRejected("STORAGE_UNAVAILABLE", f"작업 폴더를 쓸 수 없다: {type(e).__name__}", retryable=True) from None
         bank = bundle.question_bank
         self._check_bank(manifest, bank)
         warnings = self._check_library_versions(manifest)

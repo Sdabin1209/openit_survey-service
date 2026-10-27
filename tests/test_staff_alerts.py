@@ -409,7 +409,7 @@ class Sse:
         if last_id is not None:
             h["Last-Event-ID"] = str(last_id)
         self.resp = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream", headers=h), timeout=10)
-        self.events, self.comments = queue.Queue(), []
+        self.events, self.comments, self.heartbeats = queue.Queue(), [], []
         threading.Thread(target=self._read, daemon=True).start()
 
     def _read(self):
@@ -418,7 +418,9 @@ class Sse:
             for raw in self.resp:
                 line = raw.decode().rstrip("\n")
                 if line == "":
-                    if "data" in ev:
+                    if ev.get("event") == "heartbeat":                  # 이름 있는 하트비트(id 없음)는 알림 이벤트와 따로 둔다
+                        self.heartbeats.append(ev)
+                    elif "data" in ev:
                         self.events.put(ev)
                     ev = {}
                 elif line.startswith(":"):
@@ -450,6 +452,7 @@ def start_and_risk(port, sid, tid):
 def live(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     yield app, port, tmp_path
+    app.draining.set()                       # 열린 SSE 스트림이 있어도 server_close가 기다리지 않게(시험이 실패해도 멈추지 않는다)
     httpd.shutdown(); httpd.server_close(); app.stop()
 
 
