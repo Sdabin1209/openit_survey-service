@@ -102,4 +102,4 @@
 - 의존·라벨·기대값을 v0.6.1 / prompt-4로. prompt-3 릴리스는 적재하고 경고만. val 대조 결과는 design 17절 끝: A 536/549 글자 일치(불일치 13행은 state 묶음 순서, 원인 미확인), B next.text 제외 549/549.
 - 시험: pytest 403 통과, smoke.sh OK, smoke_compose.sh OK (이 PC 한 곳).
 - 남은 일: A state 묶음 순서 13행의 원인(학습 데이터 생성 규칙 확인 필요), 두 번째 환경 확인.
-- **현재 기준 (2026-10-27 확인, 위 기록은 당시 값)**: 의존 태그는 `requirements.txt` 기준 boundary-contracts v2.0.2 / turn-engine v0.4.0 / model-runtime v0.7.0(커밋 6241d00). 시험은 `pytest --collect-only`로 수집 415개. 403은 당시 통과 수였고 415개의 통과 여부는 이번에 돌리지 않아 미확인. smoke 결과도 이후 갱신 여부 미확인.
+- **현재 기준 (2026-10-27 확인, 위 기록은 당시 값)**: 의존 태그는 `requirements.txt` 기준 boundary-contracts v2.0.2 / turn-engine v0.4.0 / model-runtime v0.7.1. 시험은 `pytest --collect-only`로 수집 415개. 403은 당시 통과 수였고 415개의 통과 여부는 이번에 돌리지 않아 미확인. smoke 결과도 이후 갱신 여부 미확인.

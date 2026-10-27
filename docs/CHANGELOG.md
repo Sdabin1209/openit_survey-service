@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 의존 태그 올림: model-runtime v0.7.0 -> v0.7.1 [미출시, 푸시·태그 전]
+
+- model-runtime 의존을 v0.7.1로(requirements, build_wheels 기본 태그, inference.py 주석, boundary·runbook·STATUS의 현재 기준 표기). v0.7.1은 가짜 백엔드가 값을 내도록 확장(흐름 파일 선택 항목 slots/skips)이고 HTTP·계약 모양은 그대로다. 서비스 코드 변경 없음.
+- 시험: 가짜 응답 형태(NEXT + values 1건)가 검증 -> 저장 -> B 입력 조립을 지나 세션 상태에 저장되는 것은 기존 `tests/test_orchestrator.py::test_full_conversation`이 확인한다.
+
 ## 의존 태그 맞춤: turn-engine v0.4.0, model-runtime v0.7.0 [미출시, 푸시·태그 전]
 
 - 의존을 turn-engine v0.4.0, model-runtime v0.7.0으로(requirements, build_wheels 기본 태그, 이미지 라벨, inference.py 주석, 문서 표기). turn-engine v0.4.0은 v1 폐기 함수를 제거했고 `validate_extraction`·`QuestionFlowTable`·`SkipRule`·`DATASET_V2_FLOW`·`ContractViolation`·`ENGINE_VERSION`은 그대로이며 boundary v2.0.2를 고정한다. model-runtime v0.7.0은 비밀 파일화와 prompt-3 제거(serving_config `prompt_template_versions=['prompt-4']`)이고 `RUNTIME_VERSION`이 0.7이다.
