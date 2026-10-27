@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import re
@@ -128,13 +129,19 @@ _PROVISIONAL = {
 # 구절 자체가 부정형(또는 부정어를 품은)인 위험 표현: 뒤에 부정 표지가 와도 위험이 부정되지 않는다("살고 싶지 않아요", "숨이 안 쉬어져요").
 _RAW_NEGATIVE = frozenset({"살고 싶지 않", "더 이상 살 수 없", "살 이유가 없", "살 의미가 없", "숨이 안 쉬", "숨을 못 쉬", "숨이 잘 안 쉬", "숨을 쉴 수 없", "의식이 없",
                            "피가 멈추지 않", "팔다리에 힘이 안", "한쪽 팔이 안", "한쪽 다리가 안", "can't breathe", "cannot breathe"})
-_BOUNDARY = r"(?<![0-9A-Za-z가-힣])"
-_CLAUSE_END = re.compile(r"[.!?,;\n]|지만|는데|그리고|그런데|근데|하지만|그러나|\bbut\b|\band\b")
-_NEG_KO = re.compile(r"없|않|아니|아닙|못\s*(?:했|한|하|느)|안\s*(?:들|드|하|해|나|아)")
+_BOUNDARY_ASCII = r"(?<![A-Za-z])"       # 영어 구절은 단어 시작에서만. 한국어는 교착어라 어절 시작 제약을 두지 않는다("반신마비", "너무죽고싶어요")
+_BOUNDARY_DIGIT = r"(?<![0-9])"
+_CLAUSE_SPLIT = re.compile(r"[.!?,;\n]|지만|는데|그리고|그런데|근데|하지만|그러나|\bbut\b|\band\b")
+# 부정은 구절에 바로 붙은 활용(구절 + 짧은 어미·조사 + 부정 표지)일 때만 인정한다. 사이에 이어지는 말(…고, …서, 때문에)이나 번복(계속, 정말, 그래도)이 끼면 위험으로 본다 (의심스러우면 알린다).
+_NEG_MARK = re.compile(r"(?:지|진)\s*(?:는|도)?\s*(?:않|못)|(?:은|는|이|가)?\s*(?:아니|아닙)|없|못\s*(?:했|한)")
+_NEG_GAP_MAX = 8
+_NEG_GAP_BAD = re.compile(r"고\s|서\s|며\s|면서|아서|어서|해서|라서|니까|때문|계속|아직|여전|그래도|하지만|그런데|근데|정말|진짜|너무|많이|자꾸|또\s")
+_NEG_AFTER_REVERSAL = re.compile(r"그래도|하지만|그런데|근데|정말|진짜|계속|사실은|아직|여전|자꾸|다시")
 _NEG_EN_BEFORE = re.compile(r"\b(?:no|not|never|without|don'?t|do not|didn'?t|haven'?t|denies|deny)\b")
-_THIRD = re.compile(r"어머니|아버지|엄마|아빠|부모|가족|형제|형이|누나|언니|오빠|동생|할머니|할아버지|친구|이웃|아내|남편|아들|딸|아이가|옆 사람|옆사람")
-_HISTORY = re.compile(r"년 전|개월 전|달 전|전에는|예전|옛날|어릴 때|어릴 적|젊을 때|젊을 적|[가-힣]*적부터|때부터|[았었였]었")   # 과거 병력 이야기의 표지
-_NOW = re.compile(r"지금|방금|아까|갑자기|오늘|현재|지금도|계속")                                                  # 현재 증상이면 병력 표지가 있어도 정지한다
+_THIRD = re.compile(r"어머니|아버지|엄마|아빠|부모님?|가족|형제|형|누나|언니|오빠|동생|할머니|할아버지|친구|이웃|아내|남편|아들|딸|아이|옆 사람|옆사람")
+_CAUSE = re.compile(r"때문|해서|라서|니까|아서|어서|\s서\s")
+_HISTORY = re.compile(r"(?:았|었|였|했|졌|겼|왔|갔)었|진단\s*받았")                   # 과거형 종결만. "전부터/계속/요즘"은 현재 지속이라 과거가 아니다
+_NOW = re.compile(r"지금|방금|아까|갑자기|오늘|현재|계속|아직|요즘|여전|[가-힣]*부터|지금도|자꾸")                  # 현재 표지가 하나라도 있으면 과거 병력으로 제외하지 않는다
 _SELF = re.compile(r"(?<![가-힣])(?:제가|저는|저도|내가|나는|나도|제|저|전|난)(?![가-힣])")
 
 
@@ -146,33 +153,55 @@ def _provisional_raw() -> bytes:
 
 def _phrase_regex(phrase: str):
     words = _norm(phrase).casefold().split()
-    return re.compile(_BOUNDARY + r"\s*".join(re.escape(w) for w in words))
+    pre = _BOUNDARY_DIGIT if phrase[:1].isdigit() else (_BOUNDARY_ASCII if phrase.isascii() else "")
+    return re.compile(pre + r"\s*".join(re.escape(w) for w in words))
 
 
-def _clause_bounds(text: str, start: int, end: int) -> tuple[int, int]:
-    """구절 [start, end)를 품은 절의 시작과 끝(문장 부호·접속 표현 기준)."""
-    left = 0
-    for m in re.finditer(r"[.!?,;\n]|지만|는데|그리고|그런데|근데|하지만|그러나", text[:start]):
-        left = m.end()
-    m = _CLAUSE_END.search(text, end)
-    return left, (m.start() if m else len(text))
+class _Clauses:
+    """한 발화의 절 경계를 한 번만 구해(선형) 구절마다 이분 탐색으로 쓴다."""
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.ends = [m.end() for m in _CLAUSE_SPLIT.finditer(text)]       # 절의 시작 후보(구분 표현 끝)
+        self.starts = [m.start() for m in _CLAUSE_SPLIT.finditer(text)]   # 절의 끝 후보(구분 표현 시작)
+
+    def bounds(self, start: int, end: int) -> tuple[int, int]:
+        i = bisect.bisect_right(self.ends, start)
+        left = self.ends[i - 1] if i else 0
+        j = bisect.bisect_left(self.starts, end)
+        return left, (self.starts[j] if j < len(self.starts) else len(self.text))
 
 
-def phrase_context(text: str, start: int, end: int, phrase: str) -> str:
-    """구절이 걸린 자리의 문맥 판정: 'hit'(위험), 'negated'(같은 절 뒤 부정), 'third_party'(가족·제3자 이야기)."""
-    left, right = _clause_bounds(text, start, end)
-    ascii_phrase = phrase.isascii()
-    if ascii_phrase:
-        if _NEG_EN_BEFORE.search(text[max(left, start - 25):start]) and phrase not in _RAW_NEGATIVE:
+def _negated_ko(text: str, end: int, right: int) -> bool:
+    """구절 바로 뒤 같은 절의 부정(구절+짧은 활용+부정 표지). 번복·접속이 끼거나 부정 뒤에 다시 긍정·강조가 오면 부정으로 보지 않는다."""
+    tail = text[end:right]
+    m = _NEG_MARK.search(tail)
+    if not m or m.start() > _NEG_GAP_MAX or _NEG_GAP_BAD.search(tail[:m.start()]):
+        return False
+    return not _NEG_AFTER_REVERSAL.search(tail[m.end():])
+
+
+def phrase_context(text: str, start: int, end: int, phrase: str, rule_id: str = "", clauses: "_Clauses | None" = None) -> str:
+    """구절이 걸린 자리의 문맥 판정: 'hit'(위험), 'negated'(구절에 바로 붙은 부정), 'third_party'(가족·제3자에 대한 서술), 'history'(과거형 병력, 현재 표지 없음).
+    원칙: 의심스러우면 알린다. 제외는 확실히 위험이 아닌 좁은 경우에만 한다. 자해·자살 규칙에는 제3자·과거 제외를 적용하지 않는다."""
+    left, right = (clauses or _Clauses(text)).bounds(start, end)
+    selfharm = rule_id.endswith("self-harm")
+    if phrase not in _RAW_NEGATIVE:
+        if phrase.isascii():
+            if _NEG_EN_BEFORE.search(text[max(left, start - 25):start]):
+                return "negated"
+        elif _negated_ko(text, end, right):
             return "negated"
-    elif phrase not in _RAW_NEGATIVE and _NEG_KO.search(text[end:min(right, end + 30)]):
-        return "negated"
+    if selfharm:
+        return "hit"
     before = text[left:start]
-    if _THIRD.search(before) and not _SELF.search(before):
+    m3 = None
+    for m3 in _THIRD.finditer(before):
+        pass
+    if m3 is not None and not _SELF.search(text) and not _CAUSE.search(before[m3.end():]) and len(before[m3.end():].split()) <= 4:
         return "third_party"
     clause = text[left:right]
     if _HISTORY.search(clause) and not _NOW.search(clause):
-        return "history"            # "몇 년 전에 한 번 쓰러졌었어요" 같은 병력 이야기: 정지하지 않고 센다(history_hits)
+        return "history"
     return "hit"
 
 
@@ -207,10 +236,11 @@ class RuleRiskSource:
     def match(self, utterance: str) -> Optional[str]:
         text = _norm(utterance)
         folded = text.casefold()
+        cl = _Clauses(folded)
         for r in self.rules:
-            for c in r.contains:                              # 구절 안의 공백은 있어도 없어도 된다. 어절을 가로질러 합쳐 맞추지 않는다(손목을 그냥 != 손목을 긋)
+            for c in r.contains:                              # 구절 안의 공백은 있어도 없어도 된다. 구절은 완결된 어간이라 어절 시작 제약은 두지 않는다(교착어)
                 for m in _phrase_regex(c).finditer(folded):
-                    ctx = phrase_context(folded, m.start(), m.end(), c)
+                    ctx = phrase_context(folded, m.start(), m.end(), c, r.id, cl)
                     if ctx == "hit":
                         return r.id
                     with self._lock:
@@ -228,7 +258,7 @@ class RuleRiskSource:
             for ph in extra_phrases:
                 if isinstance(ph, str) and ph.strip():
                     for m in _phrase_regex(ph).finditer(folded):
-                        if phrase_context(folded, m.start(), m.end(), ph) == "hit":
+                        if phrase_context(folded, m.start(), m.end(), ph, "bank-phrase") == "hit":
                             rid = "bank-phrase"
                             break
                 if rid:
