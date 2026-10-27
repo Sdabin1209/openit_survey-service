@@ -15,7 +15,7 @@ from typing import Mapping, Optional
 
 from boundary_contracts import canonical
 
-from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict
+from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
 from .graph import SCHEMA_CONTRACT_VERSION, TRACE_KEYS, Route, TurnCtx, TurnGraph, initial_state, route  # noqa: F401 (재노출)
 import survey_schema
 
@@ -80,6 +80,8 @@ class Orchestrator:
         self.trace_sink = trace_sink
         self.timeline = timeline        # 선택. record(session_id, turn_index, turn_id)를 가진 객체(AlertStore). 직원 조회의 시각용, 실패해도 턴은 계속된다
         self._locks = _SessionLocks()
+        self._inflight: set = set()                # 처리 중인 (세션, 턴 ID). 같은 턴이 겹치면 두 번째는 새로 시작하지 않는다
+        self._inflight_guard = threading.Lock()
         self._stats_lock = threading.Lock()
         self.counters: dict[str, int] = {}
         self.violations: dict[str, int] = {}      # 의미 검증 위반 코드별 건수(값 없음)
@@ -107,6 +109,19 @@ class Orchestrator:
         elif intervention_decision.get("decision") not in ("RESUME", "END"):
             raise ValueError("알 수 없는 InterventionDecision.decision")
         input_hash = canonical.sha256_hash({"m": frontend_message, "d": intervention_decision})
+        key = (sid, turn_id)
+        with self._inflight_guard:
+            if key in self._inflight:
+                self._count("turn_in_progress")
+                raise TurnInProgress(f"같은 턴 ID가 처리 중이다 (turn={turn_id})")
+            self._inflight.add(key)
+        try:
+            return self._handle_locked(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id)
+        finally:
+            with self._inflight_guard:
+                self._inflight.discard(key)
+
+    def _handle_locked(self, sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id) -> TurnOutcome:
         with self._locks.hold(sid):
             replay = self._replay(sid, turn_id, input_hash)
             if replay is not None:

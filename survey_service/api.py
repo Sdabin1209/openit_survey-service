@@ -37,7 +37,7 @@ from boundary_contracts import PIPELINE_SCHEMA_VERSION
 
 from .alerts import KIND_MAP, AlertService
 from .store.effects import model_key
-from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict
+from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
 from .orchestrator import Orchestrator
 
 log = logging.getLogger("survey_service.api")
@@ -229,7 +229,14 @@ class PublicApi:
             out = self.orch.handle_turn(turn_id=turn_id, frontend_message=msg)
         except TurnIdConflict:
             return _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다")
+        except TurnInProgress:
+            return self._in_progress()
         return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
+
+    def _in_progress(self):
+        """같은 turn_id가 처리 중. 기존 오류 형식(CONFLICT 409)을 재사용하고 메시지가 TURN_IN_PROGRESS로 시작한다(계약 변경 없음, CR-015)."""
+        return _err("CONFLICT", "TURN_IN_PROGRESS: 같은 turn_id가 처리 중이다. 잠시 뒤 같은 turn_id로 다시 보낸다", 409,
+                    {"Retry-After": str(self.retry_after)})
 
     def _replayed(self, sid: str, turn_id: str) -> bool:
         try:
@@ -331,6 +338,8 @@ class PublicApi:
             out = self.orch.handle_turn(turn_id=tid, intervention_decision=dict(rest), staff_id=user)
         except TurnIdConflict:
             return _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다")
+        except TurnInProgress:
+            return self._in_progress()
         self._resolve_if_applied(out, sid, rest["decision"], user)
         return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
 

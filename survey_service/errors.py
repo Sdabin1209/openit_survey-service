@@ -17,6 +17,10 @@ class TurnIdConflict(SurveyServiceError):
     """같은 (세션, 턴 ID)에 다른 입력이 왔다."""
 
 
+class TurnInProgress(SurveyServiceError):
+    """같은 (세션, 턴 ID)가 아직 처리 중이다. 새로 시작하지 않는다(FAULT_POLICY 2). API는 409 + Retry-After로 알린다."""
+
+
 class ReleaseUnavailable(SurveyServiceError):
     """세션이 묶인 릴리스를 쓸 수 없다."""
 
