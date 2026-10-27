@@ -234,10 +234,15 @@ def test_readyz_reports_rules_file_and_start_log(tmp_path, caplog):
         app.stop()
 
 
-def test_no_rules_file_means_inactive(tmp_path):
-    app = _app(tmp_path)
+def test_no_rules_file_means_provisional_default_unless_switched_off(tmp_path):
+    app = _app(tmp_path / "x", SURVEY_RISK_DEFAULT_RULES="off")
     try:
         assert app.readiness()[1]["staff_alert_source"]["active"] is False and app.orchestrator.risk_source is None
+    finally:
+        app.stop()
+    app = _app(tmp_path / "y")
+    try:
+        assert app.readiness()[1]["staff_alert_source"]["provisional"] is True
     finally:
         app.stop()
 

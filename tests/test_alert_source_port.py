@@ -29,7 +29,10 @@ def _app(tmp_path, monkeypatch, **kw):
 
 
 def test_default_is_inactive_and_configured_source_is_reported_active(tmp_path, monkeypatch):
-    off = _app(tmp_path / "a", monkeypatch)
+    default = _app(tmp_path / "d", monkeypatch)                # 기본: 임시 기본 목록이 켜진다(D88 U2). 입력원이 꺼진 채 시작하지 않는다
+    d = default.readiness()[1]["staff_alert_source"]
+    assert d["active"] is True and d["provisional"] is True and d["clinically_reviewed"] is False and d["source"] == "PROVISIONAL_DEFAULT"
+    off = _app(tmp_path / "a", monkeypatch, risk_default_rules=False)        # 명시적으로 끄면 입력원이 없다
     assert off.orchestrator.risk_source is None and off.readiness()[1]["staff_alert_source"]["active"] is False
     on = _app(tmp_path / "b", monkeypatch, risk_source="tests.test_alert_source_port:fake_source")
     assert isinstance(on.orchestrator.risk_source, FakeInputSource) and on.readiness()[1]["staff_alert_source"]["active"] is True

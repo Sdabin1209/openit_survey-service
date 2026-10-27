@@ -26,11 +26,11 @@ def test_nodes_and_edges_match_the_design():
     nodes = {n for n in g.nodes} - {"__start__", "__end__"}
     assert nodes == {"load_session", "col_none", "col_progress", "col_paused", "col_ended", "ignore", "fail_no_session", "bind_release",
                      "extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff", "dispatch_result",
-                     "respond", "finalize"}
+                     "respond", "finalize", "prescreen", "plan_risk"}
     # D74: 정규화·판정·기록·Plan 노드는 없다
     assert not nodes & {"parse", "normalize", "judge", "write_record", "plan", "generate"}
     edges = {(e.source, e.target) for e in g.edges}
-    for e in [("__start__", "load_session"), ("load_session", "col_none"), ("load_session", "col_ended"), ("load_session", "fail_no_session"),
+    for e in [("__start__", "prescreen"), ("prescreen", "load_session"), ("bind_release", "plan_risk"), ("plan_risk", "commit"), ("load_session", "col_none"), ("load_session", "col_ended"), ("load_session", "fail_no_session"),
               ("col_paused", "ignore"), ("col_paused", "bind_release"), ("bind_release", "extract"), ("bind_release", "plan_other"),
               ("bind_release", "finalize"), ("extract", "validate_extraction"), ("extract", "extract"), ("extract", "finalize"),
               ("validate_extraction", "plan_writes"), ("validate_extraction", "extract"), ("validate_extraction", "finalize"),
@@ -39,7 +39,7 @@ def test_nodes_and_edges_match_the_design():
               ("respond", "finalize"), ("finalize", "__end__"), ("ignore", "__end__"), ("fail_no_session", "__end__")]:
         assert e in edges, e
     # 저장 판단 뒤에는 앞 단계로 돌아가지 않는다(규칙 4). 되돌아가는 간선은 쓰기 확정 전의 재시도(D75)뿐이다
-    order = ["extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff", "dispatch_result", "respond", "finalize"]
+    order = ["prescreen", "extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff", "dispatch_result", "respond", "finalize"]
     allowed_back = {("extract", "extract"), ("validate_extraction", "extract")}
     for s_, t_ in edges:
         if s_ in order and t_ in order and (s_, t_) not in allowed_back:

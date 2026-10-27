@@ -116,6 +116,8 @@ class TurnState(TypedDict, total=False):
     flow_end: bool
     resp: Optional[dict]            # 응답 계획 {kind: model_start | model | fixed | none, text?}
     alert: Optional[dict]           # 직원 알림(RiskSource가 낸 것). 입력원이 없으면 항상 None
+    prescreen_hit: bool             # 모델 추출 전에 발화 원문에서 위험이 걸렸다(D88 U1, ADR-0013)
+    alert_sent: bool                # 직원 알림을 이미 전달했다(prescreen이 쓰기 확정과 분리해 먼저 보낸다)
     # 쓰기 확정과 그 뒤
     committed: bool
     commit_unknown: bool
@@ -167,7 +169,7 @@ def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optio
         response_text=None, signal=None, intervention_result=None, dispatch_called=False, console_delivered=False,
         console={"staff_alert": None, "turn_failure_signal": None, "intervention_result": None},
         fatal=None, created=None, extract_in=None, extract_out=None, extract_calls=0, extract_next="validate", violations=None,
-        writes=None, flow_end=False, resp=None, alert=None, post_doc=None, state_doc=None, release_id=None)
+        writes=None, flow_end=False, resp=None, alert=None, prescreen_hit=False, alert_sent=False, post_doc=None, state_doc=None, release_id=None)
 
 
 def _ctx(config) -> TurnCtx:
@@ -199,17 +201,19 @@ class TurnGraph:
     def build(self):
         g = StateGraph(TurnState)
         for name in ("load_session", "col_none", "col_progress", "col_paused", "col_ended", "ignore", "fail_no_session",
-                     "bind_release", "extract", "validate_extraction", "plan_writes", "plan_other", "commit", "deliver_staff",
+                     "bind_release", "extract", "validate_extraction", "plan_writes", "plan_other", "commit", "prescreen", "plan_risk", "deliver_staff",
                      "dispatch_result", "respond", "finalize"):
             g.add_node(name, getattr(self, "n_" + name))
-        g.add_edge(START, "load_session")
+        g.add_edge(START, "prescreen")
+        g.add_edge("prescreen", "load_session")
         g.add_conditional_edges("load_session", self.r_column, {"fail_no_session": "fail_no_session", "col_none": "col_none",
                                                                "col_progress": "col_progress", "col_paused": "col_paused",
                                                                "col_ended": "col_ended"})
         for col in ("col_none", "col_progress", "col_paused", "col_ended"):
             g.add_conditional_edges(col, self.r_handled, {"ignore": "ignore", "bind_release": "bind_release"})
         g.add_conditional_edges("bind_release", self.r_after_bind, {"fail_no_session": "fail_no_session", "finalize": "finalize",
-                                                                    "extract": "extract", "plan_other": "plan_other"})
+                                                                    "extract": "extract", "plan_other": "plan_other", "plan_risk": "plan_risk"})
+        g.add_conditional_edges("plan_risk", self.r_ok("commit"), {"commit": "commit", "finalize": "finalize"})
         g.add_conditional_edges("extract", self.r_extract, {"validate_extraction": "validate_extraction", "extract": "extract",
                                                            "finalize": "finalize"})
         g.add_conditional_edges("validate_extraction", self.r_validated, {"plan_writes": "plan_writes", "extract": "extract",
@@ -242,6 +246,8 @@ class TurnGraph:
             return "fail_no_session"
         if st["failed"]:
             return "finalize"
+        if st.get("prescreen_hit") and st["route"]["full"]:
+            return "plan_risk"                          # 발화에서 위험이 걸렸다: 모델 추출 없이 정지 + 안내 (D88 U1)
         return "extract" if st["route"]["full"] else "plan_other"
 
     @staticmethod
@@ -260,6 +266,47 @@ class TurnGraph:
     @staticmethod
     def r_flow(st) -> str:
         return "dispatch_result" if st["flow_end"] else "respond"
+
+    # ------------------------------------------------------------------ 노드: 위험 선별 (모든 발화 턴, 모델·DB 읽기보다 앞)
+    def n_prescreen(self, st, config):
+        """D88 U1(fail-safe): 위험 규칙 감지를 모델 추출 성공·쓰기 확정과 무관하게 모든 발화 원문에 적용하고, 걸리면 직원 알림을 **여기서 바로** 전달한다.
+        이후 추출이 실패하거나 확정이 실패하거나 마감을 넘어도 알림은 이미 나갔다(ADR-0013). 세션 정지 기록과 환자 안내는 plan_risk가 이어서 한다."""
+        src = self.o.risk_source
+        utt = st["utterance"]
+        if src is None or utt is None or not getattr(src, "utterance_only", False):
+            return {}
+        try:
+            active = self.o.releases.active()
+            extra = tuple(active.bank["session_settings"].get("risk_phrases") or ()) if active else ()       # 문항 세트에 저작된 위험 문구(U2)
+            alert = src.screen(utt, extra)
+        except Exception as e:
+            log.warning("위험 선별 오류 session=%s error=%s", st["session_id"], type(e).__name__)
+            self.o._count("risk_source_error")
+            return {}
+        if alert is None:
+            return {}
+        self.o._count("risk_prescreen_hit")
+        sid = st["session_id"]
+        console = copy.deepcopy(st["console"])
+        console["staff_alert"] = {"session_id": sid, "staff_alert": copy.deepcopy(alert)}
+        upd: dict = {"prescreen_hit": True, "alert": alert, "alert_sent": True, "console": console, "console_calls": [copy.deepcopy(console)]}
+        try:
+            self.o.staff_console.deliver(copy.deepcopy(console))
+            upd.update(console_delivered=True, staff_status="DELIVERED", staff_delivery="SUCCESS")
+        except Exception as e:
+            log.warning("직원 콘솔 전달 실패(선별) session=%s turn=%s error=%s", sid, st["turn_id"], type(e).__name__)
+            self.o._count("step_failed.DELIVER_STAFF")
+            console["staff_alert"] = None
+            upd.update(staff_status="DELIVERY_FAILED", staff_delivery="FAILURE")      # finalize가 DELIVERY_FAILED 신호를 낸다 → 키오스크가 현장 직원 호출 화면을 보인다
+        return upd
+
+    def n_plan_risk(self, st, config):
+        """선별에서 걸린 턴: 값은 저장하지 않고(모델을 부르지 않는다) 세션을 위험 정지로 기록하고 RISK_NOTICE를 안내한다."""
+        ctx, doc = _ctx(config), st["state_doc"]
+        prog = doc["progress_record"]
+        pu = {"current_question_id": prog["current_question_id"], "open_slots": copy.deepcopy(prog["open_slots"]), "skipped_add": [],
+              "skipped_remove": [], "session_status": "PAUSED_RISK", "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(st["alert"])}]}
+        return {"writes": {"answer_updates": [], "progress_record_update": pu}, "flow_end": False, "resp": self._fixed(ctx, "RISK_NOTICE")}
 
     # ------------------------------------------------------------------ 노드: 앞부분
     def n_load_session(self, st, config):
@@ -331,7 +378,7 @@ class TurnGraph:
         """세션 정보 생성 실패, 조회 실패: 붙일 세션이 없어 로그를 남기지 않는다(9-1 3항)."""
         ctx = _ctx(config)
         sid, decision = st["session_id"], st["decision"]
-        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": "NONE"}
+        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": st.get("staff_status") or "NONE"}      # 선별이 알림을 보냈다면 그 결과를 알린다
         intervention_result = {"session_id": sid, "result": "FAILED"} if decision is not None else None
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         kind = None if st.get("fatal") == "no_route" else (st["route"]["turn_kind"] if st.get("route") else None)
@@ -448,7 +495,8 @@ class TurnGraph:
             return {"failed": self._fail(st, "VALIDATE", e)}
         upd: dict = {"writes": writes, "resp": {"kind": "model"}, "flow_end": out["next_item"] == "END"}
         src = self.o.risk_source
-        if src is not None:                                  # 입력원이 없으면(기본) 직원 알림은 비활성이다(설계 17.6)
+        if src is not None and not getattr(src, "utterance_only", False):      # 발화만 보는 입력원은 prescreen이 이미 봤다
+            # (입력원이 없으면 직원 알림은 비활성이다, 설계 17.6)
             try:
                 alert = src.check(extract_input=st["extract_in"], extract_output=out, utterance=st["utterance"])
             except Exception as e:
@@ -463,6 +511,15 @@ class TurnGraph:
                     pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(alert)}]
                     upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
         if "alert" not in upd:
+            rr = self._slot_risk(ctx, out)                    # 문항 세트의 슬롯 risk_rule(IMMEDIATE)을 저장하는 값에 적용한다 (D88 U2, ADR-0013)
+            if rr is not None:
+                upd["alert"] = rr
+                pu = writes["progress_record_update"]
+                pu["session_status"] = "PAUSED_RISK"
+                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(rr)}]
+                upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
+                self.o._count("risk_rule_hit")
+        if "alert" not in upd:
             esc = self._reask_escalation(st, ctx, out)
             if esc is not None:
                 upd.update(esc)
@@ -471,10 +528,44 @@ class TurnGraph:
                 pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": []}]
         return upd
 
+    @staticmethod
+    def _slot_risk(ctx, out) -> Optional[dict]:
+        """저장되는 값 중 슬롯의 risk_rule(IMMEDIATE)에 걸린 것이 있으면 RISK 알림. 비교: `=`는 같은 값(불리언은 불리언끼리), `>=`는 숫자(양 단위 값은 amount)."""
+        if ctx.bank is None:
+            return None
+        for v in out["values"]:
+            if not v.get("save"):
+                continue
+            try:
+                ref = effects.slot_ref(v["key"])
+                q = ctx.bank.by_id.get(ref["question_id"])
+                slot = next((x for x in (q or {}).get("slots", []) if x["slot_id"] == ref["slot_id"]), None)
+            except Exception:
+                continue
+            rule = (slot or {}).get("risk_rule")
+            if not rule or rule.get("response") != "IMMEDIATE":
+                continue
+            val, ref_val = v["value"], rule["value"]
+            if isinstance(val, dict) and "amount" in val:
+                val = val["amount"]
+            if isinstance(ref_val, dict) and "amount" in ref_val:
+                ref_val = ref_val["amount"]
+            if rule["operator"] == "=":
+                hit = val == ref_val and isinstance(val, bool) == isinstance(ref_val, bool)
+            else:
+                hit = isinstance(val, (int, float)) and not isinstance(val, bool) and isinstance(ref_val, (int, float)) and val >= ref_val
+            if hit:
+                return {"kind": "RISK", "reasons": [{"kind": "RISK_RULE", "target": [{"slot": ref}]}]}
+        return None
+
     def _reask_escalation(self, st, ctx, out) -> Optional[dict]:
         """G12: A가 REASK·CONFIRM을 연달아 내는 횟수를 대화 로그에서 센다(세션 문서에서 계산하므로 재시작·재전송에도 같다).
         상한(SURVEY_MAX_CONSECUTIVE_REASK, 0이면 끔)을 넘는 REASK·CONFIRM이 나오면 되묻는 대신 직원을 부른다."""
         cap = self.o.max_consecutive_reask
+        authored = [ctx.bank.settings.get(k) for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit")] if ctx.bank else []
+        authored = [a for a in authored if isinstance(a, int) and not isinstance(a, bool) and a >= 1]
+        if authored:            # 문항 세트가 정한 상한(U2). 세 값은 같은 연속 REASK·CONFIRM 횟수에 적용하는 근사다(ADR-0014): 가장 작은 값을 쓴다
+            cap = min(authored + ([cap] if cap > 0 else []))
         if cap <= 0 or out["action"] not in ("REASK", "CONFIRM"):
             return None
         n = 0
@@ -540,7 +631,7 @@ class TurnGraph:
         intervention_result = st["intervention_result"]
         if st["route"]["turn_kind"] in ("RESUME", "INTERVENTION_END"):
             intervention_result = {"session_id": sid, "result": "APPLIED"}
-        alert = st.get("alert")
+        alert = None if st.get("alert_sent") else st.get("alert")          # 선별(prescreen)이 이미 보냈다면 다시 보내지 않는다
         console = copy.deepcopy(st["console"])
         # 직원 알림은 지연 없이: 응답 생성보다 앞에서 한다
         if alert is not None:
@@ -632,6 +723,8 @@ class TurnGraph:
         ctx = _ctx(config)
         sid, decision, committed = st["session_id"], st["decision"], st["committed"]
         failed = list(st["failed"])
+        if st.get("staff_status") == "DELIVERY_FAILED" and not any(f["step"] == "DELIVER_STAFF" for f in failed):
+            failed.append({"phase": "AFTER_COMMIT", "step": "DELIVER_STAFF"})       # 선별에서 알림 전달이 실패했다: 신호를 낸다
         intervention_result = st["intervention_result"]
         if decision is not None and not committed:
             intervention_result = {"session_id": sid, "result": "FAILED"}

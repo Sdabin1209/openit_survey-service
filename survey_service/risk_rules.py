@@ -103,14 +103,42 @@ def parse_rules(raw: bytes) -> tuple[str, list[Rule]]:
     return version, rules
 
 
+# ADR-0013(위험 규칙 엔진 위치), D88 U2. **임상 검토 전 임시 기본 목록이다.** 널리 쓰이는 레드플래그(자해·자살, 흉통, 호흡곤란, 의식저하, 심한 출혈, 마비·뇌졸중 증상, 도움 요청)를
+# 보수적으로(놓침 비용 > 거짓 알림 비용) 한국어 표현 변형과 함께 넣었다. 띄어쓰기는 무시하고 맞춘다. 병원이 `SURVEY_RISK_RULES_FILE`로 자기 목록을 주면 이 목록은 쓰이지 않는다.
+# 임상 검토와 확정은 OPEN_GAPS(검토 전까지 /readyz의 staff_alert_source.provisional=true).
+PROVISIONAL_VERSION = "provisional-2026-10-28"
+_PROVISIONAL = {
+    "self-harm": ("자살", "죽고싶", "죽을래", "죽어버리", "죽고만싶", "스스로목숨", "목숨을끊", "자해", "손목을그", "극단적선택", "살기싫", "사는게싫", "삶을끝"),
+    "chest-pain": ("가슴이아", "가슴이너무아", "흉통", "가슴통증", "가슴이조이", "가슴이답답", "가슴을쥐어", "심장이아", "심장이조여", "심장이터"),
+    "dyspnea": ("숨이안쉬", "숨을못쉬", "숨쉬기힘", "숨쉬기가힘", "숨쉬기어렵", "호흡곤란", "숨이막", "숨막혀", "숨이차서말", "숨이넘어"),
+    "consciousness": ("의식을잃", "의식이없", "정신을잃", "정신을못차", "기절", "쓰러졌", "쓰러질것", "쓰러질거", "의식이흐", "정신이혼미"),
+    "bleeding": ("피가많이", "피가계속나", "피가멈추지", "출혈이심", "피를토", "토혈", "피를많이", "하혈이심", "피가쏟"),
+    "paralysis": ("마비", "팔다리에힘이안", "한쪽팔이안", "한쪽다리가안", "말이안나", "말이어눌", "말이잘안나", "입이돌아", "얼굴이한쪽", "한쪽이저리"),
+    "help": ("살려", "도와주세요", "응급", "119", "구급차"),
+}
+
+
+def _provisional_raw() -> bytes:
+    rules = [{"id": f"prov-{k}", "description": f"임시 기본 목록(임상 검토 전): {k}", "match": {"any_of": [{"contains": p} for p in ph]}}
+             for k, ph in _PROVISIONAL.items()]
+    return json.dumps({"version": PROVISIONAL_VERSION, "rules": rules}, ensure_ascii=False).encode("utf-8")
+
+
 class RuleRiskSource:
     """`RiskSource` 구현. 파일을 한 번 읽어 고정한다(바꾸려면 다시 시작)."""
 
-    def __init__(self, raw: bytes) -> None:
+    utterance_only = True      # 발화 원문만 본다: 모델 추출과 무관하게 모든 턴에 적용할 수 있다(D88 U1)
+
+    def __init__(self, raw: bytes, *, provisional: bool = False) -> None:
+        self.provisional = provisional          # 임상 검토 전 임시 목록이면 True(/readyz에 드러난다)
         self.version, self.rules = parse_rules(raw)
         self.sha256 = hashlib.sha256(raw).hexdigest()
         self._lock = threading.Lock()
         self.hits: dict[str, int] = {}
+
+    @classmethod
+    def provisional_default(cls) -> "RuleRiskSource":
+        return cls(_provisional_raw(), provisional=True)
 
     @classmethod
     def from_file(cls, path: str) -> "RuleRiskSource":
@@ -126,10 +154,26 @@ class RuleRiskSource:
     def match(self, utterance: str) -> Optional[str]:
         text = _norm(utterance)
         folded = text.casefold()
+        compact = re.sub(r"\s+", "", folded)           # 띄어쓰기 변형을 무시한다("숨이 안 쉬어져요" = "숨이안쉬어져요")
         for r in self.rules:
-            if any(c in folded for c in r.contains) or any(rx.search(text) for rx in r.regex):
+            if any(c in folded or c.replace(" ", "") in compact for c in r.contains) or any(rx.search(text) for rx in r.regex):
                 return r.id
         return None
+
+    def screen(self, utterance: str, extra_phrases=()) -> Optional[Mapping]:
+        """모델 추출 전에 발화 원문만 본다(D88 U1). `extra_phrases`는 문항 세트에 저작된 risk_phrases(U2)."""
+        rid = self.match(utterance or "")
+        if rid is None:
+            compact = re.sub(r"\s+", "", _norm(utterance or "").casefold())
+            for ph in extra_phrases:
+                if isinstance(ph, str) and ph.strip() and re.sub(r"\s+", "", _norm(ph).casefold()) in compact:
+                    rid = "bank-phrase"
+                    break
+        if rid is None:
+            return None
+        with self._lock:
+            self.hits[rid] = self.hits.get(rid, 0) + 1
+        return risk_alert(INTERNAL_SOURCE, rid, "RISK")
 
     def check(self, *, extract_input: Mapping, extract_output: Mapping, utterance: str) -> Optional[Mapping]:
         rid = self.match(utterance or "")
@@ -142,7 +186,8 @@ class RuleRiskSource:
     def describe(self) -> dict:
         with self._lock:
             hits = dict(self.hits)
-        return {"active": True, "source": "RULES_FILE", "rule_count": len(self.rules), "version": self.version, "sha256": self.sha256,
+        return {"active": True, "source": "PROVISIONAL_DEFAULT" if self.provisional else "RULES_FILE", "provisional": self.provisional,
+                "clinically_reviewed": not self.provisional, "rule_count": len(self.rules), "version": self.version, "sha256": self.sha256,
                 "hits_by_rule": hits}
 
 

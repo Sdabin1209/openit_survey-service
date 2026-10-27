@@ -53,6 +53,7 @@ class Settings:
     risk_source_token_env: str = "SURVEY_RISK_SOURCE_TOKEN"       # 외부 위험 신호(역할 risk-source) 토큰. 값이 없으면 risk-signals는 꺼진다(404)
     require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
     session_retention_days: Optional[int] = None                   # None이면 세션을 지우지 않는다. 값이 있으면 `python -m survey_service purge`가 끝난 세션을 지운다
+    risk_default_rules: bool = True  # 규칙 파일·입력원이 없으면 임시 기본 목록(임상 검토 전)을 쓴다. SURVEY_RISK_DEFAULT_RULES=off로 끈다 (ADR-0013)
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
     turn_deadline_seconds: float = 6.0            # 서버 턴 총 마감(초). 키오스크 대기 10초보다 짧게. 넘으면 NOT_COMMITTED(FAULT_POLICY 3)
     db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초
@@ -91,7 +92,7 @@ class Settings:
     inference_timeout_seconds: float = 4.0      # 호출 하나(extract 또는 respond)의 읽기 타임아웃. 프론트 타임아웃 10초 안에 두 호출이 들어가게
     inference_load_timeout_seconds: float = 600.0   # 릴리스 적재(모델 로딩)를 기다리는 시간
     inference_retries: int = 1
-    max_consecutive_reask: int = 0              # REASK·CONFIRM 연속 상한(G12). 0이면 끔. 값은 정해지지 않았다(CR-012)
+    max_consecutive_reask: int = 3              # REASK·CONFIRM 연속 상한(G12, D88 U10 잠정값 3). 0이면 끔(명시해야 꺼진다). 문항 세트의 ask_limit 등이 있으면 그 최솟값을 쓴다 (ADR-0014)
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
     export_backoff_max_seconds: float = 60.0
@@ -112,6 +113,7 @@ class Settings:
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
             result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""), risk_source=env.get("SURVEY_RISK_SOURCE", ""),
+            risk_default_rules=env.get("SURVEY_RISK_DEFAULT_RULES", "on").strip().lower() not in ("0", "false", "no", "off"),
             risk_rules_file=env.get("SURVEY_RISK_RULES_FILE", ""),
             result_reader_token_env=env.get("SURVEY_RESULT_READER_TOKEN_ENV", "SURVEY_RESULT_READER_TOKEN"),
             risk_source_token_env=env.get("SURVEY_RISK_SOURCE_TOKEN_ENV", "SURVEY_RISK_SOURCE_TOKEN"),
@@ -150,7 +152,7 @@ class Settings:
             release_retry_base_seconds=_float(env, "SURVEY_RELEASE_RETRY_BASE_SECONDS", 5.0),
             release_retry_max_seconds=_float(env, "SURVEY_RELEASE_RETRY_MAX_SECONDS", 60.0),
             release_retry_give_up_seconds=float(env.get("SURVEY_RELEASE_RETRY_GIVE_UP_SECONDS", "0")),
-            max_consecutive_reask=_int(env, "SURVEY_MAX_CONSECUTIVE_REASK", 0, 0),
+            max_consecutive_reask=_int(env, "SURVEY_MAX_CONSECUTIVE_REASK", 3, 0),
             release_poll_seconds=_float(env, "SURVEY_RELEASE_POLL_SECONDS", 5.0), keep_releases=_int(env, "SURVEY_KEEP_RELEASES", 2),
             export_interval_seconds=_float(env, "SURVEY_EXPORT_INTERVAL_SECONDS", 1.0),
             export_backoff_max_seconds=_float(env, "SURVEY_EXPORT_BACKOFF_MAX_SECONDS", 60.0),

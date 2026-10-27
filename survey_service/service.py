@@ -113,6 +113,9 @@ class App:
             log.info("위험 규칙 적재 version=%s rules=%s sha256=%s", d["version"], d["rule_count"], d["sha256"])
         elif risk_source is None and settings.risk_source:
             risk_source = load_factory(settings.risk_source)()
+        elif risk_source is None and settings.risk_default_rules:
+            risk_source = RuleRiskSource.provisional_default()                        # 임상 검토 전 임시 기본 목록. 입력원이 꺼진 채 시작하지 않는다 (D88 U2, ADR-0013)
+            log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask,

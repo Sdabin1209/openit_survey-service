@@ -13,8 +13,15 @@ def _kinds(rig):
 
 
 def test_default_is_off_and_never_escalates():
-    assert Settings().max_consecutive_reask == 0 and Settings.from_env({"SURVEY_RELEASE_READER": "x", "SURVEY_TRACE_INGEST": "x", "SURVEY_MODEL_BACKEND": "fake"}).max_consecutive_reask == 0
-    rig = Rig()
+    base = {"SURVEY_RELEASE_READER": "x", "SURVEY_TRACE_INGEST": "x", "SURVEY_MODEL_BACKEND": "fake"}
+    assert Settings().max_consecutive_reask == 3 and Settings.from_env(base).max_consecutive_reask == 3         # 기본 3(D88 U10), 끄려면 0을 명시한다
+    assert Settings.from_env({**base, "SURVEY_MAX_CONSECUTIVE_REASK": "0"}).max_consecutive_reask == 0
+    import copy
+    from .sample_bank import sample_bank
+    bank = copy.deepcopy(sample_bank())
+    for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
+        bank["session_settings"].pop(k, None)              # 문항 세트가 상한을 저작하지 않았고 서비스 상한도 끈 경우(Orchestrator 기본 0)
+    rig = Rig(bank=bank)
     rig.start()
     for _ in range(8):
         o = rig.say("음", out=REASK)
