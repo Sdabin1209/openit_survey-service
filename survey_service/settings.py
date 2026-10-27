@@ -121,7 +121,6 @@ class Settings:
     export_backoff_max_seconds: float = 60.0
     outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다). 0이면 상한 없음  [근거: ADR-0009, 크기는 추정]
     outbox_keep_sent_hours: int = 24
-    outbox_max_pending: int = 20000               # 보내지 못한 Trace의 최대 건수(넘으면 새 Trace는 버리고 건수를 센다, trace_outbox.dropped_full). 0이면 상한 없음
     log_level: str = "INFO"
 
     def alert_db_path(self) -> str:

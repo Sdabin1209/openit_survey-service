@@ -67,13 +67,11 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 
 비밀(API 토큰, VAPID 키 등)은 값을 환경 변수에 직접 넣지 않고 `NAME_FILE`(파일 경로)로 받는다(D84, docs/runbook.md §1). 이름 목록과 나머지 설정은 runbook §1. 실제 운영 실행에는 release-gate·ops-feedback·추론 서버 URL과 토큰 파일이 더 필요하다(설정 전체는 runbook 참조, 이 문서는 개발용 최소만 적었다).
 
-이 세션에서 **돌려 본 것**: `.venv/bin/python -m pytest --collect-only -q`(수집만, 합계 415개), `.venv/bin/python -m survey_service --help`(필수 환경 변수 누락 오류 메시지 확인).
-이 세션에서 **돌리지 않은 것**: 위 1)의 설치, 2)의 시험 실행, 3), 4), 5)의 실제 기동. 명령은 문서(runbook, scripts)에서 옮겼다.
+시험 개수와 통과 결과는 이 문서에 쓰지 않는다(어긋나기 쉽다). 현재 상태는 `docs/STATUS.md`의 마지막 기록과 `pytest` 실제 출력(위 2)의 명령)으로 확인한다. 명령은 문서(runbook, scripts)에서 옮겼다.
 
 ## 현재 상태
 
-- 문서가 기록한 결과(docs/STATUS.md 마지막 기록): pytest 403 통과, `smoke.sh` OK, `smoke_compose.sh` OK, 모두 "이 PC 한 곳"에서만 확인.
-- 수집 결과는 415개이고 STATUS의 403은 구간 8 당시 값이다(STATUS "현재 기준"에 정리). 415개의 통과 여부는 돌리지 않아 미확인.
+- 시험 상태: 개수·통과 여부는 `docs/STATUS.md` 마지막 기록과 `pytest` 출력을 본다. 모두 이 PC 한 곳에서만 확인했다.
 - 확인하지 못한 것(STATUS, OPEN_GAPS): 실제 model-runtime 서버 이미지와의 E2E, 두 번째 깨끗한 환경에서의 재현, 실제 브라우저·푸시 서비스, 실제 모델로 한 턴을 통과시키는 일(U07), 부하·동시성, 세션 문서 암호화·보존 기간.
 - 표 찾기는 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 확인 대기다(`schema/data/response_tables.json`의 `table_status: DATASET_RULES_UNCONFIRMED`, 승인 기록 미확인).
 - `/readyz`는 PostgreSQL이 죽거나 응답이 없어도 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본 2초)+약 2초 안에 503(db unavailable)으로 답하고 복구 뒤 200이 된다(CR-D23, docs/boundary.md §5·§6). 이 PC에서 로컬 PostgreSQL 컨테이너로 확인했고, 실제 compose 환경의 재측정은 deploy E2E 5p에서 헤드가 한다.
@@ -110,5 +108,5 @@ G07은 닫힘이라 뺐다. 위 요약은 대장의 한 줄을 줄인 것이며 
 | `docs/STATUS.md` | 구간별 한 일, 시험 결과, 한계 |
 | `docs/CHANGELOG.md` | 변경 이력 |
 | `docs/inference-server-spec.md` | 추론 서버 HTTP 규약 |
-| `docs/change-requests/` | 헤드에게 보낸 변경 요청(CR-001~012) |
+| `docs/change-requests/` | 헤드에게 보낸 변경 요청(CR-001~016, 목록은 docs/change-requests/) |
 | `docs/rules/` | 헤드가 전달한 업무 규칙과 입력 조립 표 |

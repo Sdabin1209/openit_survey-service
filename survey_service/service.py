@@ -1,4 +1,4 @@
-"""서비스 조립과 HTTP(/healthz, /readyz만). 공개 API(I10)는 O06 대기라 만들지 않는다."""
+"""서비스 조립과 HTTP 서버(/healthz, /readyz, 공개 API 연결, 직원 알림 SSE). 공개 API 라우팅은 api.py(D55), 설정은 settings.py."""
 from __future__ import annotations
 
 import json
