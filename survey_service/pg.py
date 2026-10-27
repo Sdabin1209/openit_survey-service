@@ -8,7 +8,9 @@
 """
 from __future__ import annotations
 
+import os
 import re
+import socket
 import threading
 from typing import Any
 
@@ -25,6 +27,23 @@ try:
 except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
     psycopg = None           # type: ignore[assignment]
     DRIVER_ERRORS = ()
+
+# 주 연결의 대기 상한(초). 설정으로 바꾼다(`configure`, db.open_stores). 근거는 docs/boundary.md §5: 정상일 때 문장 하나는 수 ms이고 턴 하나의 쓰기는 몇 문장이라
+# 3초면 느린 디스크·잠깐의 잠금 대기는 견디고, 서버 턴 총 마감(기본 8초)과 키오스크 대기(10초) 안에서 재접속 한 번까지 시도할 수 있다.
+DEFAULT_CONNECT_TIMEOUT = 3.0
+DEFAULT_STATEMENT_TIMEOUT = 3.0
+_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None}
+
+
+def configure(*, connect_timeout: float | None = None, statement_timeout: float | None = None, probe_timeout: float | None = None) -> None:
+    """이후 만드는 PgConn의 기본 상한을 정한다(서비스 시작 때 한 번)."""
+    if connect_timeout is not None:
+        _cfg["connect"] = float(connect_timeout)
+    if statement_timeout is not None:
+        _cfg["statement"] = float(statement_timeout)
+    if probe_timeout is not None:
+        _cfg["probe"] = float(probe_timeout)
+
 
 DEFAULT_PROBE_TIMEOUT = 2.0  # /readyz의 DB 확인 상한 기본값(초). libpq의 connect_timeout 최소 단위가 2초라 이보다 작게 의미가 없다
 _LOCK_KEY = 7264002          # 스키마 생성용 advisory lock 키(이 영역 고정값)
@@ -44,17 +63,48 @@ class PgConn:
             raise StoreError(f"{what}: psycopg 드라이버가 없다")
         self._url, self._what = url, what          # 어디에도 출력하지 않는다
         self._in_txn = False
-        self.probe_timeout = DEFAULT_PROBE_TIMEOUT      # /readyz 확인용 상한(초). open_stores가 설정 값으로 덮어쓴다
+        self.probe_timeout = _cfg["probe"] or DEFAULT_PROBE_TIMEOUT      # /readyz 확인용 상한(초)
+        self.connect_timeout = _cfg["connect"]            # 주 연결의 접속 상한(초)
+        self.statement_timeout = _cfg["statement"]        # 문장 하나의 상한(초): 서버 쪽 statement_timeout + 클라이언트 쪽 강제 끊기(서버가 얼어도 끝난다)
         self._lock = threading.RLock()
         self._conn = self._connect(initial=True)
 
+    def _params(self, connect_secs: int, stmt_seconds: float) -> dict:
+        params = psycopg.conninfo.conninfo_to_dict(self._url)       # URL의 options(예: search_path)를 덮어쓰지 않고 이어 붙인다
+        params["options"] = (params.get("options", "") + f" -c statement_timeout={int(stmt_seconds * 1000)}").strip()
+        params["connect_timeout"] = connect_secs
+        return params
+
     def _connect(self, initial: bool = False):
         try:
-            return psycopg.connect(self._url, autocommit=True, connect_timeout=10)
+            return psycopg.connect(autocommit=True, **self._params(max(1, int(self.connect_timeout + 0.999)), self.statement_timeout))
         except Exception as e:                      # 메시지에 host/user가 들어갈 수 있어 클래스 이름만 남긴다
             if initial:
                 raise StoreError(f"{self._what} 접속 실패: {type(e).__name__}") from None
             raise psycopg.OperationalError(f"reconnect failed: {type(e).__name__}") from None     # 호출자는 드라이버 오류로 다룬다(StoreError/DB_ERROR로 바꾼다)
+
+    @staticmethod
+    def _abort(conn) -> None:
+        """서버가 얼어 응답이 없을 때(docker pause 등) 서버 쪽 statement_timeout은 듣지 못한다. 소켓을 닫아 막힌 읽기를 끝낸다."""
+        try:
+            s = socket.socket(fileno=os.dup(conn.fileno()))
+            try:
+                s.shutdown(socket.SHUT_RDWR)
+            finally:
+                s.close()
+        except Exception:
+            pass
+
+    def _exec(self, sql: str, args):
+        """문장 하나를 상한 안에서 실행한다. statement_timeout + 1초 안에 안 끝나면 연결을 끊어 OperationalError로 끝낸다."""
+        conn = self._conn
+        timer = threading.Timer(self.statement_timeout + 1.0, self._abort, args=(conn,))
+        timer.daemon = True
+        timer.start()
+        try:
+            return conn.execute(translate(sql), tuple(args))
+        finally:
+            timer.cancel()
 
     def _alive(self) -> bool:
         return not (self._conn.closed or self._conn.broken)
@@ -95,12 +145,12 @@ class PgConn:
                     raise psycopg.OperationalError("connection lost")
                 self._conn = self._connect()
             try:
-                cur = self._conn.execute(translate(sql), tuple(args))
+                cur = self._exec(sql, args)
             except psycopg.Error as e:
                 lost = self._lost(e)
                 if lost and not self._in_txn and not end:
                     self._conn = self._connect()
-                    cur = self._conn.execute(translate(sql), tuple(args))      # 트랜잭션 밖의 멱등 문장: 새 연결로 한 번
+                    cur = self._exec(sql, args)      # 트랜잭션 밖의 멱등 문장: 새 연결로 한 번
                 else:
                     if lost:
                         self._in_txn = False
@@ -113,22 +163,21 @@ class PgConn:
 
     def script(self, ddl: str, advisory: bool = True) -> None:
         """스키마를 멱등으로 만든다(advisory lock으로 서버와 잡이 동시에 떠도 안전)."""
+        self._conn.execute("SET statement_timeout = 0")        # 시작 때 스키마 생성은 다른 인스턴스의 잠금을 기다릴 수 있다
         if advisory:
-            self.execute("SELECT pg_advisory_lock(%s)" % _LOCK_KEY)
+            self._conn.execute("SELECT pg_advisory_lock(%s)" % _LOCK_KEY)
         try:
             self._conn.execute(ddl)
         finally:
             if advisory:
-                self.execute("SELECT pg_advisory_unlock(%s)" % _LOCK_KEY)
+                self._conn.execute("SELECT pg_advisory_unlock(%s)" % _LOCK_KEY)
+            self._conn.execute(f"SET statement_timeout = {int(self.statement_timeout * 1000)}")
 
     def probe(self, table: str) -> None:
         """/readyz용 DB 확인. **이 객체의 연결·락을 쓰지 않는다**: 요청 처리나 outbox 전송이 연결을 쥐고 오래 기다리는 중이어도
         막히지 않고, 접속 시도가 `probe_timeout` 안에 끝난다(connect_timeout + 서버 쪽 statement_timeout).
         실패하면 드라이버 오류를 올린다(메시지에 접속 정보가 들어갈 수 있어 호출자가 클래스 이름만 쓴다)."""
-        secs = max(1, int(self.probe_timeout + 0.999))
-        params = psycopg.conninfo.conninfo_to_dict(self._url)       # URL의 options(예: search_path)를 덮어쓰지 않고 이어 붙인다
-        params["options"] = (params.get("options", "") + f" -c statement_timeout={int(self.probe_timeout * 1000)}").strip()
-        params["connect_timeout"] = secs
+        params = self._params(max(1, int(self.probe_timeout + 0.999)), self.probe_timeout)
         with psycopg.connect(autocommit=True, **params) as c:
             c.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchall()      # table은 코드가 정한 상수
 

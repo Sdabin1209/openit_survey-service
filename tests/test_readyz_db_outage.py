@@ -119,3 +119,52 @@ def test_readyz_db_timeout_setting():
     assert Settings.from_env({**base, "SURVEY_READYZ_DB_TIMEOUT_SECONDS": "3"}).readyz_db_timeout_seconds == 3.0
     with pytest.raises(Exception):
         Settings.from_env({**base, "SURVEY_READYZ_DB_TIMEOUT_SECONDS": "0"})
+
+
+def _container_for(url: str):
+    """TEST_DATABASE_URL의 호스트 포트를 게시한 컨테이너 이름(없으면 None)."""
+    import re
+    import subprocess
+    m = re.search(r":(\d+)/", url)
+    try:
+        for cid in subprocess.run(["docker", "ps", "-q", "--filter", "label=io.openit.dev-postgres=1"], capture_output=True, text=True, timeout=20).stdout.split():
+            ports = subprocess.run(["docker", "port", cid, "5432/tcp"], capture_output=True, text=True, timeout=20).stdout
+            if m and f":{m.group(1)}" in ports:
+                return cid
+    except Exception:
+        return None
+    return None
+
+
+def test_turn_ends_not_committed_within_deadline_when_db_is_frozen(request):
+    """docker pause 같은 무응답 DB: 서버 statement_timeout은 못 듣는다. 클라이언트 강제 끊기와 턴 총 마감으로 NOT_COMMITTED로 끝나고, 풀리면 복구된다."""
+    import subprocess
+    from survey_service import pg
+    from survey_service.store.postgres import PgSessionStore
+    from .e2e_support import ANSWER_OUT, Rig
+    url = pg_url(request)
+    import os
+    cid = _container_for(os.environ["TEST_DATABASE_URL"])
+    if not cid:
+        pytest.skip("docker로 PostgreSQL 컨테이너를 멈출 수 없음")
+    pg.configure(connect_timeout=1, statement_timeout=1)
+    request.addfinalizer(lambda: pg.configure(connect_timeout=pg.DEFAULT_CONNECT_TIMEOUT, statement_timeout=pg.DEFAULT_STATEMENT_TIMEOUT))
+    store = PgSessionStore(url)
+    request.addfinalizer(store.close)
+    rig = Rig(store=store, turn_deadline_seconds=4)
+    rig.start()
+    before = rig.doc()["answer_records"][0]["current_value"]
+    rig.model.queue.append(ANSWER_OUT)
+    subprocess.check_call(["docker", "pause", cid], stdout=subprocess.DEVNULL)
+    try:
+        t = time.monotonic()
+        out = rig.say("안 피움", turn_id="t-frozen")
+        dt = time.monotonic() - t
+        assert dt < 6 and out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", dt
+    finally:
+        subprocess.call(["docker", "unpause", cid], stdout=subprocess.DEVNULL)
+    time.sleep(1)
+    assert rig.doc()["answer_records"][0]["current_value"] == before          # 저장되지 않았다
+    rig.model.queue.append(ANSWER_OUT)
+    out = rig.say("안 피움", turn_id="t-frozen")                                 # 풀린 뒤 같은 turn_id 재전송은 처리된다
+    assert out.frontend_input["turn_failure_signal"] is None

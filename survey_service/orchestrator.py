@@ -118,19 +118,42 @@ class Orchestrator:
                 raise TurnInProgress(f"같은 턴 ID가 처리 중이다 (turn={turn_id})")
             self._inflight.add(key)
         try:
-            return self._handle_locked(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id)
+            ctx = TurnCtx()
+            if self.turn_deadline_seconds <= 0:
+                return self._handle_locked(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
+            # 턴 전체(세션 락 대기, 멱등 확인, 모델 호출 재시도, DB 대기, 쓰기 확정)에 총 마감을 건다(FAULT_POLICY 3).
+            # 처리는 데몬 스레드에서 돌고, 마감을 넘기면 ctx.cancelled로 표시해 늦게 끝난 작업이 확정(commit)하지 않게 한다.
+            ctx.deadline = time.monotonic() + self.turn_deadline_seconds
+            box: dict = {}
+
+            def work() -> None:
+                try:
+                    box["out"] = self._handle_locked(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
+                except BaseException as e:        # noqa: BLE001 호출자 스레드에서 다시 올린다
+                    box["err"] = e
+            t = threading.Thread(target=work, name=f"turn-{turn_id}", daemon=True)
+            t.start()
+            t.join(self.turn_deadline_seconds)
+            if t.is_alive():
+                ctx.cancelled.set()
+                self._count("turn_deadline_exceeded")
+                log.warning("턴 총 마감 초과 session=%s turn=%s deadline=%ss", sid, turn_id, self.turn_deadline_seconds)
+                return self._deadline_outcome(sid)
+            if "err" in box:
+                raise box["err"]
+            return box["out"]
         finally:
             with self._inflight_guard:
                 self._inflight.discard(key)
 
-    def _handle_locked(self, sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id) -> TurnOutcome:
+    def _handle_locked(self, sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx) -> TurnOutcome:
         with self._locks.hold(sid):
             replay = self._replay(sid, turn_id, input_hash)
             if replay is not None:
                 return replay
-            out = self._process(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id)
+            out = self._process(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
             try:
-                if out.cacheable:
+                if out.cacheable and not ctx.cancelled.is_set():      # 마감으로 끝낸 턴의 늦은 결과는 고정하지 않는다(같은 turn_id 재전송이 새로 처리된다)
                     self.store.save_turn_result(sid, turn_id, input_hash, {
                         "orchestrator_output": out.orchestrator_output, "frontend_input": out.frontend_input,
                         "staff_console_input": out.staff_console_input, "release_id": out.release_id})
@@ -208,37 +231,16 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ 처리 (그래프)
     def _process(self, sid: str, turn_id: str, message: Optional[Mapping], decision: Optional[Mapping], input_hash: str,
-                 staff_id: Optional[str] = None) -> TurnOutcome:
+                 staff_id: Optional[str], ctx: TurnCtx) -> TurnOutcome:
         st = initial_state(sid, turn_id, input_hash, dict(message) if message is not None else None,
                            dict(decision) if decision is not None else None, staff_id)
-        ctx = TurnCtx()
-        cfg = {"configurable": {"ctx": ctx}}
-        if self.turn_deadline_seconds <= 0:
-            final = self._graph.invoke(st, config=cfg)
-        else:
-            # 턴 전체에 총 마감을 건다(FAULT_POLICY 3): 모델 호출 재시도·DB 대기를 합쳐도 마감에서 NOT_COMMITTED로 끝낸다.
-            # 그래프는 데몬 스레드에서 돌고, 마감을 넘기면 ctx.cancelled로 표시해 늦게 끝난 작업이 확정(commit)하지 않게 한다.
-            ctx.deadline = time.monotonic() + self.turn_deadline_seconds
-            box: dict = {}
-
-            def work() -> None:
-                try:
-                    box["final"] = self._graph.invoke(st, config=cfg)
-                except BaseException as e:        # noqa: BLE001 호출자 스레드에서 다시 올린다
-                    box["err"] = e
-            t = threading.Thread(target=work, name=f"turn-{turn_id}", daemon=True)
-            t.start()
-            t.join(self.turn_deadline_seconds)
-            if t.is_alive():
-                ctx.cancelled.set()
-                self._count("turn_deadline_exceeded")
-                log.warning("턴 총 마감 초과 session=%s turn=%s deadline=%ss", sid, turn_id, self.turn_deadline_seconds)
-                return self._deadline_outcome(sid)
-            if "err" in box:
-                raise box["err"]
-            final = box["final"]
+        final = self._graph.invoke(st, config={"configurable": {"ctx": ctx}})
         return TurnOutcome(final["orchestrator_output"], final["frontend_input"], final["console_input"], final["trace"],
                            final["out_release_id"], cacheable=final["cacheable"])
+
+    def _active_id(self) -> Optional[str]:
+        a = self.releases.active()
+        return a.release_id if a else None
 
     @staticmethod
     def _deadline_outcome(sid: str) -> TurnOutcome:
@@ -248,10 +250,6 @@ class Orchestrator:
         oo = {"turn_kind": None, "session_info_created": None, "log_entry": None, "turn_failure_signal": signal,
               "intervention_result": None, "dispatch_called": False}
         return TurnOutcome(oo, {"response_text": None, "turn_failure_signal": signal}, None, trace={}, release_id=None, cacheable=False)
-
-    def _active_id(self) -> Optional[str]:
-        a = self.releases.active()
-        return a.release_id if a else None
 
     def _submit_trace(self, out: TurnOutcome) -> None:
         if self.trace_sink is None or out.release_id is None:
