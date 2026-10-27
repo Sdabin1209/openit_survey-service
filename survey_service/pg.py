@@ -20,6 +20,7 @@ DRIVER_ERRORS: tuple
 
 try:
     import psycopg
+    import psycopg.conninfo
     DRIVER_ERRORS = (psycopg.Error,)
 except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
     psycopg = None           # type: ignore[assignment]
@@ -125,8 +126,10 @@ class PgConn:
         막히지 않고, 접속 시도가 `probe_timeout` 안에 끝난다(connect_timeout + 서버 쪽 statement_timeout).
         실패하면 드라이버 오류를 올린다(메시지에 접속 정보가 들어갈 수 있어 호출자가 클래스 이름만 쓴다)."""
         secs = max(1, int(self.probe_timeout + 0.999))
-        with psycopg.connect(self._url, autocommit=True, connect_timeout=secs,
-                             options=f"-c statement_timeout={int(self.probe_timeout * 1000)}") as c:
+        params = psycopg.conninfo.conninfo_to_dict(self._url)       # URL의 options(예: search_path)를 덮어쓰지 않고 이어 붙인다
+        params["options"] = (params.get("options", "") + f" -c statement_timeout={int(self.probe_timeout * 1000)}").strip()
+        params["connect_timeout"] = secs
+        with psycopg.connect(autocommit=True, **params) as c:
             c.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchall()      # table은 코드가 정한 상수
 
     def kill_backend_pid(self) -> int:
