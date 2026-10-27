@@ -1,9 +1,14 @@
 # 서비스 이미지 + 추론 이미지(가짜 경로, 모델 없음) + 가짜 게이트/수집 서버를 같이 띄운다. 호스트 포트는 Docker가 배정한다.
-# 변수: SERVICE_IMAGE, FAKE_IMAGE (scripts/smoke_compose.sh가 정한다). 토큰은 시험용 값이다.
+# 변수: SERVICE_IMAGE, FAKE_IMAGE (scripts/smoke_compose.sh가 정한다). SMOKE_SECRETS_DIR: 시험용 무작위 토큰 파일 폴더(스크립트가 만든다).
+# 비밀은 환경 변수 값이 아니라 compose secrets의 파일로 주고 서비스에는 NAME_FILE 경로만 준다(D84).
 services:
   gate:
     image: ${FAKE_IMAGE}
     command: ["python", "-m", "tests.ref_gate_main"]
+    environment:
+      GATE_READ_TOKEN_FILE: /run/secrets/gate_read_token
+      GATE_WRITE_TOKEN_FILE: /run/secrets/gate_write_token
+    secrets: [gate_read_token, gate_write_token]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:9000/healthz')"]
       interval: 2s
@@ -13,8 +18,9 @@ services:
     image: ${FAKE_IMAGE}
     command: ["python", "-m", "tests.ref_runtime_main"]
     environment:
-      INFERENCE_TOKEN: smoke-inference-token
+      INFERENCE_TOKEN_FILE: /run/secrets/inference_token
       INFERENCE_PORT: "8081"
+    secrets: [inference_token]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8081/readyz')"]
       interval: 2s
@@ -27,21 +33,28 @@ services:
       SURVEY_RELEASE_READER: http
       SURVEY_RELEASE_READER_URL: http://gate:9000
       SURVEY_RELEASE_READER_TOKEN_ENV: GATE_READ_TOKEN
-      GATE_READ_TOKEN: r-tok
+      GATE_READ_TOKEN_FILE: /run/secrets/gate_read_token
       SURVEY_TRACE_INGEST: http
       SURVEY_TRACE_INGEST_URL: http://gate:9000
       SURVEY_TRACE_INGEST_TOKEN_ENV: GATE_WRITE_TOKEN
-      GATE_WRITE_TOKEN: w-tok
+      GATE_WRITE_TOKEN_FILE: /run/secrets/gate_write_token
       SURVEY_INFERENCE_URL: http://inference:8081
       SURVEY_INFERENCE_TOKEN_ENV: INFERENCE_CLIENT_TOKEN
-      INFERENCE_CLIENT_TOKEN: smoke-inference-token
+      INFERENCE_CLIENT_TOKEN_FILE: /run/secrets/inference_token
       SURVEY_INFERENCE_TIMEOUT_SECONDS: "3"
-      SURVEY_API_TOKEN: smoke-api-token
-      SURVEY_STAFF_API_TOKEN: smoke-staff-token
+      SURVEY_API_TOKEN_FILE: /run/secrets/api_token
+      SURVEY_STAFF_API_TOKEN_FILE: /run/secrets/staff_api_token
       SURVEY_RELEASE_POLL_SECONDS: "1"
       SURVEY_RELEASE_RETRY_BASE_SECONDS: "1"
       SURVEY_RELEASE_RETRY_MAX_SECONDS: "3"
       SURVEY_STARTUP_WAIT_SECONDS: "2"
       SURVEY_EXPORT_INTERVAL_SECONDS: "0.5"
+    secrets: [gate_read_token, gate_write_token, inference_token, api_token, staff_api_token]
     depends_on:
       inference: {condition: service_healthy}
+secrets:
+  inference_token: {file: "${SMOKE_SECRETS_DIR}/inference_token"}
+  gate_read_token: {file: "${SMOKE_SECRETS_DIR}/gate_read_token"}
+  gate_write_token: {file: "${SMOKE_SECRETS_DIR}/gate_write_token"}
+  api_token: {file: "${SMOKE_SECRETS_DIR}/api_token"}
+  staff_api_token: {file: "${SMOKE_SECRETS_DIR}/staff_api_token"}

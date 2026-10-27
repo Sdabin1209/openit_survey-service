@@ -24,7 +24,13 @@ cp -r build/wheels build/fake-ctx/wheels && cp requirements.lock build/fake-ctx/
 mkdir build/fake-ctx/tests && (cd tests && cp *.py build/../../build/fake-ctx/tests/ 2>/dev/null || cp *.py ../build/fake-ctx/tests/)
 rm -f build/fake-ctx/tests/test_*.py build/fake-ctx/tests/conftest.py
 $DOCKER build -q -t "$FAKE_IMAGE" build/fake-ctx >/dev/null
-cleanup() { $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true; $DOCKER rmi -f "$SERVICE_IMAGE" "$FAKE_IMAGE" >/dev/null 2>&1 || true; rm -f /tmp/smoke-compose-$$.body; }
+# 시험용 무작위 토큰 파일(D84): 임시 폴더 700, 파일 644(컨테이너 uid가 읽는다). 값은 출력하지 않는다
+SMOKE_SECRETS_DIR=$(mktemp -d); chmod 700 "$SMOKE_SECRETS_DIR"; export SMOKE_SECRETS_DIR
+for n in inference_token gate_read_token gate_write_token api_token staff_api_token; do
+  python3 -c 'import secrets;print("smoke-"+secrets.token_hex(16))' > "$SMOKE_SECRETS_DIR/$n"; chmod 644 "$SMOKE_SECRETS_DIR/$n"
+done
+API_TOKEN=$(cat "$SMOKE_SECRETS_DIR/api_token")
+cleanup() { rm -rf "$SMOKE_SECRETS_DIR"; $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true; $DOCKER rmi -f "$SERVICE_IMAGE" "$FAKE_IMAGE" >/dev/null 2>&1 || true; rm -f /tmp/smoke-compose-$$.body; }
 trap cleanup EXIT
 fail() { echo "SMOKE(compose) FAIL: $1"; $COMPOSE logs --tail 15 2>&1 | tail -40; exit 1; }
 
@@ -47,7 +53,7 @@ READY=$(curl -fsS "$API/readyz") || fail "readyz가 준비되지 않았다"
 echo "readyz: $READY"
 echo "$READY" | grep -q '"model_backend": "remote"' || fail "추론 경계(remote)를 쓰고 있지 않다"
 echo "$READY" | grep -q '"active_release": "rel-compose"' || fail "활성 릴리스"
-post() { curl -sS -o /tmp/smoke-compose-$$.body -w '%{http_code}' -X POST -H "Content-Type: application/json" -H "Authorization: Bearer smoke-api-token" -d "$2" "$API$1"; }
+post() { curl -sS -o /tmp/smoke-compose-$$.body -w '%{http_code}' -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $API_TOKEN" -d "$2" "$API$1"; }
 turn() { post /v1/sessions/cs-1/turns "{\"session_id\":\"cs-1\",\"kind\":\"UTTERANCE\",\"utterance\":\"$1\",\"turn_id\":\"$2\"}"; }
 [ "$(post /v1/sessions '{"session_id":"cs-1","kind":"SESSION_START"}')" = 200 ] || fail "시작"
 grep -q '"response_text": "(가짜 응답)"' /tmp/smoke-compose-$$.body || fail "추론 서버를 거친 응답 문장이 아니다: $(cat /tmp/smoke-compose-$$.body)"

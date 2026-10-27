@@ -5,6 +5,8 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from boundary_contracts import read_secret
+
 from .ref_servers import RuntimeReferenceServer
 from .runtime_support import redirect_extraction
 
@@ -15,7 +17,7 @@ class _Any(dict):
 
 
 def main() -> None:
-    srv = RuntimeReferenceServer({os.environ.get("INFERENCE_TOKEN", "smoke-inference-token"): "survey-service"})
+    srv = RuntimeReferenceServer({read_secret("INFERENCE_TOKEN", required=True): "survey-service"})   # INFERENCE_TOKEN_FILE 우선(D84)
     srv.available = _Any()
     srv.extract_fn = redirect_extraction
     srv.respond_fn = lambda req: ("(가짜 응답)", "ok")
