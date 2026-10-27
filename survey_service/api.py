@@ -85,6 +85,7 @@ class PublicApi:
         self._polls: dict[str, float] = {}
         self._poll_lock = threading.Lock()
         self._slots = threading.BoundedSemaphore(max_inflight)
+        self._tl = threading.local()
         self._msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
         self._dec = jsonschema.Draft202012Validator(survey_schema.load_schema("InterventionDecision"))
         self._sig = jsonschema.Draft202012Validator(survey_schema.load_schema("RiskSignal"))
@@ -93,6 +94,7 @@ class PublicApi:
     def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None) -> tuple[int, dict, dict]:
         """(상태 코드, 본문, 추가 헤더). /healthz, /readyz는 service.py가 처리한다. 429·503에는 Retry-After(초, 정수)를 붙인다.
         user는 게이트웨이가 인증한 계정 ID(X-Openit-User 헤더 값). 직원 개입에서만 쓴다."""
+        self._tl.t0 = time.monotonic()                      # 턴 총 마감은 요청을 받은 때부터 센다
         status, body, headers = self._handle(method, path, auth, raw, user)
         if status in (429, 503) and "Retry-After" not in headers:
             headers = {**headers, "Retry-After": str(self.retry_after)}
@@ -228,7 +230,7 @@ class PublicApi:
 
     def _run(self, sid: str, turn_id: str, msg: Mapping):
         try:
-            out = self.orch.handle_turn(turn_id=turn_id, frontend_message=msg)
+            out = self.orch.handle_turn(turn_id=turn_id, frontend_message=msg, started=getattr(self._tl, 't0', None))
         except TurnIdConflict:
             return _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다")
         except TurnInProgress:
@@ -338,7 +340,7 @@ class PublicApi:
             if status != "PAUSED_RISK":
                 return _err("CONFLICT", "멈춘 세션이 아니다")
         try:
-            out = self.orch.handle_turn(turn_id=tid, intervention_decision=dict(rest), staff_id=user)
+            out = self.orch.handle_turn(turn_id=tid, intervention_decision=dict(rest), staff_id=user, started=getattr(self._tl, 't0', None))
         except TurnIdConflict:
             return _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다")
         except TurnInProgress:

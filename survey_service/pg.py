@@ -12,6 +12,7 @@ import os
 import re
 import socket
 import threading
+import time
 from typing import Any
 
 from .errors import StoreError
@@ -30,12 +31,14 @@ except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
 
 # 주 연결의 대기 상한(초). 설정으로 바꾼다(`configure`, db.open_stores). 근거는 docs/boundary.md §5: 정상일 때 문장 하나는 수 ms이고 턴 하나의 쓰기는 몇 문장이라
 # 3초면 느린 디스크·잠깐의 잠금 대기는 견디고, 서버 턴 총 마감(기본 8초)과 키오스크 대기(10초) 안에서 재접속 한 번까지 시도할 수 있다.
-DEFAULT_CONNECT_TIMEOUT = 3.0
-DEFAULT_STATEMENT_TIMEOUT = 3.0
-_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None}
+DEFAULT_CONNECT_TIMEOUT = 2.0         # libpq의 connect_timeout은 2초 미만이 의미 없다
+DEFAULT_STATEMENT_TIMEOUT = 2.0
+DEFAULT_RECONNECT_BACKOFF = 1.0       # 접속에 실패한 뒤 이 시간 동안은 다시 접속을 시도하지 않고 바로 실패한다(턴 하나가 접속 시도 여러 번을 기다리지 않게)
+_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None, "backoff": DEFAULT_RECONNECT_BACKOFF}
 
 
-def configure(*, connect_timeout: float | None = None, statement_timeout: float | None = None, probe_timeout: float | None = None) -> None:
+def configure(*, connect_timeout: float | None = None, statement_timeout: float | None = None, probe_timeout: float | None = None,
+              reconnect_backoff: float | None = None) -> None:
     """이후 만드는 PgConn의 기본 상한을 정한다(서비스 시작 때 한 번)."""
     if connect_timeout is not None:
         _cfg["connect"] = float(connect_timeout)
@@ -43,6 +46,8 @@ def configure(*, connect_timeout: float | None = None, statement_timeout: float 
         _cfg["statement"] = float(statement_timeout)
     if probe_timeout is not None:
         _cfg["probe"] = float(probe_timeout)
+    if reconnect_backoff is not None:
+        _cfg["backoff"] = float(reconnect_backoff)
 
 
 DEFAULT_PROBE_TIMEOUT = 2.0  # /readyz의 DB 확인 상한 기본값(초). libpq의 connect_timeout 최소 단위가 2초라 이보다 작게 의미가 없다
@@ -65,6 +70,8 @@ class PgConn:
         self._in_txn = False
         self.probe_timeout = _cfg["probe"] or DEFAULT_PROBE_TIMEOUT      # /readyz 확인용 상한(초)
         self.connect_timeout = _cfg["connect"]            # 주 연결의 접속 상한(초)
+        self.reconnect_backoff = _cfg["backoff"]
+        self._retry_after = 0.0                           # time.monotonic() 기준: 이 시각 전에는 재접속을 시도하지 않는다
         self.statement_timeout = _cfg["statement"]        # 문장 하나의 상한(초): 서버 쪽 statement_timeout + 클라이언트 쪽 강제 끊기(서버가 얼어도 끝난다)
         self._lock = threading.RLock()
         self._conn = self._connect(initial=True)
@@ -76,11 +83,16 @@ class PgConn:
         return params
 
     def _connect(self, initial: bool = False):
+        if not initial and time.monotonic() < self._retry_after:        # 방금 접속에 실패했다: 또 기다리지 않고 바로 실패한다(빠른 실패)
+            raise psycopg.OperationalError("reconnect backoff")
         try:
-            return psycopg.connect(autocommit=True, **self._params(max(1, int(self.connect_timeout + 0.999)), self.statement_timeout))
+            c = psycopg.connect(autocommit=True, **self._params(max(1, int(self.connect_timeout + 0.999)), self.statement_timeout))
+            self._retry_after = 0.0
+            return c
         except Exception as e:                      # 메시지에 host/user가 들어갈 수 있어 클래스 이름만 남긴다
             if initial:
                 raise StoreError(f"{self._what} 접속 실패: {type(e).__name__}") from None
+            self._retry_after = time.monotonic() + self.reconnect_backoff
             raise psycopg.OperationalError(f"reconnect failed: {type(e).__name__}") from None     # 호출자는 드라이버 오류로 다룬다(StoreError/DB_ERROR로 바꾼다)
 
     @staticmethod

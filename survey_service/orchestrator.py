@@ -91,11 +91,13 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ 공개
     def handle_turn(self, *, turn_id: str, frontend_message: Optional[Mapping] = None,
-                    intervention_decision: Optional[Mapping] = None, staff_id: Optional[str] = None) -> TurnOutcome:
+                    intervention_decision: Optional[Mapping] = None, staff_id: Optional[str] = None,
+                    started: Optional[float] = None) -> TurnOutcome:
         """한 턴을 처리한다. 같은 (세션, 턴 ID)는 저장한 결과를 그대로 돌려준다(이중 저장 없음).
 
         frontend_message(FrontendMessage)와 intervention_decision(InterventionDecision) 중 정확히 하나를 준다.
         입력이 계약을 어기면 ValueError(턴 실패가 아니라 호출 오류).
+        started: 요청을 받은 시각(time.monotonic()). 주면 총 마감을 그 시각부터 센다(API의 사전 확인이 쓴 시간도 마감에 든다).
         """
         if (frontend_message is None) == (intervention_decision is None):
             raise ValueError("frontend_message와 intervention_decision 중 정확히 하나를 줘야 한다")
@@ -123,7 +125,7 @@ class Orchestrator:
                 return self._handle_locked(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
             # 턴 전체(세션 락 대기, 멱등 확인, 모델 호출 재시도, DB 대기, 쓰기 확정)에 총 마감을 건다(FAULT_POLICY 3).
             # 처리는 데몬 스레드에서 돌고, 마감을 넘기면 ctx.cancelled로 표시해 늦게 끝난 작업이 확정(commit)하지 않게 한다.
-            ctx.deadline = time.monotonic() + self.turn_deadline_seconds
+            ctx.deadline = (started if started is not None else time.monotonic()) + self.turn_deadline_seconds
             box: dict = {}
 
             def work() -> None:
@@ -133,7 +135,7 @@ class Orchestrator:
                     box["err"] = e
             t = threading.Thread(target=work, name=f"turn-{turn_id}", daemon=True)
             t.start()
-            t.join(self.turn_deadline_seconds)
+            t.join(max(0.05, ctx.deadline - time.monotonic()))
             if t.is_alive():
                 ctx.cancelled.set()
                 self._count("turn_deadline_exceeded")

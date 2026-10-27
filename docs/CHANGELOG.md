@@ -1,5 +1,9 @@
 # 변경 이력
 
+## DB 장애 때 턴이 빨리 끝나도록: 재접속 유예, 기본값 조정 [미출시, 푸시·태그 전]
+
+- 원인(측정): 턴 하나가 API 사전 확인·멱등 확인·세션 읽기에서 접속 시도를 연달아 끝까지 기다렸고, 총 마감은 사전 확인을 덮지 않았다. 중지 3.0초, pause 10.0초(마감 8초 초과). 고침: 접속 실패 뒤 1초 재접속 유예(`SURVEY_DB_RECONNECT_BACKOFF_SECONDS`), 접속·문장 상한 3→2초, 턴 마감 8→6초(요청 수신 시점부터 센다). 결과 중지 2.0초, pause 5.0초. 불변식과 한계는 docs/boundary.md §5. 시험 `tests/test_turn_db_outage_bounds.py`.
+
 ## 부하 측정, 접속 대기열, 우아한 종료 (N2·N3·N8) [미출시, 푸시·태그 전]
 
 - `scripts/load_test.py` 추가(측정 결과와 환경은 docs/boundary.md §6-1). 접속 대기열 `request_queue_size` 5 -> 128(동시 접속이 몰릴 때 연결 재설정·세션 시작 실패의 원인). SIGTERM: `/readyz` 503 `shutting_down`, 처리 중 요청을 끝낸 뒤 종료(이전에는 저장소를 닫아 처리 중 턴이 NOT_COMMITTED), SSE 스트림은 0.5초 안에 종료. 연결 풀은 만들지 않았다(병목이 연결이 아니라 CPU임을 측정으로 확인).

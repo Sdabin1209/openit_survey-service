@@ -29,6 +29,7 @@ def open_stores(settings: Settings, url: str | None = None):
     url = database_url() if url is None else url
     if url:
         pg.configure(connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
+                     reconnect_backoff=settings.db_reconnect_backoff_seconds,
                      probe_timeout=settings.readyz_db_timeout_seconds)
         stores = PgSessionStore(url), PgOutbox(url), PgAlertStore(url)
         return (*stores, "postgresql")
