@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 장애 정책 구현 1단계 (FAULT_POLICY 2·3·4·9) [미출시, 푸시·태그 전]
+
+- 같은 turn_id가 처리 중이면 `409 TURN_IN_PROGRESS:` + `Retry-After`(기존 오류 형식 재사용, CR-015). 서버 턴 총 마감 `SURVEY_TURN_DEADLINE_SECONDS`(기본 8). DB 주 연결 `SURVEY_DB_CONNECT_TIMEOUT_SECONDS`(기본 3, 이전 10)·`SURVEY_DB_STATEMENT_TIMEOUT_SECONDS`(기본 3)와 무응답 DB 강제 끊기. `/readyz`의 `trace_outbox.dead_by_code`. 자세한 내용과 한계는 docs/boundary.md §5·§6.
+- 동작이 바뀐 곳: 겹친 같은 turn_id는 기다리지 않고 409(이전: 락에서 기다린 뒤 저장 결과). 턴이 8초를 넘으면 NOT_COMMITTED(이전: 끝날 때까지). 접속 대기 10초에서 3초.
+
 ## 설치 줄을 태그 기준으로 고침 [미출시, 푸시·태그 전]
 
 - 증상(새 venv, 이 PC에서 재현): README/runbook의 `pip install -e ../boundary-contracts ../turn-engine ../model-runtime -e schema -e . ...`가 `ResolutionImpossible`. 원인: turn-engine이 boundary-contracts를 Git 태그 v2.0.2로 요구하는데 같은 줄에서 로컬 경로로도 요구했다. 고침: `pip install -c requirements.lock -r requirements.txt -e .`. 이웃 라이브러리는 원격 태그(워크스페이스 규칙, 이미지·build_wheels와 같은 방식, 옆 폴더 비의존)에서 설치한다. `requirements.txt`의 `./schema`를 `-e ./schema`로(시험이 리포의 schema/ 경로를 확인), `setuptools`·`wheel`을 추가(시험이 `--no-build-isolation`으로 wheel을 빌드), 잠금 파일을 제약으로 쓴다(없으면 langgraph가 1.2.18로 풀려 잠금 값을 확인하는 시험이 실패).
