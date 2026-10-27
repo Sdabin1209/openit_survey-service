@@ -16,7 +16,7 @@ from typing import Optional
 import model_runtime
 import turn_engine
 import survey_schema
-from boundary_contracts import PIPELINE_SCHEMA_VERSION
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, SecretError, read_secret, secret_source
 
 from . import SERVICE_VERSION
 from .alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, WebPushSender
@@ -54,6 +54,14 @@ def _spec(spec: str, which: str) -> str:
     return spec
 
 
+def _secret(name: str, what: str):
+    """비밀 하나를 NAME_FILE 우선, 없으면 NAME 환경 변수에서 읽는다(D84). 오류 메시지에 값은 없다."""
+    try:
+        return read_secret(name)
+    except SecretError as e:
+        raise ConfigError(f"{what}: {e}") from None
+
+
 class App:
     """저장소·릴리스 로더·Trace 내보내기·Orchestrator를 조립한다. reader/ingest를 주면 팩토리 설정을 쓰지 않는다(시험)."""
 
@@ -64,7 +72,7 @@ class App:
         self.outbox = Outbox(settings.outbox_db)
         self.alert_store = AlertStore(settings.alert_db or os.path.join(os.path.dirname(settings.session_db) or ".", "alerts.db"))
         push = None
-        vapid_key = os.environ.get(settings.vapid_private_key_env, "")
+        vapid_key = _secret(settings.vapid_private_key_env, "VAPID 비밀키") or ""
         if vapid_key:                                       # 키가 없으면 푸시 없이 SSE만 동작한다
             if not settings.vapid_subject:
                 raise ConfigError("VAPID 비밀키가 있는데 SURVEY_VAPID_SUBJECT(mailto: 또는 https://)가 없다")
@@ -75,9 +83,9 @@ class App:
         self.alerts = AlertService(self.alert_store, AlertHub(), push, settings.push_timeout_seconds)
         self.registry = ReleaseRegistry()
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
-            tok = os.environ.get(settings.inference_token_env, "")
+            tok = _secret(settings.inference_token_env, "추론 서버 토큰")
             if not tok:
-                raise ConfigError(f"추론 서버 토큰이 환경 변수 {settings.inference_token_env}에 없다")
+                raise ConfigError(f"추론 서버 토큰이 {settings.inference_token_env}_FILE(파일) 또는 환경 변수 {settings.inference_token_env}에 없다")
             self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds,
                                          load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries)
         else:
@@ -99,12 +107,12 @@ class App:
             risk_source = load_factory(settings.risk_source)()
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox))
-        api_token = os.environ.get(settings.api_token_env, "")
+        api_token = _secret(settings.api_token_env, "공개 API 토큰")
         if not api_token:
-            raise ConfigError(f"공개 API 토큰이 환경 변수 {settings.api_token_env}에 없다")
-        staff_token = os.environ.get(settings.staff_api_token_env, "")
+            raise ConfigError(f"공개 API 토큰이 {settings.api_token_env}_FILE(파일) 또는 환경 변수 {settings.api_token_env}에 없다")
+        staff_token = _secret(settings.staff_api_token_env, "직원 개입 토큰")
         if not staff_token:
-            raise ConfigError(f"직원 개입 토큰이 환경 변수 {settings.staff_api_token_env}에 없다")
+            raise ConfigError(f"직원 개입 토큰이 {settings.staff_api_token_env}_FILE(파일) 또는 환경 변수 {settings.staff_api_token_env}에 없다")
         if staff_token == api_token:
             raise ConfigError("직원 개입 토큰은 키오스크 토큰과 달라야 한다")
         self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
@@ -166,6 +174,18 @@ class App:
         self.alert_store.close()
 
     # ------------------------------------------------------------------ 상태
+    def _secret_sources(self) -> dict:
+        """비밀 출처만(file|env|unset). 값·파일 경로·변수 이름은 내지 않는다(D84)."""
+        st = self.settings
+        names = {"api_token": st.api_token_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env}
+        if st.inference_url:
+            names["inference_token"] = st.inference_token_env
+        if st.release_reader == "http":
+            names["release_reader_token"] = st.release_reader_token_env
+        if st.trace_ingest == "http":
+            names["trace_ingest_token"] = st.trace_ingest_token_env
+        return {k: secret_source(v) for k, v in names.items()}
+
     def readiness(self) -> tuple[bool, dict]:
         problems = []
         try:
@@ -192,6 +212,7 @@ class App:
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
             "staff_alerts": self.alerts.status(),
+            "secrets": self._secret_sources(),
             # D74: v2의 A 출력에는 위험 신호 필드가 없어 직원 알림의 입력원이 없다. 조용히 끄지 않고 여기에 드러낸다(CR-012, 헤드 결정 대기).
             "staff_alert_source": ({"active": True} if self.orchestrator.risk_source is not None else
                                    {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",

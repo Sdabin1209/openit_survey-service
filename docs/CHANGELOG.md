@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 비밀 파일화(D84), boundary-contracts v2.0.2 [미출시, 푸시·태그 전]
+
+- 모든 토큰·비밀을 `boundary_contracts.read_secret`으로 읽는다(`NAME_FILE` 우선, 없으면 `NAME`). `*_TOKEN_ENV` 간접 지정은 의미를 보존한다. `/readyz`에 `secrets`(출처만 file|env|unset) 추가. 값이 로그·`/readyz`·오류·저장소 파일에 없는 시험 추가(`tests/test_secrets.py`).
+- 의존을 boundary-contracts v2.0.2로(requirements, build_wheels, 문서). turn-engine v0.3.1 메타데이터는 아직 v2.0.1을 가리키며 이미지는 wheel을 `--no-deps`로 설치하므로 영향이 없다. 열차 태그 뒤에 맞춘다.
+
 ## 의존 태그 맞춤: turn-engine v0.3.1 [미출시, 푸시·태그 전]
 
 - 의존을 turn-engine v0.3.1로(requirements, build_wheels 기본 태그, 이미지 라벨, 문서 표기). v0.3.0 태그는 boundary-contracts v2.0.0을 고정해 v2.0.1과 충돌했고, v0.3.1이 boundary v2.0.1을 고정한다. 코드 변경 없음.
