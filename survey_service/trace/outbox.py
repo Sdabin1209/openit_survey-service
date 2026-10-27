@@ -110,6 +110,16 @@ class Outbox:
             r = self._db.execute("SELECT MIN(created_at) FROM outbox WHERE state='PENDING'").fetchone()
         return None if r[0] is None else now - r[0]
 
+    def dead_by_code(self) -> dict:
+        """DEAD 건수를 원인 코드(last_error의 `:` 앞)별로. 인증 실패(PERMISSION_DENIED)가 조용히 쌓이지 않게 /readyz에 낸다."""
+        with self._lock:
+            rows = self._db.execute("SELECT last_error, COUNT(*) FROM outbox WHERE state='DEAD' GROUP BY last_error").fetchall()
+        out: dict = {}
+        for err, n in rows:
+            code = (err or "UNKNOWN").split(":", 1)[0].strip() or "UNKNOWN"
+            out[code] = out.get(code, 0) + n
+        return out
+
     def dead_rows(self, limit: int = 20) -> list[dict]:
         with self._lock:
             rows = self._db.execute("SELECT session_id, turn_id, last_error FROM outbox WHERE state='DEAD' ORDER BY id LIMIT ?",

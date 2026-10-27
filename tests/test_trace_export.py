@@ -237,3 +237,14 @@ def test_converted_ids_keep_idempotency(parts):
     sink.submit("rel-1", {"session_id": "세션", "turn_id": "턴", "contract_version": 1})
     sink.submit("rel-1", {"session_id": "세션", "turn_id": "턴", "contract_version": 1})
     assert ob.counts()["PENDING"] == 1
+
+
+def test_dead_count_by_code_is_in_stats_so_auth_failure_is_not_silent(parts):
+    """A6 F7: 인증 실패(PERMISSION_DENIED)로 DEAD가 된 건수가 /readyz의 trace_outbox에 원인 코드별로 나온다."""
+    clock, ob, ing, ex, sink = parts
+    assert ex.stats()["dead_by_code"] == {}
+    run_turns(sink, 3)
+    ing.script = [BoundaryError("PERMISSION_DENIED", "토큰 거부"), BoundaryError("PERMISSION_DENIED", "토큰 거부"), BoundaryError("INVALID_RECORD", "형식")]
+    ex.flush_once()
+    st = ex.stats()
+    assert st["dead"] == 3 and st["dead_by_code"] == {"PERMISSION_DENIED": 2, "INVALID_RECORD": 1} and st["last_error"] == "INVALID_RECORD"

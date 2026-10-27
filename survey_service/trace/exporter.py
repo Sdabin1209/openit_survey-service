@@ -172,5 +172,6 @@ class TraceExporter:
         now = self.clock()
         c = self.outbox.counts()
         return {"pending": c["PENDING"], "sent": c["SENT"], "dead": c["DEAD"],
+                "dead_by_code": self.outbox.dead_by_code() if c["DEAD"] else {},
                 "oldest_pending_age_seconds": self.outbox.oldest_pending_age(now),
                 "consecutive_unavailable": self.consecutive_unavailable, "last_error": self.last_error}
