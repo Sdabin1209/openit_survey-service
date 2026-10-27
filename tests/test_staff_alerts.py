@@ -371,14 +371,14 @@ def test_vapid_key_validation():
 
 
 # ---------------------------------------------------------------- 서비스 조립, HTTP, SSE
-def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com", hb="0.2"):
+def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com", hb="0.2", extra=None):
     reader = FakeReleaseReader(tmp_path / "gate")
     reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
                        model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     env = {"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
            "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0",
-           "SURVEY_SSE_HEARTBEAT_SECONDS": hb, "SURVEY_VAPID_SUBJECT": subject}
+           "SURVEY_SSE_HEARTBEAT_SECONDS": hb, "SURVEY_VAPID_SUBJECT": subject, **(extra or {})}
     if vapid:
         monkeypatch.setenv("SURVEY_VAPID_PRIVATE_KEY", vapid)
     else:

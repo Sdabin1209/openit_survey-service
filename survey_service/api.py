@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import collections
 import hmac
 import json
 import logging
@@ -68,6 +69,20 @@ def _err(code: str, message: str, status: Optional[int] = None, headers: Optiona
 USER_ID = re.compile(r"^[A-Za-z0-9._@:+-]{1,128}$")      # X-Openit-User: gateway가 인증한 계정 ID. 형식이 어긋나면 개인 ID 없이 역할만 기록한다
 
 
+def _has_surrogate(x) -> bool:
+    if isinstance(x, str):
+        try:
+            x.encode("utf-8")
+            return False
+        except UnicodeEncodeError:
+            return True
+    if isinstance(x, dict):
+        return any(_has_surrogate(k) or _has_surrogate(v) for k, v in x.items())
+    if isinstance(x, list):
+        return any(_has_surrogate(v) for v in x)
+    return False
+
+
 class PublicApi:
     def __init__(self, orchestrator: Orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
                  max_utterance_chars: int = 1000, alerts: Optional[AlertService] = None, max_subscriptions: int = 100,
@@ -93,6 +108,8 @@ class PublicApi:
         self._poll_lock = threading.Lock()
         self._slots = threading.BoundedSemaphore(max_inflight)
         self._tl = threading.local()
+        self.stats: dict = collections.defaultdict(int)
+        self._stats_lock = threading.Lock()
         self._msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
         self._dec = jsonschema.Draft202012Validator(survey_schema.load_schema("InterventionDecision"))
         self._sig = jsonschema.Draft202012Validator(survey_schema.load_schema("RiskSignal"))
@@ -104,9 +121,27 @@ class PublicApi:
         self._tl.t0 = time.monotonic()                      # 턴 총 마감은 요청을 받은 때부터 센다
         self._tl.user = user if isinstance(user, str) and USER_ID.match(user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
         status, body, headers = self._handle(method, path, auth, raw, user)
+        self._record(method, path, status)
         if status in (429, 503) and "Retry-After" not in headers:
             headers = {**headers, "Retry-After": str(self.retry_after)}
         return status, body, headers
+
+    def _record(self, method: str, path: str, status: int) -> None:
+        """핵심 카운터(/readyz의 api)와 거절 경고 로그(E1): 401·403·429는 경로 이름(식별자 없는 틀)과 상태만 남긴다. 토큰·본문·세션 ID는 남기지 않는다."""
+        with self._stats_lock:
+            self.stats["requests"] += 1
+            self.stats[f"status_{status // 100}xx"] += 1
+            if status in (401, 403):
+                self.stats["auth_failures"] += 1
+            elif status == 429:
+                self.stats["rate_limited"] += 1
+        if status in (401, 403, 429):
+            r = self._route(method, path.partition("?")[0])
+            log.warning("요청 거절 status=%s method=%s route=%s", status, method, r[0] if r else "unknown")
+
+    def api_stats(self) -> dict:
+        with self._stats_lock:
+            return dict(self.stats)
 
     def _handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None):
         path, _, query = path.partition("?")
@@ -131,6 +166,8 @@ class PublicApi:
                 return _err("INVALID_RECORD", "본문이 JSON이 아니다")
             if not isinstance(body, dict):
                 return _err("INVALID_RECORD", "본문이 JSON 객체가 아니다")
+            if _has_surrogate(body):          # UTF-8로 인코딩할 수 없는 문자(짝 없는 서로게이트): 저장·전송에서 터지기 전에 400
+                return _err("INVALID_RECORD", "본문에 올바르지 않은 유니코드 문자가 있다")
         if (route[0] in STAFF_ROUTES - {"intervention"} or route[0] in ROLE_OF_ROUTE) and self.alerts is None:
             return _err("NOT_FOUND", "경로가 없다")
         if not self._slots.acquire(blocking=False):

@@ -77,6 +77,9 @@ class Settings:
     db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초
     db_statement_timeout_seconds: float = 2.0     # 문장 하나의 상한(초). 서버 statement_timeout + 클라이언트 강제 끊기
     db_reconnect_backoff_seconds: float = 1.0     # 접속 실패 뒤 이 시간 동안은 재접속을 시도하지 않고 바로 실패(빠른 실패)
+    socket_timeout_seconds: float = 15.0          # HTTP 요청 소켓 읽기 제한(초). 정상 요청은 수 ms~수 초, 길게 매달린 연결은 끊는다 (ADR-0018, 측정 안 함)
+    max_connections: int = 256                    # 동시 접속 상한(SSE 포함). 넘으면 503을 쓰고 끊는다. 처리 단계 상한(api_max_inflight 32)과 별개
+    max_sse_connections: int = 50                 # 직원 알림 스트림 동시 연결 상한
     readyz_db_timeout_seconds: float = 2.0        # /readyz가 PostgreSQL을 확인하는 데 쓰는 상한(초). 넘으면 503 db unavailable. SQLite에는 해당 없음
     release_poll_seconds: float = 5.0
     startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
@@ -171,6 +174,9 @@ class Settings:
             db_connect_timeout_seconds=_float(env, "SURVEY_DB_CONNECT_TIMEOUT_SECONDS", 2.0),
             db_statement_timeout_seconds=_float(env, "SURVEY_DB_STATEMENT_TIMEOUT_SECONDS", 2.0),
             db_reconnect_backoff_seconds=_float(env, "SURVEY_DB_RECONNECT_BACKOFF_SECONDS", 1.0),
+            socket_timeout_seconds=_float(env, "SURVEY_SOCKET_TIMEOUT_SECONDS", 15.0),
+            max_connections=_int(env, "SURVEY_MAX_CONNECTIONS", 256, 1),
+            max_sse_connections=_int(env, "SURVEY_MAX_SSE_CONNECTIONS", 50, 1),
             readyz_db_timeout_seconds=_float(env, "SURVEY_READYZ_DB_TIMEOUT_SECONDS", 2.0),
             release_retry_base_seconds=_float(env, "SURVEY_RELEASE_RETRY_BASE_SECONDS", 5.0),
             release_retry_max_seconds=_float(env, "SURVEY_RELEASE_RETRY_MAX_SECONDS", 60.0),

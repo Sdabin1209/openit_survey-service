@@ -11,6 +11,7 @@ import signal
 import sys
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
@@ -36,11 +37,19 @@ from .trace import Outbox, OutboxTraceSink, TraceExporter
 log = logging.getLogger("survey_service")
 
 
+_REQ = threading.local()                  # 요청마다 요청 ID(X-Request-Id 또는 새로 만든 값). 로그 한 줄마다 request_id 필드로 붙는다 (감사 E1)
+_REQ_ID = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+
+
 class JsonFormatter(logging.Formatter):
     """로그는 표준 출력에 JSON 한 줄. 발화·모델 출력·Trace 내용은 어디서도 로그로 내지 않는다."""
     def format(self, record: logging.LogRecord) -> str:
-        return json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)) + "Z", "level": record.levelname,
-                           "logger": record.name, "msg": record.getMessage()}, ensure_ascii=False)
+        d = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)) + "Z", "level": record.levelname,
+             "logger": record.name, "msg": record.getMessage()}
+        rid = getattr(_REQ, "rid", None)
+        if rid:
+            d["request_id"] = rid
+        return json.dumps(d, ensure_ascii=False)
 
 
 def configure_logging(level: str = "INFO") -> None:
@@ -280,7 +289,6 @@ class App:
                          {"kind": self.db_kind, "status": "UNAVAILABLE", "detail": "db unavailable"}), "service_version": SERVICE_VERSION,
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
-            "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
             "staff_alerts": dbs["staff_alerts"],
             "secrets": self._secret_sources(),
             # D74: v2의 A 출력에는 위험 신호 필드가 없어 직원 알림의 입력원이 없다. 조용히 끄지 않고 여기에 드러낸다(CR-012, 헤드 결정 대기).
@@ -295,6 +303,7 @@ class App:
                           "indefinite": False, "provisional_defaults": True, "last_run": self.last_retention or None},
             "kiosk_tokens": {"shared_kiosk_token": bool(self.api.token), "device_tokens": len(self.api.device_tokens),
                              "warning": ("공유 키오스크 토큰 사용 중: 기기별 토큰으로 바꾸는 것을 권고(ADR-0016)" if self.api.token else None)},
+            "api": {**{"idle_expiry_seconds": self.settings.session_idle_seconds}, **self.api.api_stats()},
             "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
             "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
@@ -333,25 +342,44 @@ def _device_tokens(env_name: str) -> dict:
 def make_handler(app: App):
     class Handler(BaseHTTPRequestHandler):
         server_version = "survey-service"
+        timeout = app.settings.socket_timeout_seconds            # 소켓 읽기 시간 제한: 느린 클라이언트(slowloris)가 스레드를 무한히 쥐지 못하게 한다 (ADR-0018)
 
         def log_message(self, *a):                                # 접근 로그에 경로 외의 것을 남기지 않는다
             return
 
+        def _begin(self) -> None:
+            rid = (self.headers.get("X-Request-Id") or "").strip()
+            _REQ.rid = rid if _REQ_ID.match(rid) else uuid.uuid4().hex[:16]
+
         def _send(self, code: int, body: dict) -> None:
             raw = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
+            self.send_header("X-Request-Id", getattr(_REQ, "rid", "-"))
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             self.wfile.write(raw)
 
         def _api(self):
-            n = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(n) if 0 < n <= 1_000_000 else b""
+            self._begin()
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                if n < 0:
+                    raise ValueError
+            except ValueError:                                     # 숫자가 아니거나 음수: 연결을 끊지 않고 400 (감사 B4)
+                self.close_connection = True
+                return self._send(400, {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "code": "INVALID_RECORD",
+                                        "message": "Content-Length가 올바르지 않다", "retryable": False})
+            if n > 1_000_000:                                      # 본문을 읽지 않고 거절한다
+                self.close_connection = True
+                return self._send(400, {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "code": "INVALID_RECORD",
+                                        "message": "본문이 너무 크다", "retryable": False})
+            raw = self.rfile.read(n) if n > 0 else b""
             code, body, hdr = app.api.handle(self.command, self.path, self.headers.get("Authorization", ""), raw,
                                              user=(self.headers.get("X-Openit-User") or "").strip() or None)
             out = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
+            self.send_header("X-Request-Id", getattr(_REQ, "rid", "-"))
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(out)))
             for k, v in hdr.items():
@@ -374,6 +402,17 @@ def make_handler(app: App):
                 self.wfile.write(out)
                 return
             hub, store = app.alerts.hub, app.alert_store
+            if hub.count() >= app.settings.max_sse_connections:      # 스트림은 연결마다 스레드를 쥔다: 상한을 넘으면 503
+                code, body, hdr = _err("UNAVAILABLE", "알림 스트림 연결이 너무 많다", 503, {"Retry-After": str(app.settings.retry_after_seconds)})
+                out = json.dumps(body, ensure_ascii=False).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(out)))
+                for k, v in hdr.items():
+                    self.send_header(k, v)
+                self.end_headers()
+                self.wfile.write(out)
+                return
             last = (self.headers.get("Last-Event-ID") or "").strip()
             q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
             try:
@@ -437,6 +476,7 @@ def make_handler(app: App):
             self.wfile.flush()
 
         def do_GET(self):
+            self._begin()
             if self.path.split("?", 1)[0] == "/v1/staff/alerts/stream":
                 self._stream()
             elif self.path.startswith("/v1/"):
@@ -462,10 +502,37 @@ class _Server(ThreadingHTTPServer):
     block_on_close = True
     # socketserver 기본 대기열(request_queue_size)은 5라, 동시에 접속이 몰리면 연결이 거부·재설정된다(부하 측정 N=50에서 확인). 일반적인 값으로 올린다.
     request_queue_size = 128
+    max_connections = 256
+
+    def process_request(self, request, client_address):
+        """동시 접속 상한(감사 A9, ADR-0018): 넘으면 스레드를 만들지 않고 503을 쓰고 끊는다. 상한은 SSE 연결을 포함한다."""
+        sem = getattr(self, "_conn_sem", None)
+        if sem is None:
+            sem = self._conn_sem = threading.BoundedSemaphore(self.max_connections)
+        if not sem.acquire(blocking=False):
+            try:
+                request.settimeout(1)
+                body = b'{"code":"UNAVAILABLE","message":"too many connections","retryable":true}'
+                request.sendall(b"HTTP/1.1 503 Service Unavailable\r\nRetry-After: 1\r\nContent-Type: application/json\r\nContent-Length: "
+                                + str(len(body)).encode() + b"\r\nConnection: close\r\n\r\n" + body)
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            log.warning("동시 접속 상한을 넘어 거절했다 max=%s", self.max_connections)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._conn_sem.release()
 
 
 def serve(app: App, port: int) -> ThreadingHTTPServer:
-    return _Server(("0.0.0.0", port), make_handler(app))
+    srv = _Server(("0.0.0.0", port), make_handler(app))
+    srv.max_connections = app.settings.max_connections
+    return srv
 
 
 def main(argv=None) -> int:

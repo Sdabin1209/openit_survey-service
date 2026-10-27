@@ -85,3 +85,112 @@ def test_push_subscription_api_rejects_internal_endpoint(tmp_path, monkeypatch):
         assert code == 201
     finally:
         app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+
+
+# ---------------------------------------------------------------- HTTP 계층 방어 (감사 A9·B4·E1)
+import http.client
+import logging
+import socket
+import time
+
+from .test_staff_alerts import http_call, make_app
+
+
+def _raw(port, request: bytes, timeout=5):
+    s = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    s.sendall(request)
+    data = b""
+    try:
+        while True:
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+            if b"\r\n\r\n" in data and (b"Content-Length" not in data or data.split(b"\r\n\r\n", 1)[1]):
+                break
+    except OSError:
+        pass
+    s.close()
+    return data
+
+
+def _shutdown(app, httpd):
+    app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+
+
+def test_bad_content_length_and_surrogate_utterance_are_400_not_dropped_connections(tmp_path, monkeypatch):
+    app, httpd, port = make_app(tmp_path, monkeypatch)
+    try:
+        for cl in (b"abc", b"-5", b"99999999"):
+            r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token\r\nContent-Length: " + cl + b"\r\n\r\n")
+            assert r.startswith(b"HTTP/1.0 400") or r.startswith(b"HTTP/1.1 400"), (cl, r[:60])
+        assert http_call(port, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, token="test-api-token")[0] == 200
+        body = b'{"session_id":"K1","kind":"UTTERANCE","utterance":"\\ud800","turn_id":"t1"}'
+        r = _raw(port, b"POST /v1/sessions/K1/turns HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+        assert b" 400 " in r.split(b"\r\n", 1)[0]
+    finally:
+        _shutdown(app, httpd)
+
+
+def test_request_id_header_and_json_log_field(tmp_path, monkeypatch):
+    from survey_service.service import JsonFormatter, _REQ
+    app, httpd, port = make_app(tmp_path, monkeypatch)
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("GET", "/healthz", headers={"X-Request-Id": "req-abcdef123456"})
+        assert c.getresponse().getheader("X-Request-Id") == "req-abcdef123456"
+        c.request("GET", "/healthz", headers={"X-Request-Id": "bad id!"})
+        rid = c.getresponse().getheader("X-Request-Id")
+        assert rid and rid != "bad id!" and len(rid) == 16                             # 형식이 어긋나면 새로 만든다
+        _REQ.rid = "req-xyz-123456"
+        line = JsonFormatter().format(logging.LogRecord("survey_service", logging.INFO, "f", 1, "메시지", None, None))
+        assert json.loads(line)["request_id"] == "req-xyz-123456"
+        _REQ.rid = None
+    finally:
+        _shutdown(app, httpd)
+
+
+def test_auth_failure_is_logged_without_secrets_and_counted(tmp_path, monkeypatch, caplog):
+    app, httpd, port = make_app(tmp_path, monkeypatch)
+    try:
+        with caplog.at_level(logging.WARNING, logger="survey_service"):
+            assert http_call(port, "POST", "/v1/sessions", {"session_id": "K9", "kind": "SESSION_START"}, token="wrong-secret-token")[0] == 401
+            assert http_call(port, "GET", "/v1/staff/alerts", token="test-api-token")[0] == 403
+        msgs = " ".join(r.getMessage() for r in caplog.records)
+        assert "요청 거절 status=401" in msgs and "요청 거절 status=403" in msgs and "wrong-secret-token" not in msgs and "K9" not in msgs
+        st = app.readiness()[1]["api"]
+        assert st["auth_failures"] >= 2 and st["requests"] >= 2
+    finally:
+        _shutdown(app, httpd)
+
+
+def test_connection_cap_rejects_with_503_and_socket_timeout_frees_slow_clients(tmp_path, monkeypatch):
+    app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_SOCKET_TIMEOUT_SECONDS": "0.6", "SURVEY_MAX_CONNECTIONS": "2"})
+    try:
+        assert httpd.max_connections == 2
+        idle = [socket.create_connection(("127.0.0.1", port)) for _ in range(2)]     # 요청을 보내지 않고 매달린 연결(slowloris)
+        time.sleep(0.2)
+        r = _raw(port, b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+        assert b" 503 " in r.split(b"\r\n", 1)[0] and b"Retry-After" in r                # 상한 초과
+        time.sleep(1.2)                                                                    # 읽기 제한(0.6초)으로 매달린 연결이 정리된다
+        r = _raw(port, b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+        assert b" 200 " in r.split(b"\r\n", 1)[0]
+        for s in idle:
+            s.close()
+    finally:
+        _shutdown(app, httpd)
+
+
+def test_sse_connection_cap(tmp_path, monkeypatch):
+    import urllib.error
+    from .test_staff_alerts import Sse
+    app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_MAX_SSE_CONNECTIONS": "1"})
+    try:
+        first = Sse(port)
+        time.sleep(0.3)
+        with pytest.raises(urllib.error.HTTPError) as e:
+            Sse(port)
+        assert e.value.code == 503 and e.value.headers.get("Retry-After")
+        first.close()
+    finally:
+        _shutdown(app, httpd)
