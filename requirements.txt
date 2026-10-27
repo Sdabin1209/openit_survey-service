@@ -1,7 +1,7 @@
 # 개발·CI 의존(Git 태그로 설치). 이미지는 requirements.lock과 scripts/build_wheels.sh의 wheel을 쓴다.
 git+ssh://git@github.com/Sdabin1209/openit_boundary-contracts.git@v2.0.2
 git+ssh://git@github.com/Sdabin1209/openit_turn-engine.git@v0.4.0
-git+ssh://git@github.com/Sdabin1209/openit_model-runtime.git@v0.7.2
+git+ssh://git@github.com/Sdabin1209/openit_model-runtime.git@v0.7.3
 # 문진 스키마 패키지(이 리포지토리의 schema/). 다른 영역은 헤드가 태그를 붙인 뒤 아래 형식으로 설치한다:
 #   openit-survey-schema @ git+ssh://git@github.com/Sdabin1209/openit_survey-service.git@<태그>#subdirectory=schema
 # 이 리포지토리 안에서는 로컬 경로를 편집 가능으로 쓴다(시험이 리포의 schema/ 를 가리키는지 확인한다):

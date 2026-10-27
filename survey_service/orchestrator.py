@@ -68,7 +68,7 @@ class Orchestrator:
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
-                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0) -> None:
+                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0) -> None:
         self.store = store
         self.releases = releases
         self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
@@ -81,6 +81,7 @@ class Orchestrator:
         self.trace_sink = trace_sink
         self.timeline = timeline        # 선택. record(session_id, turn_index, turn_id)를 가진 객체(AlertStore). 직원 조회의 시각용, 실패해도 턴은 계속된다
         self.turn_deadline_seconds = max(0.0, float(turn_deadline_seconds))      # 0이면 마감 없음(서비스는 설정 기본 8초를 준다)
+        self.extract_input_max_chars = max(0, int(extract_input_max_chars))      # 0이면 줄이지 않는다(서비스는 설정 기본 2400을 준다)
         self._locks = _SessionLocks()
         self._inflight: set = set()                # 처리 중인 (세션, 턴 ID). 같은 턴이 겹치면 두 번째는 새로 시작하지 않는다
         self._inflight_guard = threading.Lock()

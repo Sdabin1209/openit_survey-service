@@ -229,3 +229,12 @@ def test_saved_value_kind_cannot_change_to_another_kind():
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED" and _answer(rig) == {"answer": False}
     ok = rig.say("아니 먹어요", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", True, "CORRECTION")), turn_id="ok")
     assert ok.frontend_input["turn_failure_signal"] is None and _answer(rig) == {"answer": True}
+
+
+def test_extract_input_is_trimmed_to_the_model_runtime_limit():
+    rig = Rig(extract_input_max_chars=600)
+    rig.start()
+    rig.say("가" * 1000, out=ANSWER_OUT)
+    sent = rig.session.extract_requests[-1]
+    assert len(__import__("json").dumps(sent, ensure_ascii=False)) <= 600 and rig.orch.counters.get("extract_input_truncated") == 1
+    assert sent["user_utterance"].startswith("가가가")

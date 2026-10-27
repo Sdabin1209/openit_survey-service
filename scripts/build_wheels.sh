@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 BOUNDARY_TAG=${BOUNDARY_TAG:-v2.0.2}
 TURN_ENGINE_TAG=${TURN_ENGINE_TAG:-v0.4.0}
-MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.7.2}
+MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.7.3}
 PIP=${PIP:-.venv/bin/pip}
 rm -rf build && mkdir -p build/wheels build/src
 for spec in "boundary-contracts:$BOUNDARY_TAG" "turn-engine:$TURN_ENGINE_TAG" "model-runtime:$MODEL_RUNTIME_TAG"; do

@@ -129,7 +129,7 @@ class App:
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask,
-                                         turn_deadline_seconds=settings.turn_deadline_seconds)
+                                         turn_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
         if not api_token and not device_tokens:

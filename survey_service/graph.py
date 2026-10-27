@@ -12,6 +12,7 @@ D75). 세션 시작은 A를 부르지 않고 B만 부른다.
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import operator
 import threading
@@ -441,6 +442,11 @@ class TurnGraph:
                 upd.update(extract_next="finalize", failed=self._fail(st, "LoRA-A", e))
                 tr["extract_status"] = "ERROR"
                 return {**upd, "trace": tr}
+            over = len(json.dumps(inp, ensure_ascii=False)) - self.o.extract_input_max_chars
+            if over > 0 and self.o.extract_input_max_chars > 0:      # model-runtime v0.7.3의 입력 길이 상한(2500자)을 넘으면 400이 되므로 발화를 줄여 보낸다(위험 선별은 전체 발화로 이미 했다)
+                keep = max(100, len(inp["user_utterance"]) - over)
+                inp = {**inp, "user_utterance": inp["user_utterance"][:keep]}
+                self.o._count("extract_input_truncated")
             upd["extract_in"] = inp
             tr["extract_input"] = copy.deepcopy(inp)
         try:

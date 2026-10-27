@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 의존 태그 올림: model-runtime v0.7.2 -> v0.7.3 [미출시, 푸시·태그 전]
+
+- requirements.txt, build_wheels 기본 태그, inference.py 주석, boundary·STATUS의 현재 기준 표기. `requirements.lock`에는 model-runtime이 없어 바뀌지 않는다. v0.7.3은 추출 입력 길이 상한 2500자(초과 시 400)를 둔다: **추출 입력(JSON)이 상한을 넘을 위험**이 있어(이 영역 샘플 문항 세트 기준 발화 1000자 + 질문 300자 + 모든 칸을 채운 상태로 최악 약 2066자, 실제 문항 세트의 칸 수는 측정 안 함) `SURVEY_EXTRACT_INPUT_MAX_CHARS`(기본 2400)를 넘으면 발화를 줄여 보낸다(카운터 `extract_input_truncated`). 위험 선별은 전체 발화로 먼저 한다.
+
 ## FAULT_MATRIX A6·A8·A10 [미출시, 푸시·태그 전]
 
 - 깨진 응답은 한도까지 재시도 뒤 DEAD(이전: 즉시 DEAD), outbox 상한 `SURVEY_OUTBOX_MAX_PENDING`(기본 20000)과 `dropped_full`, 볼륨 쓰기 불가는 `STORAGE_UNAVAILABLE` 재시도로 드러남, SSE `resync` 이벤트·알림 DB 장애 시 503/정상 종료·`alert_events` 주기 정리. 자세한 내용은 docs/boundary.md §5·§6. SSE에 이름 있는 `heartbeat` 이벤트 추가(CR-016, 하위 호환).
