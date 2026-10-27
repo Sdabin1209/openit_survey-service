@@ -179,7 +179,7 @@ class PublicApi:
 
     def _device_denied(self, sid: Optional[str]):
         """기기별 토큰(U8): 세션을 만든 기기 토큰으로만 접근한다. 다른 기기 토큰(또는 공유 토큰)이면 세션이 없는 것처럼 404. 세션에 기기가 기록돼 있지 않으면(공유 토큰으로 만든 세션) 막지 않는다."""
-        if self.alerts is None or not sid:
+        if self.alerts is None or not sid or not self.device_tokens:         # 기기별 토큰을 쓰지 않는 구성(공유 토큰만)은 확인하지 않는다(하위 호환)
             return None
         try:
             owner = self.alerts.store.device_of(sid)
