@@ -14,6 +14,8 @@ from __future__ import annotations
 import copy
 import logging
 import operator
+import threading
+import time
 from dataclasses import asdict, dataclass
 from typing import Annotated, Any, Optional, TypedDict
 
@@ -142,6 +144,11 @@ class TurnCtx:
     def __init__(self) -> None:
         self.release: Optional[LoadedRelease] = None
         self.bank: Optional[assembly.Bank] = None
+        self.deadline: Optional[float] = None          # time.monotonic() 기준 턴 마감. None이면 마감 없음
+        self.cancelled = threading.Event()             # 마감을 넘겨 호출자가 NOT_COMMITTED로 끝냈다: 늦게 끝난 작업이 확정하지 않게 한다
+
+    def expired(self) -> bool:
+        return self.cancelled.is_set() or (self.deadline is not None and time.monotonic() >= self.deadline)
 
 
 def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optional[dict], decision: Optional[dict],
@@ -376,6 +383,9 @@ class TurnGraph:
         calls = st["extract_calls"]
         upd: dict = {"extract_calls": calls + 1}
         tr: dict = {"extract_attempts": calls + 1}
+        if ctx.expired():                                  # 마감: 모델을 더 부르지 않는다(재시도 포함)
+            tr["extract_status"] = "ERROR"
+            return {**upd, "extract_next": "finalize", "failed": self._fail(st, "LoRA-A", TimeoutError("TURN_DEADLINE")), "trace": tr}
         inp = st["extract_in"]
         if inp is None:
             try:
@@ -512,6 +522,9 @@ class TurnGraph:
     def n_commit(self, st, config):
         """쓰기 확정: 값 저장 + 진행 기록 갱신을 저장소의 한 번의 commit(한 트랜잭션)으로."""
         doc, writes = st["state_doc"], st["writes"]
+        if _ctx(config).expired():                         # 마감 뒤에는 확정하지 않는다(늦게 끝난 작업의 쓰기 방지). 저장소를 부르지 않는다
+            self.o._count("commit_skipped.DEADLINE")
+            return {"failed": _step_failed(("BEFORE_COMMIT", "COMMIT")), "commit_unknown": False}
         req = {"session_id": st["session_id"], "expected_revision": st["revision"], "writes": writes}
         res = self.o.store.commit(req, turn_id=st["turn_id"], input_hash=st["input_hash"])
         tr = {"persistence_commit_request": copy.deepcopy(req), "persistence_commit_result": copy.deepcopy(res)}
@@ -585,6 +598,9 @@ class TurnGraph:
         tr: dict = {}
         if plan["kind"] == "none":
             return {}
+        if ctx.expired() and plan["kind"] != "fixed":      # 마감 뒤에는 모델을 부르지 않는다(이미 확정된 턴은 응답만 못 낸다)
+            self.o._count("step_failed.LoRA-B")
+            return {"failed": _step_failed(("AFTER_COMMIT", "LoRA-B")), "trace": tr}
         if plan["kind"] == "fixed":
             if plan.get("text"):
                 tr["response_outcome"] = "fixed"

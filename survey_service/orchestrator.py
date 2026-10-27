@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import logging
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Mapping, Optional
@@ -67,7 +68,7 @@ class Orchestrator:
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
-                 max_consecutive_reask: int = 0, timeline=None) -> None:
+                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0) -> None:
         self.store = store
         self.releases = releases
         self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
@@ -79,6 +80,7 @@ class Orchestrator:
         self.max_consecutive_reask = max(0, int(max_consecutive_reask))   # 0이면 끔(G12). 값은 헤드 결정 대기(CR-012)
         self.trace_sink = trace_sink
         self.timeline = timeline        # 선택. record(session_id, turn_index, turn_id)를 가진 객체(AlertStore). 직원 조회의 시각용, 실패해도 턴은 계속된다
+        self.turn_deadline_seconds = max(0.0, float(turn_deadline_seconds))      # 0이면 마감 없음(서비스는 설정 기본 8초를 준다)
         self._locks = _SessionLocks()
         self._inflight: set = set()                # 처리 중인 (세션, 턴 ID). 같은 턴이 겹치면 두 번째는 새로 시작하지 않는다
         self._inflight_guard = threading.Lock()
@@ -209,9 +211,43 @@ class Orchestrator:
                  staff_id: Optional[str] = None) -> TurnOutcome:
         st = initial_state(sid, turn_id, input_hash, dict(message) if message is not None else None,
                            dict(decision) if decision is not None else None, staff_id)
-        final = self._graph.invoke(st, config={"configurable": {"ctx": TurnCtx()}})
+        ctx = TurnCtx()
+        cfg = {"configurable": {"ctx": ctx}}
+        if self.turn_deadline_seconds <= 0:
+            final = self._graph.invoke(st, config=cfg)
+        else:
+            # 턴 전체에 총 마감을 건다(FAULT_POLICY 3): 모델 호출 재시도·DB 대기를 합쳐도 마감에서 NOT_COMMITTED로 끝낸다.
+            # 그래프는 데몬 스레드에서 돌고, 마감을 넘기면 ctx.cancelled로 표시해 늦게 끝난 작업이 확정(commit)하지 않게 한다.
+            ctx.deadline = time.monotonic() + self.turn_deadline_seconds
+            box: dict = {}
+
+            def work() -> None:
+                try:
+                    box["final"] = self._graph.invoke(st, config=cfg)
+                except BaseException as e:        # noqa: BLE001 호출자 스레드에서 다시 올린다
+                    box["err"] = e
+            t = threading.Thread(target=work, name=f"turn-{turn_id}", daemon=True)
+            t.start()
+            t.join(self.turn_deadline_seconds)
+            if t.is_alive():
+                ctx.cancelled.set()
+                self._count("turn_deadline_exceeded")
+                log.warning("턴 총 마감 초과 session=%s turn=%s deadline=%ss", sid, turn_id, self.turn_deadline_seconds)
+                return self._deadline_outcome(sid)
+            if "err" in box:
+                raise box["err"]
+            final = box["final"]
         return TurnOutcome(final["orchestrator_output"], final["frontend_input"], final["console_input"], final["trace"],
                            final["out_release_id"], cacheable=final["cacheable"])
+
+    @staticmethod
+    def _deadline_outcome(sid: str) -> TurnOutcome:
+        """마감을 넘긴 턴: 확정하지 않았다고 알린다(NOT_COMMITTED). 결과를 고정하지 않는다(같은 turn_id 재전송이 안전하다).
+        마감 직전에 시작한 쓰기가 뒤늦게 반영됐다면 재전송은 기존 멱등 경로(쓰기는 확정, 결과 없음)로 그 사실을 알린다."""
+        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": "NONE"}
+        oo = {"turn_kind": None, "session_info_created": None, "log_entry": None, "turn_failure_signal": signal,
+              "intervention_result": None, "dispatch_called": False}
+        return TurnOutcome(oo, {"response_text": None, "turn_failure_signal": signal}, None, trace={}, release_id=None, cacheable=False)
 
     def _active_id(self) -> Optional[str]:
         a = self.releases.active()

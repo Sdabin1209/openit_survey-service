@@ -75,3 +75,65 @@ def test_many_concurrent_same_turn_id_process_exactly_once():
         t.join(10)
     codes = sorted(r[0] for r in res)
     assert codes.count(200) >= 1 and set(codes) <= {200, 409}
+
+
+def _say(rig, tid, text="안 피움"):
+    return rig.orch.handle_turn(turn_id=tid, frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": text})
+
+
+def _answers(rig):
+    return rig.doc("S1")["answer_records"][0]["current_value"]
+
+
+def test_deadline_slow_model_ends_not_committed_and_late_work_does_not_commit():
+    rig = Rig(turn_deadline_seconds=0.5)
+    rig.start()
+    before = _answers(rig)
+    rig.model.queue.append(ANSWER_OUT)
+    gate, entered = _gate_extract(rig)
+    t = time.monotonic()
+    out = _say(rig, "t-slow")
+    assert time.monotonic() - t < 3
+    sig = out.frontend_input["turn_failure_signal"]
+    assert sig["write_committed"] == "NOT_COMMITTED" and out.frontend_input["response_text"] is None
+    assert rig.orch.counters.get("turn_deadline_exceeded") == 1
+    commits = []
+    real = rig.store.commit
+    rig.store.commit = lambda *a, **k: (commits.append(1), real(*a, **k))[1]
+    gate.set()                                        # 늦게 끝난 모델 작업
+    time.sleep(0.8)
+    assert not commits and _answers(rig) == before    # 확정하지 않았다
+    assert rig.store.get_turn("S1", "t-slow") is None
+    rig.model.queue.append(ANSWER_OUT)                # 같은 turn_id 재전송은 안전하게 새로 처리된다
+    rig.session.extract = lambda req, real=rig.session.__class__.extract, s=rig.session: real(s, req)
+    assert _say(rig, "t-slow").frontend_input["turn_failure_signal"] is None and _answers(rig) != before
+
+
+def test_deadline_slow_store_load_skips_commit():
+    rig = Rig(turn_deadline_seconds=0.4)
+    rig.start()
+    before = _answers(rig)
+    real_load = rig.store.load
+    slow = threading.Event()
+
+    def load(sid):
+        if slow.is_set():
+            time.sleep(0.9)                           # DB 대기
+        return real_load(sid)
+    rig.store.load = load
+    rig.model.queue.append(ANSWER_OUT)
+    commits = []
+    real = rig.store.commit
+    rig.store.commit = lambda *a, **k: (commits.append(1), real(*a, **k))[1]
+    slow.set()
+    out = _say(rig, "t-db")
+    assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
+    time.sleep(1.2)
+    assert not commits and _answers(rig) == before
+
+
+def test_deadline_not_exceeded_is_normal():
+    rig = Rig(turn_deadline_seconds=5)
+    rig.start()
+    out = rig.say("안 피움", out=ANSWER_OUT)
+    assert out.frontend_input["turn_failure_signal"] is None and rig.orch.counters.get("turn_deadline_exceeded") is None

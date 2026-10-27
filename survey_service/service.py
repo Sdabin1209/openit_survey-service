@@ -113,7 +113,8 @@ class App:
             risk_source = load_factory(settings.risk_source)()
         self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
-                                         max_consecutive_reask=settings.max_consecutive_reask)
+                                         max_consecutive_reask=settings.max_consecutive_reask,
+                                         turn_deadline_seconds=settings.turn_deadline_seconds)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         if not api_token:
             raise ConfigError(f"공개 API 토큰이 {settings.api_token_env}_FILE(파일) 또는 환경 변수 {settings.api_token_env}에 없다")

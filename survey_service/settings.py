@@ -54,6 +54,7 @@ class Settings:
     require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
     session_retention_days: Optional[int] = None                   # None이면 세션을 지우지 않는다. 값이 있으면 `python -m survey_service purge`가 끝난 세션을 지운다
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
+    turn_deadline_seconds: float = 8.0            # 서버 턴 총 마감(초). 키오스크 대기 10초보다 짧게. 넘으면 NOT_COMMITTED(FAULT_POLICY 3)
     readyz_db_timeout_seconds: float = 2.0        # /readyz가 PostgreSQL을 확인하는 데 쓰는 상한(초). 넘으면 503 db unavailable. SQLite에는 해당 없음
     release_poll_seconds: float = 5.0
     startup_wait_seconds: float = 5.0             # 시작할 때 첫 릴리스 적재를 기다리는 최대 시간(넘으면 기다리지 않고 서비스를 연다)
@@ -134,6 +135,7 @@ class Settings:
             inference_retries=_int(env, "SURVEY_INFERENCE_RETRIES", 1, 0),
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
             startup_wait_seconds=_float(env, "SURVEY_STARTUP_WAIT_SECONDS", 5.0),
+            turn_deadline_seconds=_float(env, "SURVEY_TURN_DEADLINE_SECONDS", 8.0),
             readyz_db_timeout_seconds=_float(env, "SURVEY_READYZ_DB_TIMEOUT_SECONDS", 2.0),
             release_retry_base_seconds=_float(env, "SURVEY_RELEASE_RETRY_BASE_SECONDS", 5.0),
             release_retry_max_seconds=_float(env, "SURVEY_RELEASE_RETRY_MAX_SECONDS", 60.0),
