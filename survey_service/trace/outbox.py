@@ -40,15 +40,20 @@ class OutboxRow:
 
 
 class Outbox:
+    _ERRORS: tuple = (sqlite3.Error,)
+
     def __init__(self, path: str) -> None:
         self._lock = threading.RLock()
         try:
-            self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-            self._db.execute("PRAGMA journal_mode=WAL")
-            self._db.execute("PRAGMA synchronous=FULL")
-            self._db.executescript(_SCHEMA)
-        except sqlite3.Error as e:
+            self._open(path)
+        except self._ERRORS as e:
             raise StoreError(f"outbox를 열 수 없다: {type(e).__name__}") from e
+
+    def _open(self, path: str) -> None:
+        self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA synchronous=FULL")
+        self._db.executescript(_SCHEMA)
 
     def close(self) -> None:
         with self._lock:
@@ -58,7 +63,7 @@ class Outbox:
         with self._lock:
             try:
                 self._db.execute("SELECT 1 FROM outbox LIMIT 1").fetchall()
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"outbox를 읽을 수 없다: {type(e).__name__}") from e
 
     def enqueue(self, envelope: dict, now: float) -> bool:
@@ -66,10 +71,10 @@ class Outbox:
         try:
             with self._lock:
                 cur = self._db.execute(
-                    "INSERT OR IGNORE INTO outbox(session_id, turn_id, envelope, created_at) VALUES (?,?,?,?)",
+                    "INSERT INTO outbox(session_id, turn_id, envelope, created_at) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
                     (envelope["session_id"], envelope["turn_id"], json.dumps(envelope, ensure_ascii=False, separators=(",", ":")), now))
                 return cur.rowcount == 1
-        except sqlite3.Error as e:
+        except self._ERRORS as e:
             raise StoreError(f"outbox에 넣을 수 없다: {type(e).__name__}") from e
 
     def due(self, now: float, limit: int = 50) -> list[OutboxRow]:

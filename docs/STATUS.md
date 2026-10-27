@@ -118,3 +118,9 @@
 - 한 일: subject_ref(A), 결과 조회(B), StaffSessionView 보강(C), 외부 위험 신호(D), 직원 식별 헤더(E), 세션 보존 잡. 자세한 내용과 표준 이유는 CHANGELOG.
 - 시험: `pytest -o addopts=""` 466 통과, `scripts/smoke.sh` SMOKE OK(이 PC 한 환경). 확인하지 못한 것: 실제 게이트웨이를 거친 `X-Openit-User` 전달, 프런트·병원 시스템과의 실제 호출.
 - 다음: 2단계(PostgreSQL).
+
+## 후속 구간 11 (D85 2단계: PostgreSQL)
+
+- 한 일: 세션 저장소·outbox·알림 DB(알림, 시각, 접근 기록, 세션 메타, 위험 신호, 푸시 구독)에 PostgreSQL 구현. `SURVEY_DATABASE_URL`이 있으면 PostgreSQL, 없으면 SQLite. 끊긴 연결 재접속, 접속 문자열 비노출, `/readyz`의 `database.kind`. 이유와 한계는 CHANGELOG.
+- 시험: `TEST_DATABASE_URL`(`../deploy/scripts/dev-postgres.sh up survey`, 일회용 PostgreSQL 16)를 주고 `pytest -o addopts=""`: 502 통과(SKIP 0). 같은 구성의 앞선 한 번의 실행에서 `test_webpush_sender_against_local_push_service[410-GONE]`가 한 번 실패했고(PostgreSQL과 무관한 로컬 푸시 서비스 시험, 3번 따로 돌리면 통과, 타이밍 의심, 원인 미확인) 최종 실행은 통과. 없이 돌리면 472 통과 + 30 SKIP. `scripts/smoke.sh` SMOKE OK, `SMOKE_PG=1`도 OK(이 PC 한 환경). deploy `check-all.sh` FAIL 0.
+- 확인하지 못한 것: 운영 compose에서 `db-survey-dsn` 비밀을 마운트한 실제 서비스 기동(deploy 쪽 일), PostgreSQL 서버 재시작(컨테이너 재시작) 상황(연결 강제 종료로만 시험), 두 번째 깨끗한 환경.

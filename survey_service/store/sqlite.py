@@ -43,21 +43,27 @@ def _dump(o) -> str:
 
 
 class SqliteSessionStore:
+    _ERRORS: tuple = (sqlite3.Error,)
+    _FOR_UPDATE = ""        # PostgreSQL 구현은 행 잠금을 건다
+
     def __init__(self, path: str, clock=time.time) -> None:
         self._path = path
         self._clock = clock
         self._lock = threading.RLock()
         try:
-            self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-            self._db.execute("PRAGMA journal_mode=WAL")
-            self._db.execute("PRAGMA synchronous=FULL")
-            self._db.executescript(_SCHEMA)
-            cols = [r[1] for r in self._db.execute("PRAGMA table_info(sessions)").fetchall()]
-            if "updated_at" not in cols:                       # 이전 파일 이행
-                self._db.execute("ALTER TABLE sessions ADD COLUMN updated_at REAL NOT NULL DEFAULT 0")
-            self._db.execute("CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(status, updated_at)")
-        except sqlite3.Error as e:
+            self._open(path)
+        except self._ERRORS as e:
             raise StoreError(f"세션 DB를 열 수 없다: {type(e).__name__}") from e
+
+    def _open(self, path: str) -> None:
+        self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA synchronous=FULL")
+        self._db.executescript(_SCHEMA)
+        cols = [r[1] for r in self._db.execute("PRAGMA table_info(sessions)").fetchall()]
+        if "updated_at" not in cols:                       # 이전 파일 이행
+            self._db.execute("ALTER TABLE sessions ADD COLUMN updated_at REAL NOT NULL DEFAULT 0")
+        self._db.execute("CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(status, updated_at)")
 
     def close(self) -> None:
         with self._lock:
@@ -67,14 +73,14 @@ class SqliteSessionStore:
         with self._lock:
             try:
                 self._db.execute("SELECT 1 FROM sessions LIMIT 1").fetchall()
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"세션 DB를 읽을 수 없다: {type(e).__name__}") from e
 
     def load(self, session_id: str) -> dict:
         with self._lock:
             try:
                 row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?", (session_id,)).fetchone()
-            except sqlite3.Error:
+            except self._ERRORS:
                 return {"session_id": session_id, "status": "DB_ERROR", "revision": None, "state": None}
         if row is None:
             return {"session_id": session_id, "status": "NOT_FOUND", "revision": None, "state": None}
@@ -85,7 +91,7 @@ class SqliteSessionStore:
             try:
                 self._db.execute("INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at) VALUES (?,?,?,?,?,?)",
                                  (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state), self._clock()))
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"세션을 만들 수 없다: {type(e).__name__}") from e
         return 1
 
@@ -99,7 +105,7 @@ class SqliteSessionStore:
             stage = "begin"
             try:
                 self._db.execute("BEGIN IMMEDIATE")
-                row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?", (sid,)).fetchone()
+                row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?" + self._FOR_UPDATE, (sid,)).fetchone()
                 if row is None:
                     self._db.execute("ROLLBACK")
                     return result("DB_ERROR", "NOT_APPLIED", detail="세션이 없다")
@@ -121,10 +127,10 @@ class SqliteSessionStore:
                 stage = "commit"
                 self._db.execute("COMMIT")
                 return result("OK", "APPLIED", revision=rev)
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 try:
                     self._db.execute("ROLLBACK")
-                except sqlite3.Error:
+                except self._ERRORS:
                     pass
                 # COMMIT 문 자체가 실패하면 반영 여부를 알 수 없다
                 return result("DB_ERROR", "UNKNOWN" if stage == "commit" else "NOT_APPLIED",
@@ -134,7 +140,7 @@ class SqliteSessionStore:
         with self._lock:
             try:
                 self._db.execute("BEGIN IMMEDIATE")
-                row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+                row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?" + self._FOR_UPDATE, (session_id,)).fetchone()
                 if row is None:
                     self._db.execute("ROLLBACK")
                     raise StoreError("세션이 없다")
@@ -142,10 +148,10 @@ class SqliteSessionStore:
                 doc[key].append(item)
                 self._db.execute("UPDATE sessions SET revision=?, doc=?, updated_at=? WHERE session_id=?", (row[0] + 1, _dump(doc), self._clock(), session_id))
                 self._db.execute("COMMIT")
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 try:
                     self._db.execute("ROLLBACK")
-                except sqlite3.Error:
+                except self._ERRORS:
                     pass
                 raise StoreError(f"기록을 덧붙일 수 없다: {type(e).__name__}") from e
 
@@ -175,7 +181,7 @@ class SqliteSessionStore:
                     "INSERT INTO turns(session_id, turn_id, input_hash, committed, result_json) VALUES (?,?,?,0,?) "
                     "ON CONFLICT(session_id, turn_id) DO UPDATE SET result_json=excluded.result_json",
                     (session_id, turn_id, input_hash, _dump(result)))
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"턴 결과를 남길 수 없다: {type(e).__name__}") from e
 
     def list_idle(self, before: float) -> list[str]:
@@ -201,14 +207,14 @@ class SqliteSessionStore:
         with self._lock:
             try:
                 return [tuple(r) for r in self._db.execute(q, args + [limit]).fetchall()]
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"세션 목록을 읽을 수 없다: {type(e).__name__}") from e
 
     def list_ended_before(self, before: float) -> list[str]:
         with self._lock:
             try:
                 return [r[0] for r in self._db.execute("SELECT session_id FROM sessions WHERE status LIKE 'ENDED%' AND updated_at<? ORDER BY updated_at", (before,))]
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"세션 목록을 읽을 수 없다: {type(e).__name__}") from e
 
     def delete_sessions(self, session_ids: list) -> int:
@@ -221,10 +227,10 @@ class SqliteSessionStore:
                     self._db.execute("DELETE FROM turns WHERE session_id=?", (sid,))
                 self._db.execute("COMMIT")
                 return n
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 try:
                     self._db.execute("ROLLBACK")
-                except sqlite3.Error:
+                except self._ERRORS:
                     pass
                 raise StoreError(f"세션을 지울 수 없다: {type(e).__name__}") from e
 

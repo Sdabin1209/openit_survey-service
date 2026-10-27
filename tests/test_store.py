@@ -12,10 +12,16 @@ from survey_service.store.sqlite import SqliteSessionStore
 from .sample_bank import sample_bank
 
 
-@pytest.fixture(params=["memory", "sqlite"])
+@pytest.fixture(params=["memory", "sqlite", "postgres"])
 def store(request, tmp_path):
     if request.param == "memory":
         yield MemorySessionStore()
+    elif request.param == "postgres":
+        from survey_service.store.postgres import PgSessionStore
+        from .pg_support import pg_url
+        s = PgSessionStore(pg_url(request))
+        yield s
+        s.close()
     else:
         s = SqliteSessionStore(str(tmp_path / "s.db"))
         yield s

@@ -26,6 +26,7 @@ from .risk_rules import rule_id_of
 
 log = logging.getLogger("survey_service.alerts")
 
+_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"))
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (
@@ -100,21 +101,26 @@ def _row_to_alert(r) -> dict:
 
 
 class AlertStore:
-    """알림·이벤트·푸시 구독의 SQLite 저장소."""
+    """알림·이벤트·푸시 구독·세션 메타·접근 기록의 SQLite 저장소. PostgreSQL 구현은 `PgAlertStore`(같은 SQL, 같은 시험)."""
+
+    _ERRORS: tuple = (sqlite3.Error,)
 
     def __init__(self, path: str, clock: Callable[[], float] = time.time) -> None:
         self._clock = clock
         self._lock = threading.RLock()
         try:
-            self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-            self._db.execute("PRAGMA journal_mode=WAL")
-            self._db.execute("PRAGMA synchronous=FULL")
-            self._db.executescript(_SCHEMA)
-            for table, col in (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail")):      # 이전 파일 이행
-                if col not in [r[1] for r in self._db.execute(f"PRAGMA table_info({table})").fetchall()]:
-                    self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
-        except sqlite3.Error as e:
+            self._open(path)
+        except self._ERRORS as e:
             raise StoreError(f"알림 DB를 열 수 없다: {type(e).__name__}") from e
+
+    def _open(self, path: str) -> None:
+        self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA synchronous=FULL")
+        self._db.executescript(_SCHEMA)
+        for table, col in _NEW_COLUMNS:      # 이전 파일 이행
+            if col not in [r[1] for r in self._db.execute(f"PRAGMA table_info({table})").fetchall()]:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -124,7 +130,7 @@ class AlertStore:
         with self._lock:
             try:
                 self._db.execute("SELECT 1 FROM alerts LIMIT 1").fetchall()
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"알림 DB를 읽을 수 없다: {type(e).__name__}") from e
 
     def _read(self, sql: str, args=()):
@@ -132,7 +138,7 @@ class AlertStore:
         with self._lock:
             try:
                 return self._db.execute(sql, args).fetchall()
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"알림 DB 읽기 실패: {type(e).__name__}") from e
 
     def _txn(self, fn):
@@ -146,23 +152,23 @@ class AlertStore:
                 except BaseException:
                     self._db.execute("ROLLBACK")
                     raise
-            except sqlite3.Error as e:
+            except self._ERRORS as e:
                 raise StoreError(f"알림 DB 쓰기 실패: {type(e).__name__}") from e
 
     def _event(self, etype: str, n: int) -> dict:
         r = self._db.execute("SELECT n, session_id, kind, created_at, status, resolved_by_decision, resolved_at FROM alerts WHERE n=?", (n,)).fetchone()
         alert = _row_to_alert(r)
-        cur = self._db.execute("INSERT INTO alert_events(type, alert_n, payload) VALUES (?,?,?)",
-                               (etype, n, json.dumps(alert, ensure_ascii=False)))
-        return {"type": etype, "id": cur.lastrowid, "alert": alert}      # SSE의 id는 이벤트 순번이다(알림·해결 이벤트가 각각 하나씩 증가)
+        eid = self._db.execute("INSERT INTO alert_events(type, alert_n, payload) VALUES (?,?,?) RETURNING id",
+                               (etype, n, json.dumps(alert, ensure_ascii=False))).fetchone()[0]
+        return {"type": etype, "id": eid, "alert": alert}      # SSE의 id는 이벤트 순번이다(알림·해결 이벤트가 각각 하나씩 증가)
 
     def create(self, session_id: str, kind: str, rule_id: Optional[str] = None) -> dict:
         """알림 행과 이벤트 행을 한 트랜잭션으로 쓴다. 돌려주는 값: 이벤트 {type: alert, id: 이벤트 순번, alert}.
         rule_id(위험 규칙 id, 발화 원문 아님)는 알림 행에만 남고 목록·SSE의 알림 모양은 그대로다(직원 세션 조회가 읽는다)."""
         def fn():
-            cur = self._db.execute("INSERT INTO alerts(session_id, kind, created_at, rule_id) VALUES (?,?,?,?)",
-                                   (session_id, kind, _iso(self._clock()), rule_id))
-            return self._event("alert", cur.lastrowid)
+            n = self._db.execute("INSERT INTO alerts(session_id, kind, created_at, rule_id) VALUES (?,?,?,?) RETURNING n",
+                                 (session_id, kind, _iso(self._clock()), rule_id)).fetchone()[0]
+            return self._event("alert", n)
         return self._txn(fn)
 
     def resolve(self, session_id: str, decision: Optional[str], staff_id: Optional[str] = None) -> list[dict]:
@@ -213,7 +219,7 @@ class AlertStore:
 
     def record(self, session_id: str, turn_index: int, turn_id: Optional[str]) -> None:
         """세션 문서에 없는 시각을 남긴다. turn_index -1은 세션 생성, 0 이상은 대화 로그 항목의 위치. 같은 키는 처음 값을 지킨다(멱등)."""
-        self._txn(lambda: self._db.execute("INSERT OR IGNORE INTO session_timeline(session_id, turn_index, turn_id, at) VALUES (?,?,?,?)",
+        self._txn(lambda: self._db.execute("INSERT INTO session_timeline(session_id, turn_index, turn_id, at) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
                                            (session_id, turn_index, turn_id, _iso(self._clock()))))
 
     def timeline(self, session_id: str) -> dict[int, dict]:
@@ -235,7 +241,7 @@ class AlertStore:
     # ---- 세션 메타(환자 참조), 위험 신호, 보존
     def set_subject(self, session_id: str, subject_ref: Optional[str]) -> None:
         """세션 시작 때 한 번. 이미 있으면 처음 값을 지킨다."""
-        self._txn(lambda: self._db.execute("INSERT OR IGNORE INTO session_meta(session_id, subject_ref, created_at) VALUES (?,?,?)",
+        self._txn(lambda: self._db.execute("INSERT INTO session_meta(session_id, subject_ref, created_at) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                                            (session_id, subject_ref, _iso(self._clock()))))
 
     def subject_of(self, session_id: str) -> Optional[str]:
@@ -259,7 +265,7 @@ class AlertStore:
 
     def record_signal(self, session_id: str, signal: Mapping, alert_n: int, session_status: str) -> None:
         self._txn(lambda: self._db.execute(
-            "INSERT OR IGNORE INTO risk_signals(session_id, signal_id, source, code, severity, occurred_at, alert_n, session_status, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO risk_signals(session_id, signal_id, source, code, severity, occurred_at, alert_n, session_status, created_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
             (session_id, signal["signal_id"], signal["source"], signal["code"], signal.get("severity", "RISK"), signal.get("occurred_at"), alert_n,
              session_status, _iso(self._clock()))))
 
@@ -472,3 +478,22 @@ class AlertStaffConsole:
         if sa is None:
             return
         self.service.raise_alert(sa["session_id"], sa["staff_alert"]["kind"], rule_id_of(sa["staff_alert"]))
+
+
+class PgAlertStore(AlertStore):
+    """PostgreSQL 알림 저장소. 연결·스키마 방언만 다르고 나머지는 AlertStore와 같다."""
+    KIND = "postgresql"
+
+    def _open(self, url: str) -> None:
+        from .pg import PgConn, pg_ddl
+        self._db = PgConn(url, "알림 DB")
+        self._db.script(pg_ddl(_SCHEMA))
+        for table, col in _NEW_COLUMNS:           # 이전 스키마 이행(멱등)
+            self._db.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} TEXT")
+
+
+try:
+    from .pg import DRIVER_ERRORS as _PG_ERRORS
+    PgAlertStore._ERRORS = _PG_ERRORS
+except ImportError:      # pragma: no cover
+    pass

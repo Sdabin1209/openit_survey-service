@@ -40,6 +40,8 @@ py-vapid==1.9.6
 pycparser==3.11
 pydantic==2.14.1
 pydantic_core==2.50.1
+psycopg==3.3.6
+psycopg-binary==3.3.6
 pywebpush==2.5.0
 referencing==0.37.0
 requests==2.34.2

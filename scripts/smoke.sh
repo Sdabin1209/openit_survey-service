@@ -151,4 +151,33 @@ curl -s -H "Authorization: Bearer smoke-staff-token" "$API/v1/staff/alerts?statu
 # SIGTERM으로 제때 멈춘다
 start=$(date +%s); $DOCKER stop -t 10 "$NAME" >/dev/null; el=$(( $(date +%s) - start ))
 [ "$el" -le 8 ] || fail "정상 종료가 느리다: ${el}s"
+
+# 선택(SMOKE_PG=1): 같은 이미지를 PostgreSQL(SURVEY_DATABASE_URL)로 띄워 한 바퀴. 개발용 서버는 deploy의 dev-postgres.sh(일회용, 메모리 데이터)를 쓴다.
+if [ "${SMOKE_PG:-0}" = 1 ]; then
+  DEVPG="$PWD/../deploy/scripts/dev-postgres.sh"; [ -f "$DEVPG" ] || fail "SMOKE_PG=1인데 ../deploy/scripts/dev-postgres.sh가 없다"
+  export DEV_PG_SUFFIX="smoke-$$"
+  trap '$DOCKER rm -f "$NAME" "$NAME-pg" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"; bash "$DEVPG" down survey >/dev/null 2>&1 || true' EXIT
+  ( umask 022; bash "$DEVPG" up survey > "$SECRET_DIR/db_url" 2>/dev/null ) || fail "개발용 PostgreSQL을 띄우지 못했다"
+  # 앱 컨테이너는 같은 Docker 네트워크의 개발용 서버 컨테이너 주소로 붙는다(호스트 루프백 포트는 컨테이너에서 보이지 않을 수 있다)
+  PGIP=$($DOCKER inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "deploy-devpg-survey-$DEV_PG_SUFFIX" | tr -d '\r')
+  [ -n "$PGIP" ] || fail "개발용 PostgreSQL 컨테이너 주소를 알 수 없다"
+  sed -i "s#@127.0.0.1:[0-9]*/#@$PGIP:5432/#" "$SECRET_DIR/db_url"; chmod 644 "$SECRET_DIR/db_url"
+  PGPORT_APP=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')   # 빈 포트(고정하지 않는다)
+  runpg() { $DOCKER run -d --name "$NAME-pg" -p 127.0.0.1:"$PGPORT_APP":8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
+    -e SURVEY_DATABASE_URL_FILE=/run/secrets/db_url -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader \
+    -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest -e SURVEY_API_TOKEN=smoke-api-token -e SURVEY_STAFF_API_TOKEN_FILE=/run/secrets/staff_token \
+    -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null; }
+  runpg
+  PAPI="http://127.0.0.1:$PGPORT_APP"
+  for i in $(seq 1 40); do curl -fsS "$PAPI/readyz" >/dev/null 2>&1 && break; sleep 1; done
+  PREADY=$(curl -fsS "$PAPI/readyz") || { $DOCKER logs "$NAME-pg" 2>&1 | tail -5; fail "PostgreSQL 모드의 readyz가 준비되지 않았다"; }
+  echo "$PREADY" | grep -q '"database": {"kind": "postgresql"}' || fail "/readyz의 database.kind가 postgresql이 아니다"
+  [ "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer smoke-api-token' -d '{"session_id":"pg-1","kind":"SESSION_START"}' "$PAPI/v1/sessions")" = 200 ] || fail "PostgreSQL 모드의 세션 시작"
+  $DOCKER restart -t 10 "$NAME-pg" >/dev/null
+  for i in $(seq 1 40); do curl -fsS "$PAPI/readyz" >/dev/null 2>&1 && break; sleep 1; done
+  curl -fsS -H 'Authorization: Bearer smoke-api-token' "$PAPI/v1/sessions/pg-1/state" | grep -q '"state": "ACTIVE"' || fail "재시작 뒤 PostgreSQL의 세션이 남아 있지 않다"
+  URLPW=$(sed 's#^[^:]*://[^:]*:\([^@]*\)@.*#\1#' "$SECRET_DIR/db_url")
+  { echo "$PREADY"; $DOCKER logs "$NAME-pg" 2>&1; } | grep -q "$URLPW" && fail "접속 문자열(암호)이 /readyz나 로그에 나왔다"
+  echo "pg smoke: database.kind=postgresql, 재시작 뒤 세션 유지, 접속 문자열 비노출"
+fi
 echo "SMOKE OK"

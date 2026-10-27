@@ -8,3 +8,5 @@ git+ssh://git@github.com/Sdabin1209/openit_model-runtime.git@v0.7.1
 ./schema
 pytest
 pyyaml
+# PostgreSQL 드라이버(SURVEY_DATABASE_URL을 줄 때 쓴다). libpq 내장 wheel. 이미지는 requirements.lock이 같은 버전을 고정한다
+psycopg[binary]==3.3.6

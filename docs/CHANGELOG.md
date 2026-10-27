@@ -1,5 +1,15 @@
 # 변경 이력
 
+## D85 2단계: 저장소를 PostgreSQL로(세션, outbox, 알림) [미출시, 푸시·태그 전]
+
+- 설정 `SURVEY_DATABASE_URL`(`read_secret`, `_FILE` 우선). 있으면 PostgreSQL, 없으면 기존 SQLite(기본 그대로). 세 저장소(`PgSessionStore`, `PgOutbox`, `PgAlertStore`)는 SQLite 구현을 상속해 **같은 SQL 본문**을 쓰고 연결·스키마 방언만 다르다(`survey_service/pg.py`, `store/postgres.py`, `trace/pg_outbox.py`, `alerts.py`의 `PgAlertStore`, 선택은 `db.py`). 이유: SQL을 두 벌 두면 어긋나므로 한 벌을 두 방언에서 같은 시험으로 검증한다. 이를 위해 SQLite 쪽도 `INSERT OR IGNORE`를 `ON CONFLICT DO NOTHING`으로, `lastrowid`를 `RETURNING`으로 바꿨다(SQLite 3.35+).
+- 이유(드라이버): `psycopg[binary]==3.3.6`을 requirements·lock·pyproject에 고정(ops-feedback, release-gate와 같은 방식, libpq 내장 wheel이라 이미지에 시스템 패키지가 필요 없다). JSON은 TEXT로 저장(SQLite와 바이트까지 같다).
+- 끊긴 연결: `PgConn`이 연결이 죽어 있으면 트랜잭션 시작 전에 다시 열고, 트랜잭션 밖 멱등 한 문장은 새 연결로 한 번 다시 시도한다. **트랜잭션 도중에 끊기면 다시 시도하지 않는다**(서버가 되돌렸고 COMMIT 중이면 반영 여부를 몰라 UNKNOWN). 이유: 세션 쓰기는 낙관적 revision 검사가 있어 몰래 재시도하면 반영된 쓰기를 충돌로 오판한다. 세션 쓰기에는 행 잠금(`FOR UPDATE`)을 건다.
+- 접속 문자열 비노출: 오류는 예외 클래스 이름만(`세션 DB 접속 실패: OperationalError`), 재접속 실패도 드라이버 메시지(호스트·사용자 포함)를 쓰지 않고 자체 문구. 시험이 암호 카나리 문자열로 오류·로그·`/readyz`를 확인한다. 시작 실패 로그에 `StoreError` 사유(비밀 없음)를 낸다.
+- `/readyz`에 `database: {kind: postgresql|sqlite}`. 스키마는 시작 때 멱등 생성(advisory lock).
+- 시험: 세션 저장소 적합성(메모리·SQLite·PostgreSQL 같은 시험), 알림 DB·outbox 적합성(SQLite·PostgreSQL), D85 1단계 시험을 두 백엔드로 돌림, 끊은 연결 재접속(세션·알림·outbox·앱 전체), 트랜잭션 중 끊김, 접속 문자열 비노출. `TEST_DATABASE_URL`이 없으면 PostgreSQL 시험은 SKIP(통과로 세지 않는다). `SMOKE_PG=1 scripts/smoke.sh`가 같은 이미지를 PostgreSQL로 띄워 재시작 뒤 세션 유지와 비노출을 확인한다.
+- 하지 않은 것: SQLite 데이터를 PostgreSQL로 옮기는 도구, 세션 저장소와 알림 DB를 한 트랜잭션으로 묶기(여전히 별개 트랜잭션), TLS(deploy 문서: 내부 네트워크 한정), 커넥션 풀(저장소마다 연결 하나를 락으로 보호하는 기존 구조 유지).
+
 ## D85 1단계: subject_ref, 결과 조회, 외부 위험 신호, 직원 식별, 세션 보존 [미출시, 푸시·태그 전]
 
 정의는 boundary-contracts `PUBLIC_API.md` 추가 인터페이스 A~F절. 비어 있는 부분은 표준적인 방법을 골랐다(이유 한 줄씩).

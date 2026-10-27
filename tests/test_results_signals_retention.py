@@ -23,9 +23,18 @@ OFF = ext("REDIRECT", "Q1.D02", reason="OFF_TOPIC")
 
 
 class Env:
-    def __init__(self, tmp_path, *, require=False, result=True, risk=True, clock=None):
-        self.store = AlertStore(str(tmp_path / "alerts.db"), **({"clock": clock} if clock else {}))
-        self.rig = Rig(timeline=self.store)
+    def __init__(self, tmp_path, *, require=False, result=True, risk=True, clock=None, backend="sqlite", request=None):
+        kw = {"clock": clock} if clock else {}
+        if backend == "postgres":
+            from survey_service.alerts import PgAlertStore
+            from survey_service.store.postgres import PgSessionStore
+            from .pg_support import pg_url
+            url = pg_url(request)
+            self.store = PgAlertStore(url, **kw)
+            self.rig = Rig(store=PgSessionStore(url), timeline=self.store)
+        else:
+            self.store = AlertStore(str(tmp_path / "alerts.db"), **kw)
+            self.rig = Rig(timeline=self.store)
         self.service = AlertService(self.store, AlertHub(), push=None)
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
         self.api = PublicApi(self.rig.orch, "tok", staff_token="stok", alerts=self.service, result_token="rtok" if result else None,
@@ -52,11 +61,13 @@ class Env:
         return self.call("POST", f"/v1/sessions/{sid}/risk-signals", sig, auth=auth)
 
 
-@pytest.fixture
-def env(tmp_path):
-    e = Env(tmp_path)
+@pytest.fixture(params=["sqlite", "postgres"])
+def env(request, tmp_path):
+    e = Env(tmp_path, backend=request.param, request=request)
     yield e
     e.store.close()
+    if request.param == "postgres":
+        e.rig.store.close()
 
 
 # ---------------------------------------------------------------- A. subject_ref

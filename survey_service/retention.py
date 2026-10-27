@@ -15,9 +15,8 @@ import sys
 import time
 from typing import Optional
 
-from .alerts import AlertStore
+from .db import open_stores
 from .settings import ConfigError, Settings
-from .store.sqlite import SqliteSessionStore
 
 log = logging.getLogger("survey_service.retention")
 BATCH = 200
@@ -42,12 +41,16 @@ def run_purge(env=None) -> int:
     except ConfigError as e:
         print(f"설정 오류: {e}", file=sys.stderr)
         return 2
-    store = SqliteSessionStore(settings.session_db)
-    alert_store = AlertStore(settings.alert_db_path())
+    try:
+        store, outbox, alert_store, _kind = open_stores(settings)
+    except Exception as e:
+        print(f"저장소를 열 수 없다: {type(e).__name__}", file=sys.stderr)
+        return 3
     try:
         res = purge(store, alert_store, settings.session_retention_days)
     finally:
         store.close()
+        outbox.close()
         alert_store.close()
     print(json.dumps({"event": "session_purge", **res}, ensure_ascii=False))
     return 0

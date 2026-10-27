@@ -84,7 +84,8 @@ def test_view_includes_alert_with_rule_id_and_no_raw_text_in_alert_surfaces(vr):
     # 알림 저장소(알림·이벤트·접근 기록)와 알림 목록, 정지 기록에 발화 원문이 없다
     st, listing, _ = vr.call("GET", "/v1/staff/alerts")
     assert st == 200 and TEST_PHRASE not in json.dumps(listing, ensure_ascii=False)
-    dump = "\n".join(sqlite3.connect(str(vr.store._db.execute("PRAGMA database_list").fetchone()[2])).iterdump())
+    dump = json.dumps([vr.store._read(f"SELECT * FROM {t}") for t in ("alerts", "alert_events", "staff_access_log", "session_meta", "risk_signals",
+                                                                      "session_timeline")], ensure_ascii=False)
     assert TEST_PHRASE not in dump and "저기" not in dump and "internal:t-phrase" in dump
     assert vr.rig.doc("K1")["progress_record"]["pause_history"][0]["reasons"] == [{"kind": "RISK_SIGNAL", "evidence": ["signal:internal:t-phrase"]}]
 

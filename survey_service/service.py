@@ -26,8 +26,9 @@ from .remote import RemoteInference
 from .orchestrator import Orchestrator
 from .release import ReleaseLoader, ReleaseRegistry
 from .risk_rules import RuleRiskSource
+from .errors import StoreError
 from .settings import ConfigError, Settings, load_factory
-from .store.sqlite import SqliteSessionStore
+from .db import open_stores
 from .trace import Outbox, OutboxTraceSink, TraceExporter
 
 log = logging.getLogger("survey_service")
@@ -69,9 +70,7 @@ class App:
     def __init__(self, settings: Settings, *, reader=None, ingest=None, staff_console=None, dispatcher=None, risk_source=None) -> None:
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
-        self.store = SqliteSessionStore(settings.session_db)
-        self.outbox = Outbox(settings.outbox_db)
-        self.alert_store = AlertStore(settings.alert_db_path())
+        self.store, self.outbox, self.alert_store, self.db_kind = open_stores(settings)
         push = None
         vapid_key = _secret(settings.vapid_private_key_env, "VAPID 비밀키") or ""
         if vapid_key:                                       # 키가 없으면 푸시 없이 SSE만 동작한다
@@ -221,7 +220,7 @@ class App:
             if retrying is not None:
                 problems.append("release_loading")      # 거부가 아니라 일시적 실패로 재시도 중이다(release_loader.retrying)
         body = {
-            "ready": not problems, "problems": problems, "service_version": SERVICE_VERSION,
+            "ready": not problems, "problems": problems, "database": {"kind": self.db_kind}, "service_version": SERVICE_VERSION,
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "api": {"idle_expiry_seconds": self.settings.session_idle_seconds},
@@ -368,7 +367,7 @@ def main(argv=None) -> int:
     try:
         app = App(settings)
     except Exception as e:
-        log.error("시작 실패 error=%s message=%s", type(e).__name__, e if isinstance(e, ConfigError) else "")
+        log.error("시작 실패 error=%s message=%s", type(e).__name__, e if isinstance(e, (ConfigError, StoreError)) else "")
         return 3
     app.start()
     httpd = serve(app, settings.port)
