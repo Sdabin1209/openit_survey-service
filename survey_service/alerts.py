@@ -27,7 +27,7 @@ from .risk_rules import rule_id_of
 
 log = logging.getLogger("survey_service.alerts")
 
-_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"))
+_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"), ("session_meta", "device_id"))
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (
@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS staff_access_log (
 CREATE TABLE IF NOT EXISTS session_meta (
   session_id TEXT PRIMARY KEY,
   subject_ref TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  device_id TEXT
 );
 CREATE INDEX IF NOT EXISTS session_meta_subject ON session_meta(subject_ref);
 CREATE TABLE IF NOT EXISTS risk_signals (
@@ -245,10 +246,14 @@ class AlertStore:
         self._txn(fn)
 
     # ---- 세션 메타(환자 참조), 위험 신호, 보존
-    def set_subject(self, session_id: str, subject_ref: Optional[str]) -> None:
-        """세션 시작 때 한 번. 이미 있으면 처음 값을 지킨다."""
-        self._txn(lambda: self._db.execute("INSERT INTO session_meta(session_id, subject_ref, created_at) VALUES (?,?,?) ON CONFLICT DO NOTHING",
-                                           (session_id, subject_ref, _iso(self._clock()))))
+    def set_subject(self, session_id: str, subject_ref: Optional[str], device_id: Optional[str] = None) -> None:
+        """세션 시작 때 한 번(환자 참조, 세션을 만든 기기). 이미 있으면 처음 값을 지킨다."""
+        self._txn(lambda: self._db.execute("INSERT INTO session_meta(session_id, subject_ref, created_at, device_id) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
+                                           (session_id, subject_ref, _iso(self._clock()), device_id)))
+
+    def device_of(self, session_id: str) -> Optional[str]:
+        rows = self._read("SELECT device_id FROM session_meta WHERE session_id=?", (session_id,))
+        return rows[0][0] if rows else None
 
     def subject_of(self, session_id: str) -> Optional[str]:
         rows = self._read("SELECT subject_ref FROM session_meta WHERE session_id=?", (session_id,))

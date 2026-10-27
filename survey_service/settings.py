@@ -100,6 +100,7 @@ class Settings:
     retry_after_seconds: int = 1                 # 429·503 응답의 Retry-After(초)
     state_poll_min_interval_seconds: float = 0.5  # 세션 상태 폴링 빈도 상한(세션마다, 0이면 끔)
     max_push_subscriptions: int = 100
+    kiosk_device_tokens_env: str = "SURVEY_KIOSK_DEVICE_TOKENS"   # 기기별 키오스크 토큰 표(`device_id=토큰` 줄). NAME_FILE이 있으면 파일 내용 (D88 U8)
     staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
     api_max_inflight: int = 32
     api_max_utterance_chars: int = 1000

@@ -72,12 +72,14 @@ class PublicApi:
     def __init__(self, orchestrator: Orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
                  max_utterance_chars: int = 1000, alerts: Optional[AlertService] = None, max_subscriptions: int = 100,
                  retry_after_seconds: int = 1, push_allow_private: bool = False, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
-                 risk_token: Optional[str] = None, require_subject_ref: bool = False) -> None:
-        if not token:
+                 risk_token: Optional[str] = None, require_subject_ref: bool = False, device_tokens: Optional[dict] = None) -> None:
+        self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
+        if not token and not self.device_tokens:
             raise ValueError("공개 API 토큰이 비어 있다")
-        if staff_token is not None and (not staff_token or hmac.compare_digest(staff_token.encode(), token.encode())):
+        token = token or None
+        if staff_token is not None and (not staff_token or (token is not None and hmac.compare_digest(staff_token.encode(), token.encode()))):
             raise ValueError("직원 토큰은 비어 있지 않고 키오스크 토큰과 달라야 한다")
-        toks = [t for t in (token, staff_token, result_token, risk_token) if t is not None]
+        toks = [t for t in (token, staff_token, result_token, risk_token, *self.device_tokens.values()) if t is not None]
         if (result_token is not None and not result_token) or (risk_token is not None and not risk_token) or len(set(toks)) != len(toks):
             raise ValueError("토큰은 역할마다 비어 있지 않고 서로 달라야 한다")
         self.result_token, self.risk_token, self.require_subject_ref = result_token, risk_token, require_subject_ref
@@ -135,6 +137,14 @@ class PublicApi:
             return _err("UNAVAILABLE", "요청이 너무 많다", 429)
         try:
             name, arg = route
+            if role == "kiosk" and name in ("state", "turn", "end"):
+                denied = self._device_denied(arg)
+                if denied:
+                    return denied
+            if role == "kiosk" and name == "start" and isinstance(body, dict):
+                denied = self._device_denied(body.get("session_id") if isinstance(body.get("session_id"), str) else None)
+                if denied:
+                    return denied
             if name in ("alerts", "push_del"):
                 return getattr(self, "_" + name)(parse_qs(query))
             if name in ("state", "push_config"):
@@ -158,10 +168,27 @@ class PublicApi:
             return None
         tok = auth[7:].encode()
         found = None
+        self._tl.device = None
         for role, t in (("kiosk", self.token), ("staff", self.staff_token), ("result-reader", self.result_token), ("risk-source", self.risk_token)):
             if t is not None and hmac.compare_digest(tok, t.encode()):       # 모든 토큰을 끝까지 비교한다
                 found = role
+        for dev, t in self.device_tokens.items():
+            if hmac.compare_digest(tok, t.encode()):
+                found, self._tl.device = "kiosk", dev
         return found
+
+    def _device_denied(self, sid: Optional[str]):
+        """기기별 토큰(U8): 세션을 만든 기기 토큰으로만 접근한다. 다른 기기 토큰(또는 공유 토큰)이면 세션이 없는 것처럼 404. 세션에 기기가 기록돼 있지 않으면(공유 토큰으로 만든 세션) 막지 않는다."""
+        if self.alerts is None or not sid:
+            return None
+        try:
+            owner = self.alerts.store.device_of(sid)
+        except StoreError:
+            return _err("UNAVAILABLE", "지금은 처리할 수 없다")
+        if owner is not None and owner != getattr(self._tl, "device", None):
+            log.warning("다른 기기의 세션 접근을 거부했다 route_session=%s", "*")
+            return _err("NOT_FOUND", "모르는 세션이다")
+        return None
 
     @staticmethod
     def _route(method: str, path: str):
@@ -277,7 +304,7 @@ class PublicApi:
                 return _err("INVALID_RECORD", "subject_ref가 필요하다")
             if status is None and self.alerts is not None:
                 try:
-                    self.alerts.store.set_subject(sid, subject)       # 세션을 만들기 전에 남긴다: 못 남기면 시작하지 않는다
+                    self.alerts.store.set_subject(sid, subject, getattr(self._tl, 'device', None))       # 세션을 만들기 전에 남긴다(환자 참조, 만든 기기): 못 남기면 시작하지 않는다
                 except StoreError:
                     return _err("UNAVAILABLE", "세션 메타를 저장할 수 없다")
         return self._run(sid, tid, msg)

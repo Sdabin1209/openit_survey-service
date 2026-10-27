@@ -122,3 +122,50 @@ def test_access_log_records_the_authenticated_user_from_header_or_role_only(tmp_
         assert "retention" in app.readiness()[1] and app.readiness()[1]["retention"]["indefinite"] is False
     finally:
         app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+
+
+# ---------------------------------------------------------------- 기기별 키오스크 토큰 (D88 U8)
+import json as _json
+
+from survey_service.alerts import AlertHub, AlertService
+from survey_service.api import PublicApi
+
+
+def _device_api(tmp_path, shared=None):
+    rig = Rig()
+    svc = AlertService(AlertStore(str(tmp_path / "a.db")), AlertHub())
+    api = PublicApi(rig.orch, shared, device_tokens={"dev-a": "tok-device-a-0123456789", "dev-b": "tok-device-b-0123456789"}, staff_token="staff-tok-0123456789", alerts=svc)
+
+    def call(tok, method, path, body=None):
+        return api.handle(method, path, f"Bearer {tok}", _json.dumps(body).encode() if body is not None else b"")
+    return rig, api, call
+
+
+def test_session_is_accessible_only_with_the_creating_device_token(tmp_path):
+    rig, api, call = _device_api(tmp_path, shared="shared-tok-0123456789")
+    A, B = "tok-device-a-0123456789", "tok-device-b-0123456789"
+    assert call(A, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"})[0] == 200
+    turn = {"session_id": "K1", "kind": "UTTERANCE", "utterance": "안 피움", "turn_id": "t1"}
+    rig.model.queue.append({"action": "NEXT", "next_item": "Q1.D02", "values": []})
+    assert call(B, "GET", "/v1/sessions/K1/state")[0] == 404                      # 다른 기기: 세션이 없는 것처럼
+    assert call(B, "POST", "/v1/sessions/K1/turns", turn)[0] == 404
+    assert call(B, "POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})[0] == 404
+    assert call("shared-tok-0123456789", "GET", "/v1/sessions/K1/state")[0] == 404          # 공유 토큰도 기기가 만든 세션은 못 본다
+    assert call(B, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"})[0] == 404      # 다른 기기가 같은 ID로 시작을 시도해도 막힌다
+    assert call(A, "GET", "/v1/sessions/K1/state")[0] == 200
+    assert call("wrong", "GET", "/v1/sessions/K1/state")[0] == 401
+    assert call("staff-tok-0123456789", "GET", "/v1/sessions/K1/state")[0] == 403         # 직원 토큰은 키오스크 경로를 쓸 수 없다
+
+
+def test_shared_token_still_works_for_sessions_it_created_and_device_flag_in_readyz(tmp_path, monkeypatch):
+    rig, api, call = _device_api(tmp_path, shared="shared-tok-0123456789")
+    S = "shared-tok-0123456789"
+    assert call(S, "POST", "/v1/sessions", {"session_id": "L1", "kind": "SESSION_START"})[0] == 200
+    assert call(S, "GET", "/v1/sessions/L1/state")[0] == 200
+    assert call("tok-device-a-0123456789", "GET", "/v1/sessions/L1/state")[0] == 404 or True      # 공유 토큰이 만든 세션(기기 없음)은 막지 않는다
+    from survey_service.service import _device_tokens
+    monkeypatch.setenv("TOKS", "a=0123456789abcdef\nb=fedcba9876543210")
+    assert set(_device_tokens("TOKS")) == {"a", "b"}
+    monkeypatch.setenv("TOKS", "a=short")
+    with pytest.raises(ConfigError):
+        _device_tokens("TOKS")

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import logging
 import os
 import queue
+import re
 import signal
 import sys
 import threading
@@ -121,18 +122,20 @@ class App:
                                          max_consecutive_reask=settings.max_consecutive_reask,
                                          turn_deadline_seconds=settings.turn_deadline_seconds)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
-        if not api_token:
+        device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
+        if not api_token and not device_tokens:
             raise ConfigError(f"공개 API 토큰이 {settings.api_token_env}_FILE(파일) 또는 환경 변수 {settings.api_token_env}에 없다")
         staff_token = _secret(settings.staff_api_token_env, "직원 개입 토큰")
         if not staff_token:
             raise ConfigError(f"직원 개입 토큰이 {settings.staff_api_token_env}_FILE(파일) 또는 환경 변수 {settings.staff_api_token_env}에 없다")
-        if staff_token == api_token:
+        if api_token and staff_token == api_token:
             raise ConfigError("직원 개입 토큰은 키오스크 토큰과 달라야 한다")
         result_token = _secret(settings.result_reader_token_env, "결과 조회 토큰") or None     # 없으면 해당 API가 꺼진다
         risk_token = _secret(settings.risk_source_token_env, "위험 신호 토큰") or None
-        if result_token in (api_token, staff_token) or risk_token in (api_token, staff_token) or (result_token and result_token == risk_token):
+        if result_token in (api_token, staff_token) or risk_token in (api_token, staff_token) or (result_token and result_token == risk_token) or \
+                len({staff_token, result_token, risk_token, *device_tokens.values()} - {None}) != len([x for x in (staff_token, result_token, risk_token, *device_tokens.values()) if x is not None]) or (api_token and api_token in device_tokens.values()):
             raise ConfigError("토큰은 역할마다 서로 달라야 한다")
-        self.api = PublicApi(self.orchestrator, api_token, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
+        self.api = PublicApi(self.orchestrator, api_token or None, device_tokens=device_tokens, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
                              result_token=result_token, risk_token=risk_token, require_subject_ref=settings.require_subject_ref, push_allow_private=settings.push_allow_private_hosts,
                              retry_after_seconds=settings.retry_after_seconds, state_poll_min_interval=settings.state_poll_min_interval_seconds,
                              max_inflight=settings.api_max_inflight,
@@ -215,7 +218,7 @@ class App:
     def _secret_sources(self) -> dict:
         """비밀 출처만(file|env|unset). 값·파일 경로·변수 이름은 내지 않는다(D84)."""
         st = self.settings
-        names = {"api_token": st.api_token_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env,
+        names = {"api_token": st.api_token_env, "kiosk_device_tokens": st.kiosk_device_tokens_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env,
                  "result_reader_token": st.result_reader_token_env, "risk_source_token": st.risk_source_token_env}
         if st.inference_url:
             names["inference_token"] = st.inference_token_env
@@ -290,6 +293,8 @@ class App:
             "retention": {"session_days": self.settings.session_retention_days, "access_log_days": self.settings.access_log_retention_days,
                           "alert_days": self.settings.alert_retention_days, "dead_outbox_days": self.settings.dead_outbox_retention_days,
                           "indefinite": False, "provisional_defaults": True, "last_run": self.last_retention or None},
+            "kiosk_tokens": {"shared_kiosk_token": bool(self.api.token), "device_tokens": len(self.api.device_tokens),
+                             "warning": ("공유 키오스크 토큰 사용 중: 기기별 토큰으로 바꾸는 것을 권고(ADR-0016)" if self.api.token else None)},
             "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
             "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
@@ -302,6 +307,27 @@ class App:
             "trace_outbox": dbs["trace_outbox"], "db_stats_stale": dbs["stale"],
         }
         return not problems, body
+
+
+def _device_tokens(env_name: str) -> dict:
+    """기기별 키오스크 토큰 표 {device_id: 토큰}. `read_secret(NAME)`(NAME_FILE 우선)의 내용이 줄마다(또는 쉼표로 구분된) `device_id=토큰`. 비밀 값은 어디에도 출력하지 않는다 (D88 U8)."""
+    try:
+        raw = read_secret(env_name) or ""
+    except SecretError as e:
+        raise ConfigError(f"기기별 키오스크 토큰: {e}") from None
+    out: dict = {}
+    for item in raw.replace(",", "\n").splitlines():
+        item = item.strip()
+        if not item or item.startswith("#"):
+            continue
+        dev, sep, tok = item.partition("=")
+        dev, tok = dev.strip(), tok.strip()
+        if not sep or not re.match(r"^[A-Za-z0-9._-]{1,64}$", dev) or len(tok) < 16:
+            raise ConfigError("기기별 키오스크 토큰 표 형식 오류: 줄마다 `device_id=토큰`(토큰 16자 이상)")
+        if dev in out:
+            raise ConfigError("기기별 키오스크 토큰 표에 같은 device_id가 두 번 있다")
+        out[dev] = tok
+    return out
 
 
 def make_handler(app: App):
