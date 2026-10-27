@@ -270,21 +270,88 @@ def test_risk_phrase_on_unknown_session_sends_no_alert_but_store_outage_still_al
     rig.store.load = real
 
 
-def test_same_turn_resend_reuses_the_alert(tmp_path):
+def test_same_turn_resend_reuses_the_alert_once_delivered(tmp_path):
     from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole
     from survey_service.risk_rules import RuleRiskSource
     store = AlertStore(str(tmp_path / "a.db"))
     svc = AlertService(store, AlertHub())
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
     rig.orch.staff_console = AlertStaffConsole(svc)
-    svc.hub.subscribe()
+    svc.hub.subscribe()                                                                  # 전달 경로가 있다
     rig.start()
-    rig.store.commit = lambda *a, **k: {"status": "DB_ERROR", "write_outcome": "NOT_WRITTEN", "revision": None}      # 확정 실패(NOT_COMMITTED): 같은 turn_id가 다시 처리된다
+    rig.store.commit = lambda *a, **k: {"status": "DB_ERROR", "write_outcome": "NOT_WRITTEN", "revision": None}      # NOT_COMMITTED: 같은 turn_id가 다시 처리된다
     for _ in range(3):
         rig.orch.handle_turn(turn_id="dup", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
-    assert len(store.list(None, 10, None)[0]) == 1 and svc.stats["deduplicated"] >= 1
+    assert len(store.list(None, 10, None)[0]) == 1 and svc.stats["deduplicated"] == 2
     rig.orch.handle_turn(turn_id="other", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
     assert len(store.list(None, 10, None)[0]) == 2                                      # 다른 턴은 새 알림
+
+
+def test_delivery_failure_is_not_turned_into_success_by_the_idempotent_retry(tmp_path):
+    """전달 경로가 없는 실제 경로(구독자 없음): 첫 시도 DELIVERY_FAILED -> 같은 턴 재시도도 DELIVERY_FAILED(알림은 하나). 구독자가 생기면 재시도가 전달하고 성공으로 바뀐다."""
+    from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole
+    from survey_service.risk_rules import RuleRiskSource
+    store = AlertStore(str(tmp_path / "a.db"))
+    svc = AlertService(store, AlertHub())
+    rig = Rig(risk_source=RuleRiskSource.provisional_default())
+    rig.orch.staff_console = AlertStaffConsole(svc)
+    rig.start()
+    rig.store.commit = lambda *a, **k: {"status": "DB_ERROR", "write_outcome": "NOT_WRITTEN", "revision": None}
+    msg = {"session_id": "S1", "kind": "UTTERANCE", "utterance": "가슴이 아파요"}
+    for _ in range(2):
+        o = rig.orch.handle_turn(turn_id="u1", frontend_message=msg)
+        assert o.frontend_input["turn_failure_signal"]["staff_alert"] == "DELIVERY_FAILED"
+    assert len(store.list(None, 10, None)[0]) == 1
+    q = svc.hub.subscribe()                                                              # 이제 직원 콘솔이 연결됐다
+    o = rig.orch.handle_turn(turn_id="u1", frontend_message=msg)
+    assert o.frontend_input["turn_failure_signal"]["staff_alert"] == "DELIVERED" and not q.empty() and len(store.list(None, 10, None)[0]) == 1
+    o = rig.orch.handle_turn(turn_id="u1", frontend_message=msg)
+    assert o.frontend_input["turn_failure_signal"]["staff_alert"] == "DELIVERED" and svc.stats["deduplicated"] == 1
+
+
+def test_same_turn_different_kind_is_not_merged(tmp_path):
+    from survey_service.alerts import AlertHub, AlertService
+    store = AlertStore(str(tmp_path / "a.db"))
+    svc = AlertService(store, AlertHub())
+    svc.hub.subscribe()
+    from survey_service.alerts import CURRENT_TURN
+    tok = CURRENT_TURN.set(("S1", "t1"))
+    try:
+        svc.raise_alert("S1", "RISK")
+        svc.raise_alert("S1", "CALL_STAFF")
+        svc.raise_alert("S1", "RISK")
+    finally:
+        CURRENT_TURN.reset(tok)
+    assert sorted(a["kind"] for a in store.list(None, 10, None)[0]) == ["CALL_STAFF", "RISK_STOP"]
+
+
+def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_path):
+    """실제 저장소로: 없는 세션은 알림을 버리고, 저장소 장애(닫힌 DB)와 느림(한도 초과)은 알림을 보낸다."""
+    import time as _t
+    from survey_service.risk_rules import RuleRiskSource
+    from survey_service.store.sqlite import SqliteSessionStore
+
+    class Slow(SqliteSessionStore):
+        delay = 0.0
+
+        def load(self, sid):
+            _t.sleep(self.delay)
+            return super().load(sid)
+    store = Slow(str(tmp_path / "s.db"))
+    rig = Rig(store=store, risk_source=RuleRiskSource.provisional_default(), turn_deadline_seconds=3)
+    rig.start("S2")
+    rig.orch.handle_turn(turn_id="a", frontend_message={"session_id": "NOPE", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    assert not [c for c in rig.console.inputs if c.get("staff_alert")] and rig.orch.counters.get("risk_prescreen_unknown_session") == 1                    # NOT_FOUND: 알림 없음
+    store.delay = 5                                                                                                          # 느림: 확인 한도(마감의 30%, 최대 1초)를 넘긴다
+    rig.orch.handle_turn(turn_id="b", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    assert len([c for c in rig.console.inputs if c.get("staff_alert")]) == 1
+    store.delay = 0
+    store._db.close()                                                                                                        # 장애: 닫힌 DB는 DB_ERROR
+    try:
+        rig.orch.handle_turn(turn_id="c", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "숨이 안 쉬어져요"})
+    except Exception:
+        pass                              # 닫힌 DB는 턴의 다른 단계가 터질 수 있다(이 시험은 알림이 먼저 나갔는지만 본다)
+    assert len([c for c in rig.console.inputs if c.get("staff_alert")]) == 2
 
 
 def test_device_token_cannot_touch_sessions_without_a_recorded_owner(tmp_path):
