@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "SurveyReadyz.schema.json",
+  "title": "SurveyReadyz",
+  "description": "GET /readyz 응답 본문(200 또는 503). 만드는 쪽: survey-service(service.py readiness). 읽는 쪽: deploy(경보·점검). 필수 키는 deploy 경보와 점검이 읽는 것만, 나머지는 있으면 형식만 확인한다. 모르는 키는 읽는 쪽이 무시한다(이 서비스가 진단 필드를 더해도 deploy가 깨지지 않게). 비밀 값은 어떤 키에도 없다.",
+  "type": "object",
+  "required": [
+    "ready",
+    "problems",
+    "database",
+    "contract_version",
+    "pipeline_schema_version",
+    "trace_outbox",
+    "staff_alerts",
+    "staff_alert_source",
+    "kiosk_tokens",
+    "release_loader"
+  ],
+  "properties": {
+    "ready": {
+      "type": "boolean"
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "ready=false면 비어 있지 않다. 값 예: no_active_release, release_loading, session_db, outbox_db, alert_db, shutting_down"
+    },
+    "database": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sqlite",
+            "postgresql"
+          ]
+        },
+        "status": {
+          "const": "UNAVAILABLE"
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "service_version": {
+      "type": "string"
+    },
+    "active_release": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pipeline_schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "trace_outbox": {
+      "type": "object",
+      "required": [
+        "pending",
+        "sent",
+        "dead",
+        "dropped_full",
+        "dead_by_code",
+        "oldest_pending_age_seconds",
+        "consecutive_unavailable",
+        "last_error"
+      ],
+      "properties": {
+        "pending": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dead": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dropped_full": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dead_by_code": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "oldest_pending_age_seconds": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "consecutive_unavailable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "staff_alerts": {
+      "type": "object",
+      "required": [
+        "delivery_failed"
+      ],
+      "properties": {
+        "delivery_failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "staff_alert_source": {
+      "type": "object",
+      "required": [
+        "active"
+      ],
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "provisional": {
+          "type": "boolean"
+        }
+      }
+    },
+    "kiosk_tokens": {
+      "type": "object",
+      "required": [
+        "shared_kiosk_token",
+        "device_tokens"
+      ],
+      "properties": {
+        "shared_kiosk_token": {
+          "type": "boolean"
+        },
+        "device_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "auth_failures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "idle_expiry_seconds": {
+          "type": "number"
+        }
+      }
+    },
+    "release_loader": {
+      "type": "object",
+      "required": [
+        "retrying",
+        "rejections"
+      ],
+      "properties": {
+        "retrying": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "rejections": {
+          "type": "array"
+        },
+        "warnings": {
+          "type": "array"
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "description": "비밀이 어디서 왔는지만(file/env/unset). 값은 없다.",
+      "additionalProperties": {
+        "enum": [
+          "file",
+          "env",
+          "unset"
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ready": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "problems": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "ready": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "problems": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

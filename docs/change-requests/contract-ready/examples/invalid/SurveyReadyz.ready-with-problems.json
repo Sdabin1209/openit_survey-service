@@ -1,0 +1,113 @@
+{
+  "ready": true,
+  "problems": [
+    "session_db"
+  ],
+  "database": {
+    "kind": "sqlite"
+  },
+  "service_version": "0.2.0",
+  "active_release": "rel-1",
+  "contract_version": 1,
+  "pipeline_schema_version": "2.1",
+  "staff_alerts": {
+    "deduplicated": 0,
+    "created": 0,
+    "delivered": 0,
+    "delivery_failed": 0,
+    "push_accepted": 0,
+    "push_failed": 0,
+    "push_gone": 0,
+    "staff_call_retries": 0,
+    "staff_call_retry_delivered": 0,
+    "staff_call_retry_failed": 0,
+    "staff_call_retry_replayed": 0,
+    "staff_call_retry_rejected_interval": 0,
+    "staff_call_retry_rejected_limit": 0,
+    "staff_call_retry_no_open_alert": 0,
+    "staff_call_reports": 0,
+    "staff_call_reports_not_notified": 0,
+    "staff_call_report_rejected_limit": 0,
+    "retry_min_interval_s": 30,
+    "retry_max_per_session": 10,
+    "report_max_per_session": 20,
+    "push_enabled": false,
+    "sse_connections": 0,
+    "subscriptions": 0
+  },
+  "secrets": {
+    "api_token": "env",
+    "kiosk_device_tokens": "unset",
+    "staff_api_token": "env",
+    "vapid_private_key": "unset",
+    "result_reader_token": "unset",
+    "risk_source_token": "unset"
+  },
+  "staff_alert_source": {
+    "active": true
+  },
+  "validation_violations": {
+    "validations_with_violation": 0,
+    "total": 0,
+    "by_code": {}
+  },
+  "result_dispatcher": {
+    "attached": true
+  },
+  "retention": {
+    "session_days": 90,
+    "access_log_days": 365,
+    "alert_days": 365,
+    "dead_outbox_days": 30,
+    "indefinite": false,
+    "provisional_defaults": true,
+    "last_run": null
+  },
+  "kiosk_tokens": {
+    "shared_kiosk_token": true,
+    "device_tokens": 0,
+    "warning": "공유 키오스크 토큰 사용 중: 기기별 토큰으로 바꾸는 것을 권고(ADR-0016)"
+  },
+  "api": {
+    "idle_expiry_seconds": 0
+  },
+  "reask_limit": {
+    "active": true,
+    "max_consecutive": 3
+  },
+  "response_tables": {
+    "status": "DATASET_RULES_UNCONFIRMED",
+    "counters": {
+      "ask_fallback": 0,
+      "phrase_fallback": 0,
+      "ask_generic": 0,
+      "phrase_generic": 0
+    }
+  },
+  "question_flow": {
+    "flow_id": "dataset_v2",
+    "items": 31
+  },
+  "inference": null,
+  "model_backend": "fake",
+  "model_backend_production_safe": false,
+  "release_loader": {
+    "retrying": null,
+    "unavailable_releases": [],
+    "last_pointer_version": 1,
+    "last_poll_error": null,
+    "rejections": [],
+    "warnings": []
+  },
+  "trace_outbox": {
+    "pending": 0,
+    "sent": 0,
+    "dead": 0,
+    "dropped_full": 0,
+    "dead_by_code": {},
+    "oldest_pending_age_seconds": null,
+    "consecutive_unavailable": 0,
+    "last_error": null
+  },
+  "db_stats_stale": false
+}

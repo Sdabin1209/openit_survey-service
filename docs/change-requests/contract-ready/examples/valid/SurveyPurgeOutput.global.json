@@ -1,0 +1,9 @@
+{
+  "event": "session_purge",
+  "configured": true,
+  "purged_sessions": 0,
+  "retention_days": 90,
+  "purged_access_log": 0,
+  "purged_alerts": 0,
+  "purged_dead_outbox": 0
+}

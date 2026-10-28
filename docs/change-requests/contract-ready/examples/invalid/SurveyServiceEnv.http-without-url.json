@@ -1,0 +1,15 @@
+{
+  "SURVEY_RELEASE_READER": "http",
+  "SURVEY_RELEASE_READER_TOKEN_FILE": "/run/secrets/release-reader-token",
+  "SURVEY_TRACE_INGEST": "http",
+  "SURVEY_TRACE_INGEST_URL": "http://ops-feedback:8080",
+  "SURVEY_TRACE_INGEST_TOKEN_FILE": "/run/secrets/trace-ingest-token",
+  "SURVEY_MODEL_BACKEND": "http",
+  "SURVEY_INFERENCE_URL": "http://inference:8000",
+  "SURVEY_INFERENCE_TOKEN_FILE": "/run/secrets/inference-token",
+  "SURVEY_DATABASE_URL_FILE": "/run/secrets/db-survey-dsn",
+  "SURVEY_STAFF_API_TOKEN_FILE": "/run/secrets/staff-token",
+  "SURVEY_KIOSK_DEVICE_TOKENS_FILE": "/run/secrets/kiosk-device-tokens",
+  "SURVEY_LOG_LEVEL": "INFO",
+  "SURVEY_PORT": "8080"
+}
