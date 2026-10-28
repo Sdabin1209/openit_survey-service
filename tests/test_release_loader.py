@@ -260,26 +260,37 @@ def test_release_expectations_from_installed_libraries(env):
     """설치된 model-runtime이 내보내는 serving_config 기준값(prompt 버전, 보호 정책)과 역할별 system_prompt를 가진 매니페스트를 적재한다."""
     reader, reg, loader = env
     import model_runtime
-    expected_cfg = model_runtime.fake_serving_config()      # 기준값은 설치된 패키지에서 읽는다
+    from model_runtime.prompts import SUPPORTED_TEMPLATE_VERSIONS
+    from survey_service.inference import role_configs
     add(reader, "rel-1")
     reader.set_pointer("rel-1")
     assert loader.poll_once().action == "LOADED"
     m = reg.active().manifest
     for role in ("LORA_A", "LORA_B"):
-        assert m["adapters"][role]["serving_config"]["prompt_template_version"] == expected_cfg["prompt_template_version"]
-        assert m["adapters"][role]["serving_config"]["protection_policy_version"] == model_runtime.PROTECTION_POLICY_VERSION
+        cfg = m["adapters"][role]["serving_config"]
+        # 기대값은 시험 대상(서비스가 적재한 매니페스트)과 독립인 model-runtime의 지원 목록이다
+        assert cfg["prompt_template_version"] in SUPPORTED_TEMPLATE_VERSIONS
+        assert cfg["protection_policy_version"] in model_runtime.PROTECTION_POLICIES
+        model_runtime.validate_serving_config(cfg)          # 서버(model-runtime)가 받는 값이다
         assert m["adapters"][role]["system_prompt"]["path"] == "system_prompt.txt"
+    # 서비스가 I9 load에 넘기는 값은 매니페스트의 역할별 값 그대로이고, 해시는 서버가 같은 설정에서 계산하는 값과 같다
+    cfgs, hashes, _ = role_configs(m)
+    for role in ("LORA_A", "LORA_B"):
+        assert cfgs[role] == m["adapters"][role]["serving_config"]
+        assert hashes[role] == model_runtime.serving_config_hash(cfgs[role])
     assert m["pipeline_schema_version"] == PIPELINE_SCHEMA_VERSION      # 설치된 계약 패키지의 값
     assert not [w for w in reg.active().warnings if "폐기" in w]
 
 
 def test_release_with_prompt_3_is_rejected(env):
-    """현재 prompt 버전이 아닌 옛 prompt 버전(현재 번호 -1)은 적재되지 않는다. 이전 릴리스를 유지하고 거부한다."""
+    """model-runtime의 지원 목록에 없는 prompt 버전은 적재되지 않는다. 이전 릴리스를 유지하고 거부한다."""
     import model_runtime
     reader, reg, loader = env
-    cur = model_runtime.fake_serving_config()["prompt_template_version"]
-    stem, num = cur.rsplit("-", 1)
-    cfg = dict(model_runtime.fake_serving_config(), prompt_template_version=f"{stem}-{int(num) - 1}")
+    from model_runtime.prompts import SUPPORTED_TEMPLATE_VERSIONS
+    stem = "prompt"
+    newest = max(int(v.rsplit("-", 1)[1]) for v in SUPPORTED_TEMPLATE_VERSIONS)
+    unsupported = next(f"{stem}-{n}" for n in range(newest + 1, newest + 50) if f"{stem}-{n}" not in SUPPORTED_TEMPLATE_VERSIONS)   # 지원 목록에 없는 버전
+    cfg = dict(model_runtime.fake_serving_config(), prompt_template_version=unsupported)
     reader.add_release("rel-1", sample_bank(), serving_config_b=cfg)
     reader.set_pointer("rel-1")
     r = loader.poll_once()
