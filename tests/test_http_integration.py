@@ -1,4 +1,4 @@
-"""실제 HTTP 클라이언트(boundary_contracts.clients)와 참조 서버(tests/ref_servers.py)로 로더와 Trace 전송을 통합 시험한다.
+"""실제 HTTP 클라이언트(boundary_contracts.clients)와 참조 서버(boundary-contracts의 conformance.servers)로 로더와 Trace 전송을 통합 시험한다.
 
 참조 서버는 release-gate·ops-feedback이 아니다. 실제 서버를 띄운 E2E는 deploy의 몫이다.
 """
@@ -19,7 +19,7 @@ from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter, envelop
 
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .http_support import TOK, publish
-from .ref_servers import ReferenceServer
+from conformance.servers import ReferenceServer
 from .sample_bank import sample_bank
 from .test_release_loader import INSTALLED
 

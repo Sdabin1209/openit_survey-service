@@ -1,4 +1,4 @@
-"""참조 서버(tests/ref_servers.py)에 FakeReleaseReader로 만든 일관된 릴리스를 올린다. 시험과 스모크가 같이 쓴다."""
+"""참조 서버(boundary-contracts의 conformance.servers)에 FakeReleaseReader로 만든 일관된 릴리스를 올린다. 시험과 스모크가 같이 쓴다."""
 import json
 
 import model_runtime

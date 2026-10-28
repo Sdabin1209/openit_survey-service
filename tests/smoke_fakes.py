@@ -9,7 +9,7 @@ from boundary_contracts.clients import HttpReleaseReader, HttpTraceIngest
 from .e2e_support import ScriptedRisk
 from .fakes import RecordingConsole, RecordingDispatcher
 from .http_support import TOK, publish
-from .ref_servers import ReferenceServer
+from conformance.servers import ReferenceServer
 
 _server = None
 

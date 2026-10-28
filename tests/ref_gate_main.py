@@ -7,7 +7,7 @@ from pathlib import Path
 from boundary_contracts import read_secret
 
 from .http_support import TOK, publish
-from .ref_servers import ReferenceServer
+from conformance.servers import ReferenceServer
 
 
 def main(port: int = 9000) -> None:

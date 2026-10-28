@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from boundary_contracts import read_secret
 
-from .ref_servers import RuntimeReferenceServer
+from conformance.servers import RuntimeReferenceServer
 from .runtime_support import redirect_extraction
 
 

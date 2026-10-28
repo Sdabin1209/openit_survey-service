@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 시험 대역: 계약 참조 서버 복사본 제거 [미출시]
+
+- `tests/ref_servers.py`(boundary-contracts conformance/servers.py의 복사본)를 지우고 시험이 `conformance.servers`를 import한다(영역 사이 코드 복사 금지). 이 패키지는 boundary-contracts 커밋 409d820에서 패키지에 포함됐고 v2.1.0 태그에는 없다. 다음 태그가 나오면 `requirements.txt`의 고정 태그를 그 태그로 올려야 시험·스모크 이미지가 돌아간다(그 전에는 `PYTHONPATH=../boundary-contracts`로 시험했다).
+
 ## 정정: /readyz 총 마감 [미출시]
 
 - 아래 'readyz DB 확인' 항목들이 말한 "+약 2초", "+1초 하드 상한"은 낡았다. 현재 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본값은 `survey_service/settings.py`)가 세 확인 전체의 총 마감이고 여유를 더하지 않는다(ADR-0011, 경계 시험은 `tests/test_readyz_db_outage.py`).

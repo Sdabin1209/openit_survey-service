@@ -1,4 +1,4 @@
-"""모델 추론 서버 시험 대역: 계약의 RuntimeReferenceServer(tests/ref_servers.py)에 실패·지연·적재 지연을 꽂는 시험용 확장.
+"""모델 추론 서버 시험 대역: 계약의 RuntimeReferenceServer(boundary-contracts의 conformance.servers)에 실패·지연·적재 지연을 꽂는 시험용 확장.
 
 서버 동작(경로, 본문 검증, OUTPUT_INVALID 503)은 참조 서버 그대로이고, 이 클래스는 호출 전에 시험이 정한 사고를 일으킬 뿐이다."""
 from __future__ import annotations
@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from boundary_contracts import PIPELINE_SCHEMA_VERSION as V, BoundaryError
 
-from .ref_servers import RuntimeReferenceServer
+from conformance.servers import RuntimeReferenceServer
 
 
 def question_id_of(req: dict) -> str:
