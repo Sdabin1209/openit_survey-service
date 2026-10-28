@@ -237,3 +237,35 @@ def test_readyz_total_deadline_with_three_hanging_dbs_and_reasons_are_kept(tmp_p
         hang.set()
     finally:
         app.stop() if hasattr(app, "stop") else None
+
+
+def test_readyz_deadline_boundary_check_finishing_just_before_counts_ok_just_after_counts_failed(tmp_path, monkeypatch):
+    """마감 경계: 마감(SURVEY_READYZ_DB_TIMEOUT_SECONDS)보다 조금 일찍 끝난 확인은 정상, 조금 늦게 끝난 확인은 실패로 센다. 총 시간은 마감 + 작은 여유 안이다."""
+    app = _app(tmp_path, monkeypatch, extra={"SURVEY_READYZ_DB_TIMEOUT_SECONDS": "1.0"})
+    try:
+        budget = app.settings.readyz_db_timeout_seconds
+        margin = 0.3
+        monkeypatch.setattr(app.store, "ping", lambda: time.sleep(budget - margin))      # 마감 직전에 끝남
+        monkeypatch.setattr(app.outbox, "ping", lambda: time.sleep(budget + margin))     # 마감 직후에 끝남
+        monkeypatch.setattr(app.alert_store, "ping", lambda: None)
+        ok, body, took = _timed(app)
+        assert ok is False
+        assert [p for p in body["problems"] if p.endswith("_db")] == ["outbox_db"]
+        assert took < budget + margin, took
+    finally:
+        app.stop() if hasattr(app, "stop") else None
+
+
+def test_readyz_deadline_measured_worst_case(tmp_path, monkeypatch):
+    """세 확인이 모두 멈출 때 /readyz 총 시간을 5회 잰다. 최악 값은 `READYZ_MEASURE`로 출력한다(ADR-0011에 기록). 기본 마감 + 0.5초 안이어야 한다."""
+    app = _app(tmp_path, monkeypatch)
+    try:
+        hang = threading.Event()
+        for st in (app.store, app.outbox, app.alert_store):
+            monkeypatch.setattr(st, "ping", lambda: hang.wait(30))
+        took = [_timed(app)[2] for _ in range(5)]
+        print("READYZ_MEASURE", [round(t, 3) for t in took], "worst", round(max(took), 3))
+        assert max(took) < app.settings.readyz_db_timeout_seconds + 0.5, took
+        hang.set()
+    finally:
+        app.stop() if hasattr(app, "stop") else None

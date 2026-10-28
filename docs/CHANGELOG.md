@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 정정: /readyz 총 마감 [미출시]
+
+- 아래 'readyz DB 확인' 항목들이 말한 "+약 2초", "+1초 하드 상한"은 낡았다. 현재 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본값은 `survey_service/settings.py`)가 세 확인 전체의 총 마감이고 여유를 더하지 않는다(ADR-0011, 경계 시험은 `tests/test_readyz_db_outage.py`).
+
 ## 계약 2.1.0: 직원 호출 재알림·실패 기록(CR-H001), 정지 사유(CR-H002) [미출시, 푸시·태그 전]
 
 - 추가형. `POST /v1/sessions/{id}/staff-call/retry`·`/report`(키오스크, 세션을 만든 기기만), 알림 행의 delivery_attempts·last_delivery_status·manual_notice_*·pause_reason, 세션 상태·직원 세션 조회·턴 신호의 optional `pause_reason`(문진 스키마 `TurnFailureSignal`·`StaffSessionView`에 optional 필드 추가, 정수 버전 1 그대로), 설정 `SURVEY_STAFF_CALL_RETRY_*`, `/readyz` 건수. ADR-0021, ADR-0022. 의존 고정을 v2.1.0으로 올리는 일은 태그가 push된 뒤.

@@ -74,7 +74,7 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 - 시험 상태(2026-10-28, 이 PC 한 곳, 계약 작업 트리 2.1.0 스펙 커밋 86da3bf 기준, 태그 전): `.venv/bin/python -m pytest` 1154 통과 + 54 SKIP(PostgreSQL 시험은 `TEST_DATABASE_URL`이 없어 SKIP). 일회용 PostgreSQL을 `TEST_DATABASE_URL`로 주면 1204 통과 + 4 SKIP. 이 숫자는 여기에만 적는다(`docs/STATUS.md`는 이전 시점 기록). 두 번째 깨끗한 환경에서는 확인하지 못했다.
 - 확인하지 못한 것(STATUS, OPEN_GAPS): 실제 model-runtime 서버 이미지와의 E2E, 두 번째 깨끗한 환경에서의 재현, 실제 브라우저·푸시 서비스, 실제 모델로 한 턴을 통과시키는 일(U07), 부하·동시성, 세션 문서 암호화·보존 기간.
 - 표 찾기는 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 확인 대기다(`schema/data/response_tables.json`의 `table_status: DATASET_RULES_UNCONFIRMED`, 승인 기록 미확인).
-- `/readyz`는 PostgreSQL이 죽거나 응답이 없어도 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본 2초)+약 2초 안에 503(db unavailable)으로 답하고 복구 뒤 200이 된다(CR-D23, docs/boundary.md §5·§6). 이 PC에서 로컬 PostgreSQL 컨테이너로 확인했고, 실제 compose 환경의 재측정은 deploy E2E 5p에서 헤드가 한다.
+- `/readyz`는 PostgreSQL이 죽거나 응답이 없어도 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본값은 `survey_service/settings.py`)가 정하는 총 마감 안에 503(db unavailable)으로 답하고 복구 뒤 200이 된다(CR-D23, docs/boundary.md §5·§6). 이 PC에서 로컬 PostgreSQL 컨테이너로 확인했고, 실제 compose 환경의 재측정은 deploy E2E 5p에서 헤드가 한다.
 - 직원 알림은 기본으로 임시 규칙 목록(임상 검토 전)이 모든 발화 턴에서 돌아 만들어진다(`/readyz`의 `staff_alert_source.active=true, provisional=true`, `SURVEY_RISK_DEFAULT_RULES=off`이면 꺼짐, docs/boundary.md §5).
 
 ## 이 영역의 열린 항목 (head/docs/OPEN_GAPS.md, 읽기 전용으로 확인)
