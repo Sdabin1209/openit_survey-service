@@ -28,7 +28,7 @@ def test_view_alert_kind_equals_the_list_alert_kind(vr):
     _risk(vr)
     _, lst, _ = vr.call("GET", "/v1/staff/alerts")
     _, view, _ = vr.call("GET", "/v1/staff/sessions/K1")
-    assert [a["kind"] for a in lst["alerts"]] == ["RISK_STOP"]
+    assert [a["kind"] for a in lst["items"]] == ["RISK_STOP"]
     assert [a["kind"] for a in view["alerts"]] == ["RISK_STOP"]
 
 
