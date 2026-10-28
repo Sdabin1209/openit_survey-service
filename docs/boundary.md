@@ -4,7 +4,7 @@
 
 ## 1. 소유하는 것
 
-- 소유 저장소: **Session Store**(서비스 내부, 기본 SQLite 파일 `SURVEY_SESSION_DB`)와 **Trace outbox**(SQLite 파일 `SURVEY_OUTBOX_DB`). 이웃은 두 파일을 읽지 않는다.
+- 소유 저장소: **Session Store**(서비스 내부, 기본 SQLite 파일 `SURVEY_SESSION_DB`)와 **Trace outbox**(세션과 같은 DB의 표. SQLite에서는 세션 DB 파일, ADR-0023. `SURVEY_OUTBOX_DB`는 더 쓰지 않는다). 이웃은 이 저장소를 읽지 않는다.
 - 유지하는 것: `schema/`(문진 스키마, 정수 버전 `CONTRACT_VERSION`=1, 문항 순서·건너뛰기 표 `QuestionFlow`와 표 찾기 어휘표 `ResponseTables`(데이터셋 담당 규칙을 옮김, 확인 대기) 포함). 변경은 다른 영역의 변경 요청을 받아 반영하고, 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다(D21).
 
 ## 2. 제공하는 것
@@ -13,7 +13,7 @@
 |---|---|
 | 문진 스키마 패키지 | 배포 이름 `openit-survey-schema`, import `survey_schema`. `load_schema(name, version=1)`, `schema_dir(version=1)`(model-runtime `load(schema_dir=...)`에 넘기는 `<계약명>.json`이 있는 디렉터리), `contract_version_dir`, `available_versions`, `current_version`, `list_schemas`. 정수 버전별 디렉터리 `survey_schema/v1/`. 설치: Git 태그 + `#subdirectory=schema`(태그는 헤드가 붙인다). |
 | SDK 인터페이스 | **없다**(brief §2). 이웃이 서비스의 내부 저장소를 읽지 않는다. 따라서 이 영역의 메모리 구현(가짜 SDK)도 없다. 이웃이 이 영역을 흉내 낼 일은 공개 API(I10)가 정해진 뒤의 몫이다. |
-| 공개 API(I10) | `boundary-contracts/PUBLIC_API.md`(D55): `POST /v1/sessions`, `POST /v1/sessions/{id}/turns`, `POST /v1/sessions/{id}/end`, `GET /v1/sessions/{id}/state`(키오스크, 정지면 `pause_reason`), 직원 호출 재알림 `POST /v1/sessions/{id}/staff-call/retry`와 직접 알림 보고 `.../staff-call/report`(키오스크, 세션을 만든 기기만, G절, ADR-0021), `POST /v1/sessions/{id}/intervention`(역할 staff, 멈춘 세션만), 직원 알림 `GET /v1/staff/alerts`, `GET /v1/staff/alerts/stream`(SSE), `GET /v1/staff/push-config`, `POST/DELETE /v1/staff/push-subscriptions`, 세션 기록 조회 `GET /v1/staff/sessions/{id}`(응답 `StaffSessionView`, 호출마다 접근 기록, PUBLIC_API.md C절)(모두 staff), 결과 조회 `GET /v1/results/{id}`·`GET /v1/results`(역할 result-reader, `SessionResult`, B절), 위험 신호 입력 `POST /v1/sessions/{id}/risk-signals`(역할 risk-source, `RiskSignal`, D절), 시작 본문의 선택 필드 `subject_ref`(A절), 개입의 `X-Openit-User` 헤더(E절), `GET /healthz`, `/readyz`. Bearer 토큰(키오스크/직원 두 개). 해석은 CR-009 |
+| 공개 API(I10) | `boundary-contracts/PUBLIC_API.md`(D55): `POST /v1/sessions`(`session_id` 생략 시 서버 발급, 응답 최상위 `session_id`; 프론트가 정하는 방식은 폐기 예정), `POST /v1/sessions/{id}/turns`, `POST /v1/sessions/{id}/end`, `GET /v1/sessions/{id}/state`(키오스크, 정지면 `pause_reason`), 직원 호출 재알림 `POST /v1/sessions/{id}/staff-call/retry`와 직접 알림 보고 `.../staff-call/report`(키오스크, 세션을 만든 기기만, G절, ADR-0021), `POST /v1/sessions/{id}/intervention`(역할 staff, 멈춘 세션만), 직원 알림 `GET /v1/staff/alerts`, `GET /v1/staff/alerts/stream`(SSE), `GET /v1/staff/push-config`, `POST /v1/staff/push-subscriptions`·`POST /v1/staff/push-subscriptions/unsubscribe`(204, `DELETE ?endpoint=`는 폐기 예정), 세션 기록 조회 `GET /v1/staff/sessions/{id}`(응답 `StaffSessionView`, 호출마다 접근 기록, PUBLIC_API.md C절)(모두 staff), 결과 조회 `GET /v1/results/{id}`·`GET /v1/results`(역할 result-reader, `SessionResult`, B절), 위험 신호 입력 `POST /v1/sessions/{id}/risk-signals`(역할 risk-source, `RiskSignal`, D절), 시작 본문의 선택 필드 `subject_ref`(A절), 개입의 `X-Openit-User` 헤더(E절), `GET /healthz`, `/readyz`. Bearer 토큰(키오스크/직원 두 개). 해석은 CR-009 |
 | 개발용 CLI | `python -m survey_service.cli`(공개 API가 아니다) |
 
 ## 3. 소비하는 것과 지원 버전

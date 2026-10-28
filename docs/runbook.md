@@ -39,7 +39,7 @@ HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_
 `trace_outbox`: `pending`(보낼 것), `sent`, `dead`(재시도하지 않는 실패), `oldest_pending_age_seconds`, `consecutive_unavailable`.
 
 - pending이 늘고 `last_error`가 `UNAVAILABLE`이면 수집(ops-feedback)이 내려가 있다. 턴에는 영향이 없고 복구되면 자동으로 보낸다.
-- dead 확인: `sqlite3 $SURVEY_OUTBOX_DB "SELECT session_id, turn_id, last_error FROM outbox WHERE state='DEAD'"`. `LOCAL_INVALID`는 이 서비스가 만든 봉투가 스키마를 어긴 것(결함이다. 세션·턴 ID는 `x-` 변환으로 막혀 있다). `INVALID_RECORD` 등은 수집이 거부한 것이다. 고친 뒤 다시 보내려면 해당 행을 `state='PENDING', next_attempt_at=0, attempts=0`으로 되돌린다.
+- dead 확인(SQLite는 `$SURVEY_SESSION_DB`, outbox가 세션 DB에 있다. ADR-0023): `sqlite3 $SURVEY_SESSION_DB "SELECT session_id, turn_id, last_error FROM outbox WHERE state='DEAD'"`. `LOCAL_INVALID`는 이 서비스가 만든 봉투가 스키마를 어긴 것(결함이다. 세션·턴 ID는 `x-` 변환으로 막혀 있다). `INVALID_RECORD` 등은 수집이 거부한 것이다. 고친 뒤 다시 보내려면 해당 행을 `state='PENDING', next_attempt_at=0, attempts=0`으로 되돌린다.
 - 전달 완료 행은 `SURVEY_OUTBOX_KEEP_SENT_HOURS` 뒤에 지운다.
 
 ## 4. 한 턴이 실패했을 때
@@ -101,7 +101,7 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 - **장애 정책 설정**: `SURVEY_TURN_DEADLINE_SECONDS`(6, 턴 총 마감), `SURVEY_DB_RECONNECT_BACKOFF_SECONDS`(1, 접속 실패 직후 재접속 유예), `SURVEY_DB_CONNECT_TIMEOUT_SECONDS`(2), `SURVEY_DB_STATEMENT_TIMEOUT_SECONDS`(2). 근거와 한계는 docs/boundary.md §5. 마감 초과가 잦으면 `turn_deadline_exceeded`와 `inference`(타임아웃), DB 상태를 본다. `/readyz`의 `trace_outbox.dead_by_code`에 `PERMISSION_DENIED`가 있으면 Trace 토큰이 거부된 것이다.
 - **부하 측정과 종료**: `LOAD_DATABASE_URL=<compose.dev.yaml의 PostgreSQL URL> .venv/bin/python scripts/load_test.py [--steps 1,10,50,100] [--max-inflight 32] [--model-delay 0]`으로 이 PC에서 동시 세션 부하를 잰다(가짜 모델, 실제 LLM 지연 없음, 결과는 docs/boundary.md §6-1). 한 프로세스가 CPU 한계로 약 12~14 턴/초에서 포화한다. 종료(SIGTERM)는 `/readyz`를 503 `shutting_down`으로 바꾸고 처리 중 요청을 끝낸 뒤 닫는다(컨테이너 정지 유예는 10초 이상으로 둔다).
 - **의미 검증 위반 관측**: 로그 `의미 검증 위반 ... violations=코드@경로,...`(재시도 전)와 `step=VALIDATE error=RuntimeError violations=...`(최종 실패)에 위반 코드와 경로가 있다(발화·값 없음). `/readyz`의 `validation_violations.by_code`는 코드별 누적 빈도다(검증 시도마다 센다. 프로세스 시작 이후).
-- **추론 호출 실패 로그**: `추론 호출 실패 op= code= reason= status= elapsed= read_timeout= classified=timeout|not_timeout`. `read_timeout`은 `SURVEY_INFERENCE_TIMEOUT_SECONDS`(기본 4초)이다. `SURVEY_HTTP_TIMEOUT_SECONDS`(10초)는 릴리스 읽기·Trace 전송 클라이언트에만 쓰이고 추론 호출에는 쓰이지 않는다.
+- **추론 호출 실패 로그**: `추론 호출 실패 op= code= reason= status= elapsed= read_timeout= classified=timeout|not_timeout`. `read_timeout`은 호출 종류별 상한이다: extract `SURVEY_INFERENCE_EXTRACT_TIMEOUT_SECONDS`(기본 3.0초), respond `SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS`(기본 2.0초). 계약 CONVENTIONS 2.2.0 배분이고 측정하지 않았다(ADR-0026). 재시도는 남은 턴 예산이 그 호출 상한 이상일 때만 한다(`retry_skipped_budget` 카운터). `SURVEY_INFERENCE_TIMEOUT_SECONDS`(기본 4초)는 릴리스 적재 확인·readyz 같은 제어 호출에만 쓰인다. `SURVEY_HTTP_TIMEOUT_SECONDS`(10초)는 릴리스 읽기·Trace 전송 클라이언트에만 쓰이고 추론 호출에는 쓰이지 않는다.
 - **직원 알림 입력원 자리(G01)**: `SURVEY_RISK_SOURCE=모듈:함수`가 `RiskSource` 구현을 만든다(포트 계약은 `docs/boundary.md` 4절). 비우면 입력원 없음이고 `/readyz`의 `staff_alert_source.active`는 false다. 입력원은 정해지지 않았다.
 
 - **직원 알림이 안 나온다**: `/readyz`의 `staff_alert_source`를 보라. `active: false`면 v2에 입력원이 없는 것이다(CR-012). 고장이 아니다. 입력원이 정해지면 `SURVEY_RISK_SOURCE=모듈:함수`로 꽂는다.

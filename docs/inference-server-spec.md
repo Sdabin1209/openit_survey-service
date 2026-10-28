@@ -39,7 +39,7 @@
 
 ## 4. 서비스 쪽 설정
 
-`SURVEY_INFERENCE_URL`(base URL), `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_INFERENCE_TIMEOUT_SECONDS`(호출 하나의 읽기 타임아웃, 기본 4), `SURVEY_INFERENCE_RETRIES`(기본 1), `SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS`(기본 600). 타임아웃 기본값은 프론트 타임아웃 10초 안에 parse와 generate 두 호출이 들어가도록 정했다(4+4).
+`SURVEY_INFERENCE_URL`(base URL), `SURVEY_INFERENCE_TOKEN_ENV`, `SURVEY_INFERENCE_EXTRACT_TIMEOUT_SECONDS`(기본 3.0), `SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS`(기본 2.0), `SURVEY_INFERENCE_TIMEOUT_SECONDS`(제어 호출용, 기본 4), `SURVEY_INFERENCE_RETRIES`(기본 1), `SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS`(기본 600). 호출별 상한은 서버 턴 마감 6초 안에 extract와 respond 두 호출이 들어가도록 계약 표(2.2.0)대로 3.0+2.0으로 정했다. 재시도는 남은 턴 예산이 호출 상한 이상일 때만 한다(ADR-0026, 측정하지 않은 배분값).
 
 ## 5. 서비스의 실패 처리 (`tests/test_inference_client.py`가 느린 서버·죽은 서버·틀린 출력까지 확인한다)
 

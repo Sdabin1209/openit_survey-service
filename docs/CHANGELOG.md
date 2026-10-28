@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 계약 2.2.0 따르기: 서버 발급 세션 ID, 푸시 해지 POST, 모델 호출별 시간 예산, kind 이름 [미출시, 푸시·태그 전]
+
+- 세션 ID: `POST /v1/sessions`에서 `session_id`를 생략하면 서버가 발급해 응답 최상위 `session_id`로 돌려준다. 프론트가 정하는 방식은 수용하되 폐기 예정 경고(3.0.0 제거). 스키마: `FrontendMessage`(SESSION_START의 session_id 선택), `FrontendInput`(선택 `session_id`).
+- 푸시 해지: `POST /v1/staff/push-subscriptions/unsubscribe` 본문 `{"endpoint"}` -> 204(멱등). `DELETE ?endpoint=`는 폐기 예정 경고.
+- 모델 호출: extract 3.0초, respond 2.0초, 재시도는 남은 턴 예산이 호출 상한 이상일 때만 (ADR-0026). 이전 호출당 4초는 없어졌다.
+- 직원 세션 보기의 알림 kind가 목록과 같은 이름(`RISK_STOP` 등)이다. `StaffSessionView` 스키마의 `AlertKind`를 고쳤다(CR-019 해결). 정수 스키마 버전은 그대로이나 이름 변경은 추가형이 아니다.
+
 ## 시험 대역: 계약 참조 서버 복사본 제거 [미출시]
 
 - `tests/ref_servers.py`(boundary-contracts conformance/servers.py의 복사본)를 지우고 시험이 `conformance.servers`를 import한다(영역 사이 코드 복사 금지). 이 패키지는 boundary-contracts 커밋 409d820에서 패키지에 포함됐고 v2.1.0 태그에는 없다. 다음 태그가 나오면 `requirements.txt`의 고정 태그를 그 태그로 올려야 시험·스모크 이미지가 돌아간다(그 전에는 `PYTHONPATH=../boundary-contracts`로 시험했다).

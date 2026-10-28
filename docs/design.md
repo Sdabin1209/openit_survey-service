@@ -8,7 +8,7 @@
 
 - 하는 일 [확인: brief §1]: 한 턴을 처리하는 Orchestrator, Session Store, 릴리스 로더, Trace 내보내기, 추론 서버, 문진 스키마 패키지(`schema/`).
 - 하지 않는 일 [확인]: 판단 로직(turn-engine), 모델 로딩·프롬프트·디코딩(model-runtime), 문항·모델 승인(게이트), Frontend 화면.
-- **공개 API(I10)** [확인: D55, `boundary-contracts/PUBLIC_API.md`]: 키오스크 프론트가 부르는 HTTP/JSON. `POST /v1/sessions`(시작), `POST /v1/sessions/{id}/turns`(발화, `turn_id` 멱등), `POST /v1/sessions/{id}/end`(종료), `GET /healthz`, `/readyz`. Bearer 토큰(환경 변수의 이름으로 지정, `SURVEY_API_TOKEN_ENV`). 구현은 `survey_service/api.py`가 기존 `handle_turn`(엔진·기록·직원 호출·결과 전달·Trace)에 그대로 연결하고, 문서가 정하지 않은 점의 해석은 CR-009에 적었다. 요청은 `FrontendMessage`로 검증하고 응답은 `FrontendInput`이다. 상태 코드: 400/401/404/409/429/503. 세션 유휴 만료(기본 300초, `SURVEY_SESSION_IDLE_SECONDS`)는 이탈 종료로 닫는다. 개발용 CLI(`python -m survey_service.cli`)는 그대로 있다. 직원 개입은 `POST /v1/sessions/{id}/intervention`(역할 `staff` 토큰, 키오스크 토큰은 403, 위험으로 멈춘 세션만, 아니면 409, `turn_id` 멱등)이 `InterventionDecision` 처리에 연결된다 [확인: D58, v1.3.1].
+- **공개 API(I10)** [확인: D55, `boundary-contracts/PUBLIC_API.md`]: 키오스크 프론트가 부르는 HTTP/JSON. `POST /v1/sessions`(시작. 본문의 `session_id`를 생략하면 서버가 `secrets.token_urlsafe(32)`로 발급해 응답 최상위 `session_id`로 돌려준다. 프론트가 정해 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식이라 수용하되 경고를 남긴다. 스키마: `FrontendMessage`·`FrontendInput`), `POST /v1/sessions/{id}/turns`(발화, `turn_id` 멱등), `POST /v1/sessions/{id}/end`(종료), `GET /healthz`, `/readyz`. Bearer 토큰(환경 변수의 이름으로 지정, `SURVEY_API_TOKEN_ENV`). 구현은 `survey_service/api.py`가 기존 `handle_turn`(엔진·기록·직원 호출·결과 전달·Trace)에 그대로 연결하고, 문서가 정하지 않은 점의 해석은 CR-009에 적었다. 요청은 `FrontendMessage`로 검증하고 응답은 `FrontendInput`이다. 상태 코드: 400/401/404/409/429/503. 세션 유휴 만료(기본 300초, `SURVEY_SESSION_IDLE_SECONDS`)는 이탈 종료로 닫는다. 개발용 CLI(`python -m survey_service.cli`)는 그대로 있다. 직원 개입은 `POST /v1/sessions/{id}/intervention`(역할 `staff` 토큰, 키오스크 토큰은 403, 위험으로 멈춘 세션만, 아니면 409, `turn_id` 멱등)이 `InterventionDecision` 처리에 연결된다 [확인: D58, v1.3.1].
 
 ## 2. 컴포넌트 지도
 
@@ -74,7 +74,7 @@
 - 턴마다 `TurnTrace` 하나. 조립 규칙 [확인: trace_contract]: 각 경계는 해당 계약의 전체 payload 또는 null. null은 미확보(예: 처리 안 함 턴의 컴포넌트 입출력). `session_before`/`session_after`는 턴 시작 문서·턴 끝 문서, `persistence_*`는 조회·커밋 요청과 결과.
 - `TraceEnvelope`: `pipeline_schema_version`(boundary-contracts가 정한 값), `release_id`(세션이 묶인 릴리스, 세션이 없으면 활성 릴리스), `runtime_contract_version`, `session_id`, `turn_id`, `sent_at`, `trace`.
 - **외부 ID 변환** [확인: CONVENTIONS 10절, CR-007]: 세션 ID·턴 ID가 `Id` 형식(`[A-Za-z0-9][A-Za-z0-9._:-]*`, 128자)이면 그대로, 아니면 `x-` + 원본 UTF-8 SHA-256 앞 32자(소문자 16진)를 봉투에 넣는다. 결정적이라 outbox의 (세션, 턴) 유일성과 수집의 멱등이 유지되고, 원본은 `trace` 본문에 남는다. 서비스 안의 세션·턴 식별(저장소, 멱등)은 원본 ID를 쓴다. 공개 API(O06)가 `Id` 형식으로 발급하기로 정해지면 변환은 쓰이지 않는다.
-- **outbox** [결정]: SQLite 파일(`SURVEY_OUTBOX_DB`). `(session_id, turn_id)` 유일. 턴 처리는 `enqueue`(로컬 INSERT) 한 번만 한다. 전송 스레드가 별도로 `send`를 부른다.
+- **outbox** [결정]: 세션과 **같은 DB**의 표(SQLite도 세션 DB 파일. `SURVEY_OUTBOX_DB`는 더 쓰지 않는다). `(session_id, turn_id)` 유일. 세션 commit 트랜잭션이 예약 행을 쓰고 턴이 끝나면 한 트랜잭션으로 완성본으로 바꾼다(트랜잭셔널 outbox, ADR-0023). 전송 스레드가 별도로 `send`를 부른다.
 - 재시도 [확인: I6, CONVENTIONS 4]: `BoundaryError`의 `retryable`(UNAVAILABLE)일 때만 지수 백오프로 재시도한다. `ACCEPTED`와 `DUPLICATE`는 둘 다 전달 완료로 본다(최소 1회 전달, 수집이 키로 멱등). 재시도 불가 오류(예: `INVALID_RECORD`, `UNSUPPORTED_VERSION`)는 `DEAD`로 옮겨 재시도하지 않고 개수를 상태에 낸다. `BoundaryError`가 아닌 예외는 선언된 실패가 아니므로 `UNAVAILABLE`처럼 보류하되 `unexpected`로 표시한다 [제안].
 - outbox 쓰기 실패는 턴을 실패시키지 않는다. 표준 오류로 알리고 카운터를 올린다(그 Trace는 잃는다. 이 경우 최소 1회 보장은 깨진다. 디스크 오류와 같은 급이라 비보증으로 둔다 [제안]).
 - 보존: 전달 완료 행은 `SURVEY_OUTBOX_KEEP_SENT_HOURS` 뒤에 지운다.
@@ -92,7 +92,7 @@
 |---|---|
 | `SURVEY_PORT` (8080) | `/healthz`, `/readyz` 포트 |
 | `SURVEY_SESSION_DB` (/data/sessions.db) | Session Store |
-| `SURVEY_OUTBOX_DB` (/data/outbox.db) | Trace outbox |
+| `SURVEY_OUTBOX_DB` (/data/outbox.db) | 더 쓰지 않는다. Trace outbox는 세션 DB에 있다(ADR-0023) |
 | `SURVEY_RELEASE_READER` | `http`(기본: `boundary_contracts.clients.HttpReleaseReader`, D49) 또는 팩토리 `모듈:함수`. `SURVEY_RELEASE_READER_URL`, 토큰이 든 환경 변수의 이름 `SURVEY_RELEASE_READER_TOKEN_ENV` |
 | `SURVEY_TRACE_INGEST` | `http`(`HttpTraceIngest`) 또는 팩토리. `SURVEY_TRACE_INGEST_URL`, `SURVEY_TRACE_INGEST_TOKEN_ENV` |
 | `SURVEY_MODEL_BACKEND` | `fake` 등 |
@@ -180,7 +180,7 @@
 - **본문** [확인]: 알림, SSE, 푸시 본문에는 세션 ID와 종류만 있다(환자 발화·개인 정보 없음, 시험이 확인).
 - **SSE**: `GET /v1/staff/alerts/stream`. 이벤트 이름 `alert`(새 알림), `resolved`(해결), `id:`는 이벤트 순번(알림과 해결 이벤트가 각각 하나씩 증가, 영속), `data:`는 `StaffAlert` JSON, 15초마다 `: ping`. `Last-Event-ID` 뒤의 이벤트부터 이어서 보낸다(서비스를 다시 띄워도 된다). 이벤트는 최근 1만 개를 남긴다(`trim_events`).
 - **웹 푸시**: `pywebpush`(잠금 파일에 고정). VAPID 비밀키는 환경 변수 `SURVEY_VAPID_PRIVATE_KEY`(이름은 `SURVEY_VAPID_PRIVATE_KEY_ENV`로 바꿀 수 있다, PEM 또는 base64url DER)와 `SURVEY_VAPID_SUBJECT`(mailto: 또는 https://)로만 받는다. **키가 없으면 푸시 없이 SSE만** 동작하고 `GET /v1/staff/push-config`는 `{"vapid_public_key": null}`이다. 키가 있으면 공개키(applicationServerKey)를 낸다. 키 형식이 잘못되면 시작하지 않는다. 푸시는 구독마다 병렬로 보내고 `SURVEY_PUSH_TIMEOUT_SECONDS`(3초)까지만 기다린다. 만료된 구독(404, 410)은 지운다.
-- **구독**: `POST /v1/staff/push-subscriptions`(201, 같은 endpoint는 갱신, https만, 한도 `SURVEY_MAX_PUSH_SUBSCRIPTIONS`는 409), `DELETE ...?endpoint=`(멱등, 200).
+- **구독**: `POST /v1/staff/push-subscriptions`(201, 같은 endpoint는 갱신, https만, 한도 `SURVEY_MAX_PUSH_SUBSCRIPTIONS`는 409), 해지는 `POST /v1/staff/push-subscriptions/unsubscribe` 본문 `{"endpoint"}`(204, 없는 endpoint도 멱등 204; URL에 푸시 권한 값을 싣지 않으려고 본문). `DELETE ...?endpoint=`(200)는 2.x에서만 허용하는 폐기 예정 방식이라 남기되 경고를 로그에 남긴다(URL은 로그에 없다).
 - **해결**: 개입 결정이 성공(`intervention_result APPLIED`)하면 그 세션의 열린 알림을 `RESOLVED`(`resolved_by_decision` RESUME/END)로 하고 `resolved` 이벤트를 낸다. 같은 `turn_id` 재전송에서도 다시 해 본다(멱등). 키오스크나 유휴 만료로 세션이 끝나면 결정 없이 해결한다.
 - **세션 상태**(키오스크, `GET /v1/sessions/{id}/state`): `ACTIVE | PAUSED_RISK | ENDED`와 `resume_text`. 직원이 재개하면 재개 턴의 안내 문장이 다음 발화 턴이 접수되기 전까지 `resume_text`로 오고 그 뒤 null이다. 대화 로그에서 계산하므로 재시작해도 같다. 폴링 빈도 상한(`SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS`, 기본 0.5초, 세션마다)을 넘으면 429.
 - **오류 표** [확인: D66]: 400 INVALID_RECORD, 401·403 PERMISSION_DENIED, 404 NOT_FOUND, 409 CONFLICT, 429·503 UNAVAILABLE. 429·503에는 `Retry-After`(초, 정수, `SURVEY_RETRY_AFTER_SECONDS` 기본 1)가 붙는다.
