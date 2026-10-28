@@ -78,26 +78,27 @@ def test_ingest_stuck_or_broken_keeps_rows_pending_and_never_fails_turns(stub, t
     res = ex.flush_once()
     assert ob.counts() == {"PENDING": 3, "SENT": 0, "DEAD": 0} and (res.retried + res.paused) >= 1
     st = ex.stats()
-    assert st["sent"] == 0 and st["dead"] == 0 and st["last_error"] in ("UNAVAILABLE", "INTEGRITY_ERROR")
+    assert st["sent"] == 0 and st["dead"] == 0 and st["last_error"] == "UNAVAILABLE"
     ob.close()
 
 
-def test_broken_response_is_retried_up_to_limit_then_dead(tmp_path):
+def test_integrity_error_is_quarantined_not_retried(tmp_path):
     from boundary_contracts import BoundaryError
 
     class Broken:
         calls = 0
 
         def send(self, env):
-            self.calls += 1
+            Broken.calls += 1
             raise BoundaryError("INTEGRITY_ERROR", "응답이 스키마를 위반한다")
     clock = [1000.0]
     ob = Outbox(str(tmp_path / "ob.db"))
-    ex = TraceExporter(ob, Broken(), base_delay=1.0, max_delay=2.0, max_unexpected_attempts=3, clock=lambda: clock[0])
+    ex = TraceExporter(ob, Broken(), base_delay=1.0, max_delay=2.0, clock=lambda: clock[0])
     run_turns(OutboxTraceSink(ob, lambda: 1000.0), n=2)
     for _ in range(12):
         ex.flush_once()
         clock[0] += 5
+    assert Broken.calls == 2        # 계약 I6: UNAVAILABLE일 때만 재시도. 건당 한 번만 보냈다
     assert ob.counts() == {"PENDING": 0, "SENT": 0, "DEAD": 2} and ex.stats()["dead_by_code"] == {"INTEGRITY_ERROR": 2}
     ob.close()
 

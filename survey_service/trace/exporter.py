@@ -64,10 +64,10 @@ class FlushResult:
 
 class TraceExporter:
     def __init__(self, outbox: Outbox, ingest, *, base_delay: float = 1.0, max_delay: float = 60.0, batch: int = 50,
-                 validate: bool = True, max_unexpected_attempts: int = 20, clock: Callable[[], float] = time.time) -> None:
+                 validate: bool = True, clock: Callable[[], float] = time.time) -> None:
         self.outbox, self.ingest = outbox, ingest
         self.base_delay, self.max_delay, self.batch = base_delay, max_delay, batch
-        self.validate, self.max_unexpected = validate, max_unexpected_attempts
+        self.validate = validate
         self.clock = clock
         self.consecutive_unavailable = 0
         self.pause_until = 0.0
@@ -115,12 +115,7 @@ class TraceExporter:
             try:
                 r = self.ingest.send(row.envelope)
             except BoundaryError as e:
-                if e.code == "INTEGRITY_ERROR" and row.attempts + 1 >= self.max_unexpected:
-                    self.outbox.mark_dead(row.id, now, f"{e.code}: 수집 서버의 응답이 계속 깨져 있다")       # 정책 10: 깨진 응답은 성공이 아니고, 한도까지 다시 시도한 뒤에야 DEAD
-                    self.last_error = e.code
-                    res.dead += 1
-                    continue
-                if e.retryable or e.code == "INTEGRITY_ERROR":          # 깨진 응답(프록시 오류 페이지 등)은 5xx와 같이 실패로 다룬다. 수집이 (세션, 턴)으로 멱등이라 다시 보내도 안전하다
+                if e.retryable:                  # 왜: 계약 I6(INTERFACES.md)·CONVENTIONS 4절 "UNAVAILABLE일 때만 재시도". INTEGRITY_ERROR는 retryable=false(CONVENTIONS 3절)
                     self.consecutive_unavailable += 1
                     delay = min(self.max_delay, self.base_delay * 2 ** (self.consecutive_unavailable - 1))
                     self.pause_until = now + delay
@@ -129,20 +124,18 @@ class TraceExporter:
                     res.retried += 1
                     res.paused = True
                     return res                       # 수집이 죽어 있으면 나머지도 같다: 다음 주기까지 쉰다
+                # 왜: 재시도하지 않는 실패(INTEGRITY_ERROR 포함)는 지우지 않고 DEAD(격리)로 남긴다. dead_rows/dead_by_code(/readyz)로 사람이 보고, 보존 기간(retention)이 지나야 지워진다
                 self.outbox.mark_dead(row.id, now, f"{e.code}: {e.message}")
                 self.last_error = e.code
                 log.error("재시도하지 않는 전송 실패 code=%s session=%s turn=%s", e.code, row.session_id, row.turn_id)
                 res.dead += 1
                 continue
-            except Exception as e:                    # 선언된 실패가 아니다: 보류하고 간격을 두고 다시(한도가 있다)
+            except Exception as e:                    # 왜: 네트워크 실패는 클라이언트가 UNAVAILABLE로 바꾼다(_http.py). 날것의 예외는 UNAVAILABLE이 아니므로 재시도하지 않고 버그 신호로 격리한다
                 err = f"UNEXPECTED: {type(e).__name__}"
                 self.last_error = err
-                if row.attempts + 1 >= self.max_unexpected:
-                    self.outbox.mark_dead(row.id, now, err)
-                    res.dead += 1
-                else:
-                    self.outbox.mark_failed(row.id, now + min(self.max_delay, self.base_delay * 2 ** row.attempts), err)
-                    res.retried += 1
+                self.outbox.mark_dead(row.id, now, err)
+                log.error("예상 밖 전송 예외 error=%s session=%s turn=%s", type(e).__name__, row.session_id, row.turn_id)
+                res.dead += 1
                 continue
             self.consecutive_unavailable = 0
             self.outbox.mark_sent(row.id, now)

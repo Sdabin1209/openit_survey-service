@@ -158,17 +158,31 @@ def test_locally_invalid_trace_is_not_sent(parts):
     assert r.dead == 1 and ing.calls == 0 and "TurnTrace" in ob.dead_rows()[0]["error"]
 
 
-def test_unexpected_exception_is_held_then_dead_after_limit(parts):
+def test_integrity_error_is_not_retried_and_is_quarantined(parts):
+    """SV-18: 기대값의 근거는 계약. INTERFACES.md I6 '`UNAVAILABLE`일 때만 재시도', CONVENTIONS.md 3절(INTEGRITY_ERROR는 retryable=false)·4절.
+    INTEGRITY_ERROR를 받으면 다시 보내지 않고 버리지도 않는다(DEAD로 남아 사람이 본다)."""
     clock, ob, ing, ex, sink = parts
-    ex.max_unexpected = 3
     run_turns(sink, 1)                                  # 봉투 2건
-    ing.script = [ConnectionError("끊김")] * 6
+    ing.script = [BoundaryError("INTEGRITY_ERROR", "깨진 응답")] * 10
+    r = ex.flush_once()
+    assert ing.calls == 2 and r.dead == 2 and r.retried == 0
+    assert ob.counts() == {"PENDING": 0, "SENT": 0, "DEAD": 2} and ex.stats()["dead_by_code"] == {"INTEGRITY_ERROR": 2}
+    assert len(ob.dead_rows()) == 2                     # 버리지 않고 사람이 볼 수 있다
+    clock.t += 1000
     ex.flush_once()
-    assert ob.counts()["PENDING"] == 2 and ex.last_error == "UNEXPECTED: ConnectionError"
-    for _ in range(2):
-        clock.t += 100
-        ex.flush_once()
-    assert ob.counts() == {"PENDING": 0, "SENT": 0, "DEAD": 2} and ing.calls == 6 and not ing.received
+    assert ing.calls == 2                               # 더 부르지 않는다
+
+
+def test_undeclared_exception_is_not_retried(parts):
+    """SV-18: UNAVAILABLE이 아닌 것은 재시도하지 않는다(I6). 네트워크 실패는 클라이언트가 UNAVAILABLE로 바꾸므로 날것의 예외는 버그 신호이고 격리한다."""
+    clock, ob, ing, ex, sink = parts
+    run_turns(sink, 1)
+    ing.script = [ValueError("버그")] * 10
+    ex.flush_once()
+    clock.t += 1000
+    ex.flush_once()
+    assert ing.calls == 2 and ob.counts() == {"PENDING": 0, "SENT": 0, "DEAD": 2}
+    assert ex.stats()["dead_by_code"] == {"UNEXPECTED": 2}
 
 
 def test_enqueue_is_idempotent(parts):
