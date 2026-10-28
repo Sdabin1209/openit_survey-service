@@ -57,7 +57,7 @@ HTTP 클라이언트 설정(영역 사이 호출은 HTTP, D49): `SURVEY_RELEASE_
 ## 5. 개발·시험
 
 ```
-python3 -m venv .venv && .venv/bin/pip install -c requirements.lock -r requirements.txt -e .
+bash scripts/setup-env.sh   # .venv 생성/재사용 + `pip install -c requirements.lock -r requirements.txt -e .`(핀 정본: requirements.*), 정본은 이 스크립트
 # 라이브러리는 requirements.txt의 Git 태그(워크스페이스 규칙), 서드파티 버전은 requirements.lock으로 고정한다. 옆 폴더(../model-runtime 등)를 -e/경로로 같이 주면
 # turn-engine이 boundary-contracts를 태그로 요구해 ResolutionImpossible이 난다(로컬 개발 중인 이웃이 필요하면 requirements.txt 해당 줄을 바꾸고 그 사실을 기록한다).
 .venv/bin/python -m pytest                 # 단위·통합·골든 대조
