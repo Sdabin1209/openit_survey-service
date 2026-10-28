@@ -48,3 +48,15 @@ def test_dockerfile_does_not_default_labels_to_values_imagelabels_rejects():
     text = (ROOT / "Dockerfile").read_text()
     for arg in ("COMMIT", "SCHEMA_CONTRACT_VERSION", "BOUNDARY_TAG", "TURN_ENGINE_TAG", "MODEL_RUNTIME_TAG"):
         assert not re.search(rf"^ARG {arg}=unknown", text, re.M), arg
+
+
+def test_smoke_scripts_use_tokens_that_pass_the_minimum_length_rule():
+    """smoke.sh가 주는 토큰이 시작 검사(service.MIN_TOKEN_CHARS, ADR-0024)를 통과한다. 이전에는 15자 토큰이라 이미지가 시작하지 못했다."""
+    from survey_service.service import MIN_TOKEN_CHARS
+    text = (ROOT / "scripts/smoke.sh").read_text()
+    literals = set(re.findall(r"SURVEY_[A-Z_]*TOKEN=([A-Za-z0-9._-]+)", text))
+    literals |= set(re.findall(r"printf '([A-Za-z0-9._-]+)\\n' > \"\$SECRET_DIR/\w*token\"", text))
+    literals |= set(re.findall(r"Bearer (smoke-[A-Za-z0-9-]+)", text))
+    assert literals, "토큰 리터럴을 찾지 못했다(시험이 낡았다)"
+    short = sorted(t for t in literals if len(t) < MIN_TOKEN_CHARS)
+    assert not short, short
