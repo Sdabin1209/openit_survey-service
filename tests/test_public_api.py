@@ -88,7 +88,7 @@ def test_auth_and_routes(rig_api):
     ("/v1/sessions", {"session_id": "a" * 65, "kind": "SESSION_START"}),
     ("/v1/sessions", {"session_id": "has.dot", "kind": "SESSION_START"}),
     ("/v1/sessions", {"session_id": "", "kind": "SESSION_START"}),
-    ("/v1/sessions", {"kind": "SESSION_START"}),
+    # session_id 없는 시작 요청은 2.2.0부터 유효하다(서버 발급): tests/test_server_issued_session_id.py
     ("/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "x"}),                       # turn_id 없음
     ("/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "bad id"}),
     ("/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "start"}),     # 예약 값
