@@ -43,7 +43,7 @@ components:
 - name: Extraction Validator
   title: 출력 검증
   kind: 코드
-  responsibility: turn-engine의 validate_extraction으로 A 출력의 의미(targets, next_item, 건너뛰기, save 규칙)를 검증한다. 문항 순서·건너뛰기 표(QuestionFlow)는 이 영역이 문진 스키마에서 만들어 넘긴다(D76).
+  responsibility: A 출력의 의미 규칙(targets, next_item, 건너뛰기, save 규칙)은 추론 서버가 보증하므로 다시 검사하지 않는다(R7). 이 영역은 문항 세트에 의존하는 값 검사(칸 존재, 현재 문항, 값 타당성)만 하고, 문항 순서·건너뛰기 표(QuestionFlow)를 문진 스키마에서 만들어 추론 요청에 실어 보낸다(D76).
   why: 위반 출력은 값을 지어내지 않고 한 번 재시도한 뒤 턴 실패로 처리한다(D75).
   id: extraction_validator
   contracts:

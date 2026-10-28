@@ -217,7 +217,7 @@
 
 ## 17. 문항 순서·건너뛰기 표(D76)와 A 입력 state
 
-[확인] 소유는 이 영역이다. 문진 스키마에 `QuestionFlow` 계약(`schema/schemas/QuestionFlow.json`)과 데이터(`schema/data/question_flow.json`)를 두었다: `order`(31개 문항), `skips`(`{slot, op: "==", value, skip_item}` 7건, `Q8_1.days == 0` 같은 수 조건 포함), `reference_sources`, `slot_order`. 서비스(`survey_service/flow.py`)가 이 데이터를 계약으로 검증한 뒤 turn-engine의 `QuestionFlowTable`을 만들어 `validate_extraction`에 넘긴다. `tests/test_extraction.py::test_flow_built_from_survey_schema_equals_dataset_v2_flow`가 이 표와 turn-engine의 `DATASET_V2_FLOW`가 같음을 시험한다(`DATASET_V2_FLOW`는 시험용 기준일 뿐 서비스는 쓰지 않는다). 비교 연산은 `==`뿐이다(turn-engine `SkipRule`이 그것만 안다). 다른 연산이 필요해지면 turn-engine 변경 요청이다.
+[확인] 소유는 이 영역이다. 문진 스키마에 `QuestionFlow` 계약(`schema/schemas/QuestionFlow.json`)과 데이터(`schema/data/question_flow.json`)를 두었다: `order`(31개 문항), `skips`(`{slot, op: "==", value, skip_item}` 7건, `Q8_1.days == 0` 같은 수 조건 포함), `reference_sources`, `slot_order`. 서비스(`survey_service/flow.py`)가 이 데이터를 계약으로 검증한 뒤 자체 `FlowTable`을 만들어 A 입력 `state` 조립에 쓰고, 추론 서버 extract 요청의 `flow`(계약 QuestionFlowTable)로 보낸다(ADR-0028). `tests/test_extraction.py::test_flow_built_from_survey_schema_is_the_contract_flow_table`가 계약 형식과 같음을 시험한다. 비교 연산은 `==`뿐이다(문진 스키마 `QuestionFlow`가 정한다). 다른 연산이 필요해지면 문진 스키마와 계약 규칙 명세의 변경이다.
 
 문진 스키마의 **정수 버전은 올리지 않았다**(`CONTRACT_VERSION` 1 그대로). 이유: model-runtime 0.6.0이 `SUPPORTED_RUNTIME_CONTRACT_VERSION = 1`만 받는다. 대신 같은 정수 버전 안에서 v1 모델 입출력 계약 12개(`UtteranceParserInput` 등)를 지우고 `SessionStore`, `TurnTrace` 등을 바꾸고 `QuestionFlow`, `ResponseTables`를 더했다. **이것은 같은 정수 버전 안의 비호환 변경이다**(ops-feedback이 가진 TurnTrace 사본, 결과 전달의 DispatchInput). 정수 버전을 2로 올릴지(그러려면 model-runtime의 지원 값부터 바뀌어야 한다)는 헤드 결정이다.
 

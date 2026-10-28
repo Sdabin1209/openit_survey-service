@@ -43,7 +43,7 @@
     },
     "QuestionFlow": {
       "type": "object",
-      "description": "문항 순서와 건너뛰기 표(D76). survey-service가 QuestionFlowTable(turn-engine)을 이 표에서 만든다.",
+      "description": "문항 순서와 건너뛰기 표(D76). survey-service가 추론 서버 extract 요청의 flow(계약 QuestionFlowTable)를 이 표에서 만든다.",
       "properties": {
         "flow_id": {
           "type": "string",

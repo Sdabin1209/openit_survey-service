@@ -120,7 +120,7 @@ class Settings:
     staff_call_retry_min_interval_seconds: int = 30   # 직원 호출 재알림 최소 간격(CR-H001). 계약 기본 권고. 측정하지 않았다 (ADR-0021)
     staff_call_retry_max_per_session: int = 10        # 세션당 재알림 상한. 계약 기본 권고. 측정하지 않았다 (ADR-0021)
     staff_call_report_max_per_session: int = 20       # 세션당 직접 알림 보고 상한. 측정하지 않았다 (ADR-0021)
-    turn_engine_version: str = "0.4.3"          # 릴리스 매니페스트의 turn_engine_version과 MAJOR.MINOR를 비교하는 기준(D45, CR-005). 코드는 turn-engine에 의존하지 않으므로(D109) 라이브러리 설치본이 아니라 배포가 주는 값이다. 기본은 헤드 기준 v0.4.3
+    turn_engine_version: str = "0.4.3"          # 릴리스 매니페스트의 turn_engine_version과 MAJOR.MINOR를 비교하는 기준(D45, CR-005). 코드는 turn-engine에 의존하지 않으므로(D109) 라이브러리 설치본이 아니라 배포가 주는 값이다. 기본 0.4.3은 헤드 기준값(D109)이고 측정한 값이 아니다 (ADR-0028)
     max_consecutive_reask: int = 3              # REASK·CONFIRM 연속 상한(G12, D88 U10 잠정값 3). 0이면 끔(명시해야 꺼진다). 문항 세트의 ask_limit 등이 있으면 그 최솟값을 쓴다 (ADR-0014)
     keep_releases: int = 2
     export_interval_seconds: float = 1.0
@@ -191,7 +191,7 @@ class Settings:
             release_retry_base_seconds=_float(env, "SURVEY_RELEASE_RETRY_BASE_SECONDS", 5.0),
             release_retry_max_seconds=_float(env, "SURVEY_RELEASE_RETRY_MAX_SECONDS", 60.0),
             release_retry_give_up_seconds=float(env.get("SURVEY_RELEASE_RETRY_GIVE_UP_SECONDS", "0")),
-            turn_engine_version=env.get("SURVEY_TURN_ENGINE_VERSION", "0.4.3").lstrip("v"),
+            turn_engine_version=env.get("SURVEY_TURN_ENGINE_VERSION", "0.4.3").lstrip("v"),   # 기본값 0.4.3: 헤드 기준(D109), 측정값 아님
             max_consecutive_reask=_int(env, "SURVEY_MAX_CONSECUTIVE_REASK", 3, 0),
             staff_call_retry_min_interval_seconds=_int(env, "SURVEY_STAFF_CALL_RETRY_MIN_INTERVAL_SECONDS", 30, 0),
             staff_call_retry_max_per_session=_int(env, "SURVEY_STAFF_CALL_RETRY_MAX_PER_SESSION", 10, 0),

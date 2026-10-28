@@ -993,7 +993,7 @@
     },
     "ViolationRecord": {
       "type": "object",
-      "description": "turn_engine.Violation의 기록(값 없음: code, path, message).",
+      "description": "서비스 검사 위반의 기록(값 없음: code, path, message).",
       "properties": {
         "code": {
           "type": "string",

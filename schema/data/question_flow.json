@@ -1,6 +1,6 @@
 {
  "flow_id": "dataset_v2",
- "description": "학습 데이터셋 v2(IO_SPEC v2)의 문항 순서·건너뛰기 규칙과 A 입력 state의 참조 원천 문항. 조건 칸의 값이 같으면 skip_item은 묻지 않는다(D76: 소유는 survey-service, turn-engine DATASET_V2_FLOW와 같은지 시험한다).",
+ "description": "학습 데이터셋 v2(IO_SPEC v2)의 문항 순서·건너뛰기 규칙과 A 입력 state의 참조 원천 문항. 조건 칸의 값이 같으면 skip_item은 묻지 않는다(D76: 소유는 survey-service, 이 표를 추론 서버 extract 요청의 flow로 보낸다).",
  "order": [
   "Q1.D01",
   "Q1.D02",
