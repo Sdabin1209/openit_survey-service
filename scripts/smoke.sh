@@ -11,7 +11,7 @@ fi
 TESTS_DIR=$PWD/tests
 IMG=openit-survey-service:smoke-$$
 NAME=openit-survey-service-smoke-$$
-COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+COMMIT=$(git rev-parse --short HEAD)      # 해시를 못 얻으면 실패한다(라벨 revision은 hex만 허용: ImageLabels)
 bash scripts/build_wheels.sh >/dev/null
 # shellcheck disable=SC1091
 source build/wheels/VERSIONS.env

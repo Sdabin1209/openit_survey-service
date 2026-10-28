@@ -7,12 +7,16 @@ RUN pip install --no-cache-dir --prefix=/install -r /requirements.lock \
  && pip install --no-cache-dir --prefix=/install --no-deps /wheels/*.whl
 
 FROM python:3.12-slim
-ARG COMMIT=unknown
-ARG BOUNDARY_TAG=unknown
-ARG SCHEMA_CONTRACT_VERSION=unknown
-ARG TURN_ENGINE_TAG=unknown
-ARG MODEL_RUNTIME_TAG=unknown
-ARG LANGGRAPH_VERSION=unknown
+ARG COMMIT
+ARG BOUNDARY_TAG
+ARG SCHEMA_CONTRACT_VERSION
+ARG TURN_ENGINE_TAG
+ARG MODEL_RUNTIME_TAG
+ARG LANGGRAPH_VERSION
+# 왜: 라벨 값이 deploy의 ImageLabels(게시 전 검사)를 통과하는 형식이 아니면 이미지를 만들지 않는다(기본값 unknown이 라벨에 남지 않게).
+RUN echo "$COMMIT" | grep -Eq '^[0-9a-f]{7,40}$' && echo "$SCHEMA_CONTRACT_VERSION" | grep -Eq '^([0-9]+|n/a)$' \
+ && for t in "$BOUNDARY_TAG" "$TURN_ENGINE_TAG" "$MODEL_RUNTIME_TAG"; do echo "$t" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+$' || exit 1; done \
+ && test -n "$LANGGRAPH_VERSION" || { echo "빌드 인자(COMMIT 해시, SCHEMA_CONTRACT_VERSION 정수, *_TAG v접두 버전, LANGGRAPH_VERSION)가 라벨 규칙에 맞지 않는다" >&2; exit 1; }
 LABEL io.openit.service=survey-service \
       io.openit.revision=$COMMIT \
       io.openit.contracts.boundary=$BOUNDARY_TAG \

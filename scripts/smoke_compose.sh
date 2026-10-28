@@ -12,7 +12,7 @@ PROJECT=openit-survey-service-compose-$$
 export SERVICE_IMAGE=openit-survey-service:compose-$$
 export FAKE_IMAGE=openit-survey-service-fake:compose-$$
 COMPOSE="$DOCKER compose -p $PROJECT -f tests/compose/compose.smoke.yaml"
-COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+COMMIT=$(git rev-parse --short HEAD)      # 해시를 못 얻으면 실패한다(ImageLabels: revision은 hex만)
 bash scripts/build_wheels.sh >/dev/null
 # shellcheck disable=SC1091
 source build/wheels/VERSIONS.env
