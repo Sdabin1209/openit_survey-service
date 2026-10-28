@@ -41,7 +41,7 @@ def test_state_active_paused_resume_text_and_ended(ar):
     assert (code, body) == (200, {"session_id": "K1", "state": "ACTIVE", "resume_text": None}); valid("SessionState", body)
     ar.hub.subscribe(); ar.risk()
     code, body, _ = state(ar)
-    assert (code, body) == (200, {"session_id": "K1", "state": "PAUSED_RISK", "resume_text": None}); valid("SessionState", body)
+    assert (code, body) == (200, {"session_id": "K1", "state": "PAUSED_RISK", "resume_text": None, "pause_reason": "RISK"}); valid("SessionState", body)
     code, fi, _ = ar.intervene("RESUME", "i-1")
     code, body, _ = state(ar)
     assert body["state"] == "ACTIVE" and body["resume_text"] == fi["response_text"] and body["resume_text"]; valid("SessionState", body)

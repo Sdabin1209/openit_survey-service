@@ -105,6 +105,23 @@
               "type": "null"
             }
           ]
+        },
+        "pause_reason": {
+          "description": "정지 사유(2.1.0, CR-H002). 위험 신호/위험 규칙은 RISK, 되묻기 한도 초과는 REASK_LIMIT, 그 밖은 OTHER. optional: 없으면 미상. 읽는 쪽은 모르는 값을 OTHER로 취급한다.",
+          "oneOf": [
+            {
+              "const": "RISK"
+            },
+            {
+              "const": "REASK_LIMIT"
+            },
+            {
+              "const": "OTHER"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -262,6 +279,51 @@
             }
           ],
           "description": "알림을 해결한 직원 계정 ID. 열려 있거나 개입 없이(이탈 등) 해결됐으면 null."
+        },
+        "pause_reason": {
+          "description": "정지 사유(2.1.0, CR-H002). 위험 신호/위험 규칙은 RISK, 되묻기 한도 초과는 REASK_LIMIT, 그 밖은 OTHER. optional: 없으면 미상. 읽는 쪽은 모르는 값을 OTHER로 취급한다.",
+          "oneOf": [
+            {
+              "const": "RISK"
+            },
+            {
+              "const": "REASK_LIMIT"
+            },
+            {
+              "const": "OTHER"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery_attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_delivery_status": {
+          "enum": [
+            "DELIVERED",
+            "DELIVERY_FAILED",
+            null
+          ]
+        },
+        "manual_notice_outcome": {
+          "enum": [
+            "STAFF_NOTIFIED_MANUALLY",
+            "NOT_NOTIFIED",
+            null
+          ]
+        },
+        "manual_notice_reported_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [

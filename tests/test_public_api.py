@@ -145,7 +145,7 @@ def test_failure_signal_is_passed_through_with_200(rig_api):
     rig.console.fail = True
     rig.model.queue.append(RISK_OUT)
     code, body, _ = say(api, "숨이 안 쉬어져요", "t-1")
-    assert code == 200 and body["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED"}
+    assert code == 200 and body["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED", "pause_reason": "RISK"}
     assert body["response_text"]                        # 응답 단계는 그대로 한다
 
 

@@ -618,6 +618,20 @@
               "const": "DELIVERY_FAILED"
             }
           ]
+        },
+        "pause_reason": {
+          "description": "정지 사유(2.1.0, CR-H002). 위험 신호/위험 규칙은 RISK, 되묻기 한도 초과는 REASK_LIMIT, 그 밖은 OTHER. optional: 없으면 미상. 읽는 쪽은 모르는 값을 OTHER로 취급한다.",
+          "oneOf": [
+            {
+              "const": "RISK"
+            },
+            {
+              "const": "REASK_LIMIT"
+            },
+            {
+              "const": "OTHER"
+            }
+          ]
         }
       },
       "required": [

@@ -362,7 +362,7 @@ def test_staff_delivery_failure_still_responds_and_signals():
     rig.start()
     rig.console.fail = True
     o = rig.say("숨이 안 쉬어져요", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"))
-    assert o.orchestrator_output["turn_failure_signal"] == {"session_id": "S1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED"}
+    assert o.orchestrator_output["turn_failure_signal"] == {"session_id": "S1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED", "pause_reason": "RISK"}
     assert le(o)["turn_result"] == {"failed_steps": [{"phase": "AFTER_COMMIT", "step": "DELIVER_STAFF"}]}
     assert le(o)["staff_alert_delivery"] == "FAILURE" and o.frontend_input["response_text"]
     assert rig.doc()["progress_record"]["session_status"] == "PAUSED_RISK"        # 쓰기는 반영됐다

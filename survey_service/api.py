@@ -4,7 +4,9 @@
   POST /v1/sessions                    세션 시작   본문 {session_id, kind: SESSION_START}
   POST /v1/sessions/{id}/turns         환자 발화   본문 {session_id, kind: UTTERANCE, utterance} + 봉투 turn_id (멱등)
   POST /v1/sessions/{id}/end           세션 종료   본문 {session_id, kind: SESSION_END}
-  GET  /v1/sessions/{id}/state         세션 상태   SessionState (위험 정지 중 폴링, 재개하면 resume_text)
+  GET  /v1/sessions/{id}/state         세션 상태   SessionState (위험 정지 중 폴링, 재개하면 resume_text, 정지면 pause_reason)
+  POST /v1/sessions/{id}/staff-call/retry   직원 재알림  StaffCallRetryRequest -> StaffCallRetryResult (세션을 만든 기기 토큰만, CR-H001)
+  POST /v1/sessions/{id}/staff-call/report  직접 알림 보고  StaffCallReport -> StaffAlert (같은 권한)
 직원 콘솔(토큰 역할 staff)
   POST /v1/sessions/{id}/intervention  개입 결정   본문 {session_id, decision: RESUME|END} + 봉투 turn_id (멈춘 세션만)
   GET  /v1/staff/alerts                알림 목록   StaffAlertPage
@@ -34,9 +36,9 @@ from urllib.parse import parse_qs
 import jsonschema
 
 import survey_schema
-from boundary_contracts import PIPELINE_SCHEMA_VERSION
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, load_schema as load_contract_schema
 
-from .alerts import KIND_MAP, AlertService
+from .alerts import KIND_MAP, AlertService, StaffCallRejected
 from .store.effects import model_key
 from . import netguard
 from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
@@ -117,6 +119,9 @@ class PublicApi:
         self._msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
         self._dec = jsonschema.Draft202012Validator(survey_schema.load_schema("InterventionDecision"))
         self._sig = jsonschema.Draft202012Validator(survey_schema.load_schema("RiskSignal"))
+        # 요청 본문은 계약 패키지의 엄격한 스키마로 검증한다(복사본을 두지 않는다)
+        self._retry_req = jsonschema.Draft202012Validator(load_contract_schema("StaffCallRetryRequest"))
+        self._report_req = jsonschema.Draft202012Validator(load_contract_schema("StaffCallReport"))
 
     # ------------------------------------------------------------------ 진입
     def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None) -> tuple[int, dict, dict]:
@@ -172,13 +177,13 @@ class PublicApi:
                 return _err("INVALID_RECORD", "본문이 JSON 객체가 아니다")
             if _has_surrogate(body):          # UTF-8로 인코딩할 수 없는 문자(짝 없는 서로게이트): 저장·전송에서 터지기 전에 400
                 return _err("INVALID_RECORD", "본문에 올바르지 않은 유니코드 문자가 있다")
-        if (route[0] in STAFF_ROUTES - {"intervention"} or route[0] in ROLE_OF_ROUTE) and self.alerts is None:
+        if (route[0] in STAFF_ROUTES - {"intervention"} or route[0] in ROLE_OF_ROUTE or route[0] in ("staff_retry", "staff_report")) and self.alerts is None:
             return _err("NOT_FOUND", "경로가 없다")
         if not self._slots.acquire(blocking=False):
             return _err("UNAVAILABLE", "요청이 너무 많다", 429)
         try:
             name, arg = route
-            if role == "kiosk" and name in ("state", "turn", "end"):
+            if role == "kiosk" and name in ("state", "turn", "end", "staff_retry", "staff_report"):
                 denied = self._device_denied(arg)
                 if denied:
                     return denied
@@ -255,6 +260,9 @@ class PublicApi:
             return ("push_del", None)
         if method == "POST" and path == "/v1/sessions":
             return ("start", None)
+        m = re.fullmatch(r"/v1/sessions/([^/]+)/staff-call/(retry|report)", path)
+        if method == "POST" and m:
+            return ("staff_" + m.group(2), m.group(1))
         m = re.fullmatch(r"/v1/sessions/([^/]+)/(turns|end|intervention)", path)
         if method == "POST" and m:
             return ({"turns": "turn", "end": "end", "intervention": "intervention"}[m.group(2)], m.group(1))
@@ -442,8 +450,72 @@ class PublicApi:
         if status is None:
             return _err("NOT_FOUND", "모르는 세션이다")
         state = "ENDED" if status.startswith("ENDED") else STATE_NAME[status]
-        return 200, {"session_id": sid, "state": state,
-                     "resume_text": self._resume_text(r["state"]) if state == "ACTIVE" else None}, {}
+        out = {"session_id": sid, "state": state, "resume_text": self._resume_text(r["state"]) if state == "ACTIVE" else None}
+        if state == "PAUSED_RISK":
+            out["pause_reason"] = self._pause_reason(sid, r["state"])        # 정지가 아닌 상태에서는 생략(계약: null 또는 생략)
+        return 200, out, {}
+
+    def _pause_reason(self, sid: str, doc: Mapping) -> str:
+        """정지 사유(CR-H002, ADR-0022). 세션 문서의 마지막 PAUSE 기록에 위험 사유가 있으면 RISK(문서가 정본이라 알림 저장소가 죽어도 맞다).
+        없으면 그 정지를 낳은 알림에 기록된 사유(되묻기 한도 REASK_LIMIT, 외부 호출 OTHER). 알림이 없으면 OTHER(미상)."""
+        for entry in reversed(doc["progress_record"]["pause_history"]):
+            if entry.get("kind") == "PAUSE":
+                if entry.get("reasons"):
+                    return "RISK"
+                break
+        if self.alerts is not None:
+            try:
+                return self.alerts.store.latest_pause_reason(sid) or "OTHER"
+            except StoreError:
+                log.warning("정지 사유를 읽지 못했다: OTHER로 응답한다")
+        return "OTHER"
+
+    # ------------------------------------------------------------------ 직원 호출 재알림·실패 기록 (키오스크, 세션을 만든 기기)
+    def _staff_call_common(self, validator, body: Mapping, sid: str):
+        """공통 검증: 세션 ID 형식, 본문 스키마, turn_id 형식, 세션이 있는가. (turn_id, 오류 응답)."""
+        if not SESSION_ID.match(sid):
+            return None, _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
+        if list(validator.iter_errors(body)):
+            return None, _err("INVALID_RECORD", "요청 본문이 스키마와 다르다(모르는 필드 포함)")
+        tid = body["turn_id"]
+        if not TURN_ID.match(tid) or tid in RESERVED:
+            return None, _err("INVALID_RECORD", "turn_id 형식이 아니거나 예약 값이다")
+        status, _ = self._state_of(sid)
+        if status == "ERROR":
+            return None, _err("UNAVAILABLE", "지금은 처리할 수 없다")
+        if status is None:
+            return None, _err("NOT_FOUND", "모르는 세션이다")
+        return tid, None
+
+    def _staff_call_rejected(self, e: StaffCallRejected):
+        if e.kind == "NO_OPEN_ALERT":
+            return _err("CONFLICT", "열린 직원 알림이 없다", details={"reason": "NO_OPEN_ALERT"})
+        if e.kind == "OUTCOME_MISMATCH":
+            return _err("CONFLICT", "같은 turn_id에 다른 outcome이 왔다")
+        return _err("UNAVAILABLE", "재알림이 너무 잦다" if e.kind == "INTERVAL" else "세션당 재알림 상한을 넘었다", 429,
+                    {"Retry-After": str(max(1, e.retry_after_s))}, details={"reason": e.kind})
+
+    def _staff_retry(self, body: Mapping, sid: str):
+        tid, err = self._staff_call_common(self._retry_req, body, sid)
+        if err:
+            return err
+        try:
+            return 200, self.alerts.retry_staff_call(sid, tid), {}
+        except StaffCallRejected as e:
+            return self._staff_call_rejected(e)
+        except StoreError:
+            return _err("UNAVAILABLE", "알림 저장소를 쓸 수 없다")
+
+    def _staff_report(self, body: Mapping, sid: str):
+        tid, err = self._staff_call_common(self._report_req, body, sid)
+        if err:
+            return err
+        try:
+            return 200, self.alerts.report_manual_notice(sid, tid, body["outcome"], "kiosk", getattr(self._tl, "user", None)), {}
+        except StaffCallRejected as e:
+            return self._staff_call_rejected(e)
+        except StoreError:
+            return _err("UNAVAILABLE", "알림 저장소를 쓸 수 없다")       # 감사 기록을 못 남기면 보고도 남기지 않는다(한 트랜잭션)
 
     @staticmethod
     def _resume_text(doc: Mapping) -> Optional[str]:
@@ -540,10 +612,15 @@ class PublicApi:
             turns.append({"turn_index": i, "turn_id": t.get("turn_id"), "at": t.get("at"), "utterance": e["input"]["utterance"],
                           "response_text": e["response_text"], "action": (e.get("extract_output") or {}).get("action")})
         kinds = {v: k for k, v in KIND_MAP.items()}
+        pr = self._pause_reason(sid, doc) if status == "PAUSED_RISK" else None
         view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": self.orch.store.release_id_of(sid),
                 "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": self._values(doc),
                 "alerts": [{"alert_id": a["alert_id"], "kind": kinds.get(a["kind"], a["kind"]), "status": a["status"],
-                            "created_at": a["created_at"], "rule_id": a["rule_id"], "resolved_by": a["resolved_by"]} for a in alerts]}
+                            "created_at": a["created_at"], "rule_id": a["rule_id"], "resolved_by": a["resolved_by"],
+                            **{k: a[k] for k in ("pause_reason", "delivery_attempts", "last_delivery_status", "manual_notice_outcome",
+                                                 "manual_notice_reported_at") if k in a}} for a in alerts]}
+        if pr is not None:
+            view["pause_reason"] = pr
         return 200, view, {}
 
     # ------------------------------------------------------------------ 결과 조회 (result-reader)

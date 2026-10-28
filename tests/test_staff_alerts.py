@@ -72,15 +72,15 @@ def test_risk_stop_is_persisted_with_only_session_and_kind(ar):
     ar.start()
     q = ar.hub.subscribe()
     code, fi, _ = ar.risk()
-    assert code == 200 and fi["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED"} and fi["response_text"]       # 위험 정지 + 알림 전달: 키오스크가 대기 화면으로 가도록 DELIVERED를 알린다(H-2)
+    assert code == 200 and fi["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED", "pause_reason": "RISK"} and fi["response_text"]       # 위험 정지 + 알림 전달: 키오스크가 대기 화면으로 가도록 DELIVERED를 알린다(H-2)
     code, body, _ = ar.call("GET", "/v1/staff/alerts")
     assert code == 200 and len(body["items"]) == 1 and body["next_cursor"] is None
     a = body["items"][0]
-    assert set(a) == {"alert_id", "session_id", "kind", "created_at", "status", "resolved_by_decision", "resolved_at"}
+    assert set(a) == {"alert_id", "session_id", "kind", "created_at", "status", "resolved_by_decision", "resolved_at", "pause_reason", "delivery_attempts", "last_delivery_status"}      # 2.1.0 optional 필드(값이 있을 때만)
     assert (a["session_id"], a["kind"], a["status"], a["resolved_by_decision"], a["resolved_at"]) == ("K1", "RISK_STOP", "OPEN", None, None)
     assert a["created_at"].endswith("Z") and a["alert_id"].startswith("al-")
     ev = q.get_nowait()
-    assert ev["type"] == "alert" and ev["alert"] == a
+    assert ev["type"] == "alert" and ev["alert"] == {k: v for k, v in a.items() if k not in ("delivery_attempts", "last_delivery_status")}      # 처음 이벤트는 전달 시도 기록 전 모양(목록은 그 뒤)
     blob = json.dumps([a, ev, ar.store.events_after(0)], ensure_ascii=False)
     assert SECRET_TEXT not in blob and "utterance" not in blob              # 환자 발화·개인 정보 없음
 
@@ -88,7 +88,7 @@ def test_risk_stop_is_persisted_with_only_session_and_kind(ar):
 def test_no_delivery_path_is_delivery_failed_but_alert_is_stored(ar):
     ar.start()
     code, fi, _ = ar.risk()                                                  # SSE 연결 없음, 푸시 없음
-    assert code == 200 and fi["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED"}
+    assert code == 200 and fi["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERY_FAILED", "pause_reason": "RISK"}
     assert fi["response_text"]                                               # 응답 단계는 그대로
     items = ar.call("GET", "/v1/staff/alerts")[1]["items"]
     assert len(items) == 1 and items[0]["status"] == "OPEN"                  # 조회된다
@@ -99,7 +99,7 @@ def test_no_delivery_path_is_delivery_failed_but_alert_is_stored(ar):
 def test_sse_connection_makes_it_delivered(ar):
     ar.start()
     ar.hub.subscribe()
-    assert ar.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED"}
+    assert ar.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED", "pause_reason": "RISK"}
     assert ar.service.status()["delivered"] == 1 and ar.service.status()["sse_connections"] == 1
 
 
@@ -109,7 +109,7 @@ def test_push_accepted_makes_it_delivered_and_payload_is_minimal(tmp_path):
     try:
         r.store.upsert_subscription({"endpoint": "https://push.example/1", "keys": {"p256dh": "a", "auth": "b"}})
         r.start()
-        assert r.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED"} and len(push.sent) == 1
+        assert r.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED", "pause_reason": "RISK"} and len(push.sent) == 1
         sub, payload = push.sent[0]
         body = json.loads(payload)
         assert set(body) == {"type", "alert_id", "session_id", "kind"} and body["session_id"] == "K1" and body["kind"] == "RISK_STOP"

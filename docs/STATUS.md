@@ -161,3 +161,7 @@
 ## 2026-10-28 학습 데이터(C1) 대조
 
 - 결과 표와 원인은 docs/boundary.md §5 '학습 데이터(C1 빌드) 대조'. 값 검증이 정상 정답 2행(0.006%)을 거부한 것을 찾아 고쳤다(현재 문항에서 next_item까지 저장 허용). 못 한 것: 실제 문항 세트(선택지·단위 정의)로의 재대조.
+
+## 계약 2.1.0 구현 (2026-10-28)
+
+- CR-H001 재알림·실패 기록, CR-H002 pause_reason 구현(ADR-0021, ADR-0022). 시험 `tests/test_staff_call.py`(SQLite·PostgreSQL). 남은 일: 계약 태그 v2.1.0이 push되면 `requirements.txt`·`scripts/build_wheels.sh`·`scripts/lib` 고정을 올리고 시험 재실행. 계약 쪽 발견: `StaffAlertPage.schema.json`의 items 안에 `StaffAlert` 정의가 복사돼 있어 새 optional 필드가 없다(additionalProperties false라 `GET /v1/staff/alerts` 응답이 페이지 스키마에서 거부됨) — 헤드에 알림.

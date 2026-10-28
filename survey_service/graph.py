@@ -118,6 +118,7 @@ class TurnState(TypedDict, total=False):
     resp: Optional[dict]            # 응답 계획 {kind: model_start | model | fixed | none, text?}
     alert: Optional[dict]           # 직원 알림(RiskSource가 낸 것). 입력원이 없으면 항상 None
     prescreen_hit: bool             # 모델 추출 전에 발화 원문에서 위험이 걸렸다(D88 U1, ADR-0013)
+    pause_reason: Optional[str]     # 이 턴이 낳은 정지의 사유 REASK_LIMIT(되묻기 한도). 위험 매처는 alert.kind RISK로 도출한다(CR-H002, ADR-0022)
     alert_sent: bool                # 직원 알림을 이미 전달했다(prescreen이 쓰기 확정과 분리해 먼저 보낸다)
     # 쓰기 확정과 그 뒤
     committed: bool
@@ -309,7 +310,7 @@ class TurnGraph:
         console["staff_alert"] = {"session_id": sid, "staff_alert": copy.deepcopy(alert)}
         upd: dict = {"prescreen_hit": True, "alert": alert, "alert_sent": True, "console": console, "console_calls": [copy.deepcopy(console)]}
         try:
-            self._deliver(console, sid, st["turn_id"])
+            self._deliver(console, sid, st["turn_id"], self._pause_reason(st))
             upd.update(console_delivered=True, staff_status="DELIVERED", staff_delivery="SUCCESS")
         except Exception as e:
             log.warning("직원 콘솔 전달 실패(선별) session=%s turn=%s error=%s", sid, st["turn_id"], type(e).__name__)
@@ -318,13 +319,24 @@ class TurnGraph:
             upd.update(staff_status="DELIVERY_FAILED", staff_delivery="FAILURE")      # finalize가 DELIVERY_FAILED 신호를 낸다 → 키오스크가 현장 직원 호출 화면을 보인다
         return upd
 
-    def _deliver(self, console: dict, sid: str, turn_id: str) -> None:
+    @staticmethod
+    def _pause_reason(st) -> Optional[str]:
+        """이 턴의 정지 사유(CR-H002). 되묻기 한도는 그 경로가 표시한 값, 위험 신호·위험 규칙(kind RISK)은 RISK, 정지가 아니면 None.
+        왜 도출하나: 위험 매처가 셋(선별, 입력원, 슬롯 규칙)이라 각각에 표시를 달면 빠지기 쉽다. 정지를 만드는 알림 종류는 RISK와 되묻기 한도뿐이다."""
+        if st.get("pause_reason"):
+            return st["pause_reason"]
+        a = st.get("alert")
+        return "RISK" if a is not None and a.get("kind") == "RISK" else None
+
+    def _deliver(self, console: dict, sid: str, turn_id: str, pause_reason: Optional[str] = None) -> None:
         """직원 접점에 전달한다. 알림 생성은 (세션, 턴)으로 멱등이다(같은 turn_id 재전송이 알림을 쌓지 않는다)."""
-        from .alerts import CURRENT_TURN
+        from .alerts import CURRENT_PAUSE_REASON, CURRENT_TURN
         tok = CURRENT_TURN.set((sid, turn_id))
+        tok2 = CURRENT_PAUSE_REASON.set(pause_reason)
         try:
             self.o.staff_console.deliver(copy.deepcopy(console))
         finally:
+            CURRENT_PAUSE_REASON.reset(tok2)
             CURRENT_TURN.reset(tok)
 
     def n_plan_risk(self, st, config):
@@ -405,7 +417,8 @@ class TurnGraph:
         """세션 정보 생성 실패, 조회 실패: 붙일 세션이 없어 로그를 남기지 않는다(9-1 3항)."""
         ctx = _ctx(config)
         sid, decision = st["session_id"], st["decision"]
-        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": st.get("staff_status") or "NONE"}      # 선별이 알림을 보냈다면 그 결과를 알린다
+        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": st.get("staff_status") or "NONE",
+                  **({"pause_reason": self._pause_reason(st)} if self._pause_reason(st) else {})}      # 선별이 알림을 보냈다면 그 결과를 알린다
         intervention_result = {"session_id": sid, "result": "FAILED"} if decision is not None else None
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         kind = None if st.get("fatal") == "no_route" else (st["route"]["turn_kind"] if st.get("route") else None)
@@ -612,7 +625,7 @@ class TurnGraph:
         if n < cap:
             return None
         self.o._count("reask_limit_reached")
-        return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF")}
+        return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF"), "pause_reason": "REASK_LIMIT"}
 
     @staticmethod
     def _fixed(ctx, key: str) -> dict:
@@ -674,7 +687,7 @@ class TurnGraph:
         if alert is not None or intervention_result is not None:
             upd["console_calls"] = [copy.deepcopy(console)]
             try:
-                self._deliver(console, sid, st["turn_id"])
+                self._deliver(console, sid, st["turn_id"], self._pause_reason(st))
                 upd["console_delivered"] = True
                 if alert is not None:
                     upd.update(staff_status="DELIVERED", staff_delivery="SUCCESS")
@@ -747,10 +760,13 @@ class TurnGraph:
 
     # ------------------------------------------------------------------ 종료 노드: 로그, 신호, 프론트
     @staticmethod
-    def _signal(sid: str, failed: list, committed: bool, staff_status: str) -> Optional[dict]:
+    def _signal(sid: str, failed: list, committed: bool, staff_status: str, pause_reason: Optional[str] = None) -> Optional[dict]:
         if not failed:
             return None
-        return {"session_id": sid, "write_committed": "COMMITTED" if committed else "NOT_COMMITTED", "staff_alert": staff_status}
+        sig = {"session_id": sid, "write_committed": "COMMITTED" if committed else "NOT_COMMITTED", "staff_alert": staff_status}
+        if pause_reason is not None:
+            sig["pause_reason"] = pause_reason        # optional(2.1.0). 정지가 아닌 실패 신호에는 싣지 않는다
+        return sig
 
     def n_finalize(self, st, config):
         ctx = _ctx(config)
@@ -762,7 +778,7 @@ class TurnGraph:
         if decision is not None and not committed:
             intervention_result = {"session_id": sid, "result": "FAILED"}
         # 프론트 전달(O06 대기: 자리만 있다)
-        signal = self._signal(sid, failed, committed, st["staff_status"])
+        signal = self._signal(sid, failed, committed, st["staff_status"], self._pause_reason(st))
         fi_text = st["response_text"]
         sink = self.o.frontend_sink
         if committed and sink is not None and st["response_text"] is not None:
@@ -772,13 +788,15 @@ class TurnGraph:
                 log.warning("프론트 전달 실패 session=%s turn=%s error=%s", sid, st["turn_id"], type(e).__name__)
                 self.o._count("step_failed.DELIVER_FRONT")
                 failed.append({"phase": "AFTER_COMMIT", "step": "DELIVER_FRONT"})
-                signal = self._signal(sid, failed, committed, st["staff_status"])
+                signal = self._signal(sid, failed, committed, st["staff_status"], self._pause_reason(st))
                 fi_text = None
         fi_signal = signal
         if signal is None and st["staff_status"] == "DELIVERED":
             # 위험 정지로 직원 알림이 닿았다: PUBLIC_API.md가 정한 대로 staff_alert=DELIVERED를 알려 키오스크가 대기 화면으로 가게 한다(횡단 H-2).
             # 내부 신호·로그·Trace는 그대로 두고(실패가 아니다) 프론트 응답에만 싣는다.
             fi_signal = {"session_id": sid, "write_committed": "COMMITTED" if committed else "NOT_COMMITTED", "staff_alert": "DELIVERED"}
+            if self._pause_reason(st) is not None:
+                fi_signal["pause_reason"] = self._pause_reason(st)
         fi = {"response_text": fi_text, "turn_failure_signal": fi_signal}
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         doc = st["state_doc"]

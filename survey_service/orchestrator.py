@@ -202,7 +202,7 @@ class Orchestrator:
                 status = "PAUSED_RISK"
             rule_id = f"{signal['source']}:{signal['code']}"
             try:
-                a = alerts.raise_alert(sid, severity, rule_id)
+                a = alerts.raise_alert(sid, severity, rule_id, "RISK" if severity == "RISK" else "OTHER")      # 외부 감지기의 CALL_STAFF는 위험 판정이 아니라 호출이다: OTHER (CR-H002)
             except Exception as e:                         # 전달 경로가 없어도 알림은 저장돼 있다(DeliveryFailed.alert)
                 a = getattr(e, "alert", None)
                 if a is None:

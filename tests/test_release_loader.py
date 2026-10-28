@@ -1,6 +1,6 @@
 """릴리스 로더: 포인터 폴링, 적재, 거부와 이전 릴리스 유지, 새 세션부터 적용."""
 import pytest
-from boundary_contracts import BoundaryError
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, BoundaryError
 
 import model_runtime
 import turn_engine
@@ -268,7 +268,7 @@ def test_release_expectations_for_contract_2_0_0(env):
         assert m["adapters"][role]["serving_config"]["prompt_template_version"] == "prompt-4"
         assert m["adapters"][role]["serving_config"]["protection_policy_version"] == "protect-2"
         assert m["adapters"][role]["system_prompt"]["path"] == "system_prompt.txt"
-    assert m["pipeline_schema_version"] == "2.0"
+    assert m["pipeline_schema_version"] == PIPELINE_SCHEMA_VERSION      # 계약 2.1.0 이후 "2.1"
     assert not [w for w in reg.active().warnings if "폐기" in w]
 
 
