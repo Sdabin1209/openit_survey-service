@@ -1,4 +1,4 @@
-"""CR-H001·CR-H002 (계약 2.1.0): 직원 호출 재알림·실패 기록·정지 사유. SQLite와 일회용 PostgreSQL(TEST_DATABASE_URL) 모두.
+"""CR-H001·CR-H002 (설치된 계약 패키지 기준): 직원 호출 재알림·실패 기록·정지 사유. SQLite와 일회용 PostgreSQL(TEST_DATABASE_URL) 모두.
 권한 부정, 경로 우회, 멱등, 간격·상한, 크래시 구간, 계약 스키마 적합성을 본다."""
 import json
 

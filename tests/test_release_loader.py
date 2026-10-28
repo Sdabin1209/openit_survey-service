@@ -256,27 +256,30 @@ def test_inference_backend_must_be_known():
     assert InferenceServer("fake").production_safe is False
 
 
-def test_release_expectations_for_contract_2_0_0(env):
-    """헤드 지시(migration-2.0.0): model_runtime_version 0.7.x, prompt-4(D77), protect-2, 역할별 system_prompt를 가진 매니페스트를 적재한다."""
+def test_release_expectations_from_installed_libraries(env):
+    """설치된 model-runtime이 내보내는 serving_config 기준값(prompt 버전, 보호 정책)과 역할별 system_prompt를 가진 매니페스트를 적재한다."""
     reader, reg, loader = env
-    assert INSTALLED["model_runtime_version"].startswith("0.7.") and INSTALLED["turn_engine_version"].startswith("0.4.")
+    import model_runtime
+    expected_cfg = model_runtime.fake_serving_config()      # 기준값은 설치된 패키지에서 읽는다
     add(reader, "rel-1")
     reader.set_pointer("rel-1")
     assert loader.poll_once().action == "LOADED"
     m = reg.active().manifest
     for role in ("LORA_A", "LORA_B"):
-        assert m["adapters"][role]["serving_config"]["prompt_template_version"] == "prompt-4"
-        assert m["adapters"][role]["serving_config"]["protection_policy_version"] == "protect-2"
+        assert m["adapters"][role]["serving_config"]["prompt_template_version"] == expected_cfg["prompt_template_version"]
+        assert m["adapters"][role]["serving_config"]["protection_policy_version"] == model_runtime.PROTECTION_POLICY_VERSION
         assert m["adapters"][role]["system_prompt"]["path"] == "system_prompt.txt"
-    assert m["pipeline_schema_version"] == PIPELINE_SCHEMA_VERSION      # 계약 2.1.0 이후 "2.1"
+    assert m["pipeline_schema_version"] == PIPELINE_SCHEMA_VERSION      # 설치된 계약 패키지의 값
     assert not [w for w in reg.active().warnings if "폐기" in w]
 
 
 def test_release_with_prompt_3_is_rejected(env):
-    """model-runtime 0.7.0은 prompt-3을 제거했다(prompt_template_versions=['prompt-4']). 이전 릴리스를 유지하고 거부한다."""
+    """현재 prompt 버전이 아닌 옛 prompt 버전(현재 번호 -1)은 적재되지 않는다. 이전 릴리스를 유지하고 거부한다."""
     import model_runtime
     reader, reg, loader = env
-    cfg = dict(model_runtime.fake_serving_config(), prompt_template_version="prompt-3")
+    cur = model_runtime.fake_serving_config()["prompt_template_version"]
+    stem, num = cur.rsplit("-", 1)
+    cfg = dict(model_runtime.fake_serving_config(), prompt_template_version=f"{stem}-{int(num) - 1}")
     reader.add_release("rel-1", sample_bank(), serving_config_b=cfg)
     reader.set_pointer("rel-1")
     r = loader.poll_once()
@@ -284,9 +287,12 @@ def test_release_with_prompt_3_is_rejected(env):
     assert reg.active() is None or reg.active().release_id != "rel-1"
 
 
-def test_release_built_with_model_runtime_0_5_is_rejected(env):
+def test_release_built_with_older_model_runtime_minor_is_rejected(env):
     reader, reg, loader = env
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version="0.5.3")
+    major, minor, patch = (int(x) for x in INSTALLED["model_runtime_version"].split(".")[:3])
+    assert minor > 0
+    older = f"{major}.{minor - 1}.{patch}"      # 현재 MINOR -1: 거부되어야 하는 옛 값은 현재 값에서 계산한다
+    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=older)
     reader.set_pointer("rel-1")
     r = loader.poll_once()
     assert r.action == "REJECTED" and r.code == "VERSION_MISMATCH" and reg.active() is None

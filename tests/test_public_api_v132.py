@@ -1,4 +1,4 @@
-"""공개 API 보완(D66, boundary-contracts v1.3.2): 세션 상태, 푸시 설정, 오류 표, Retry-After, turn_id 봉투, 응답 스키마 검증."""
+"""공개 API 보완(D66): 세션 상태, 푸시 설정, 오류 표, Retry-After, turn_id 봉투, 응답 스키마 검증."""
 import json
 import re
 import threading

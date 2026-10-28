@@ -1,4 +1,4 @@
-# boundary-contracts v2.0.0 conformance/servers.py의 복사본(시험 전용). 패키지에 포함되지 않아 경로로 읽어 복사했다.
+# boundary-contracts conformance/servers.py의 복사본(시험 전용). 패키지에 포함되지 않아 경로로 읽어 복사했다.
 # 바꾼 곳은 _example()의 예시 경로뿐이다(환경 변수 BOUNDARY_CONTRACTS_EXAMPLES 또는 이웃 읽기 전용 리포의 examples/).
 """HTTP.md를 따르는 작은 참조 서버(표준 라이브러리 http.server). 적합성 시험용이며 서비스 구현이 아니다.
 
@@ -388,7 +388,7 @@ class ReferenceServer:
 
 
 class RuntimeReferenceServer(ReferenceServer):
-    """HTTP.md I9(모델 추론 서버)를 따르는 참조 서버(계약 2.0.0). I1~I7 서버와 경로(`/v1/releases/{id}`)가 겹치므로 따로 띄운다.
+    """HTTP.md I9(모델 추론 서버)를 따르는 참조 서버(설치된 계약 패키지 기준). I1~I7 서버와 경로(`/v1/releases/{id}`)가 겹치므로 따로 띄운다.
 
     실제 모델은 없다. `extract_fn(요청 dict) -> dict`와 `respond_fn(요청 dict) -> (문장, outcome)`을 바꿔 끼워 동작을 정한다.
     기본값은 예시의 고정 출력이다. `extract_fn`의 출력이 `ActionExtraction`을 어기면 서버는 그대로 내지 않고 503 OUTPUT_INVALID(D75)를 낸다. 요청 본문은 서버가 스키마로 검증하고(400 INVALID_RECORD), 적재되지 않은 릴리스는 404다.
