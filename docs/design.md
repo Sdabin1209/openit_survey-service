@@ -269,7 +269,7 @@
 
 ## 15. 직원 알림과 공개 API 보완 (D64, D66)
 
-계약은 `boundary-contracts/PUBLIC_API.md`(v1.3.2). 구현은 `survey_service/alerts.py`(저장·전달), `api.py`(HTTP 동작), `service.py`(SSE 스트림).
+계약은 `boundary-contracts/PUBLIC_API.md`(버전은 설치된 계약 패키지 기준). 구현은 `survey_service/alerts.py`(저장·전달), `api.py`(HTTP 동작), `service.py`(SSE 스트림).
 
 - **알림 저장** [확인]: 직원 알림이 나면(`StaffAlert.kind` RISK, CALL_STAFF, USER_CALLED_STAFF → 알림 종류 `RISK_STOP`, `CALL_STAFF`, `USER_CALLED_STAFF`) SQLite(`SURVEY_ALERT_DB`, 비우면 세션 DB 옆 `alerts.db`)에 영속 저장한다. 알림 행과 이벤트 행은 한 트랜잭션이다. 세션 저장소와는 다른 파일이라 세션 쓰기 확정과 한 트랜잭션은 아니다: 쓰기 확정 뒤 알림 저장 전에 프로세스가 죽으면 알림이 없고, 같은 `turn_id` 재시도는 `DELIVERY_FAILED` 신호를 돌려준다(복구 경로) [제안: 단일 파일로 합치지 않은 이유는 알림을 세션 저장소와 독립적으로 보존·조회하기 위해서다].
 - **전달 판정** [확인]: 알림이 저장되고 전달 경로가 하나 이상 살아 있으면 `DELIVERED`(SSE 연결 수 > 0 이거나 웹 푸시 서비스가 접수), 아니면 `AlertStaffConsole`이 `DeliveryFailed`를 던져 Orchestrator가 `DELIVERY_FAILED`로 기록한다(응답 단계는 그대로). 저장 실패도 전달 실패다. **한계**: SSE 연결이 살아 있는지는 서버가 쓰기에 실패해야 안다. 클라이언트가 소리 없이 사라지면(프록시가 연결을 닫지 않는 경우 포함) 다음 `: ping`(기본 15초, `SURVEY_SSE_HEARTBEAT_SECONDS`) 전까지 DELIVERED로 잘못 볼 수 있다. 직원 화면이 연결 확인을 하는 운영 절차가 필요하다 [미정].
@@ -285,7 +285,7 @@
 - 직원 접점은 교체 가능하다: 기본은 `AlertStaffConsole`(StaffConsole Protocol 구현), `SURVEY_STAFF_CONSOLE`로 다른 구현을 꽂으면 그것을 쓴다(알림 조회·SSE API는 알림 저장소를 그대로 쓰므로 이 경우 알림은 저장되지 않는다).
 
 
-## 16. D74 구조: 한 턴의 흐름 (계약 2.0.0, turn-engine 0.3.1, model-runtime 0.6.1)
+## 16. D74 구조: 한 턴의 흐름 (작성 시점 2026-10-27 기록. 현행 버전은 `requirements.txt`)
 
 [확인] 정규화·판정·기록·Plan 코드는 서비스에 없다. 모델(LoRA-A)이 값 추출·정규화·절차(action)·다음 문항(next_item)을 한 번에 내고, 서비스는 **검증·저장·전달·표 찾기**만 한다. 판단은 하지 않는다(모델의 출력을 `validate_extraction`이 확인할 뿐이다).
 
