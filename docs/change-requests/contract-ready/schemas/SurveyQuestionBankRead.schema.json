@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "SurveyQuestionBankRead.schema.json",
+  "title": "SurveyQuestionBankRead",
+  "description": "제안 I4 호출 `get_release_question_bank(release_id) -> {release_id, content_hash, question_bank}`. 지금은 문항 세트를 얻는 길이 load_bundle뿐이라 어댑터까지 내려받는다(SV-16). 이 호출은 어댑터 없이 문항 세트만 돌려준다. 만드는 쪽: release-gate(서버). 읽는 쪽: survey-service. question_bank는 해당 릴리스에 묶인 문항 세트(문진 스키마 QuestionBank, 지금 load_bundle().question_bank와 같은 값)이고 content_hash는 그 정규화 JSON(RFC 8785)의 SHA-256이다(클라이언트가 다시 계산해 다르면 INTEGRITY_ERROR). 모르는 키는 읽기 모드로 받아들인다(CONVENTIONS 1절).",
+  "$defs": {
+    "Request": {
+      "type": "object",
+      "required": [
+        "release_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "release_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "maxLength": 128
+        }
+      }
+    },
+    "Response": {
+      "type": "object",
+      "required": [
+        "release_id",
+        "content_hash",
+        "question_bank"
+      ],
+      "properties": {
+        "release_id": {
+          "type": "string"
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "question_bank": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/Request"
+    },
+    {
+      "$ref": "#/$defs/Response"
+    }
+  ],
+  "$comment": "예시는 $defs/Request 또는 $defs/Response로 따로 검증한다(MANIFEST의 def). 오류는 기존 BoundaryError(NOT_FOUND 없는 릴리스, INTEGRITY_ERROR 해시 불일치, UNAVAILABLE). question_bank의 내용은 문진 스키마 QuestionBank(survey-service/schema)다."
+}
