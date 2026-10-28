@@ -263,32 +263,47 @@ class App:
             t.join(max(0.0, end - time.monotonic()))
         return dict(out)
 
-    def _db_problems(self) -> list:
-        """세 저장소를 **동시에** 확인하고 **총 마감 `readyz_db_timeout_seconds`(기본 2초)** 안에 끝나지 않은 것은 실패로 센다.
-        근거: FAULT_POLICY 5는 의존이 응답하지 않을 때 /readyz가 2초 안에 503을 내라고 한다(단언 허용 2.5초). 이전에는 확인 자체의 상한(2초)에 여유 1초를
-        더해 기다려 전체 E2E 5pn(postgres를 네트워크에서 분리)에서 3.1초가 걸렸다(이 PC 측정 1회). 여유를 없애고 마감을 총합에 건다.
-        각 확인은 자기 사유(session_db/outbox_db/alert_db)를 따로 보고하므로 하나가 죽어도 나머지의 상태는 그대로 나온다. PostgreSQL의 각 확인은
-        주 연결·락을 쓰지 않는 별도 짧은 연결이고 같은 값이 자체 상한(connect_timeout·statement_timeout)이다."""
-        res = self._bounded({"session_db": self.store.ping, "outbox_db": self.outbox.ping, "alert_db": self.alert_store.ping},
-                            self.settings.readyz_db_timeout_seconds)
-        return [n for n in ("session_db", "outbox_db", "alert_db") if res.get(n, ("error",))[0] != "ok"]
+    def _db_check(self) -> tuple[list, dict]:
+        """세 저장소 확인과 보조 수치 읽기를 **동시에** 시작하고 **한 번의 총 마감 `readyz_db_timeout_seconds`(기본 2초)** 안에 끝난 것만 쓴다.
+        근거: 계약 FAULT_POLICY 5는 의존이 응답하지 않으면 /readyz가 2초 안에 503을 내라고 한다(E2E 단언 허용 2.5초). 이전 구현은 확인(총 2초)이 끝난 뒤
+        보조 수치(주 연결)를 1초 더 **이어서** 기다려 최악 3초였다: 네트워크 분리 직후 확인용 새 연결은 통과하고 주 연결 읽기만 매달린 요청이 생기면
+        그다음 요청까지 합쳐 분리부터 503까지 약 3초(gpu-dev E2E 5pn 2.8초 관찰과 맞는 경로, ADR-0027). 이제 마감은 응답 전체에 하나다.
+        각 확인은 자기 사유(session_db/outbox_db/alert_db)를 따로 보고한다. 보조 수치는 확인이 모두 통과했을 때만 쓰고(주 연결이 정상일 때의 값),
+        마감 안에 못 읽으면 마지막 값에 stale=true를 붙인다. 마감을 넘긴 스레드는 데몬이라 버려진다(PostgreSQL 확인은 자체 connect_timeout으로 끝난다)."""
+        out: dict = {}
 
-    def _db_stats(self, db_ok: bool) -> dict:
-        """DB를 읽는 보조 수치(outbox 건수, 구독 수). 주 연결을 쓰므로 DB가 정상일 때만 읽고, 1초 안에 못 읽거나 DB가 비정상이면
-        마지막으로 읽은 값에 `stale=true`를 붙여 돌려준다. 이 읽기가 실패해도 /readyz는 응답한다(예외가 핸들러를 끊지 않게)."""
-        if db_ok:
-            res = self._bounded({"stats": lambda: {"trace_outbox": self.exporter.stats(), "staff_alerts": self.alerts.status()}}, 1.0)
-            if res.get("stats", ("error",))[0] == "ok":
-                self._db_stats_cache = res["stats"][1]
-                return dict(self._db_stats_cache, stale=False)
+        def run(name, fn):
+            try:
+                out[name] = ("ok", fn())
+            except Exception:
+                out[name] = ("error", None)
+        fns = {"session_db": self.store.ping, "outbox_db": self.outbox.ping, "alert_db": self.alert_store.ping,
+               "stats": lambda: {"trace_outbox": self.exporter.stats(), "staff_alerts": self.alerts.status()}}
+        ts = {n: threading.Thread(target=run, args=(n, f), name="readyz-" + n, daemon=True) for n, f in fns.items()}
+        for th in ts.values():
+            th.start()
+        end = time.monotonic() + self.settings.readyz_db_timeout_seconds
+        for n in ("session_db", "outbox_db", "alert_db"):
+            ts[n].join(max(0.0, end - time.monotonic()))
+        # 왜: 확인이 끝난 뒤 보조 수치를 마감까지 기다리면, 분리 직후(새 연결은 통과, 주 연결은 매달림) 200 응답이 2초를 다 쓰고 다음 요청의 503이 그만큼 늦는다.
+        #     확인 뒤에는 STATS_GRACE_S만 더 기다린다(총 마감 안). 값은 측정하지 않았다(ADR-0027): 정상 보조 수치는 로컬 질의 몇 ms라 넉넉하다는 판단이다.
+        ts["stats"].join(max(0.0, min(end, time.monotonic() + STATS_GRACE_S) - time.monotonic()))
+        res = dict(out)
+        problems = [n for n in ("session_db", "outbox_db", "alert_db") if res.get(n, ("error",))[0] != "ok"]
+        if not problems and res.get("stats", ("error",))[0] == "ok":
+            self._db_stats_cache = res["stats"][1]
+            return problems, dict(self._db_stats_cache, stale=False)
         c = getattr(self, "_db_stats_cache", None)
-        return dict(c, stale=True) if c else {"trace_outbox": None, "staff_alerts": None, "stale": True}
+        return problems, (dict(c, stale=True) if c else {"trace_outbox": None, "staff_alerts": None, "stale": True})
+
+    def _db_problems(self) -> list:
+        """세 저장소 확인 결과만(시험·진단용). /readyz는 `_db_check`를 쓴다."""
+        return self._db_check()[0]
 
     def readiness(self) -> tuple[bool, dict]:
-        problems = self._db_problems()
+        problems, dbs = self._db_check()
         if self.draining.is_set():
             problems.append("shutting_down")
-        dbs = self._db_stats(not problems)
         active = self.registry.active_id()
         retrying = self.loader.retry_info()
         if active is None:
@@ -335,6 +350,9 @@ MIN_TOKEN_CHARS = 16      # 기기 토큰과 역할 토큰의 최소 길이. 근
 def _check_token_length(token, what: str) -> None:
     if token is not None and len(token) < MIN_TOKEN_CHARS:
         raise ConfigError(f"{what}이 너무 짧다: {MIN_TOKEN_CHARS}자 이상이어야 한다")     # 값은 오류에 넣지 않는다
+
+
+STATS_GRACE_S = 0.2       # /readyz: DB 확인이 끝난 뒤 보조 수치(주 연결)를 더 기다리는 상한(초). 측정하지 않은 값, ADR-0027
 
 
 def _device_tokens(env_name: str) -> dict:
