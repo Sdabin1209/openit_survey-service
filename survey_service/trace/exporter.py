@@ -45,12 +45,15 @@ class OutboxTraceSink:
     def __init__(self, outbox: Outbox, clock: Callable[[], float] = time.time) -> None:
         self.outbox, self.clock = outbox, clock
 
-    def submit(self, release_id: str, trace: dict) -> None:
+    def envelope(self, release_id: str, trace: dict) -> dict:
         now = self.clock()
-        envelope = {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id,
+        return {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id,
                     "runtime_contract_version": trace["contract_version"], "session_id": envelope_id(trace["session_id"]),
                     "turn_id": envelope_id(trace["turn_id"]), "sent_at": _iso(now), "trace": trace}
-        self.outbox.enqueue(envelope, now)
+
+    def submit(self, release_id: str, trace: dict) -> None:
+        """세션 저장소와 outbox가 다른 곳이면(시험, 메모리 저장소) 이 경로로 따로 넣는다. 같은 DB면 Orchestrator가 저장소 트랜잭션에 쓴다."""
+        self.outbox.enqueue(self.envelope(release_id, trace), self.clock())
 
 
 @dataclass
@@ -64,7 +67,9 @@ class FlushResult:
 
 class TraceExporter:
     def __init__(self, outbox: Outbox, ingest, *, base_delay: float = 1.0, max_delay: float = 60.0, batch: int = 50,
-                 validate: bool = True, clock: Callable[[], float] = time.time) -> None:
+                 validate: bool = True, clock: Callable[[], float] = time.time, stage_grace: float = 60.0) -> None:
+        # stage_grace: 예약 행(턴 진행 중)이 이만큼 오래되면 턴이 사라진 것으로 보고 승격한다. 서버 턴 마감 6초(ADR-0008)의 10배, 측정하지 않았다 (ADR-0023)
+        self.stage_grace = stage_grace
         self.outbox, self.ingest = outbox, ingest
         self.base_delay, self.max_delay, self.batch = base_delay, max_delay, batch
         self.validate = validate
@@ -101,6 +106,7 @@ class TraceExporter:
     def flush_once(self) -> FlushResult:
         res = FlushResult()
         now = self.clock()
+        self.outbox.promote_stale_staged(now - self.stage_grace)
         if now < self.pause_until:
             res.paused = True
             return res

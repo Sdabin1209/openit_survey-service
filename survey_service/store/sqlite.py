@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from ..errors import StoreEffectError, StoreError
+from ..trace.outbox import _SCHEMA as _OUTBOX_SCHEMA, finish_in_txn, stage_in_txn
 from . import effects
 from .base import TurnRecord
 
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS turns (
   result_json TEXT,
   PRIMARY KEY (session_id, turn_id)
 );
-"""
+""" + _OUTBOX_SCHEMA      # 왜: Trace outbox 표를 세션과 같은 DB에 둬야 세션 commit과 같은 트랜잭션에 쓸 수 있다(H02, ADR-0023)
 
 
 def _dump(o) -> str:
@@ -45,6 +46,8 @@ def _dump(o) -> str:
 class SqliteSessionStore:
     _ERRORS: tuple = (sqlite3.Error,)
     _FOR_UPDATE = ""        # PostgreSQL 구현은 행 잠금을 건다
+    supports_trace_outbox = True
+    outbox_gate = None      # 서비스가 Outbox를 꽂는다(max_pending·dropped_full). 없으면 상한 없이 쓴다
 
     def __init__(self, path: str, clock=time.time) -> None:
         self._path = path
@@ -95,7 +98,8 @@ class SqliteSessionStore:
                 raise StoreError(f"세션을 만들 수 없다: {type(e).__name__}") from e
         return 1
 
-    def commit(self, request: dict, *, turn_id: str, input_hash: str) -> dict:
+    def commit(self, request: dict, *, turn_id: str, input_hash: str, trace_envelope: Optional[dict] = None) -> dict:
+        """trace_envelope가 있으면 같은 트랜잭션에 Trace outbox 예약 행을 쓴다(트랜잭셔널 outbox)."""
         sid = request["session_id"]
 
         def result(status, outcome, revision=None, detail=None):
@@ -124,6 +128,8 @@ class SqliteSessionStore:
                     "INSERT INTO turns(session_id, turn_id, input_hash, committed) VALUES (?,?,?,1) "
                     "ON CONFLICT(session_id, turn_id) DO UPDATE SET committed=1, input_hash=excluded.input_hash",
                     (sid, turn_id, input_hash))
+                if trace_envelope is not None:
+                    stage_in_txn(self._db, trace_envelope, self._clock(), self.outbox_gate)
                 stage = "commit"
                 self._db.execute("COMMIT")
                 return result("OK", "APPLIED", revision=rev)
@@ -183,6 +189,26 @@ class SqliteSessionStore:
                     (session_id, turn_id, input_hash, _dump(result)))
             except self._ERRORS as e:
                 raise StoreError(f"턴 결과를 남길 수 없다: {type(e).__name__}") from e
+
+    def finalize_turn(self, session_id: str, turn_id: str, input_hash: str, result: Optional[dict], envelope: Optional[dict]) -> None:
+        """턴의 마지막 쓰기: 멱등 결과(있으면)와 완성된 Trace outbox 행(있으면)을 한 트랜잭션으로."""
+        with self._lock:
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                if result is not None:
+                    self._db.execute(
+                        "INSERT INTO turns(session_id, turn_id, input_hash, committed, result_json) VALUES (?,?,?,0,?) "
+                        "ON CONFLICT(session_id, turn_id) DO UPDATE SET result_json=excluded.result_json",
+                        (session_id, turn_id, input_hash, _dump(result)))
+                if envelope is not None:
+                    finish_in_txn(self._db, envelope, self._clock(), self.outbox_gate)
+                self._db.execute("COMMIT")
+            except self._ERRORS as e:
+                try:
+                    self._db.execute("ROLLBACK")
+                except self._ERRORS:
+                    pass
+                raise StoreError(f"턴 마무리를 남길 수 없다: {type(e).__name__}") from e
 
     def list_idle(self, before: float) -> list[str]:
         """마지막 기록이 before보다 오래된 진행 중(IN_PROGRESS) 세션. 멈춘(PAUSED_RISK) 세션은 직원이 정하므로 넣지 않는다."""

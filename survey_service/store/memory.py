@@ -37,7 +37,7 @@ class MemorySessionStore:
             self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id, "updated_at": self._clock()}
             return 1
 
-    def commit(self, request: dict, *, turn_id: str, input_hash: str) -> dict:
+    def commit(self, request: dict, *, turn_id: str, input_hash: str, trace_envelope=None) -> dict:   # trace_envelope: 메모리 구현은 outbox가 없어 무시한다
         sid = request["session_id"]
         with self._lock:
             s = self._sessions.get(sid)

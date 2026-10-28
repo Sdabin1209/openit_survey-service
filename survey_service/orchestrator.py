@@ -155,13 +155,19 @@ class Orchestrator:
             if replay is not None:
                 return replay
             out = self._process(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
+            result = None
             try:
                 sig = (out.orchestrator_output or {}).get("turn_failure_signal") or {}
                 # 확정된 턴만 멱등 재생한다(CR-D25): 확정되지 못한 턴(NOT_COMMITTED: 모델 단계 실패 등)은 결과를 고정하지 않아 같은 turn_id 재전송이 새로 처리된다
                 if out.cacheable and sig.get("write_committed") != "NOT_COMMITTED" and not ctx.cancelled.is_set():      # 마감으로 끝낸 턴의 늦은 결과는 고정하지 않는다(같은 turn_id 재전송이 새로 처리된다)
-                    self.store.save_turn_result(sid, turn_id, input_hash, {
-                        "orchestrator_output": out.orchestrator_output, "frontend_input": out.frontend_input,
-                        "staff_console_input": out.staff_console_input, "release_id": out.release_id})
+                    result = {"orchestrator_output": out.orchestrator_output, "frontend_input": out.frontend_input,
+                              "staff_console_input": out.staff_console_input, "release_id": out.release_id}
+                envelope = self.trace_envelope(out.release_id, out.trace)
+                if envelope is not None:          # 같은 DB: 멱등 결과와 완성된 Trace 행을 한 트랜잭션으로 (H02, ADR-0023)
+                    self.store.finalize_turn(sid, turn_id, input_hash, result, envelope)
+                    return out
+                if result is not None:
+                    self.store.save_turn_result(sid, turn_id, input_hash, result)
             except StoreError:
                 log.error("턴 결과를 멱등 기록에 남기지 못했다 (session=%s turn=%s)", sid, turn_id)
             self._submit_trace(out)
@@ -256,6 +262,18 @@ class Orchestrator:
         oo = {"turn_kind": None, "session_info_created": None, "log_entry": None, "turn_failure_signal": signal,
               "intervention_result": None, "dispatch_called": False}
         return TurnOutcome(oo, {"response_text": None, "turn_failure_signal": signal}, None, trace={}, release_id=None, cacheable=False)
+
+    def atomic_trace(self) -> bool:
+        """Trace outbox가 세션 저장소와 같은 DB에 있어 세션 commit과 같은 트랜잭션에 쓸 수 있는가(트랜잭셔널 outbox)."""
+        gate = getattr(self.store, "outbox_gate", None)
+        return (gate is not None and getattr(self.store, "supports_trace_outbox", False)
+                and getattr(self.trace_sink, "outbox", None) is gate and hasattr(self.trace_sink, "envelope"))
+
+    def trace_envelope(self, release_id, trace) -> Optional[dict]:
+        """같은 DB 모드일 때 TraceEnvelope. 아니면 None(기존 경로: _submit_trace)."""
+        if not self.atomic_trace() or release_id is None or not trace:
+            return None
+        return self.trace_sink.envelope(release_id, trace)
 
     def _submit_trace(self, out: TurnOutcome) -> None:
         if self.trace_sink is None or out.release_id is None:

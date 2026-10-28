@@ -31,6 +31,11 @@ def open_stores(settings: Settings, url: str | None = None):
         pg.configure(connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
                      reconnect_backoff=settings.db_reconnect_backoff_seconds,
                      probe_timeout=settings.readyz_db_timeout_seconds)
-        stores = PgSessionStore(url), PgOutbox(url), PgAlertStore(url)
-        return (*stores, "postgresql")
-    return SqliteSessionStore(settings.session_db), Outbox(settings.outbox_db), AlertStore(settings.alert_db_path()), "sqlite"
+        store, outbox = PgSessionStore(url), PgOutbox(url)
+        store.outbox_gate = outbox          # 같은 데이터베이스의 outbox 표를 세션 commit과 같은 트랜잭션에 쓴다 (H02, ADR-0023)
+        return store, outbox, PgAlertStore(url), "postgresql"
+    # 왜: SQLite도 outbox 표를 세션 DB 파일에 둔다. 세션 commit과 같은 트랜잭션에 쓰려면 같은 파일이어야 한다(H02, ADR-0023).
+    # settings.outbox_db(SURVEY_OUTBOX_DB)는 더 쓰지 않는다. 그 파일에 남은 미전송 행은 옮기지 않는다(운영은 PostgreSQL, SQLite는 개발·시험).
+    store, outbox = SqliteSessionStore(settings.session_db), Outbox(settings.session_db)
+    store.outbox_gate = outbox
+    return store, outbox, AlertStore(settings.alert_db_path()), "sqlite"

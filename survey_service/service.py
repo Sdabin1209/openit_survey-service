@@ -112,7 +112,7 @@ class App:
             open_release_ids=self.store.open_release_ids, retry_base_seconds=settings.release_retry_base_seconds,
             retry_max_seconds=settings.release_retry_max_seconds, give_up_seconds=settings.release_retry_give_up_seconds)
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,
-                                      max_delay=settings.export_backoff_max_seconds)
+                                      max_delay=settings.export_backoff_max_seconds, stage_grace=settings.outbox_stage_grace_seconds)
         console = staff_console if staff_console is not None else (load_factory(settings.staff_console)() if settings.staff_console else None)
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
         if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다

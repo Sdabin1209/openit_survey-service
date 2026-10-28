@@ -662,7 +662,11 @@ class TurnGraph:
             self.o._count("commit_skipped.DEADLINE")
             return {"failed": _step_failed(("BEFORE_COMMIT", "COMMIT")), "commit_unknown": False}
         req = {"session_id": st["session_id"], "expected_revision": st["revision"], "writes": writes}
-        res = self.o.store.commit(req, turn_id=st["turn_id"], input_hash=st["input_hash"])
+        kw: dict = {}
+        env = self.o.trace_envelope(st.get("release_id"), dict(st["trace"], persistence_commit_request=copy.deepcopy(req)))
+        if env is not None:      # 세션 commit과 같은 트랜잭션에 Trace 예약 행을 쓴다(H02). 턴이 끝나면 finalize_turn이 완성본으로 바꾼다
+            kw["trace_envelope"] = env
+        res = self.o.store.commit(req, turn_id=st["turn_id"], input_hash=st["input_hash"], **kw)
         tr = {"persistence_commit_request": copy.deepcopy(req), "persistence_commit_result": copy.deepcopy(res)}
         if res["status"] == "OK":
             return {"committed": True, "revision": res["revision"], "post_doc": effects.apply_writes(doc, writes), "trace": tr}

@@ -30,6 +30,45 @@ CREATE INDEX IF NOT EXISTS outbox_due ON outbox(state, next_attempt_at, id);
 """
 
 
+# 왜: 세션 commit과 같은 트랜잭션에 쓰는 행은 그때 Trace가 아직 완성되지 않았다(응답 생성·전달이 commit 뒤다). 그래서 commit 트랜잭션에는
+# '예약(staged)' 행을 쓰고(내용은 그때까지의 Trace) 턴이 끝나면 같은 행을 완성본으로 바꾼다. 예약 행은 다음 시각을 이 값으로 두어 전송 대상에서
+# 빠진다(`due`는 next_attempt_at<=now). 스키마(CHECK 제약)를 바꾸지 않으려고 새 상태 값 대신 이 표식을 쓴다. 값 1e18은 어떤 epoch 초보다 크다는 것뿐이다.
+STAGED_AT = 1e18
+
+
+def _count_pending(db, limit: int) -> int:
+    return db.execute("SELECT COUNT(*) FROM (SELECT 1 FROM outbox WHERE state='PENDING' LIMIT ?)", (limit,)).fetchone()[0]
+
+
+def _insert(db, envelope: dict, now: float, next_attempt_at: float) -> bool:
+    cur = db.execute(
+        "INSERT INTO outbox(session_id, turn_id, envelope, next_attempt_at, created_at) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
+        (envelope["session_id"], envelope["turn_id"], json.dumps(envelope, ensure_ascii=False, separators=(",", ":")), next_attempt_at, now))
+    return cur.rowcount == 1
+
+
+def stage_in_txn(db, envelope: dict, now: float, gate=None) -> bool:
+    """호출자가 연 트랜잭션 안에서 예약 행을 쓴다(트랜잭셔널 outbox: 업무 변경과 같은 트랜잭션). gate는 max_pending·dropped_full을 가진 객체(Outbox).
+    가득 차면 쓰지 않고 센다(Trace 때문에 업무 쓰기가 실패하면 안 된다: I6). 이미 있으면 False."""
+    if gate is not None and gate.max_pending > 0 and _count_pending(db, gate.max_pending) >= gate.max_pending:
+        gate.dropped_full += 1
+        return False
+    return _insert(db, envelope, now, STAGED_AT)
+
+
+def finish_in_txn(db, envelope: dict, now: float, gate=None) -> bool:
+    """턴이 끝났다: 예약 행을 완성본으로 바꿔 전송 대상으로 만든다. 예약 행이 없으면(commit이 없던 턴, 가득 참으로 건너뜀) 새로 넣는다.
+    이미 전송 대상이 된 행(유예가 지나 부분 Trace가 승격됐다)은 건드리지 않는다."""
+    cur = db.execute("UPDATE outbox SET envelope=?, next_attempt_at=0 WHERE session_id=? AND turn_id=? AND next_attempt_at>=?",
+                     (json.dumps(envelope, ensure_ascii=False, separators=(",", ":")), envelope["session_id"], envelope["turn_id"], STAGED_AT))
+    if cur.rowcount == 1:
+        return True
+    if gate is not None and gate.max_pending > 0 and _count_pending(db, gate.max_pending) >= gate.max_pending:
+        gate.dropped_full += 1
+        return False
+    return _insert(db, envelope, now, 0)
+
+
 @dataclass
 class OutboxRow:
     id: int
@@ -91,6 +130,16 @@ class Outbox:
         except self._ERRORS as e:
             raise StoreError(f"outbox에 넣을 수 없다: {type(e).__name__}") from e
 
+    def promote_stale_staged(self, created_before: float) -> int:
+        """턴이 끝나지 못하고 사라진 예약 행(프로세스 사망)을 전송 대상으로 승격한다. 내용은 사망 전까지의 Trace라서 스키마 검증에 걸리면
+        LOCAL_INVALID로 DEAD가 된다(조용히 사라지지 않고 /readyz에 보인다)."""
+        with self._lock:
+            try:
+                return self._db.execute("UPDATE outbox SET next_attempt_at=0 WHERE next_attempt_at>=? AND created_at<?",
+                                        (STAGED_AT, created_before)).rowcount
+            except self._ERRORS as e:
+                raise StoreError(f"outbox를 갱신할 수 없다: {type(e).__name__}") from e
+
     def due(self, now: float, limit: int = 50) -> list[OutboxRow]:
         with self._lock:
             rows = self._db.execute(
@@ -114,14 +163,17 @@ class Outbox:
 
     def counts(self) -> dict:
         with self._lock:
-            rows = self._db.execute("SELECT state, COUNT(*) FROM outbox GROUP BY state").fetchall()
+            rows = self._db.execute("SELECT state, COUNT(*) FROM outbox WHERE next_attempt_at<? GROUP BY state", (STAGED_AT,)).fetchall()
+            staged = self._db.execute("SELECT COUNT(*) FROM outbox WHERE next_attempt_at>=?", (STAGED_AT,)).fetchone()[0]
         out = {"PENDING": 0, "SENT": 0, "DEAD": 0}
         out.update({r[0]: r[1] for r in rows})
+        if staged:
+            out["STAGED"] = staged       # 진행 중인 턴의 예약 행(정상이면 곧 PENDING이 된다)
         return out
 
     def oldest_pending_age(self, now: float) -> Optional[float]:
         with self._lock:
-            r = self._db.execute("SELECT MIN(created_at) FROM outbox WHERE state='PENDING'").fetchone()
+            r = self._db.execute("SELECT MIN(created_at) FROM outbox WHERE state='PENDING' AND next_attempt_at<?", (STAGED_AT,)).fetchone()
         return None if r[0] is None else now - r[0]
 
     def dead_by_code(self) -> dict:
