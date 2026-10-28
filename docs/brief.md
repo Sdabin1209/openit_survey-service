@@ -66,7 +66,7 @@
 
 ## 8. 시드
 
-Frontend 연동 계층, Orchestrator, Parser(LoRA-A), Normalizer, Judge, Record Writer, Planner, Generator(LoRA-B), 릴리스 로더, 트레이스 내보내기, 추론 서버. Normalizer·Judge·Record Writer·Planner의 코드는 turn-engine에 있다. 시드는 구속하지 않는다.
+Frontend 연동 계층, Orchestrator(LangGraph 그래프, `survey_service/graph.py`), 모델 추출 호출(LoRA-A)과 응답 생성 호출(LoRA-B), turn-engine의 `validate_extraction` 호출과 `QuestionFlowTable` 조립, 릴리스 로더, 트레이스 내보내기, 추론 서버 클라이언트. 현행 구조는 `docs/design.md` 16절. 시드는 구속하지 않는다.
 
 ## 9. 요구하는 산출물
 
