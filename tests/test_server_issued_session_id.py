@@ -84,3 +84,28 @@ def test_issued_session_is_bound_to_the_creating_device(tmp_path):
         assert api.handle("GET", f"/v1/sessions/{sid}/state", "Bearer tok-device-b-0123456789", b"")[0] == 404
     finally:
         r.store.close()
+
+
+def test_schemas_describe_the_start_request_and_response():
+    """스키마가 선택적 session_id(요청)와 시작 응답의 최상위 session_id를 기술한다(PUBLIC_API.md 7행). 위치: schema/schemas/FrontendMessage.json(요청), FrontendInput.json(응답)."""
+    import jsonschema
+    import survey_schema
+    msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
+    fi = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
+    assert not list(msg.iter_errors({"kind": "SESSION_START"}))                                   # 서버 발급: session_id 생략
+    assert not list(msg.iter_errors({"kind": "SESSION_START", "session_id": "legacy-1"}))         # 2.x 호환
+    assert list(msg.iter_errors({"kind": "UTTERANCE", "utterance": "x"}))                         # 다른 kind는 session_id 필수
+    assert list(msg.iter_errors({"kind": "SESSION_END"}))
+    base = {"response_text": "안녕하세요", "turn_failure_signal": None}
+    assert not list(fi.iter_errors(base))
+    assert not list(fi.iter_errors({**base, "session_id": "a" * 43}))
+    assert list(fi.iter_errors({**base, "session_id": ""}))
+    assert list(fi.iter_errors({**base, "session_id": "has space"}))
+
+
+def test_issued_start_response_validates_against_the_frontend_input_schema(ar):
+    import jsonschema
+    import survey_schema
+    fi = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
+    code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
+    assert code == 200 and not list(fi.iter_errors(body))

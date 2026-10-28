@@ -80,7 +80,7 @@ def test_view_includes_alert_with_rule_id_and_no_raw_text_in_alert_surfaces(vr):
     vr.post("/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": f"저기 {TEST_PHRASE} 입니다", "turn_id": "t-2"})
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")
     assert st == 200 and not list(VIEW.iter_errors(body)) and body["status"] == "PAUSED_RISK"
-    assert [(a["kind"], a["status"], a["rule_id"]) for a in body["alerts"]] == [("RISK", "OPEN", "internal:t-phrase")]
+    assert [(a["kind"], a["status"], a["rule_id"]) for a in body["alerts"]] == [("RISK_STOP", "OPEN", "internal:t-phrase")]
     # 알림 저장소(알림·이벤트·접근 기록)와 알림 목록, 정지 기록에 발화 원문이 없다
     st, listing, _ = vr.call("GET", "/v1/staff/alerts")
     assert st == 200 and TEST_PHRASE not in json.dumps(listing, ensure_ascii=False)
