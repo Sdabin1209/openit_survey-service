@@ -101,7 +101,9 @@ class App:
             if not tok:
                 raise ConfigError(f"추론 서버 토큰이 {settings.inference_token_env}_FILE(파일) 또는 환경 변수 {settings.inference_token_env}에 없다")
             self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds,
-                                         load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries)
+                                         load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries,
+                                         extract_timeout=settings.inference_extract_timeout_seconds,
+                                         respond_timeout=settings.inference_respond_timeout_seconds)
         else:
             self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()

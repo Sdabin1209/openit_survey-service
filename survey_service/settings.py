@@ -112,7 +112,9 @@ class Settings:
     # 모델 런타임을 HTTP 경계 뒤에 둘 때(추론 컨테이너): 비우면 프로세스 안에서 적재한다
     inference_url: str = ""
     inference_token_env: str = "SURVEY_INFERENCE_TOKEN"
-    inference_timeout_seconds: float = 4.0      # 호출 하나(extract 또는 respond)의 읽기 타임아웃. 프론트 타임아웃 10초 안에 두 호출이 들어가게
+    inference_timeout_seconds: float = 4.0      # 추론 서버 제어 호출(릴리스 적재 확인, /readyz)의 타임아웃. 환자 턴의 extract·respond에는 쓰지 않는다 (ADR-0026)
+    inference_extract_timeout_seconds: float = 3.0   # 환자 턴 extract 한 번의 상한. 계약 CONVENTIONS 2.2.0 표의 배분값, 측정하지 않았다 (ADR-0026)
+    inference_respond_timeout_seconds: float = 2.0   # 환자 턴 respond 한 번의 상한. 같은 표, 측정하지 않았다 (ADR-0026)
     inference_load_timeout_seconds: float = 600.0   # 릴리스 적재(모델 로딩)를 기다리는 시간
     inference_retries: int = 1
     staff_call_retry_min_interval_seconds: int = 30   # 직원 호출 재알림 최소 간격(CR-H001). 계약 기본 권고. 측정하지 않았다 (ADR-0021)
@@ -170,6 +172,8 @@ class Settings:
             inference_url=env.get("SURVEY_INFERENCE_URL", ""),
             inference_token_env=env.get("SURVEY_INFERENCE_TOKEN_ENV", "SURVEY_INFERENCE_TOKEN"),
             inference_timeout_seconds=_float(env, "SURVEY_INFERENCE_TIMEOUT_SECONDS", 4.0),
+            inference_extract_timeout_seconds=_float(env, "SURVEY_INFERENCE_EXTRACT_TIMEOUT_SECONDS", 3.0),
+            inference_respond_timeout_seconds=_float(env, "SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS", 2.0),
             inference_load_timeout_seconds=_float(env, "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS", 600.0),
             inference_retries=_int(env, "SURVEY_INFERENCE_RETRIES", 1, 0),
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),

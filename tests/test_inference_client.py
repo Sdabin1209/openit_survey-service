@@ -29,7 +29,8 @@ class Env:
         self.srv = FlakyRuntime({TOKEN: "survey-service"}, **srv_kw).start()
         self.url = self.srv.url
         self.registry = ReleaseRegistry()
-        self.client = RemoteInference(self.url, TOKEN, timeout, load_timeout=load_timeout, retries=retries, poll_interval=0.05, backoff=0.01)
+        self.client = RemoteInference(self.url, TOKEN, timeout, load_timeout=load_timeout, retries=retries, poll_interval=0.05, backoff=0.01,
+                                     extract_timeout=timeout, respond_timeout=timeout)   # 이 시험들은 호출 상한을 하나로 줄여 시간을 짧게 한다
         self.loader = ReleaseLoader(self.reader, self.registry, self.client, workdir=tmp / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0)
         self.orch = Orchestrator(MemorySessionStore(), self.registry, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
         self.n = 0
@@ -288,7 +289,9 @@ def test_server_side_output_protection_is_visible_and_turn_continues(tmp_path):
 
 def test_auth_failure_on_calls_fails_the_step(env):
     env.start()
-    env.registry.active().session._rt._token = "wrong"
+    s = env.registry.active().session
+    for rt in (s._rt, *s._ops.values()):      # 제어용과 호출 종류별 클라이언트 모두
+        rt._token = "wrong"
     o = env.turn()
     assert failed(o) == LORA_A_FAIL and env.client.stats.snapshot()["retries"] == 0
 

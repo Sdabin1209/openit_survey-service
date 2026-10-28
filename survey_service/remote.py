@@ -45,7 +45,7 @@ class Stats:
     """호출 통계(원문 없음). /readyz에 낸다."""
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self.data = {"calls": 0, "failures": 0, "retries": 0, "timeouts": 0, "output_invalid": 0, "reloads": 0, "outcome_fallback": 0}
+        self.data = {"calls": 0, "failures": 0, "retries": 0, "retry_skipped_budget": 0, "timeouts": 0, "output_invalid": 0, "reloads": 0, "outcome_fallback": 0}
         self.protections: dict[str, int] = {}      # 출력 보호 규칙 코드별 건수(G0, G5 ...). 원문 없음
 
     def add(self, key: str, n: int = 1) -> None:
@@ -65,12 +65,19 @@ class Stats:
 class RemoteModelSession:
     """graph가 아는 extract/respond. 둘 다 RuntimeResult(output, outcome, attempts, protections)를 돌려준다."""
 
-    def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None) -> None:
+    accepts_deadline = True      # graph가 턴 마감(time.monotonic 기준)을 넘겨 준다: 재시도 판단에 쓴다
+
+    def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None,
+                 op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None) -> None:
         self._rt, self.release_id, self.retries, self.backoff = runtime, release_id, retries, backoff
+        self._ops = dict(op_runtimes or {})      # 호출 종류별 클라이언트(호출별 상한이 다르다). 없으면 runtime 하나를 쓴다
         self.stats = stats or Stats()
 
+    def _op_rt(self, op: str) -> HttpModelRuntime:
+        return self._ops.get(op, self._rt)
+
     def _call_once(self, op: str, request: Mapping) -> RuntimeResult:
-        fn = getattr(self._rt, op)
+        fn = getattr(self._op_rt(op), op)
         try:
             return fn(self.release_id, dict(request))
         except BoundaryError as e:
@@ -83,8 +90,9 @@ class RemoteModelSession:
             raise BoundaryError("UNAVAILABLE", "추론 서버가 릴리스를 다시 적재하는 중이다", {"reason": "RELOADING"})
         return fn(self.release_id, dict(request))
 
-    def _call(self, op: str, request: Mapping) -> RuntimeResult:
+    def _call(self, op: str, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:
         self.stats.add("calls")
+        limit = self._op_rt(op)._timeout
         attempt = 0
         while True:
             t0 = time.monotonic()
@@ -97,11 +105,18 @@ class RemoteModelSession:
                     self.stats.add("failures")
                     raise
                 elapsed = time.monotonic() - t0
-                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, self._rt._timeout)
+                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, limit)
                 log.warning("추론 호출 실패 op=%s %s elapsed=%.2fs read_timeout=%.1fs classified=%s attempt=%d", op, _failure_info(e),
-                            elapsed, self._rt._timeout, "timeout" if timed_out else "not_timeout", attempt + 1)
+                            elapsed, limit, "timeout" if timed_out else "not_timeout", attempt + 1)
                 if timed_out:
                     self.stats.add("timeouts")
+                # 왜: 재시도는 남은 턴 예산이 이 호출의 상한 이상일 때만 한다(계약 CONVENTIONS 2.2.0). 모자라면 재시도하지 않고 실패로 둔다.
+                #     백오프 대기도 예산에서 쓴다. deadline이 없으면(턴 마감을 끈 구성) 횟수 제한만 본다.
+                if deadline is not None and e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries and \
+                        deadline - time.monotonic() - self.backoff * (attempt + 1) < limit:
+                    self.stats.add("retry_skipped_budget")
+                    self.stats.add("failures")
+                    raise
                 if e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries:
                     attempt += 1
                     self.stats.add("retries")
@@ -115,11 +130,11 @@ class RemoteModelSession:
             self.stats.add_protections(res.protections)
         return res
 
-    def extract(self, request: Mapping) -> RuntimeResult:
-        return self._call("extract", request)
+    def extract(self, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:
+        return self._call("extract", request, deadline)
 
-    def respond(self, request: Mapping) -> RuntimeResult:
-        return self._call("respond", request)
+    def respond(self, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:
+        return self._call("respond", request, deadline)
 
 
 class RemoteInference:
@@ -127,9 +142,11 @@ class RemoteInference:
     production_safe = True
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
-                 poll_interval: float = 0.5, backoff: float = 0.2) -> None:
+                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 2.0) -> None:
         self.backend = "remote"
-        self._rt = HttpModelRuntime(base_url, token, timeout)
+        self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
+        # 환자 턴의 호출은 종류마다 상한이 다르다(extract 3.0초, respond 2.0초: 계약 CONVENTIONS 2.2.0 배분, 측정 안 함, ADR-0026)
+        self._op_rts = {"extract": HttpModelRuntime(base_url, token, extract_timeout), "respond": HttpModelRuntime(base_url, token, respond_timeout)}
         self._base = base_url.rstrip("/")
         self._timeout = timeout
         self.load_timeout, self.retries, self.poll_interval, self.backoff = load_timeout, retries, poll_interval, backoff
@@ -153,7 +170,7 @@ class RemoteInference:
             # 412·422·403·404 등 결정적 거부는 다시 시도해도 같다.
             raise InferenceLoadError("REMOTE_" + e.code, "추론 서버가 릴리스 적재를 거부했거나 부를 수 없다",
                                      retryable=e.code == "UNAVAILABLE") from e
-        return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats)
+        return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, op_runtimes=self._op_rts)
 
     def ready(self) -> bool:
         import urllib.request

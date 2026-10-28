@@ -155,6 +155,15 @@ class TurnCtx:
         return self.cancelled.is_set() or (self.deadline is not None and time.monotonic() >= self.deadline)
 
 
+def _model_call(ctx, op: str, request):
+    """모델 호출. 세션이 턴 마감을 받을 수 있으면(원격 추론) 넘겨 재시도 판단에 쓰게 한다 (ADR-0026)."""
+    session = ctx.release.session
+    fn = getattr(session, op)
+    if getattr(session, "accepts_deadline", False):
+        return fn(request, deadline=ctx.deadline)
+    return fn(request)
+
+
 def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optional[dict], decision: Optional[dict],
                   staff_id: Optional[str] = None) -> TurnState:
     trace = {k: None for k in TRACE_KEYS}
@@ -488,7 +497,7 @@ class TurnGraph:
             upd["extract_in"] = inp
             tr["extract_input"] = copy.deepcopy(inp)
         try:
-            res = ctx.release.session.extract(inp)
+            res = _model_call(ctx, "extract", inp)
         except BoundaryError as e:
             invalid = is_output_invalid(e)
             if invalid and calls + 1 < MAX_EXTRACT_CALLS:
@@ -753,7 +762,7 @@ class TurnGraph:
             else:
                 req = extraction.build_response_request(st["extract_out"], st["extract_in"], st["post_doc"], ctx.bank, self.o.tables)
             tr["response_input"] = copy.deepcopy(req)
-            res = ctx.release.session.respond(req)
+            res = _model_call(ctx, "respond", req)
         except Exception as e:
             log.warning("응답 생성 실패 session=%s turn=%s error=%s", st["session_id"], st["turn_id"], type(e).__name__)
             self.o._count("step_failed.LoRA-B")
