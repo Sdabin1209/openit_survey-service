@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from ..errors import StoreError
-from ..pg import DRIVER_ERRORS, PgConn, pg_ddl
-from .outbox import _SCHEMA, Outbox
+from ..migrate import migrate
+from ..pg import DRIVER_ERRORS, PgConn
+from .outbox import Outbox
 
 
 class PgOutbox(Outbox):
@@ -11,8 +12,8 @@ class PgOutbox(Outbox):
     KIND = "postgresql"
 
     def _open(self, url: str) -> None:
+        migrate("postgresql", url)
         self._db = PgConn(url, "outbox")
-        self._db.script(pg_ddl(_SCHEMA))
 
     def ping(self) -> None:
         """/readyz용. 주 연결과 락을 쓰지 않는 별도 짧은 연결로 확인한다(전송 스레드가 연결을 쥐고 있어도 막히지 않는다)."""

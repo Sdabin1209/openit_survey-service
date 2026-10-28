@@ -31,3 +31,4 @@
 - [ADR-0027](ADR-0027.md) /readyz 응답 전체에 총 마감 하나, 보조 수치는 동시에 읽고 짧은 유예만 (ADR-0011의 /readyz 부분 대체)
 - [ADR-0029](ADR-0029.md) HTTP 서버는 WSGI 앱 + waitress (ADR-0004 대체)
 - [ADR-0028](ADR-0028.md) LoRA-A 출력의 의미 규칙은 서버가 보증하고 서비스는 다시 검사하지 않는다, turn-engine 코드 의존 제거 (ADR-0017 2번 대체)
+- [ADR-0030](ADR-0030.md) 스키마는 yoyo-migrations의 번호 붙은 마이그레이션으로 만들고 바꾼다 (표준 점검 A05)

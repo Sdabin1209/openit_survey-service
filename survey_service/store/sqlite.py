@@ -12,31 +12,13 @@ import time
 from typing import Optional
 
 from ..errors import StoreEffectError, StoreError
-from ..trace.outbox import _SCHEMA as _OUTBOX_SCHEMA, finish_in_txn, stage_in_txn
+from ..migrate import migrate
+from ..trace.outbox import finish_in_txn, stage_in_txn
 from . import effects
 from .base import TurnRecord
 
 OPEN_STATUSES = ("IN_PROGRESS", "PAUSED_RISK")
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS sessions (
-  session_id TEXT PRIMARY KEY,
-  revision   INTEGER NOT NULL,
-  release_id TEXT NOT NULL,
-  status     TEXT NOT NULL,
-  doc        TEXT NOT NULL,
-  updated_at REAL NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS sessions_status ON sessions(status);
-CREATE TABLE IF NOT EXISTS turns (
-  session_id  TEXT NOT NULL,
-  turn_id     TEXT NOT NULL,
-  input_hash  TEXT NOT NULL,
-  committed   INTEGER NOT NULL DEFAULT 0,
-  result_json TEXT,
-  PRIMARY KEY (session_id, turn_id)
-);
-""" + _OUTBOX_SCHEMA      # 왜: Trace outbox 표를 세션과 같은 DB에 둬야 세션 commit과 같은 트랜잭션에 쓸 수 있다(H02, ADR-0023)
 
 
 def _dump(o) -> str:
@@ -59,14 +41,10 @@ class SqliteSessionStore:
             raise StoreError(f"세션 DB를 열 수 없다: {type(e).__name__}") from e
 
     def _open(self, path: str) -> None:
+        migrate("sqlite", path)
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
-        self._db.executescript(_SCHEMA)
-        cols = [r[1] for r in self._db.execute("PRAGMA table_info(sessions)").fetchall()]
-        if "updated_at" not in cols:                       # 이전 파일 이행
-            self._db.execute("ALTER TABLE sessions ADD COLUMN updated_at REAL NOT NULL DEFAULT 0")
-        self._db.execute("CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(status, updated_at)")
 
     def close(self) -> None:
         with self._lock:

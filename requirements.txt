@@ -14,3 +14,5 @@ wheel
 psycopg[binary]==3.3.6
 # HTTP 서버(WSGI). 단일 프로세스·다중 스레드 서버. 이미지는 requirements.lock이 같은 버전을 고정한다 (ADR-0029)
 waitress==3.0.2
+# 스키마 버전 마이그레이션 (ADR-0030). 이미지는 requirements.lock이 같은 버전을 고정한다
+yoyo-migrations==9.0.0

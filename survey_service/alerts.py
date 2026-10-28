@@ -24,93 +24,12 @@ from typing import Callable, Iterable, Mapping, Optional, Protocol
 
 from . import netguard
 from .errors import StoreError, SurveyServiceError
+from .migrate import migrate
 from .risk_rules import rule_id_of
 
 log = logging.getLogger("survey_service.alerts")
 
-_NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"), ("session_meta", "device_id"), ("alerts", "turn_id"), ("alerts", "delivered"),
-                ("alerts", "pause_reason"), ("alerts", "delivery_attempts"), ("alerts", "last_delivery_status"), ("alerts", "last_retry_at"), ("alerts", "last_retry_turn_id"),
-                ("alerts", "manual_notice_outcome"), ("alerts", "manual_notice_reported_at"))
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS alerts (
-  n INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','RESOLVED')),
-  resolved_by_decision TEXT,
-  resolved_at TEXT,
-  turn_id TEXT,
-  delivered TEXT,
-  pause_reason TEXT,
-  delivery_attempts TEXT,
-  last_delivery_status TEXT,
-  last_retry_at TEXT,
-  last_retry_turn_id TEXT,
-  manual_notice_outcome TEXT,
-  manual_notice_reported_at TEXT
-);
-CREATE INDEX IF NOT EXISTS alerts_status ON alerts(status, n);
-CREATE INDEX IF NOT EXISTS alerts_session ON alerts(session_id, status);
-CREATE TABLE IF NOT EXISTS alert_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  type TEXT NOT NULL,
-  alert_n INTEGER NOT NULL,
-  payload TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS staff_call_actions (
-  session_id TEXT NOT NULL,
-  turn_id TEXT NOT NULL,
-  action TEXT NOT NULL,
-  detail TEXT,
-  response TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (session_id, turn_id, action)
-);
-CREATE TABLE IF NOT EXISTS session_timeline (
-  session_id TEXT NOT NULL,
-  turn_index INTEGER NOT NULL,
-  turn_id TEXT,
-  at TEXT NOT NULL,
-  PRIMARY KEY (session_id, turn_index)
-);
-CREATE TABLE IF NOT EXISTS staff_access_log (
-  n INTEGER PRIMARY KEY AUTOINCREMENT,
-  at TEXT NOT NULL,
-  role TEXT NOT NULL,
-  session_id TEXT NOT NULL,
-  outcome TEXT NOT NULL,
-  detail TEXT,
-  user_id TEXT
-);
-CREATE TABLE IF NOT EXISTS session_meta (
-  session_id TEXT PRIMARY KEY,
-  subject_ref TEXT,
-  created_at TEXT NOT NULL,
-  device_id TEXT
-);
-CREATE INDEX IF NOT EXISTS session_meta_subject ON session_meta(subject_ref);
-CREATE TABLE IF NOT EXISTS risk_signals (
-  session_id TEXT NOT NULL,
-  signal_id TEXT NOT NULL,
-  source TEXT NOT NULL,
-  code TEXT NOT NULL,
-  severity TEXT NOT NULL,
-  occurred_at TEXT,
-  alert_n INTEGER NOT NULL,
-  session_status TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (session_id, signal_id)
-);
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-  endpoint TEXT PRIMARY KEY,
-  subscription TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-"""
-
-
 CURRENT_TURN: contextvars.ContextVar = contextvars.ContextVar("survey_current_turn", default=None)      # (session_id, turn_id): 알림 생성의 멱등 키
 
 
@@ -167,13 +86,10 @@ class AlertStore:
             raise StoreError(f"알림 DB를 열 수 없다: {type(e).__name__}") from e
 
     def _open(self, path: str) -> None:
+        migrate("sqlite", path)
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
-        self._db.executescript(_SCHEMA)
-        for table, col in _NEW_COLUMNS:      # 이전 파일 이행
-            if col not in [r[1] for r in self._db.execute(f"PRAGMA table_info({table})").fetchall()]:
-                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
 
     def close(self) -> None:
         with self._lock:
@@ -749,11 +665,9 @@ class PgAlertStore(AlertStore):
     KIND = "postgresql"
 
     def _open(self, url: str) -> None:
-        from .pg import PgConn, pg_ddl
+        from .pg import PgConn
+        migrate("postgresql", url)
         self._db = PgConn(url, "알림 DB")
-        self._db.script(pg_ddl(_SCHEMA))
-        for table, col in _NEW_COLUMNS:           # 이전 스키마 이행(멱등)
-            self._db.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} TEXT")
 
     def ping(self) -> None:
         """/readyz용. 주 연결과 락을 쓰지 않는 별도 짧은 연결로 확인한다."""

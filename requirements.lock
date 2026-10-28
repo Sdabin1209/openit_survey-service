@@ -58,3 +58,8 @@ xxhash==4.0.1
 yarl==1.25.1
 zstandard==0.25.0
 waitress==3.0.2
+yoyo-migrations==9.0.0
+sqlparse==0.6.0
+tabulate==0.10.0
+importlib_metadata==10.1.0
+zipp==4.1.2

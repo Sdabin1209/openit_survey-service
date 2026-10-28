@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 단위 4a-B: 스키마를 yoyo-migrations로 [미출시] (D111, ADR-0030)
+
+- 시작 때 `CREATE IF NOT EXISTS`/`ALTER`/advisory lock 대신 `survey_service/migrations/<sqlite|postgresql>/`의 번호 파일을 yoyo가 적용한다. 지운 것: `_SCHEMA`, `_NEW_COLUMNS`, `pg_ddl`, `PgConn.script`. 기존 데이터베이스는 그대로 받아들인다(시험).
+
 ## 단위 4a-A: HTTP 서버를 WSGI 앱 + waitress로 [미출시] (D111, ADR-0029)
 
 - `make_wsgi`/`serve`(waitress)로 교체, 자체 `_Server`·접속 상한 세마포어·소켓 읽기 제한 삭제. 종료는 `close_server`(진행 중 요청을 기다린 뒤 닫음).
@@ -90,7 +94,7 @@
 - 이유(드라이버): `psycopg[binary]==3.3.6`을 requirements·lock·pyproject에 고정(ops-feedback, release-gate와 같은 방식, libpq 내장 wheel이라 이미지에 시스템 패키지가 필요 없다). JSON은 TEXT로 저장(SQLite와 바이트까지 같다).
 - 끊긴 연결: `PgConn`이 연결이 죽어 있으면 트랜잭션 시작 전에 다시 열고, 트랜잭션 밖 멱등 한 문장은 새 연결로 한 번 다시 시도한다. **트랜잭션 도중에 끊기면 다시 시도하지 않는다**(서버가 되돌렸고 COMMIT 중이면 반영 여부를 몰라 UNKNOWN). 이유: 세션 쓰기는 낙관적 revision 검사가 있어 몰래 재시도하면 반영된 쓰기를 충돌로 오판한다. 세션 쓰기에는 행 잠금(`FOR UPDATE`)을 건다.
 - 접속 문자열 비노출: 오류는 예외 클래스 이름만(`세션 DB 접속 실패: OperationalError`), 재접속 실패도 드라이버 메시지(호스트·사용자 포함)를 쓰지 않고 자체 문구. 시험이 암호 카나리 문자열로 오류·로그·`/readyz`를 확인한다. 시작 실패 로그에 `StoreError` 사유(비밀 없음)를 낸다.
-- `/readyz`에 `database: {kind: postgresql|sqlite}`. 스키마는 시작 때 멱등 생성(advisory lock).
+- `/readyz`에 `database: {kind: postgresql|sqlite}`. 스키마는 시작 때 멱등 생성(advisory lock). 이후 yoyo 마이그레이션으로 바뀜: ADR-0030.
 - 시험: 세션 저장소 적합성(메모리·SQLite·PostgreSQL 같은 시험), 알림 DB·outbox 적합성(SQLite·PostgreSQL), D85 1단계 시험을 두 백엔드로 돌림, 끊은 연결 재접속(세션·알림·outbox·앱 전체), 트랜잭션 중 끊김, 접속 문자열 비노출. `TEST_DATABASE_URL`이 없으면 PostgreSQL 시험은 SKIP(통과로 세지 않는다). `SMOKE_PG=1 scripts/smoke.sh`가 같은 이미지를 PostgreSQL로 띄워 재시작 뒤 세션 유지와 비노출을 확인한다.
 - 하지 않은 것: SQLite 데이터를 PostgreSQL로 옮기는 도구, 세션 저장소와 알림 DB를 한 트랜잭션으로 묶기(여전히 별개 트랜잭션), TLS(deploy 문서: 내부 네트워크 한정), 커넥션 풀(저장소마다 연결 하나를 락으로 보호하는 기존 구조 유지).
 

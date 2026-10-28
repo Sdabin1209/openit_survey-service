@@ -11,24 +11,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..errors import StoreError
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS outbox (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id      TEXT NOT NULL,
-  turn_id         TEXT NOT NULL,
-  envelope        TEXT NOT NULL,
-  state           TEXT NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING','SENT','DEAD')),
-  attempts        INTEGER NOT NULL DEFAULT 0,
-  next_attempt_at REAL NOT NULL DEFAULT 0,
-  last_error      TEXT,
-  created_at      REAL NOT NULL,
-  finished_at     REAL,
-  UNIQUE (session_id, turn_id)
-);
-CREATE INDEX IF NOT EXISTS outbox_due ON outbox(state, next_attempt_at, id);
-"""
-
+from ..migrate import migrate
 
 # 왜: 세션 commit과 같은 트랜잭션에 쓰는 행은 그때 Trace가 아직 완성되지 않았다(응답 생성·전달이 commit 뒤다). 그래서 commit 트랜잭션에는
 # '예약(staged)' 행을 쓰고(내용은 그때까지의 Trace) 턴이 끝나면 같은 행을 완성본으로 바꾼다. 예약 행은 다음 시각을 이 값으로 두어 전송 대상에서
@@ -93,10 +76,10 @@ class Outbox:
             raise StoreError(f"outbox를 열 수 없다: {type(e).__name__}") from e
 
     def _open(self, path: str) -> None:
+        migrate("sqlite", path)
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
-        self._db.executescript(_SCHEMA)
 
     def close(self) -> None:
         with self._lock:
