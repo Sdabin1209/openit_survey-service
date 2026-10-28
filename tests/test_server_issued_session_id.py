@@ -2,10 +2,9 @@
 
 기대값의 출처: ../boundary-contracts/PUBLIC_API.md 7행(2.2.0, D106): 문자열 1~64자·영문·숫자·`-_`, 예측할 수 없는 값(OWASP 세션 관리 권고, 원문 대조 전),
 프론트가 session_id를 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식(수용하되 로그에 폐기 예정 경고 한 줄).
-CSPRNG 여부는 출력만으로 증명할 수 없다: 시험은 길이(128비트 이상을 base64url로 쓴 22자 이상), 유일성, `random` 모듈 비사용(난수 모듈을 막아도 동작)을 본다.
+CSPRNG 여부는 출력만으로 증명할 수 없다: 시험은 길이(128비트 이상을 base64url로 쓴 22자 이상), 유일성, `secrets` 모듈 사용는 secrets 모듈 호출의 결과와 같음을 본다.
 """
 import logging
-import random
 import re
 
 import pytest
@@ -34,17 +33,21 @@ def test_omitted_session_id_is_issued_by_the_server(ar):
     assert ar.call("GET", f"/v1/sessions/{sid}/state", auth=AUTH)[0] == 200
 
 
-def test_issued_ids_are_unique_and_do_not_use_the_random_module(ar, monkeypatch):
-    def boom(*a, **k):
-        raise AssertionError("random 모듈(비암호학적 난수)을 쓰면 안 된다")
-    for name in ("random", "randrange", "randint", "getrandbits", "choice", "choices"):
-        monkeypatch.setattr(random, name, boom, raising=False)
-    ids = set()
+def test_issued_ids_are_unique_and_come_from_the_secrets_module(ar, monkeypatch):
+    import secrets
+    real, made = secrets.token_urlsafe, []
+
+    def spy(n=None):
+        v = real(n)
+        made.append(v)
+        return v
+    monkeypatch.setattr(secrets, "token_urlsafe", spy)      # CSPRNG(secrets)에서 왔는지: 발급된 값이 이 호출의 결과와 같다
+    ids = []
     for _ in range(60):
         code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
         assert code == 200
-        ids.add(body["session_id"])
-    assert len(ids) == 60
+        ids.append(body["session_id"])
+    assert ids == made and len(set(ids)) == 60
 
 
 def test_client_supplied_session_id_still_works_with_one_deprecation_warning(ar, caplog):

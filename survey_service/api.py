@@ -27,6 +27,7 @@ import hmac
 import json
 import logging
 import re
+import secrets
 import threading
 import time
 from datetime import datetime
@@ -352,6 +353,13 @@ class PublicApi:
         subject = rest.pop("subject_ref", None)             # 환자 참조는 문진 메시지(FrontendMessage)가 아니라 세션 메타다
         if subject is not None and (not isinstance(subject, str) or not SUBJECT_REF.match(subject)):
             return _err("INVALID_RECORD", "subject_ref는 [A-Za-z0-9._:/#=+-] 1~128자 문자열이어야 한다")
+        issued = False
+        if "session_id" not in rest:
+            # 왜: 세션 ID는 서버가 CSPRNG로 발급한다(계약 PUBLIC_API.md 2.2.0, D106; OWASP 세션 관리: 예측할 수 없는 값). token_urlsafe(32) = 256비트 -> 43자(영문·숫자·-_)로 1~64자 안
+            rest["session_id"] = secrets.token_urlsafe(32)
+            issued = True
+        else:
+            log.warning("폐기 예정 방식: 프론트가 session_id를 정해 보냈다(서버 발급으로 바꿀 것, 3.0.0에서 제거)")      # 값은 로그에 남기지 않는다
         msg, err = self._message(rest, None, "SESSION_START")
         if err:
             return err
@@ -369,7 +377,10 @@ class PublicApi:
                     self.alerts.store.set_subject(sid, subject, getattr(self._tl, 'device', None))       # 세션을 만들기 전에 남긴다(환자 참조, 만든 기기): 못 남기면 시작하지 않는다
                 except StoreError:
                     return _err("UNAVAILABLE", "세션 메타를 저장할 수 없다")
-        return self._run(sid, tid, msg)
+        code, out, hdr = self._run(sid, tid, msg)
+        if issued and code == 200 and isinstance(out, dict):
+            out = {**out, "session_id": sid}        # 서버가 발급한 ID를 돌려준다. 프론트가 정한 ID는 되돌리지 않는다(2.x 응답 모양 유지)
+        return code, out, hdr
 
     def _turn(self, body: Mapping, path_sid: str):
         rest, tid, err = self._envelope(body, required=True, reserved_ok=False)
