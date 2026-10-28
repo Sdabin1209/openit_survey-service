@@ -10,6 +10,7 @@ from boundary_contracts import validator
 from survey_service.api import PublicApi
 from survey_service.settings import Settings
 
+from .http_server_support import stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .test_staff_alerts import (AUTH, STAFF, AlertRig, Sse, _vapid_key_pem, http_call, make_app, start_and_risk, api)
 
@@ -91,7 +92,7 @@ def test_push_config_null_without_vapid_and_public_key_with(tmp_path, monkeypatc
         assert (code, body) == (200, {"vapid_public_key": None}); valid("PushConfig", body)
         assert http_call(port, "GET", "/v1/staff/push-config", token="test-api-token-0123")[0] == 403
     finally:
-        httpd.shutdown(); httpd.server_close(); app.stop()
+        stop_server(httpd); app.stop()
     pem = _vapid_key_pem()
     app, httpd, port = make_app(tmp_path / "p", monkeypatch, vapid=pem)
     try:
@@ -104,7 +105,7 @@ def test_push_config_null_without_vapid_and_public_key_with(tmp_path, monkeypatc
         assert body["vapid_public_key"] == base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
         assert "PRIVATE" not in json.dumps(body) and len(raw) == 65
     finally:
-        httpd.shutdown(); httpd.server_close(); app.stop()
+        stop_server(httpd); app.stop()
 
 
 # ---------------------------------------------------------------- 오류 표, Retry-After
@@ -226,7 +227,7 @@ def test_sse_events_are_alert_and_resolved_with_event_numbers_and_validate(tmp_p
         assert [resumed.next()[1:2][0] for _ in range(2)] == ["resolved", "alert"]
         resumed.close()
     finally:
-        httpd.shutdown(); httpd.server_close(); app.stop()
+        stop_server(httpd); app.stop()
 
 
 def test_new_settings_come_from_environment():

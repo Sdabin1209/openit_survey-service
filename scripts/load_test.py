@@ -142,12 +142,12 @@ def main() -> int:
         return 2
     import logging
     logging.disable(logging.WARNING)
-    from survey_service.service import serve
+    from survey_service.service import close_server, serve
     with tempfile.TemporaryDirectory() as td:
         app = build_app(args, Path(td))
         httpd = serve(app, 0)
-        port = httpd.server_address[1]
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        port = httpd.effective_port
+        threading.Thread(target=httpd.run, daemon=True).start()
         print(f"# max_inflight={args.max_inflight} model_delay={args.model_delay}s deadline={args.deadline}s turns/session={args.turns} cpus={os.cpu_count()}")
         print("| N | 요청 | 200 | p50 s | p95 s | max s | 상태 코드별 | PG 연결 최대 | 스레드 시작→최대 | RSS MB 시작→최대 | 처리량 req/s |")
         print("|---|---|---|---|---|---|---|---|---|---|---|")
@@ -158,7 +158,7 @@ def main() -> int:
                 print(f"  (세션 시작 응답: {r['start_codes']})")
             print(f"| {r['n']} | {r['turns']} | {r['ok']} | {r['p50']:.2f} | {r['p95']:.2f} | {r['max']:.2f} | {codes} | {r['pg_conn_max']} | "
                   f"{r['thr0']}→{r['threads_max']} | {r['rss0']:.0f}→{r['rss_max']:.0f} | {r['tps']:.1f} |", flush=True)
-        httpd.shutdown()
+        close_server(httpd, 10.0)
         app.stop()
     return 0
 

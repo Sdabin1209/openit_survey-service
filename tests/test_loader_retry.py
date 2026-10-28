@@ -17,6 +17,7 @@ from survey_service.remote import RemoteInference
 from survey_service.service import App, serve
 from survey_service.settings import Settings
 
+from .http_server_support import start_server, server_port, stop_server
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
 from .runtime_support import FlakyRuntime
@@ -248,8 +249,8 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
     app = App(s, reader=gate, ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     app.start()
     front = serve(app, 0)
-    threading.Thread(target=front.serve_forever, daemon=True).start()
-    fport = front.server_address[1]
+    start_server(front)
+    fport = server_port(front)
     started = False
     try:
         deadline = time.time() + 5
@@ -270,7 +271,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
         assert code == 200 and body["active_release"] == "rel-1" and body["problems"] == []
         assert body["release_loader"]["retrying"] is None and body["release_loader"]["rejections"] == []
     finally:
-        front.shutdown(); front.server_close(); app.stop()
+        stop_server(front); app.stop()
         if started:
             inf.stop()
 
@@ -316,8 +317,8 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
         app.start()
         assert time.time() - t0 < 1.2                                                           # 적재를 끝까지 기다리지 않았다
         front = serve(app, 0)
-        threading.Thread(target=front.serve_forever, daemon=True).start()
-        port = front.server_address[1]
+        start_server(front)
+        port = server_port(front)
         assert http(port, "/healthz")[0] == 200
         assert http(port, "/readyz")[0] == 503
         deadline = time.time() + 8
@@ -326,5 +327,5 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
         assert http(port, "/readyz")[0] == 200
     finally:
         if front:
-            front.shutdown(); front.server_close()
+            stop_server(front)
         app.stop(); srv.stop()

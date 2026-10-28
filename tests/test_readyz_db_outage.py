@@ -9,6 +9,7 @@ import pytest
 from survey_service.service import App
 from survey_service.settings import Settings
 
+from .http_server_support import start_server, server_port, stop_server, listen_backlog
 from .fakes import FakeReleaseReader, FakeTraceIngest
 from .pg_support import pg_url
 from .sample_bank import sample_bank
@@ -180,9 +181,9 @@ def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, m
     monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "stok-0123456789abc")
     app = _app(tmp_path, monkeypatch)
     httpd = serve(app, 0)
-    assert httpd.request_queue_size >= 64          # 기본 5면 동시 접속이 몰릴 때 연결이 거부된다(부하 측정에서 확인)
-    port = httpd.server_address[1]
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    assert listen_backlog(httpd) >= 64          # 기본 5면 동시 접속이 몰릴 때 연결이 거부된다(부하 측정에서 확인)
+    port = server_port(httpd)
+    start_server(httpd)
     sess = app.registry.active().session
     real, gate, entered = sess.extract, threading.Event(), threading.Event()
 
@@ -205,7 +206,7 @@ def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, m
     app.draining.set()                             # SIGTERM
     ok, body = app.readiness()
     assert ok is False and "shutting_down" in body["problems"]
-    stopper = threading.Thread(target=lambda: (httpd.shutdown(), httpd.server_close(), app.stop()))
+    stopper = threading.Thread(target=lambda: (stop_server(httpd), app.stop()))
     stopper.start()
     time.sleep(0.5)
     assert stopper.is_alive() and not res          # 처리 중인 요청을 기다린다

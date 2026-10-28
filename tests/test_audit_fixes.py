@@ -4,6 +4,7 @@ import copy
 from survey_service.inference import InferenceServer
 from survey_service.release import ReleaseLoader, ReleaseRegistry
 
+from .http_server_support import stop_server
 from .e2e_support import ANSWER_OUT, Rig
 from .fakes import FakeReleaseReader
 from .sample_bank import sample_bank
@@ -121,7 +122,7 @@ def test_access_log_records_the_authenticated_user_from_header_or_role_only(tmp_
         assert {r["user_id"] for r in rows} == {"nurse.kim", None} and all(r["role"] == "staff" for r in rows)
         assert "retention" in app.readiness()[1] and app.readiness()[1]["retention"]["indefinite"] is False
     finally:
-        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+        app.draining.set(); stop_server(httpd); app.stop()
 
 
 # ---------------------------------------------------------------- 기기별 키오스크 토큰 (D88 U8)

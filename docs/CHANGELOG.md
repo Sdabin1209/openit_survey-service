@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 단위 4a-A: HTTP 서버를 WSGI 앱 + waitress로 [미출시] (D111, ADR-0029)
+
+- `make_wsgi`/`serve`(waitress)로 교체, 자체 `_Server`·접속 상한 세마포어·소켓 읽기 제한 삭제. 종료는 `close_server`(진행 중 요청을 기다린 뒤 닫음).
+- 동작 변경: 접속 상한 초과는 503 대신 대기, 본문 상한 초과는 400 대신 413, 연결은 keep-alive. 값의 출처는 ADR-0029.
+
 ## ADR 0010 호출자 쪽: 의미 규칙은 서버가 보증, turn-engine 코드 의존 제거 [미출시, 서버 model-runtime 0.9.0 뒤]
 
 - I9 extract 요청이 `ExtractRequest{input, flow}`다(계약 2.2.1의 `extract(..., flow=)`). flow는 문진 스키마 `QuestionFlow`의 order·skips. 서비스는 `validate_extraction`(OUTPUT_SCHEMA, SAVE_RULE, TARGET_NOT_IN_VALUES, UNKNOWN_ITEM, NEXT_ITEM_MISMATCH, SKIP_ORDER_MISMATCH)을 더는 부르지 않는다. 503 OUTPUT_INVALID는 계약 문장대로 같은 요청 1회 재전송. 서비스 고유 검사 4가지(UNKNOWN_SLOT, OUT_OF_CURRENT_ITEM, VALUE_INVALID, VALUE_TYPE_MISMATCH)와 그 위반의 재호출 1회는 유지(ADR-0028).

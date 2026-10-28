@@ -10,6 +10,7 @@ import pytest
 from survey_service.settings import ConfigError, Settings, load_factory
 from survey_service.service import App, serve
 
+from .http_server_support import server_port, start_server, stop_server
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
 
@@ -37,12 +38,10 @@ def running(tmp_path):
     ingest = FakeTraceIngest()
     app = App(settings(tmp_path), reader=reader, ingest=ingest, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     httpd = serve(app, 0)
-    port = httpd.server_address[1]
-    th = threading.Thread(target=httpd.serve_forever, daemon=True)
-    th.start()
+    port = server_port(httpd)
+    start_server(httpd)
     yield app, reader, ingest, port
-    httpd.shutdown()
-    httpd.server_close()
+    stop_server(httpd)
     app.stop()
 
 

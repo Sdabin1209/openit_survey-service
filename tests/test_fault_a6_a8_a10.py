@@ -14,6 +14,7 @@ from survey_service.inference import InferenceServer
 from survey_service.release import ReleaseLoader, ReleaseRegistry
 from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter
 
+from .http_server_support import server_port, stop_server
 from .fakes import FakeReleaseReader
 from .sample_bank import sample_bank
 from .test_release_loader import INSTALLED
@@ -171,7 +172,7 @@ def test_sse_tells_client_to_resync_when_events_were_trimmed(tmp_path, monkeypat
         assert sse2.events.empty()
         sse2.close()
     finally:
-        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+        app.draining.set(); stop_server(httpd); app.stop()
 
 
 def test_sse_returns_503_when_alert_db_is_down_and_stream_ends_cleanly(tmp_path, monkeypatch):
@@ -189,7 +190,7 @@ def test_sse_returns_503_when_alert_db_is_down_and_stream_ends_cleanly(tmp_path,
         assert app.alerts.hub.count() == 0                      # 구독이 남지 않는다
         app.alert_store.latest_event_id = real
     finally:
-        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+        app.draining.set(); stop_server(httpd); app.stop()
 
 
 def test_dropped_sse_clients_do_not_leak_subscriptions_or_threads(tmp_path, monkeypatch):
@@ -206,7 +207,7 @@ def test_dropped_sse_clients_do_not_leak_subscriptions_or_threads(tmp_path, monk
             time.sleep(0.1)
         assert app.alerts.hub.count() == 0 and threading.active_count() <= base + 1
     finally:
-        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+        app.draining.set(); stop_server(httpd); app.stop()
 
 
 def test_named_heartbeat_event_keeps_flowing_when_alert_db_dies_after_connect(tmp_path, monkeypatch):
@@ -232,4 +233,4 @@ def test_named_heartbeat_event_keeps_flowing_when_alert_db_dies_after_connect(tm
         assert len(sse.heartbeats) >= n0 + 3 and any("ping" in c for c in sse.comments)      # 기존 주석 줄도 유지
         sse.close()
     finally:
-        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+        app.draining.set(); stop_server(httpd); app.stop()

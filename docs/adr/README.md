@@ -29,4 +29,5 @@
 - [ADR-0025](ADR-0025.md) 근거 없는 값의 출처 분류(점검 N-, 값은 바꾸지 않음)
 - [ADR-0026](ADR-0026.md) 모델 호출별 상한 extract 3.0초·respond 2.0초와 예산 기반 재시도 (점검 F03)
 - [ADR-0027](ADR-0027.md) /readyz 응답 전체에 총 마감 하나, 보조 수치는 동시에 읽고 짧은 유예만 (ADR-0011의 /readyz 부분 대체)
+- [ADR-0029](ADR-0029.md) HTTP 서버는 WSGI 앱 + waitress (ADR-0004 대체)
 - [ADR-0028](ADR-0028.md) LoRA-A 출력의 의미 규칙은 서버가 보증하고 서비스는 다시 검사하지 않는다, turn-engine 코드 의존 제거 (ADR-0017 2번 대체)

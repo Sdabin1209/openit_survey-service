@@ -17,6 +17,7 @@ from survey_service.errors import StoreError
 from survey_service.service import App, serve
 from survey_service.settings import ConfigError, Settings
 
+from .http_server_support import start_server, server_port, stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig, ScriptedRisk
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingDispatcher
 from .sample_bank import sample_bank
@@ -386,8 +387,8 @@ def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com"
     app = App(Settings.from_env(env), reader=reader, ingest=FakeTraceIngest(), dispatcher=RecordingDispatcher(), risk_source=ScriptedRisk())
     app.start()
     httpd = serve(app, 0)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    return app, httpd, httpd.server_address[1]
+    start_server(httpd)
+    return app, httpd, server_port(httpd)
 
 
 def http_call(port, method, path, body=None, token="test-staff-token", headers=None):
@@ -453,7 +454,7 @@ def live(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     yield app, port, tmp_path
     app.draining.set()                       # 열린 SSE 스트림이 있어도 server_close가 기다리지 않게(시험이 실패해도 멈추지 않는다)
-    httpd.shutdown(); httpd.server_close(); app.stop()
+    stop_server(httpd); app.stop()
 
 
 def test_sse_streams_new_alerts_resolves_and_heartbeats(live):
@@ -488,7 +489,7 @@ def test_sse_resumes_with_last_event_id_and_after_restart(tmp_path, monkeypatch)
         sse2.close()
         last = got[-1][0]
     finally:
-        httpd.shutdown(); httpd.server_close(); app.stop()
+        stop_server(httpd); app.stop()
     # 서비스를 다시 띄워도 목록과 이어 받기가 된다
     app2, httpd2, port2 = make_app(tmp_path, monkeypatch)
     try:
@@ -501,7 +502,7 @@ def test_sse_resumes_with_last_event_id_and_after_restart(tmp_path, monkeypatch)
         assert alert["session_id"] == "D" and i == last + 1
         sse3.close()
     finally:
-        httpd2.shutdown(); httpd2.server_close(); app2.stop()
+        stop_server(httpd2); app2.stop()
 
 
 def test_sse_and_list_over_http_need_staff_token(live):
@@ -536,7 +537,7 @@ def test_vapid_from_environment(tmp_path, monkeypatch):
     try:
         assert app.alerts.status()["push_enabled"] is True
     finally:
-        httpd.shutdown(); httpd.server_close(); app.stop()
+        stop_server(httpd); app.stop()
     with pytest.raises(ConfigError):
         make_app(tmp_path / "b", monkeypatch, vapid="garbage")
     with pytest.raises(ConfigError):

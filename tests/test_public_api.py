@@ -17,6 +17,7 @@ from survey_service.service import App, serve
 from survey_service.settings import Settings
 from survey_service.store.memory import MemorySessionStore
 
+from .http_server_support import start_server, server_port, stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
@@ -244,8 +245,8 @@ def test_over_http_with_app(tmp_path):
     app = App(s, reader=reader, ingest=ing, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     app.start()
     httpd = serve(app, 0)
-    port = httpd.server_address[1]
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = server_port(httpd)
+    start_server(httpd)
 
     def http(method, path, body=None, token="test-api-token-0123"):
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method,
@@ -272,7 +273,7 @@ def test_over_http_with_app(tmp_path):
             time.sleep(0.05)
         assert {k[1] for k in ing.received} == {"start", "t-1", "end"}          # 턴마다 Trace 한 건(재시도 응답은 다시 보내지 않는다)
     finally:
-        httpd.shutdown(); httpd.server_close(); app.stop()
+        stop_server(httpd); app.stop()
 
 
 def test_app_refuses_to_start_without_api_token(tmp_path, monkeypatch):

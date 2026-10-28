@@ -8,6 +8,7 @@ import pytest
 from survey_service import netguard
 from survey_service.alerts import WebPushSender
 
+from .http_server_support import stop_server, connection_limit
 from .test_staff_alerts import _client_keys, _vapid_key_pem
 
 
@@ -84,7 +85,7 @@ def test_push_subscription_api_rejects_internal_endpoint(tmp_path, monkeypatch):
         code, _ = http_call(port, "POST", "/v1/staff/push-subscriptions", {"endpoint": "https://push.example.com/ok", "keys": keys})
         assert code == 201
     finally:
-        app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+        app.draining.set(); stop_server(httpd); app.stop()
 
 
 # ---------------------------------------------------------------- HTTP 계층 방어 (감사 A9·B4·E1)
@@ -115,15 +116,15 @@ def _raw(port, request: bytes, timeout=5):
 
 
 def _shutdown(app, httpd):
-    app.draining.set(); httpd.shutdown(); httpd.server_close(); app.stop()
+    app.draining.set(); stop_server(httpd); app.stop()
 
 
 def test_bad_content_length_and_surrogate_utterance_are_400_not_dropped_connections(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     try:
-        for cl in (b"abc", b"-5", b"99999999"):
+        for cl, want in ((b"abc", b" 400 "), (b"-5", b" 400 "), (b"99999999", b" 413 ")):        # 본문 상한(1,000,000) 초과는 waitress가 413 (ADR-0029, 이전에는 400)
             r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + cl + b"\r\n\r\n")
-            assert r.startswith(b"HTTP/1.0 400") or r.startswith(b"HTTP/1.1 400"), (cl, r[:60])
+            assert want in r.split(b"\r\n", 1)[0], (cl, r[:60])
         assert http_call(port, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, token="test-api-token-0123")[0] == 200
         body = b'{"session_id":"K1","kind":"UTTERANCE","utterance":"\\ud800","turn_id":"t1"}'
         r = _raw(port, b"POST /v1/sessions/K1/turns HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
@@ -138,9 +139,11 @@ def test_request_id_header_and_json_log_field(tmp_path, monkeypatch):
     try:
         c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
         c.request("GET", "/healthz", headers={"X-Request-Id": "req-abcdef123456"})
-        assert c.getresponse().getheader("X-Request-Id") == "req-abcdef123456"
+        r1 = c.getresponse(); r1.read()
+        assert r1.getheader("X-Request-Id") == "req-abcdef123456"
         c.request("GET", "/healthz", headers={"X-Request-Id": "bad id!"})
-        rid = c.getresponse().getheader("X-Request-Id")
+        r2 = c.getresponse(); r2.read()
+        rid = r2.getheader("X-Request-Id")
         assert rid and rid != "bad id!" and len(rid) == 16                             # 형식이 어긋나면 새로 만든다
         _REQ.rid = "req-xyz-123456"
         line = JsonFormatter().format(logging.LogRecord("survey_service", logging.INFO, "f", 1, "메시지", None, None))
@@ -164,19 +167,23 @@ def test_auth_failure_is_logged_without_secrets_and_counted(tmp_path, monkeypatc
         _shutdown(app, httpd)
 
 
-def test_connection_cap_rejects_with_503_and_socket_timeout_frees_slow_clients(tmp_path, monkeypatch):
-    app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_SOCKET_TIMEOUT_SECONDS": "0.6", "SURVEY_MAX_CONNECTIONS": "2"})
+def test_connection_limit_holds_new_connections_and_idle_timeout_frees_slots(tmp_path, monkeypatch):
+    """waitress는 접속 상한에 닿으면 새 연결을 받지 않고(커널 대기열에 둔다) 503을 쓰지 않는다(ADR-0029, 이전에는 503). 매달린 연결은 읽기 제한으로 정리되어 자리가 난다."""
+    app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_SOCKET_TIMEOUT_SECONDS": "1", "SURVEY_MAX_CONNECTIONS": "2"})
     try:
-        assert httpd.max_connections == 2
+        assert connection_limit(httpd) == 2 + 2             # 설정 2 + waitress 내부 소켓 2
         idle = [socket.create_connection(("127.0.0.1", port)) for _ in range(2)]     # 요청을 보내지 않고 매달린 연결(slowloris)
-        time.sleep(0.2)
-        r = _raw(port, b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
-        assert b" 503 " in r.split(b"\r\n", 1)[0] and b"Retry-After" in r                # 상한 초과
-        time.sleep(1.2)                                                                    # 읽기 제한(0.6초)으로 매달린 연결이 정리된다
-        r = _raw(port, b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
-        assert b" 200 " in r.split(b"\r\n", 1)[0]
-        for s in idle:
-            s.close()
+        time.sleep(0.3)
+        s = socket.create_connection(("127.0.0.1", port))
+        s.sendall(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+        s.settimeout(0.5)
+        with pytest.raises(socket.timeout):                  # 자리가 없어 아직 받아 주지 않는다
+            s.recv(100)
+        s.settimeout(5)
+        assert b" 200 " in s.recv(4096).split(b"\r\n", 1)[0]       # 읽기 제한(1초)으로 매달린 연결이 정리되면 처리된다
+        s.close()
+        for c in idle:
+            c.close()
     finally:
         _shutdown(app, httpd)
 
@@ -223,17 +230,5 @@ def test_deeply_nested_body_is_400_not_a_dropped_connection(tmp_path, monkeypatc
             cur.append(nxt)
             cur = nxt
         assert _has_surrogate(deep) is False and _has_surrogate({"a": ["\ud800"]}) is True
-    finally:
-        _shutdown(app, httpd)
-
-
-def test_connection_cap_503_has_request_id_and_schema_version(tmp_path, monkeypatch):
-    app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_SOCKET_TIMEOUT_SECONDS": "5", "SURVEY_MAX_CONNECTIONS": "1"})
-    try:
-        idle = socket.create_connection(("127.0.0.1", port))
-        time.sleep(0.2)
-        r = _raw(port, b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
-        assert b" 503 " in r.split(b"\r\n", 1)[0] and b"X-Request-Id: " in r and b"pipeline_schema_version" in r
-        idle.close()
     finally:
         _shutdown(app, httpd)
