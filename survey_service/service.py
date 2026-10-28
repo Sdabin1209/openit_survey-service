@@ -394,6 +394,13 @@ def make_handler(app: App):
             raw = self.rfile.read(n) if n > 0 else b""
             code, body, hdr = app.api.handle(self.command, self.path, self.headers.get("Authorization", ""), raw,
                                              user=(self.headers.get("X-Openit-User") or "").strip() or None)
+            if code == 204:      # 왜: 204는 본문이 없어야 한다(RFC 9110 15.3.5). 본문과 Content-Type을 보내지 않는다
+                self.send_response(204)
+                self.send_header("X-Request-Id", getattr(_REQ, "rid", "-"))
+                for k, v in hdr.items():
+                    self.send_header(k, v)
+                self.end_headers()
+                return
             out = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("X-Request-Id", getattr(_REQ, "rid", "-"))

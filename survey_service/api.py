@@ -50,7 +50,7 @@ SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")      # $가 아니라 \Z: $는 끝의 개행 하나를 허용해 "id\n"이 다른 turn_id로 통과한다
 MAX_BODY = 64 * 1024
 HTTP_CODE = {"INVALID_RECORD": 400, "PERMISSION_DENIED": 401, "NOT_FOUND": 404, "CONFLICT": 409, "UNAVAILABLE": 503}
-STAFF_ROUTES = {"intervention", "staff_session", "alerts", "push_add", "push_del", "push_config"}
+STAFF_ROUTES = {"intervention", "staff_session", "alerts", "push_add", "push_del", "push_unsub", "push_config"}
 ROLE_OF_ROUTE = {"result": "result-reader", "results": "result-reader", "risk_signal": "risk-source"}     # 그 밖의 직원 경로는 staff, 나머지는 kiosk
 SUBJECT_REF = re.compile(r"^[A-Za-z0-9._:/#=+-]{1,128}\Z")
 STAFF_ID = re.compile(r"^[A-Za-z0-9._:@/#=+-]{1,128}\Z")
@@ -266,7 +266,9 @@ class PublicApi:
             return ("push_config", None)
         if method == "POST" and path == "/v1/staff/push-subscriptions":
             return ("push_add", None)
-        if method == "DELETE" and path == "/v1/staff/push-subscriptions":
+        if method == "POST" and path == "/v1/staff/push-subscriptions/unsubscribe":
+            return ("push_unsub", None)
+        if method == "DELETE" and path == "/v1/staff/push-subscriptions":     # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
             return ("push_del", None)
         if method == "POST" and path == "/v1/sessions":
             return ("start", None)
@@ -736,7 +738,19 @@ class PublicApi:
             return _err("UNAVAILABLE", "알림 저장소에 쓸 수 없다")
         return 201, {"endpoint": ep}, {}
 
+    def _push_unsub(self, body: Mapping, _sid):
+        """해지: 본문 {"endpoint"} -> 204. 없는 endpoint도 204(멱등). 왜 본문: 푸시 엔드포인트 URL은 그 자체가 푸시 권한을 주는 값이라 URL에 싣지 않는다(계약 2.2.0)."""
+        ep = body.get("endpoint")
+        if not isinstance(ep, str) or not ep or len(ep) > 2048 or set(body) != {"endpoint"}:
+            return _err("INVALID_RECORD", "본문은 {\"endpoint\": \"https://...\"} 하나여야 한다")
+        try:
+            self.alerts.store.remove_subscription(ep)
+        except StoreError:
+            return _err("UNAVAILABLE", "알림 저장소에 쓸 수 없다")
+        return 204, None, {}
+
     def _push_del(self, q: dict):
+        log.warning("폐기 예정 방식 호출: DELETE /v1/staff/push-subscriptions?endpoint= (POST .../unsubscribe 본문으로 바꿀 것, 3.0.0에서 제거)")    # 엔드포인트 URL은 로그에 남기지 않는다
         ep = (q.get("endpoint") or [None])[0]
         if not ep:
             return _err("INVALID_RECORD", "endpoint 쿼리가 필요하다")
