@@ -72,3 +72,10 @@ def test_service_imports_without_turn_engine():
             "import survey_service.service, survey_service.graph, survey_service.flow, survey_service.release.loader\n")
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-500:]
+
+
+def test_package_metadata_does_not_depend_on_turn_engine():
+    """코드 의존이 없으면(D109) 패키지 선언에도 없어야 한다. 이미지는 --no-deps라 영향이 없지만 pip install로 설치하면 끌려온다."""
+    import tomllib
+    deps = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["dependencies"]
+    assert not [d for d in deps if d.lower().replace("_", "-").startswith("turn-engine")]
