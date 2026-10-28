@@ -1,3 +1,4 @@
+# 보관(v1): 2026-10-28 D99, v1 전용 문서(answer_normalizer, answer_judge, record_writer, dialogue_planner)는 목록에서 뺐다. 이 폴더에는 원래 없고 삭제할 파일도 없다
 version: 1
 files:
 - README.md
@@ -6,10 +7,6 @@ files:
 - timing.md
 - mapping.md
 - utterance_parser.md
-- answer_normalizer.md
-- answer_judge.md
-- record_writer.md
-- dialogue_planner.md
 - response_generator.md
 - orchestrator.md
 - session_store.md

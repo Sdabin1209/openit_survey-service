@@ -1,3 +1,5 @@
+보관(v1): 2026-10-28 D99, 참조 제거 후 다음 릴리스에서 삭제
+
 ## 1. 역할과 계약의 대응
 
 자연어 사실 추출은 Utterance Parser(LoRA-A), 표준화·정형 검사는 Answer Normalizer, 상태 판정은 Answer Judge, 저장할 변경은 Record Writer, 다음 행동과 문장 재료는 Dialogue Planner가 담당한다. Response Generator(LoRA-B)는 정해진 재료를 자연어로 표현하고 Orchestrator(LangGraph)는 이 경계들을 연결한다.
