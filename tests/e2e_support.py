@@ -1,4 +1,4 @@
-"""실제 turn-engine(validate_extraction) + model-runtime의 FakeModelSession으로 Orchestrator를 돌리는 조립(D74 구조).
+"""model-runtime의 FakeModelSession으로 Orchestrator를 돌리는 조립(D74 구조).
 
 LoRA-A가 낼 ActionExtraction은 시험이 큐에 넣는다. LoRA-B는 고정 문장을 낸다. 서비스가 모델에 보낸 요청은 `session.extract_requests`,
 `session.respond_requests`에 남는다."""
@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from typing import Optional
 
 import survey_schema
@@ -45,9 +46,16 @@ class ScriptedModel:
         self.queue: list = []
         self.response = "응답입니다."
 
+    @staticmethod
+    def _stay(req):
+        """큐가 비면 같은 문항에 머무는 REDIRECT(OFF_TOPIC). 어떤 입력에도 계약 규칙을 지키고 세션이 끝나지 않는다(survey_service.inference.dev_responder와 같다).
+        서비스는 규칙을 다시 검사하지 않으므로(ADR 0010) 기본 출력이 규칙을 어기면 시험이 의도 없이 세션을 끝낸다."""
+        m = re.search(r"<\|im_start\|>user\n(.*)<\|im_end\|>", req.prompt, re.S)
+        return {"action": "REDIRECT", "next_item": json.loads(m.group(1))["question_id"], "reason": "OFF_TOPIC", "values": []}
+
     def responder(self, req):
         if req.role == "LORA_A":
-            item = self.queue.pop(0) if self.queue else ext("NEXT", "END")
+            item = self.queue.pop(0) if self.queue else self._stay(req)
             return item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)
         return self.response
 
@@ -91,11 +99,11 @@ class Rig:
         self.orch = Orchestrator(self.store, self.registry, staff_console=self.console, dispatcher=self.dispatcher, **orch_kw)
         self.n = 0
 
-    def say(self, utterance=None, *, kind="UTTERANCE", out=None, sid="S1", turn_id=None, decision=None):
+    def say(self, utterance=None, *, kind="UTTERANCE", out=None, sid="S1", turn_id=None, decision=None, times=1):
         self.n += 1
         tid = turn_id or f"t{self.n}"
         if out is not None:
-            self.model.queue.append(out)
+            self.model.queue.extend([out] * times)      # 같은 출력을 다시 받는 시험(서비스 고유 검사의 재호출 1회)은 times=2, 깨진 출력은 서버 안 재시도까지 6
         if decision:
             return self.orch.handle_turn(turn_id=tid, intervention_decision={"session_id": sid, "decision": decision})
         msg = {"session_id": sid, "kind": kind}

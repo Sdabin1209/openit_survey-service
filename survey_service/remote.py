@@ -66,6 +66,7 @@ class RemoteModelSession:
     """graph가 아는 extract/respond. 둘 다 RuntimeResult(output, outcome, attempts, protections)를 돌려준다."""
 
     accepts_deadline = True      # graph가 턴 마감(time.monotonic 기준)을 넘겨 준다: 재시도 판단에 쓴다
+    accepts_flow = True          # graph가 문항 순서표(QuestionFlowTable)를 넘겨 준다: extract 본문이 ExtractRequest가 된다 (ADR-0028)
 
     def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None,
                  op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None) -> None:
@@ -76,10 +77,11 @@ class RemoteModelSession:
     def _op_rt(self, op: str) -> HttpModelRuntime:
         return self._ops.get(op, self._rt)
 
-    def _call_once(self, op: str, request: Mapping) -> RuntimeResult:
+    def _call_once(self, op: str, request: Mapping, flow: Optional[Mapping] = None) -> RuntimeResult:
         fn = getattr(self._op_rt(op), op)
+        kw = {"flow": dict(flow)} if flow is not None else {}
         try:
-            return fn(self.release_id, dict(request))
+            return fn(self.release_id, dict(request), **kw)
         except BoundaryError as e:
             if e.code != "NOT_FOUND":
                 raise
@@ -88,16 +90,16 @@ class RemoteModelSession:
         st = self._rt.load_release(self.release_id)
         if st["state"] != "LOADED":
             raise BoundaryError("UNAVAILABLE", "추론 서버가 릴리스를 다시 적재하는 중이다", {"reason": "RELOADING"})
-        return fn(self.release_id, dict(request))
+        return fn(self.release_id, dict(request), **kw)
 
-    def _call(self, op: str, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:
+    def _call(self, op: str, request: Mapping, deadline: Optional[float] = None, flow: Optional[Mapping] = None) -> RuntimeResult:
         self.stats.add("calls")
         limit = self._op_rt(op)._timeout
         attempt = 0
         while True:
             t0 = time.monotonic()
             try:
-                res = self._call_once(op, request)
+                res = self._call_once(op, request, flow)
                 break
             except BoundaryError as e:
                 if is_output_invalid(e):
@@ -130,8 +132,8 @@ class RemoteModelSession:
             self.stats.add_protections(res.protections)
         return res
 
-    def extract(self, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:
-        return self._call("extract", request, deadline)
+    def extract(self, request: Mapping, deadline: Optional[float] = None, flow: Optional[Mapping] = None) -> RuntimeResult:
+        return self._call("extract", request, deadline, flow)
 
     def respond(self, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:
         return self._call("respond", request, deadline)

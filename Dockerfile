@@ -1,4 +1,4 @@
-# survey-service 이미지. 설정은 환경 변수로만 받고 비밀 값은 넣지 않는다. 로그는 표준 출력. 비root로 실행.
+# survey-service 이미지. turn-engine에는 코드 의존이 없다(D109): 라벨 io.openit.turn-engine은 n/a. 설정은 환경 변수로만 받고 비밀 값은 넣지 않는다. 로그는 표준 출력. 비root로 실행.
 # 빌드 전에 scripts/build_wheels.sh 로 build/wheels 를 만든다(이웃 라이브러리는 Git 태그 시점의 소스로 만든 wheel).
 FROM python:3.12-slim AS build
 COPY build/wheels /wheels
@@ -10,18 +10,17 @@ FROM python:3.12-slim
 ARG COMMIT
 ARG BOUNDARY_TAG
 ARG SCHEMA_CONTRACT_VERSION
-ARG TURN_ENGINE_TAG
 ARG MODEL_RUNTIME_TAG
 ARG LANGGRAPH_VERSION
 # 왜: 라벨 값이 deploy의 ImageLabels(게시 전 검사)를 통과하는 형식이 아니면 이미지를 만들지 않는다(기본값 unknown이 라벨에 남지 않게).
 RUN echo "$COMMIT" | grep -Eq '^[0-9a-f]{7,40}$' && echo "$SCHEMA_CONTRACT_VERSION" | grep -Eq '^([0-9]+|n/a)$' \
- && for t in "$BOUNDARY_TAG" "$TURN_ENGINE_TAG" "$MODEL_RUNTIME_TAG"; do echo "$t" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+$' || exit 1; done \
+ && for t in "$BOUNDARY_TAG" "$MODEL_RUNTIME_TAG"; do echo "$t" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+$' || exit 1; done \
  && test -n "$LANGGRAPH_VERSION" || { echo "빌드 인자(COMMIT 해시, SCHEMA_CONTRACT_VERSION 정수, *_TAG v접두 버전, LANGGRAPH_VERSION)가 라벨 규칙에 맞지 않는다" >&2; exit 1; }
 LABEL io.openit.service=survey-service \
       io.openit.revision=$COMMIT \
       io.openit.contracts.boundary=$BOUNDARY_TAG \
       io.openit.contracts.survey-schema=$SCHEMA_CONTRACT_VERSION \
-      io.openit.turn-engine=$TURN_ENGINE_TAG \
+      io.openit.turn-engine=n/a \
       io.openit.model-runtime=$MODEL_RUNTIME_TAG \
       io.openit.langgraph=$LANGGRAPH_VERSION
 COPY --from=build /install /usr/local

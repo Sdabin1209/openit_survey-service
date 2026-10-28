@@ -33,7 +33,7 @@ def test_model_runtime_pins_agree_with_the_installed_package():
 
 def test_other_library_pins_agree_between_requirements_and_build_script():
     assert _req_tag("boundary-contracts") == _script_tag("BOUNDARY_TAG")
-    assert _req_tag("turn-engine") == _script_tag("TURN_ENGINE_TAG")
+    assert "turn-engine" not in (ROOT / "requirements.txt").read_text() and "TURN_ENGINE_TAG" not in (ROOT / "scripts/build_wheels.sh").read_text()   # D109: 코드 의존 없음
 
 
 def test_schema_label_input_is_an_integer_not_a_tag_string():
@@ -46,7 +46,7 @@ def test_schema_label_input_is_an_integer_not_a_tag_string():
 def test_dockerfile_does_not_default_labels_to_values_imagelabels_rejects():
     """`unknown` 기본값이 라벨에 남으면 deploy 게시 검사가 거부한다. 빌드 인자를 빠뜨리면 이미지가 만들어지지 않아야 한다."""
     text = (ROOT / "Dockerfile").read_text()
-    for arg in ("COMMIT", "SCHEMA_CONTRACT_VERSION", "BOUNDARY_TAG", "TURN_ENGINE_TAG", "MODEL_RUNTIME_TAG"):
+    for arg in ("COMMIT", "SCHEMA_CONTRACT_VERSION", "BOUNDARY_TAG", "MODEL_RUNTIME_TAG"):
         assert not re.search(rf"^ARG {arg}=unknown", text, re.M), arg
 
 

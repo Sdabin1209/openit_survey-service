@@ -16,7 +16,7 @@ bash scripts/build_wheels.sh >/dev/null
 # shellcheck disable=SC1091
 source build/wheels/VERSIONS.env
 $DOCKER build -q -t "$IMG" --build-arg COMMIT="$COMMIT" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" \
-  --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" --build-arg TURN_ENGINE_TAG="$TURN_ENGINE_TAG" \
+  --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
   --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" . >/dev/null
 trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true' EXIT
 
@@ -59,7 +59,7 @@ echo "$READY" | grep -q '"response_tables": {"status": "DATASET_RULES_UNCONFIRME
 [ "$($DOCKER exec "$NAME" id -u | tr -d '\r')" != "0" ] || fail "root로 실행 중"
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")
 echo "labels:  $LABELS"
-for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" "io.openit.turn-engine\":\"$TURN_ENGINE_TAG" \
+for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" "io.openit.turn-engine\":\"n/a" \
             "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SCHEMA_CONTRACT_VERSION" "io.openit.langgraph\":\"$LANGGRAPH_VERSION"; do
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done
@@ -125,7 +125,7 @@ grep -q '"session_id": "smoke-3"' /tmp/smoke-sse2-$$.txt || fail "Last-Event-ID�
 [ "$(iv smoke-3 END i-1 smoke-staff-token)" = 200 ] || fail "직원 종료"
 [ "$(rk smoke-3 "x" r-2)" = 409 ] || fail "직원이 끝낸 세션이 409가 아니다"
 rm -f /tmp/smoke-$$.body /tmp/smoke-sse-$$.txt /tmp/smoke-sse2-$$.txt
-# 이미지 안에서 실제 turn-engine, model-runtime(fake), 문진 스키마 패키지로 한 턴(개발 하네스)
+# 이미지 안에서 model-runtime(fake), 문진 스키마 패키지로 한 턴(개발 하네스)
 $DOCKER exec -e EXPECT_LANGGRAPH="$LANGGRAPH_VERSION" "$NAME" python - <<'PY' || fail "이미지 안의 한 턴"
 import json, tempfile, os, subprocess, sys
 sys.path.insert(0, "/mnt")

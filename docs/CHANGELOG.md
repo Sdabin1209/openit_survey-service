@@ -1,5 +1,11 @@
 # 변경 이력
 
+## ADR 0010 호출자 쪽: 의미 규칙은 서버가 보증, turn-engine 코드 의존 제거 [미출시, 서버 model-runtime 0.9.0 뒤]
+
+- I9 extract 요청이 `ExtractRequest{input, flow}`다(계약 2.2.1의 `extract(..., flow=)`). flow는 문진 스키마 `QuestionFlow`의 order·skips. 서비스는 `validate_extraction`(OUTPUT_SCHEMA, SAVE_RULE, TARGET_NOT_IN_VALUES, UNKNOWN_ITEM, NEXT_ITEM_MISMATCH, SKIP_ORDER_MISMATCH)을 더는 부르지 않는다. 503 OUTPUT_INVALID는 계약 문장대로 같은 요청 1회 재전송. 서비스 고유 검사 4가지(UNKNOWN_SLOT, OUT_OF_CURRENT_ITEM, VALUE_INVALID, VALUE_TYPE_MISMATCH)와 그 위반의 재호출 1회는 유지(ADR-0028).
+- turn-engine 의존 제거(requirements, build_wheels, 스모크, `flow.py`의 자체 `FlowTable`). 이미지 라벨 `io.openit.turn-engine=n/a`. `turn_engine_version`은 설정 `SURVEY_TURN_ENGINE_VERSION`(기본 0.4.3)과 비교한다(D109). 계약 핀 v2.2.1.
+- 한계: model-runtime이 아직 0.8.x이면 flow를 받아도 규칙 보증이 없다. 프로세스 안 가짜 백엔드는 flow를 받지 않는다.
+
 ## 계약 2.2.0 따르기: 서버 발급 세션 ID, 푸시 해지 POST, 모델 호출별 시간 예산, kind 이름 [미출시, 푸시·태그 전]
 
 - 세션 ID: `POST /v1/sessions`에서 `session_id`를 생략하면 서버가 발급해 응답 최상위 `session_id`로 돌려준다. 프론트가 정하는 방식은 수용하되 폐기 예정 경고(3.0.0 제거). 스키마: `FrontendMessage`(SESSION_START의 session_id 선택), `FrontendInput`(선택 `session_id`).

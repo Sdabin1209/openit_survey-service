@@ -1,8 +1,8 @@
 """한 턴의 오케스트레이션 그래프(LangGraph StateGraph). 설계서 14절, D74 구조(17절).
 
 처리 표(9-1)의 열(세션 상태)은 `load_session` 뒤의 조건부 간선, 행(이벤트 종류)은 열 노드의 표(COLUMNS)다. 단계별 실패는
-`failed`에 쌓고 다음 간선이 종료 노드로 보낸다. 발화 턴은 `extract`(LoRA-A 한 번) -> `validate_extraction`(turn-engine) -> `plan_writes`
--> `commit` -> `respond`(LoRA-B)다. 검증 위반이나 503 OUTPUT_INVALID는 같은 요청을 한 번 더 부른다(`validate_extraction` -> `extract` 간선,
+`failed`에 쌓고 다음 간선이 종료 노드로 보낸다. 발화 턴은 `extract`(LoRA-A 한 번) -> `validate_extraction`(서비스 고유 검사만, ADR 0010) -> `plan_writes`
+-> `commit` -> `respond`(LoRA-B)다. 서비스 고유 검사의 위반이나 503 OUTPUT_INVALID는 같은 요청을 한 번 더 부른다(`validate_extraction` -> `extract` 간선,
 D75). 세션 시작은 A를 부르지 않고 B만 부른다.
 
 - 상태(TurnState)는 JSON으로 직렬화되는 값만 가진다. 자원(저장소, 엔진, 모델 세션)은 Orchestrator가 가진다.
@@ -24,7 +24,6 @@ from langgraph.graph import END, START, StateGraph
 
 from boundary_contracts import BoundaryError
 from boundary_contracts.clients import is_output_invalid
-from turn_engine import ContractViolation, validate_extraction
 
 from . import assembly, extraction
 from .errors import ReleaseUnavailable, StoreError
@@ -155,13 +154,17 @@ class TurnCtx:
         return self.cancelled.is_set() or (self.deadline is not None and time.monotonic() >= self.deadline)
 
 
-def _model_call(ctx, op: str, request):
-    """모델 호출. 세션이 턴 마감을 받을 수 있으면(원격 추론) 넘겨 재시도 판단에 쓰게 한다 (ADR-0026)."""
+def _model_call(ctx, op: str, request, flow=None):
+    """모델 호출. 세션이 턴 마감을 받을 수 있으면(원격 추론) 넘겨 재시도 판단에 쓰게 한다 (ADR-0026).
+    extract는 세션이 flow를 받을 수 있으면(원격 추론, I9 ExtractRequest) 문항 순서표를 함께 보내 서버가 출력 규칙을 보증하게 한다 (ADR-0028)."""
     session = ctx.release.session
     fn = getattr(session, op)
+    kw: dict = {}
     if getattr(session, "accepts_deadline", False):
-        return fn(request, deadline=ctx.deadline)
-    return fn(request)
+        kw["deadline"] = ctx.deadline
+    if op == "extract" and flow is not None and getattr(session, "accepts_flow", False):
+        kw["flow"] = flow
+    return fn(request, **kw)
 
 
 def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optional[dict], decision: Optional[dict],
@@ -497,7 +500,7 @@ class TurnGraph:
             upd["extract_in"] = inp
             tr["extract_input"] = copy.deepcopy(inp)
         try:
-            res = _model_call(ctx, "extract", inp)
+            res = _model_call(ctx, "extract", inp, self.o.flow.table.wire())
         except BoundaryError as e:
             invalid = is_output_invalid(e)
             if invalid and calls + 1 < MAX_EXTRACT_CALLS:
@@ -515,14 +518,14 @@ class TurnGraph:
         return {**upd, "trace": tr}
 
     def n_validate_extraction(self, st, config):
-        """turn-engine의 validate_extraction(의미 검증)과 저장할 칸이 문항 세트에 있는지. 위반이면 같은 요청을 1회 재시도, 그래도면 턴 실패(D75)."""
+        """서버가 보증하는 의미 규칙(save·targets·next_item 등, 계약 action_extraction_rules)은 다시 검사하지 않는다(R7, ADR 0010).
+        문항 세트에 의존하는 서비스 고유 검사만 한다: 저장할 칸이 문항 세트에 있는지, 값 타당성. 위반이면 같은 요청을 1회 재시도, 그래도면 턴 실패(D75)."""
         ctx, doc = _ctx(config), st["state_doc"]
-        out, inp = st["extract_out"], st["extract_in"]
+        out = st["extract_out"]
         try:
-            viol = list(validate_extraction(inp, out, self.o.flow.table))
-            viol += extraction.check_slots(out, doc["answer_records"])
+            viol = list(extraction.check_slots(out, doc["answer_records"]))
             viol += extraction.check_values(out, doc, ctx.bank, self.o.flow)                # 값 타당성(TE-1): 타입·크기·현재 문항 밖 저장 (ADR-0017)
-        except ContractViolation as e:                       # 우리가 만든 입력이 계약을 어겼다: 재시도해도 같다
+        except Exception as e:                               # 서비스 쪽 검사가 입력을 읽지 못했다: 재시도해도 같다
             return {"extract_next": "finalize", "failed": self._fail(st, "VALIDATE", e),
                     "trace": {"extract_status": "ERROR", "validation_ok": False, "validation_violations": None}}
         rec = [{"code": v.code, "path": v.path, "message": v.message} for v in viol]

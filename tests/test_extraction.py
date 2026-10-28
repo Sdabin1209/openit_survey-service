@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from boundary_contracts import validator
-from turn_engine import DATASET_V2_FLOW, validate_extraction
+from boundary_contracts.action_rules import check_action_extraction
 
 import survey_schema
 
@@ -27,8 +27,10 @@ BANK = Bank(sample_bank())
 
 
 # ---------------------------------------------------------------- 문항 순서·건너뛰기 표 (D76)
-def test_flow_built_from_survey_schema_equals_dataset_v2_flow():
-    assert FLOW.table == DATASET_V2_FLOW
+def test_flow_built_from_survey_schema_is_the_contract_flow_table():
+    data = survey_schema.load_data("question_flow")
+    assert FLOW.table.wire() == {"order": data["order"], "skips": data["skips"]}
+    assert list(validator("QuestionFlowTable").iter_errors(FLOW.table.wire())) == []
     assert FLOW.table.order[0] == "Q1.D01" and len(FLOW.table.order) == 31 and len(FLOW.table.skips) == 7
 
 
@@ -44,8 +46,6 @@ def test_flow_data_validates_against_its_contract_and_has_numeric_condition():
 
 
 def test_flow_follows_skips_for_next_item():
-    assert FLOW.table.next_item("Q4", {"Q4.answer": False}) == "Q5"
-    assert FLOW.table.next_item("Q8_1", {"Q8_1.days": 0}) == "Q9_1"
     assert FLOW.previous_item("Q8_1", {"Q7.does_not_drink": True}) == "Q7"
     assert FLOW.previous_item("Q8_1", {"Q7.does_not_drink": False}) == "Q7_2"
     assert FLOW.previous_item("Q1.D01", {}) is None
@@ -122,8 +122,8 @@ def test_extract_input_uses_question_sentence_when_there_is_no_previous_response
 
 # ---------------------------------------------------------------- 검증과 저장 계획
 @pytest.mark.parametrize("fx", FIX, ids=[f"{f['a_output']['action']}-{i}" for i, f in enumerate(FIX)])
-def test_sample_outputs_pass_validate_extraction_with_the_schema_flow(fx):
-    assert validate_extraction(fx["a_input"], fx["a_output"], FLOW.table) == []
+def test_sample_outputs_pass_the_contract_checker_with_the_schema_flow(fx):
+    assert check_action_extraction(fx["a_input"], fx["a_output"], FLOW.table.wire()) == []
 
 
 @pytest.mark.parametrize("fx", FIX, ids=[f"{f['a_output']['action']}-{i}" for i, f in enumerate(FIX)])

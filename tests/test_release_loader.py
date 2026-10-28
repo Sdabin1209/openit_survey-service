@@ -3,17 +3,16 @@ import pytest
 from boundary_contracts import PIPELINE_SCHEMA_VERSION, BoundaryError
 
 import model_runtime
-import turn_engine
 from survey_service.errors import ReleaseUnavailable
 from survey_service.inference import InferenceLoadError, InferenceServer
 from survey_service.orchestrator import Orchestrator
 from survey_service.release import ReleaseLoader, ReleaseRegistry
 from survey_service.store.memory import MemorySessionStore
 
-from .fakes import FakeReleaseReader, RecordingConsole
+from .fakes import TURN_ENGINE_VERSION, FakeReleaseReader, RecordingConsole
 from .sample_bank import sample_bank
 
-INSTALLED = {"turn_engine_version": turn_engine.ENGINE_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION}
+INSTALLED = {"turn_engine_version": TURN_ENGINE_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION}
 
 
 @pytest.fixture

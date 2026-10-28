@@ -82,6 +82,8 @@ class FaultyStore:
 
 
 # ---------------------------------------------------------------- I4 ReleaseReader (release-gate의 메모리 구현 대역)
+TURN_ENGINE_VERSION = "0.4.3"      # 릴리스 매니페스트와 서비스 설정(SURVEY_TURN_ENGINE_VERSION 기본값)의 기준(D109). 코드 의존이 아니다
+
 class FakeReleaseReader:
     """boundary_contracts.sdk.ReleaseReader Protocol을 따르는 시험용 대역. 실제 구현은 release-gate가 배포한다."""
 
@@ -107,8 +109,7 @@ class FakeReleaseReader:
                     decision_subject_swap: bool = False, tamper_bank: bool = False) -> dict:
         from boundary_contracts import canonical
         import model_runtime
-        import turn_engine
-        turn_engine_version = turn_engine_version or turn_engine.ENGINE_VERSION
+        turn_engine_version = turn_engine_version or TURN_ENGINE_VERSION
         model_runtime_version = model_runtime_version or model_runtime.RUNTIME_VERSION
         cfg = model_runtime.fake_serving_config()
         dirs = {}

@@ -6,7 +6,7 @@
 
 (1) B 입력: `ResponseTables.b_fields`가 만든 필드(next 제외)가 B 입력과 글자 단위로 같은가(분모: B 전체 행, START 포함).
 (2) A 입력 state: 서비스 규칙(`extraction.build_state`)이 만든 state가 A 입력의 state와 같은가(키 순서까지, 같은 칸 집합·값 대조 포함).
-(3) 값 검증: A 출력(정답)을 서비스의 검증 경로(turn-engine `validate_extraction` + `check_slots` + `check_values`)에 넣어 정상 정답을 거부하는 비율과 사유.
+(3) 값 검증: A 출력(정답)을 서비스의 검증 경로(계약의 `check_action_extraction` + `check_slots` + `check_values`)에 넣어 정상 정답을 거부하는 비율과 사유.
 문항 세트는 이 영역의 시험용 세트(tests/sample_bank.py: 31개 문항·칸, 선택지·단위 정의 없음)다. 데이터 쪽 question_bank.json은 문장만 있어 칸 정의를 담지 않는다.
 """
 from __future__ import annotations
@@ -123,7 +123,7 @@ def a_state_agreement(d: Path, splits, bank, flow, limit):
 
 
 def validation_check(d: Path, splits, bank, flow, limit):
-    from turn_engine import validate_extraction
+    from boundary_contracts.action_rules import check_action_extraction
     from survey_service import extraction
     tot = collections.Counter()
     codes = collections.Counter()
@@ -139,7 +139,7 @@ def validation_check(d: Path, splits, bank, flow, limit):
             tot[f"{sp} 행"] += 1
             doc = doc_from_input(inp, bank, flow)
             viol = []
-            viol += [("engine", v.code, v.path) for v in validate_extraction(inp, out, flow.table)]
+            viol += [("engine", v.code, v.path) for v in check_action_extraction(inp, out, flow.table.wire())]
             viol += [("slots", v.code, v.path) for v in extraction.check_slots(out, doc["answer_records"])]
             viol += [("values", v.code, v.path) for v in extraction.check_values(out, doc, bank, flow)]
             if not viol:

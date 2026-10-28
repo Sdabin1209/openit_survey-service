@@ -2,7 +2,7 @@
 
 한 턴의 분기와 단계는 LangGraph 그래프(survey_service/graph.py, 설계서 14절)가 맡는다. 이 모듈은 그래프 밖에서 유지하는 것을 한다:
 세션별 직렬화, 입력 검증, turn_id 멱등(저장된 결과 재생), 결과 저장, Trace outbox로 넘기기.
-판단은 하지 않는다(추출은 LoRA-A, 의미 검증은 turn-engine의 validate_extraction이 한다). 공개 API(I10)는 survey_service/api.py가 이 handle_turn을 부른다.
+판단은 하지 않는다(추출은 LoRA-A, 출력의 의미 규칙은 서버가 보증한다(ADR 0010)). 공개 API(I10)는 survey_service/api.py가 이 handle_turn을 부른다.
 """
 from __future__ import annotations
 

@@ -15,7 +15,7 @@ def test_not_committed_turn_is_reprocessed_on_same_turn_id():
     rig = Rig()
     rig.start()
     before = rig.doc()["answer_records"][0]["current_value"]
-    out = rig.say("안 피움", out="깨진 출력 {{", turn_id="m-2")                    # 추출이 깨져 두 번 모두 검증 실패
+    out = rig.say("안 피움", out="깨진 출력 {{", turn_id="m-2", times=6)                    # 추출이 깨져 두 번 모두 검증 실패
     rig.model.queue.clear()
     sig = out.frontend_input["turn_failure_signal"]
     assert sig and sig["write_committed"] == "NOT_COMMITTED" and rig.doc()["answer_records"][0]["current_value"] == before
@@ -185,7 +185,7 @@ def test_value_from_outside_the_current_item_is_not_saved_unless_it_is_a_correct
     rig.say("네", out=ANSWER_OUT)                                           # Q1.D01 답, 현재 문항은 Q1.D02
     bad = ext("NEXT", "Q1.D03", val("Q4.answer", True))                     # 현재 문항이 아닌 Q4 칸 저장(정정 아님)
     before = rig.doc()["answer_records"]
-    out = rig.say("아무 말", out=bad)
+    out = rig.say("아무 말", out=bad, times=2)
     rig.model.queue.clear()
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
     assert rig.doc()["answer_records"] == before                             # 값을 저장하지 않았다
@@ -203,7 +203,7 @@ def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_v
     for value, code in [("열대여섯", None), (123456789, "VALUE_INVALID"), ("", "VALUE_INVALID"), ("x" * 500, "VALUE_INVALID")]:
         n = rig.orch.violations.get(code, 0) if code else 0
         before = rig.doc()["answer_records"]
-        out = rig.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", value)))
+        out = rig.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", value)), times=2)
         rig.model.queue.clear()
         if code:
             assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", value
@@ -213,7 +213,7 @@ def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_v
             assert out.frontend_input["turn_failure_signal"] is None
     rig2 = Rig(bank=bank)
     rig2.start()
-    out = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "아무거나")))             # 선택지 밖
+    out = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "아무거나")), times=2)             # 선택지 밖
     rig2.model.queue.clear()
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
     ok = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "복용")), turn_id="ok")
@@ -224,7 +224,7 @@ def test_saved_value_kind_cannot_change_to_another_kind():
     rig = Rig()
     rig.start()
     rig.say("안 피움", out=ANSWER_OUT)                                                   # Q1.D01.diagnosed=False 저장
-    out = rig.say("아니 열대여섯", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", "열대여섯", "CORRECTION")))
+    out = rig.say("아니 열대여섯", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", "열대여섯", "CORRECTION")), times=2)
     rig.model.queue.clear()
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED" and _answer(rig) == {"answer": False}
     ok = rig.say("아니 먹어요", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", True, "CORRECTION")), turn_id="ok")
@@ -259,6 +259,7 @@ def test_one_utterance_may_answer_several_following_items_up_to_next_item():
 def test_risk_phrase_on_unknown_session_sends_no_alert_but_store_outage_still_alerts():
     from survey_service.risk_rules import RuleRiskSource
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
+    rig.model.queue.extend(["깨진 출력 {{"] * 6)                                            # 이 턴은 모델 단계에서 실패한다(서버 안 재시도 3회 x 서비스 재시도 2회)
     out = rig.orch.handle_turn(turn_id="x1", frontend_message={"session_id": "NOPE", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
     assert not [c for c in rig.console.inputs if c.get("staff_alert")] and rig.orch.counters.get("risk_prescreen_unknown_session") == 1
     assert out.frontend_input["turn_failure_signal"]["staff_alert"] == "NONE"

@@ -7,14 +7,14 @@
 ## 1. 범위
 
 - 하는 일 [확인: brief §1]: 한 턴을 처리하는 Orchestrator, Session Store, 릴리스 로더, Trace 내보내기, 추론 서버, 문진 스키마 패키지(`schema/`).
-- 하지 않는 일 [확인]: 판단 로직(turn-engine), 모델 로딩·프롬프트·디코딩(model-runtime), 문항·모델 승인(게이트), Frontend 화면.
+- 하지 않는 일 [확인]: 판단 로직(모델과 서버), 모델 로딩·프롬프트·디코딩(model-runtime), 문항·모델 승인(게이트), Frontend 화면.
 - **공개 API(I10)** [확인: D55, `boundary-contracts/PUBLIC_API.md`]: 키오스크 프론트가 부르는 HTTP/JSON. `POST /v1/sessions`(시작. 본문의 `session_id`를 생략하면 서버가 `secrets.token_urlsafe(32)`로 발급해 응답 최상위 `session_id`로 돌려준다. 프론트가 정해 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식이라 수용하되 경고를 남긴다. 스키마: `FrontendMessage`·`FrontendInput`), `POST /v1/sessions/{id}/turns`(발화, `turn_id` 멱등), `POST /v1/sessions/{id}/end`(종료), `GET /healthz`, `/readyz`. Bearer 토큰(환경 변수의 이름으로 지정, `SURVEY_API_TOKEN_ENV`). 구현은 `survey_service/api.py`가 기존 `handle_turn`(엔진·기록·직원 호출·결과 전달·Trace)에 그대로 연결하고, 문서가 정하지 않은 점의 해석은 CR-009에 적었다. 요청은 `FrontendMessage`로 검증하고 응답은 `FrontendInput`이다. 상태 코드: 400/401/404/409/429/503. 세션 유휴 만료(기본 300초, `SURVEY_SESSION_IDLE_SECONDS`)는 이탈 종료로 닫는다. 개발용 CLI(`python -m survey_service.cli`)는 그대로 있다. 직원 개입은 `POST /v1/sessions/{id}/intervention`(역할 `staff` 토큰, 키오스크 토큰은 403, 위험으로 멈춘 세션만, 아니면 409, `turn_id` 멱등)이 `InterventionDecision` 처리에 연결된다 [확인: D58, v1.3.1].
 
 ## 2. 컴포넌트 지도
 
 ```
               +-------------------- survey_service (프로세스) ---------------------+
- handle_turn  | Orchestrator(graph.py) --- turn-engine(validate_extraction, QuestionFlowTable)
+ handle_turn  | Orchestrator(graph.py) --- 서비스 고유 검사(check_slots, check_values). 의미 규칙은 서버(I9 flow)가 보증
  (라이브러리) |      |      \-- Inference(model-runtime ModelSession: extract/respond)
               |      |                         ^
               |      v                         | 적재
@@ -204,7 +204,7 @@
 | 노드 | 하는 일 |
 |---|---|
 | `extract` | `ActionExtractionInput`을 조립해(17절) 추론 서버 `extract`를 한 번 부른다. 이 노드가 다시 실행되면 같은 요청의 재시도다 |
-| `validate_extraction` | `turn_engine.validate_extraction(입력, 출력, QuestionFlowTable)`과 서비스 검사(저장할 칸이 문항 세트에 있는가: `UNKNOWN_SLOT`). 위반이 있으면 한 번 재시도, 그래도면 턴 실패 |
+| `validate_extraction` | 서버가 보증하는 의미 규칙은 다시 보지 않는다(ADR-0028). 서비스 고유 검사만: 저장할 칸이 문항 세트에 있는가(`UNKNOWN_SLOT`)와 값 타당성(`check_values`). 위반이 있으면 한 번 재시도, 그래도면 턴 실패 |
 | `plan_writes` | `save=true`인 값만 `AnswerUpdate`로(칸에 값이 이미 있으면 정정 `NEW_REVISION`, 이력에 쌓음), 진행 갱신(`next_item`, 미저장 칸, 건너뜀, 문진 종료), 위험 입력원 호출(있을 때) |
 | `plan_other` | 비발화 턴의 쓰기·응답 계획. SESSION_START는 B만(`action=START`, `next=Q1.D01`), 직원 재개는 고정 문장 RESUME, 직원 종료는 SURVEY_STOPPED, 이탈은 응답 없음 |
 | `commit` | 값 저장과 진행 갱신을 한 트랜잭션으로(그대로) |

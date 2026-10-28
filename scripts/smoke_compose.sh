@@ -17,7 +17,7 @@ bash scripts/build_wheels.sh >/dev/null
 # shellcheck disable=SC1091
 source build/wheels/VERSIONS.env
 $DOCKER build -q -t "$SERVICE_IMAGE" --build-arg COMMIT="$COMMIT" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" \
-  --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" --build-arg TURN_ENGINE_TAG="$TURN_ENGINE_TAG" \
+  --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
   --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" . >/dev/null
 rm -rf build/fake-ctx && mkdir -p build/fake-ctx
 cp -r build/wheels build/fake-ctx/wheels && cp requirements.lock build/fake-ctx/ && cp tests/compose/Dockerfile.fake build/fake-ctx/Dockerfile

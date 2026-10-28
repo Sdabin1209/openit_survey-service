@@ -33,6 +33,7 @@ class FlakyRuntime(RuntimeReferenceServer):
         self.fail_next: list = []          # 추론 POST마다 앞에서 하나씩: BoundaryError면 던지고, (상태, 유형, 바이트)면 그대로 응답한다
         self.puts = 0
         self.calls: list = []
+        self.extract_bodies: list = []     # extract POST가 받은 본문(JSON). 서비스가 ExtractRequest를 보냈는지 본다
         self.load_delay, self.load_error = load_delay, load_error
         self._load_started: dict = {}
 
@@ -98,6 +99,8 @@ class FlakyRuntime(RuntimeReferenceServer):
                     raise e
         if len(parts) == 5 and method == "POST":
             self.calls.append(parts[4])
+            if parts[4] == "extract":
+                self.extract_bodies.append(json.loads(body))
             if self.fail_next:
                 step = self.fail_next.pop(0)
                 if isinstance(step, BoundaryError):

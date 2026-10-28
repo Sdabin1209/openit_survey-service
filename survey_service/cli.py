@@ -1,7 +1,7 @@
 """개발용 하네스(공개 API가 아니다, O06 대기). 한 턴을 처리하고 결과를 JSON으로 찍는다.
 
 문항 세트 파일과 SQLite 파일을 주면 여러 번 부르는 동안 세션이 이어진다. 모델은 FakeModelSession이고, LoRA-A가 낼 ActionExtraction은 사람이
-`--extraction`으로 직접 준다(검증은 실제 turn-engine이 한다). 응답 문장은 가짜다.
+`--extraction`으로 직접 준다(의미 규칙은 서버가 보증한다, ADR 0010). 응답 문장은 가짜다.
 
 예: python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --start
     python -m survey_service.cli --bank bank.json --db /tmp/s.db turn --session S1 --utterance "안 피움" --extraction '{...}'

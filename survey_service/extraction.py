@@ -1,6 +1,6 @@
 """D74 구조의 한 턴 순수 로직: A 입력 조립, 추출 결과의 저장·진행 계획, B 입력 조립(표 찾기).
 
-판단은 모델(LoRA-A)과 turn-engine의 `validate_extraction`이 한다. 이 모듈은 저장소 문서와 표에서 정해진 것을 '고르고 옮길' 뿐이다:
+판단은 모델(LoRA-A)이 하고 출력의 의미 규칙은 서버가 보증한다(ADR 0010). 이 모듈은 저장소 문서와 표에서 정해진 것을 '고르고 옮길' 뿐이다:
 - A 입력 `state`: 지금 문항의 저장 값 -> 직전 문항(건너뛴 문항은 뺀다)과 참조 원천 문항의 저장 값 -> 지금 문항의 MISSING·UNCLEAR 순서(학습 데이터 규칙,
   표본에서 읽은 것이라 미확정). 한 항목은 `{"value", "status"}` 순서.
 - 저장: `save=true`인 값만. 같은 칸에 값이 있으면 이력에 쌓는 정정(NEW_REVISION). CONFLICT 등 save=false 값은 저장하지 않는다.
@@ -30,7 +30,7 @@ class TurnInputError(Exception):
 
 @dataclass(frozen=True)
 class Violation:
-    """서비스 쪽 검사의 위반(turn_engine.Violation과 같은 모양, 값 없음)."""
+    """서비스 쪽 검사의 위반(code, path, message. 값 없음)."""
     code: str
     path: str
     message: str
@@ -117,7 +117,7 @@ def _is_num(x: Any) -> bool:
 
 
 def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank], flow: Optional[Flow] = None) -> list[Violation]:
-    """turn-engine의 validate_extraction 뒤에 서비스가 한 번 더 보는 값 타당성(감사 TE-1, D88): 위반이면 값을 저장하지 않고 같은 요청을 1회 재시도, 그래도면 턴 NOT_COMMITTED.
+    """서버가 보증하는 의미 규칙 밖에서 서비스가 보는 값 타당성(문항 은행 의존)(감사 TE-1, D88): 위반이면 값을 저장하지 않고 같은 요청을 1회 재시도, 그래도면 턴 NOT_COMMITTED.
     (1) 저장하는 값의 칸이 현재 문항이어야 한다(정정은 예외: status CORRECTION 또는 action CORRECT). (2) 값이 Value 형식이고 합리적인 크기다.
     (3) 슬롯 정의가 아는 만큼 타입이 맞는다: choices는 그 목록의 문자열, yes_no_map은 불리언(또는 yes/no 문자열), units는 단위가 목록에 있는 양 또는 숫자.
     (4) 이미 저장된 값이 있으면 같은 종류(불리언/숫자/문자열/양)여야 한다. 한계: QuestionBank에 칸의 값 타입 필드가 없어 처음 쓰는 자유 칸의 타입은 알 수 없다(CR-017)."""

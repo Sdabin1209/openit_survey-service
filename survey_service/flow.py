@@ -1,7 +1,7 @@
 """문항 순서·건너뛰기 표(D76). 소유는 survey-service이고 값은 문진 스키마(`schema/data/question_flow.json`, 계약 QuestionFlow)에 있다.
 
-서비스는 문진 스키마에서 turn-engine의 `QuestionFlowTable`을 만들어 `validate_extraction`에 넘긴다. turn-engine의 `DATASET_V2_FLOW`는
-시험용 기준일 뿐이다(`tests/test_flow.py`가 두 표가 같은지 본다). 이 모듈은 A 입력의 `state`를 만드는 데 필요한 순서 규칙도 가진다.
+서비스는 문진 스키마에서 표를 만들어 A 입력의 `state`를 만드는 데 쓰고, I9 extract 요청의 `flow`(계약 QuestionFlowTable: order, skips)로 서버에 싣는다.
+출력의 의미 검증은 서버가 보증하므로(ADR 0010, R7) 서비스는 이 표로 출력을 검사하지 않는다.
 """
 from __future__ import annotations
 
@@ -10,12 +10,33 @@ from typing import Any, Mapping
 
 import jsonschema
 import survey_schema
-from turn_engine import QuestionFlowTable, SkipRule
+
+
+def _same(a: Any, b: Any) -> bool:
+    """칸 값과 규칙 값이 같은가. 불리언과 숫자는 다른 값이다(False != 0)."""
+    return isinstance(a, bool) == isinstance(b, bool) and a == b
+
+
+@dataclass(frozen=True)
+class FlowTable:
+    """문진 스키마 QuestionFlow의 order·skips(계약 QuestionFlowTable과 같은 모양). 조건은 `==`만 쓴다(문진 스키마가 정한다)."""
+    order: tuple
+    skips: tuple = ()
+
+    def index(self, item: str) -> int | None:
+        return self.order.index(item) if item in self.order else None
+
+    def is_skipped(self, item: str, saved: Mapping[str, Any]) -> bool:
+        return any(r["skip_item"] == item and r["slot"] in saved and _same(saved[r["slot"]], r["value"]) for r in self.skips)
+
+    def wire(self) -> dict:
+        """계약 QuestionFlowTable(JSON)."""
+        return {"order": list(self.order), "skips": [dict(r) for r in self.skips]}
 
 
 @dataclass(frozen=True)
 class Flow:
-    table: QuestionFlowTable
+    table: FlowTable
     reference_sources: Mapping[str, tuple]
     slot_order: Mapping[str, tuple]
     flow_id: str
@@ -40,7 +61,9 @@ class Flow:
 
 
 def build_flow(data: Mapping) -> Flow:
-    table = QuestionFlowTable(order=data["order"], skips=[SkipRule(s["slot"], s["value"], s["skip_item"]) for s in data["skips"]])
+    if len(set(data["order"])) != len(data["order"]) or any(s["skip_item"] not in data["order"] for s in data["skips"]):
+        raise ValueError("문항 순서에 중복이 있거나 건너뛸 문항이 순서에 없다")
+    table = FlowTable(order=tuple(data["order"]), skips=tuple({k: s[k] for k in ("slot", "op", "value", "skip_item")} for s in data["skips"]))
     return Flow(table, {k: tuple(v) for k, v in data["reference_sources"].items()},
                 {k: tuple(v) for k, v in data["slot_order"].items()}, data["flow_id"])
 

@@ -1,4 +1,4 @@
-"""Orchestrator를 실제 turn-engine(validate_extraction)과 model-runtime의 FakeModelSession으로 돌린다(D74 구조, 문항 세트는 tests/sample_bank.py)."""
+"""Orchestrator를 model-runtime의 FakeModelSession으로 돌린다(D74 구조, 문항 세트는 tests/sample_bank.py)."""
 import copy
 import threading
 
@@ -278,34 +278,6 @@ def test_output_invalid_twice_fails_turn_and_keeps_state():
     assert doc["answer_records"] == snap["answer_records"] and doc["progress_record"] == snap["progress_record"]
     assert len(doc["dialogue_log"]) == len(snap["dialogue_log"]) + 1
     assert len(rig.session.respond_requests) == 1             # B를 부르지 않았다(시작 한 번뿐)
-
-
-# next_item이 REASK의 규칙(= 입력 question_id)을 어긴다 -> validate_extraction 위반
-VIOLATING = ext("REASK", "Q1.D03", val("Q1.D01.on_medication", None, "MISSING"), reason="MISSING", targets=["Q1.D01.on_medication"])
-
-
-def test_violation_is_retried_once_then_succeeds():
-    rig = Rig()
-    rig.start()
-    rig.model.queue.append(VIOLATING)
-    o = rig.say("음", out=HEALTH)
-    assert o.trace["extract_attempts"] == 2 and o.trace["extract_status"] == "OK"
-    assert o.trace["validation_ok"] is True and o.trace["validation_violations"] == []
-    assert rec(rig.doc(), "Q1.D01.diagnosed")["current_value"] == {"answer": False}
-
-
-def test_violation_twice_fails_turn_and_traces_violations():
-    rig = Rig()
-    rig.start()
-    snap = rig.doc()
-    rig.model.queue += [VIOLATING, VIOLATING]
-    o = rig.say("음")
-    assert le(o)["turn_result"] == {"failed_steps": [{"phase": "BEFORE_COMMIT", "step": "VALIDATE"}]}
-    assert o.trace["extract_status"] == "VIOLATION" and o.trace["validation_ok"] is False
-    assert [v["code"] for v in o.trace["validation_violations"]] == ["NEXT_ITEM_MISMATCH"]
-    assert set(o.trace["validation_violations"][0]) == {"code", "path", "message"}       # 값을 싣지 않는다
-    assert le(o)["validation_violations"] == o.trace["validation_violations"]
-    assert rig.doc()["answer_records"] == snap["answer_records"] and rig.doc()["progress_record"] == snap["progress_record"]
 
 
 def test_save_to_unknown_slot_is_a_violation_not_an_invented_record():
