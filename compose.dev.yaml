@@ -1,0 +1,19 @@
+# 개발·스모크 전용: 앱 밖의 의존(PostgreSQL)만 띄운다(워크스페이스 규칙 D22). 앱 이미지는 여기 없다.
+# 쓰는 법: scripts/smoke.sh의 SMOKE_PG=1 이 `docker compose -p <고유 프로젝트> -f compose.dev.yaml up -d --wait`로 띄우고 down -v 로 지운다.
+# 왜 이 구성인가: 일회용 데이터(메모리 tmpfs)라 비밀이 필요 없어 trust 인증을 쓴다. 호스트에 열 때는 127.0.0.1에만, 포트는 Docker가 고른다
+# (여러 영역이 같은 서버에서 동시에 돌려도 충돌하지 않게, 워크스페이스 규칙). 주 버전 16은 운영과 같다(ADR-0002, tests/pg_container.py).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: survey
+    ports:
+      - "127.0.0.1::5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d survey"]
+      interval: 1s
+      timeout: 3s
+      retries: 40

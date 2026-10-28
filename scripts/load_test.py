@@ -5,7 +5,7 @@ PostgreSQL(LOAD_DATABASE_URL)을 붙인 App을 같은 프로세스에서 Threadi
 N개 세션이 동시에 발화를 보낼 때의 성공률, 턴 지연 p50/p95/max, 상태 코드별 건수, PostgreSQL 연결 수 최대, 서버 스레드 수·RSS 증가를 표로 낸다.
 실제 LLM 지연은 포함되지 않는다(--model-delay로 가짜 모델에 고정 지연을 줄 수 있고, 그 값은 가정이다).
 
-사용: LOAD_DATABASE_URL=$(bash ../deploy/scripts/dev-postgres.sh up survey) .venv/bin/python scripts/load_test.py [--steps 1,10,50,100] [--turns 3]
+사용: LOAD_DATABASE_URL=<compose.dev.yaml의 PostgreSQL URL, docs/runbook.md> .venv/bin/python scripts/load_test.py [--steps 1,10,50,100] [--turns 3]
       [--max-inflight 32] [--model-delay 0] [--deadline 8]
 비밀(접속 문자열)은 출력하지 않는다.
 """
