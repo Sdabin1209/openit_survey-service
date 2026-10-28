@@ -439,7 +439,7 @@ class Sse:
         self.resp.close()
 
 
-def api(port, method, path, body, token="test-api-token"):
+def api(port, method, path, body, token="test-api-token-0123"):
     return http_call(port, method, path, body, token=token)
 
 
@@ -506,7 +506,7 @@ def test_sse_resumes_with_last_event_id_and_after_restart(tmp_path, monkeypatch)
 
 def test_sse_and_list_over_http_need_staff_token(live):
     app, port, _ = live
-    for token, code in [("test-api-token", 403), ("nope", 401), (None, 401)]:
+    for token, code in [("test-api-token-0123", 403), ("nope", 401), (None, 401)]:
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream",
                                                           headers={"Authorization": f"Bearer {token}"} if token else {}), timeout=5)

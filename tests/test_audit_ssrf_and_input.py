@@ -122,11 +122,11 @@ def test_bad_content_length_and_surrogate_utterance_are_400_not_dropped_connecti
     app, httpd, port = make_app(tmp_path, monkeypatch)
     try:
         for cl in (b"abc", b"-5", b"99999999"):
-            r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token\r\nContent-Length: " + cl + b"\r\n\r\n")
+            r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + cl + b"\r\n\r\n")
             assert r.startswith(b"HTTP/1.0 400") or r.startswith(b"HTTP/1.1 400"), (cl, r[:60])
-        assert http_call(port, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, token="test-api-token")[0] == 200
+        assert http_call(port, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, token="test-api-token-0123")[0] == 200
         body = b'{"session_id":"K1","kind":"UTTERANCE","utterance":"\\ud800","turn_id":"t1"}'
-        r = _raw(port, b"POST /v1/sessions/K1/turns HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+        r = _raw(port, b"POST /v1/sessions/K1/turns HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
         assert b" 400 " in r.split(b"\r\n", 1)[0]
     finally:
         _shutdown(app, httpd)
@@ -155,7 +155,7 @@ def test_auth_failure_is_logged_without_secrets_and_counted(tmp_path, monkeypatc
     try:
         with caplog.at_level(logging.WARNING, logger="survey_service"):
             assert http_call(port, "POST", "/v1/sessions", {"session_id": "K9", "kind": "SESSION_START"}, token="wrong-secret-token")[0] == 401
-            assert http_call(port, "GET", "/v1/staff/alerts", token="test-api-token")[0] == 403
+            assert http_call(port, "GET", "/v1/staff/alerts", token="test-api-token-0123")[0] == 403
         msgs = " ".join(r.getMessage() for r in caplog.records)
         assert "요청 거절 status=401" in msgs and "요청 거절 status=403" in msgs and "wrong-secret-token" not in msgs and "K9" not in msgs
         st = app.readiness()[1]["api"]
@@ -214,7 +214,7 @@ def test_deeply_nested_body_is_400_not_a_dropped_connection(tmp_path, monkeypatc
     try:
         for depth in (600, 5000, 100000):
             body = ("[" * depth + "]" * depth).encode()
-            r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+            r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
             assert b" 400 " in r.split(b"\r\n", 1)[0], (depth, r[:80])
         from survey_service.api import _has_surrogate
         deep = cur = []

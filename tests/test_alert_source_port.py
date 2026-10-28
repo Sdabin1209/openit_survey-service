@@ -21,8 +21,8 @@ def fake_source():
 
 
 def _app(tmp_path, monkeypatch, **kw):
-    monkeypatch.setenv("SURVEY_API_TOKEN", "a-tok")
-    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s-tok")
+    monkeypatch.setenv("SURVEY_API_TOKEN", "a-tok-0123456789ab")
+    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s-tok-0123456789ab")
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"), model_backend="fake", **kw)
     risk = load_factory(s.risk_source)() if s.risk_source else None
     return App(s, reader=object(), ingest=object(), risk_source=risk)

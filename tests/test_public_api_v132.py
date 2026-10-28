@@ -89,7 +89,7 @@ def test_push_config_null_without_vapid_and_public_key_with(tmp_path, monkeypatc
     try:
         code, body = http_call(port, "GET", "/v1/staff/push-config")
         assert (code, body) == (200, {"vapid_public_key": None}); valid("PushConfig", body)
-        assert http_call(port, "GET", "/v1/staff/push-config", token="test-api-token")[0] == 403
+        assert http_call(port, "GET", "/v1/staff/push-config", token="test-api-token-0123")[0] == 403
     finally:
         httpd.shutdown(); httpd.server_close(); app.stop()
     pem = _vapid_key_pem()

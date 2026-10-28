@@ -185,10 +185,10 @@ def test_app_with_database_url_reports_kind_and_never_exposes_url(request, tmp_p
         text = json.dumps(body)
         assert url not in text and url.split("@")[0].split(":")[-1] not in text
         assert not (tmp_path / "never.db").exists()
-        st, _, _ = app.api.handle("POST", "/v1/sessions", "Bearer test-api-token", json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
+        st, _, _ = app.api.handle("POST", "/v1/sessions", "Bearer test-api-token-0123", json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
         assert st == 200
         kill_connection(app.store._db)                               # 서비스 재시작 없이 복구
-        assert app.api.handle("GET", "/v1/sessions/K1/state", "Bearer test-api-token", b"")[0] == 200
+        assert app.api.handle("GET", "/v1/sessions/K1/state", "Bearer test-api-token-0123", b"")[0] == 200
         kill_connection(app.alert_store._db)
         assert app.readiness()[0] is True
     finally:

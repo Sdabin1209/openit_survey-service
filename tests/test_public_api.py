@@ -247,7 +247,7 @@ def test_over_http_with_app(tmp_path):
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
-    def http(method, path, body=None, token="test-api-token"):
+    def http(method, path, body=None, token="test-api-token-0123"):
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method,
                                      data=json.dumps(body).encode() if body is not None else None,
                                      headers={"Authorization": f"Bearer {token}"} if token else {})
@@ -385,6 +385,6 @@ def test_app_requires_distinct_staff_token(tmp_path, monkeypatch):
     monkeypatch.delenv("SURVEY_STAFF_API_TOKEN")
     with pytest.raises(ConfigError):
         App(s, reader=object(), ingest=object())
-    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "test-api-token")
+    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "test-api-token-0123")
     with pytest.raises(ConfigError):
         App(s, reader=object(), ingest=object())

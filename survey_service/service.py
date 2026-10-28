@@ -141,8 +141,12 @@ class App:
             raise ConfigError(f"직원 개입 토큰이 {settings.staff_api_token_env}_FILE(파일) 또는 환경 변수 {settings.staff_api_token_env}에 없다")
         if api_token and staff_token == api_token:
             raise ConfigError("직원 개입 토큰은 키오스크 토큰과 달라야 한다")
+        _check_token_length(api_token or None, "공개 API 토큰")
+        _check_token_length(staff_token, "직원 개입 토큰")
         result_token = _secret(settings.result_reader_token_env, "결과 조회 토큰") or None     # 없으면 해당 API가 꺼진다
         risk_token = _secret(settings.risk_source_token_env, "위험 신호 토큰") or None
+        _check_token_length(result_token, "결과 조회 토큰")
+        _check_token_length(risk_token, "위험 신호 토큰")
         if result_token in (api_token, staff_token) or risk_token in (api_token, staff_token) or (result_token and result_token == risk_token) or \
                 len({staff_token, result_token, risk_token, *device_tokens.values()} - {None}) != len([x for x in (staff_token, result_token, risk_token, *device_tokens.values()) if x is not None]) or (api_token and api_token in device_tokens.values()):
             raise ConfigError("토큰은 역할마다 서로 달라야 한다")
@@ -323,6 +327,14 @@ class App:
         return not problems, body
 
 
+MIN_TOKEN_CHARS = 16      # 기기 토큰과 역할 토큰의 최소 길이. 근거: ADR-0016(기기 토큰 16자)과 같은 규칙을 역할 토큰에도 적용한다(결정표 2026-10-29, ADR-0024). 16은 측정·표준 값이 아니다
+
+
+def _check_token_length(token, what: str) -> None:
+    if token is not None and len(token) < MIN_TOKEN_CHARS:
+        raise ConfigError(f"{what}이 너무 짧다: {MIN_TOKEN_CHARS}자 이상이어야 한다")     # 값은 오류에 넣지 않는다
+
+
 def _device_tokens(env_name: str) -> dict:
     """기기별 키오스크 토큰 표 {device_id: 토큰}. `read_secret(NAME)`(NAME_FILE 우선)의 내용이 줄마다(또는 쉼표로 구분된) `device_id=토큰`. 비밀 값은 어디에도 출력하지 않는다 (D88 U8)."""
     try:
@@ -336,7 +348,7 @@ def _device_tokens(env_name: str) -> dict:
             continue
         dev, sep, tok = item.partition("=")
         dev, tok = dev.strip(), tok.strip()
-        if not sep or not re.match(r"^[A-Za-z0-9._-]{1,64}$", dev) or len(tok) < 16:
+        if not sep or not re.match(r"^[A-Za-z0-9._-]{1,64}$", dev) or len(tok) < MIN_TOKEN_CHARS:
             raise ConfigError("기기별 키오스크 토큰 표 형식 오류: 줄마다 `device_id=토큰`(토큰 16자 이상)")
         if dev in out:
             raise ConfigError("기기별 키오스크 토큰 표에 같은 device_id가 두 번 있다")

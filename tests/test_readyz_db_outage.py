@@ -176,8 +176,8 @@ def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, m
     """N8: SIGTERM 처리 순서(main과 같다: draining 표시 -> shutdown -> server_close -> app.stop). 처리 중 턴은 끝까지 처리되고, 그동안 /readyz는 503 shutting_down이다."""
     import http.client
     from survey_service.service import serve
-    monkeypatch.setenv("SURVEY_API_TOKEN", "tok")
-    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "stok")
+    monkeypatch.setenv("SURVEY_API_TOKEN", "tok-0123456789abcd")
+    monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "stok-0123456789abc")
     app = _app(tmp_path, monkeypatch)
     httpd = serve(app, 0)
     assert httpd.request_queue_size >= 64          # 기본 5면 동시 접속이 몰릴 때 연결이 거부된다(부하 측정에서 확인)
@@ -194,7 +194,7 @@ def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, m
 
     def post(path, body):
         c = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
-        c.request("POST", path, json.dumps(body).encode(), {"Authorization": "Bearer tok"})
+        c.request("POST", path, json.dumps(body).encode(), {"Authorization": "Bearer tok-0123456789abcd"})
         r = c.getresponse()
         return r.status, json.loads(r.read())
     assert post("/v1/sessions", {"session_id": "G1", "kind": "SESSION_START"})[0] == 200
