@@ -194,7 +194,8 @@ class Orchestrator:
                 writes = {"answer_updates": [], "progress_record_update": {
                     "current_question_id": prog["current_question_id"], "open_slots": copy.deepcopy(prog["open_slots"]), "skipped_add": [],
                     "skipped_remove": [], "session_status": "PAUSED_RISK",
-                    "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(alert) if severity == "RISK" else []}]}}
+                    "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(alert) if severity == "RISK" else [],
+                                           "pause_reason": "RISK" if severity == "RISK" else "OTHER"}]}}
                 res = self.store.commit({"session_id": sid, "expected_revision": loaded["revision"], "writes": writes},
                                         turn_id="risk-signal:" + signal["signal_id"], input_hash=canonical.sha256_hash({"risk_signal": dict(signal)}))
                 if res["status"] != "OK":

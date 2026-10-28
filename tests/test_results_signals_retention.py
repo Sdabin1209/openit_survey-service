@@ -197,7 +197,7 @@ def test_risk_signal_pauses_alerts_and_is_idempotent(env):
     st, body, _ = env.signal()
     assert st == 201 and body["session_status"] == "PAUSED_RISK" and body["alert_id"].startswith("al-")
     assert env.rig.doc("K1")["progress_record"]["session_status"] == "PAUSED_RISK"
-    assert env.rig.doc("K1")["progress_record"]["pause_history"][-1] == {"kind": "PAUSE", "reasons": [{"kind": "RISK_SIGNAL", "evidence": ["signal:clf-a:C7"]}]}
+    assert env.rig.doc("K1")["progress_record"]["pause_history"][-1] == {"kind": "PAUSE", "reasons": [{"kind": "RISK_SIGNAL", "evidence": ["signal:clf-a:C7"]}], "pause_reason": "RISK"}
     st2, body2, _ = env.signal()
     assert st2 == 200 and body2 == body
     view = env.call("GET", "/v1/staff/sessions/K1")[1]

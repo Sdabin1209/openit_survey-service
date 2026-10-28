@@ -93,7 +93,8 @@ class App:
             except ValueError as e:
                 raise ConfigError(str(e)) from None
         self.alerts = AlertService(self.alert_store, AlertHub(), push, settings.push_timeout_seconds,
-                                    settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session)
+                                    settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
+                                    settings.staff_call_report_max_per_session)
         self.registry = ReleaseRegistry()
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
             tok = _secret(settings.inference_token_env, "추론 서버 토큰")

@@ -321,8 +321,8 @@ class TurnGraph:
 
     @staticmethod
     def _pause_reason(st) -> Optional[str]:
-        """이 턴의 정지 사유(CR-H002). 되묻기 한도는 그 경로가 표시한 값, 위험 신호·위험 규칙(kind RISK)은 RISK, 정지가 아니면 None.
-        왜 도출하나: 위험 매처가 셋(선별, 입력원, 슬롯 규칙)이라 각각에 표시를 달면 빠지기 쉽다. 정지를 만드는 알림 종류는 RISK와 되묻기 한도뿐이다."""
+        """이 턴의 정지 사유(CR-H002), 알림 행에 남길 값. 되묻기 한도는 그 경로가 표시한 값, 위험 신호·위험 규칙(kind RISK)은 RISK, 정지가 아니면 None.
+        정본은 세션 문서의 PAUSE 기록(같은 값을 쓴다). 턴 신호에는 세션이 실제로 정지됐을 때만 싣는다(finalize가 committed를 본다)."""
         if st.get("pause_reason"):
             return st["pause_reason"]
         a = st.get("alert")
@@ -344,7 +344,7 @@ class TurnGraph:
         ctx, doc = _ctx(config), st["state_doc"]
         prog = doc["progress_record"]
         pu = {"current_question_id": prog["current_question_id"], "open_slots": copy.deepcopy(prog["open_slots"]), "skipped_add": [],
-              "skipped_remove": [], "session_status": "PAUSED_RISK", "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(st["alert"])}]}
+              "skipped_remove": [], "session_status": "PAUSED_RISK", "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(st["alert"]), "pause_reason": "RISK"}]}
         return {"writes": {"answer_updates": [], "progress_record_update": pu}, "flow_end": False, "resp": self._fixed(ctx, "RISK_NOTICE")}
 
     # ------------------------------------------------------------------ 노드: 앞부분
@@ -417,8 +417,7 @@ class TurnGraph:
         """세션 정보 생성 실패, 조회 실패: 붙일 세션이 없어 로그를 남기지 않는다(9-1 3항)."""
         ctx = _ctx(config)
         sid, decision = st["session_id"], st["decision"]
-        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": st.get("staff_status") or "NONE",
-                  **({"pause_reason": self._pause_reason(st)} if self._pause_reason(st) else {})}      # 선별이 알림을 보냈다면 그 결과를 알린다
+        signal = {"session_id": sid, "write_committed": "NOT_COMMITTED", "staff_alert": st.get("staff_status") or "NONE"}      # 선별이 알림을 보냈다면 그 결과를 알린다
         intervention_result = {"session_id": sid, "result": "FAILED"} if decision is not None else None
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         kind = None if st.get("fatal") == "no_route" else (st["route"]["turn_kind"] if st.get("route") else None)
@@ -554,7 +553,7 @@ class TurnGraph:
                 if alert["kind"] == "RISK":
                     pu = writes["progress_record_update"]
                     pu["session_status"] = "PAUSED_RISK"
-                    pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(alert)}]
+                    pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(alert), "pause_reason": "RISK"}]
                     upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
         if "alert" not in upd:
             rr = self._slot_risk(ctx, out)                    # 문항 세트의 슬롯 risk_rule(IMMEDIATE)을 저장하는 값에 적용한다 (D88 U2, ADR-0013)
@@ -562,7 +561,7 @@ class TurnGraph:
                 upd["alert"] = rr
                 pu = writes["progress_record_update"]
                 pu["session_status"] = "PAUSED_RISK"
-                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(rr)}]
+                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": _pause_reasons(rr), "pause_reason": "RISK"}]
                 upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
                 self.o._count("risk_rule_hit")
         if "alert" not in upd:
@@ -571,7 +570,7 @@ class TurnGraph:
                 upd.update(esc)
                 pu = writes["progress_record_update"]
                 pu["session_status"] = "PAUSED_RISK"           # 기존 직원 호출 경로: 정지 + CALL_STAFF 알림 + 문항 세트의 고정 문장
-                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": []}]
+                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": [], "pause_reason": "REASK_LIMIT"}]      # 사유는 정지 기록(세션 문서)에 함께 남긴다: 상태·신호·알림이 같은 값을 본다 (ADR-0022)
         return upd
 
     @staticmethod
@@ -772,13 +771,14 @@ class TurnGraph:
         ctx = _ctx(config)
         sid, decision, committed = st["session_id"], st["decision"], st["committed"]
         failed = list(st["failed"])
+        pr = self._pause_reason(st) if committed else None      # 쓰기가 확정된 턴에서만 정지 사유를 알린다(NOT_COMMITTED면 세션은 정지하지 않았다)
         if st.get("staff_status") == "DELIVERY_FAILED" and not any(f["step"] == "DELIVER_STAFF" for f in failed):
             failed.append({"phase": "AFTER_COMMIT", "step": "DELIVER_STAFF"})       # 선별에서 알림 전달이 실패했다: 신호를 낸다
         intervention_result = st["intervention_result"]
         if decision is not None and not committed:
             intervention_result = {"session_id": sid, "result": "FAILED"}
         # 프론트 전달(O06 대기: 자리만 있다)
-        signal = self._signal(sid, failed, committed, st["staff_status"], self._pause_reason(st))
+        signal = self._signal(sid, failed, committed, st["staff_status"], pr)
         fi_text = st["response_text"]
         sink = self.o.frontend_sink
         if committed and sink is not None and st["response_text"] is not None:
@@ -788,15 +788,15 @@ class TurnGraph:
                 log.warning("프론트 전달 실패 session=%s turn=%s error=%s", sid, st["turn_id"], type(e).__name__)
                 self.o._count("step_failed.DELIVER_FRONT")
                 failed.append({"phase": "AFTER_COMMIT", "step": "DELIVER_FRONT"})
-                signal = self._signal(sid, failed, committed, st["staff_status"], self._pause_reason(st))
+                signal = self._signal(sid, failed, committed, st["staff_status"], pr)
                 fi_text = None
         fi_signal = signal
         if signal is None and st["staff_status"] == "DELIVERED":
             # 위험 정지로 직원 알림이 닿았다: PUBLIC_API.md가 정한 대로 staff_alert=DELIVERED를 알려 키오스크가 대기 화면으로 가게 한다(횡단 H-2).
             # 내부 신호·로그·Trace는 그대로 두고(실패가 아니다) 프론트 응답에만 싣는다.
             fi_signal = {"session_id": sid, "write_committed": "COMMITTED" if committed else "NOT_COMMITTED", "staff_alert": "DELIVERED"}
-            if self._pause_reason(st) is not None:
-                fi_signal["pause_reason"] = self._pause_reason(st)
+            if pr is not None:
+                fi_signal["pause_reason"] = pr
         fi = {"response_text": fi_text, "turn_failure_signal": fi_signal}
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         doc = st["state_doc"]

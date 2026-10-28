@@ -458,6 +458,20 @@
           "items": {
             "$ref": "#/$defs/PauseReason"
           }
+        },
+        "pause_reason": {
+          "description": "이 정지의 사유(2.1.0, CR-H002, ADR-0022). 세션 문서가 정본이다. 없으면(옛 기록) reasons가 비어 있지 않으면 RISK, 아니면 OTHER로 본다.",
+          "oneOf": [
+            {
+              "const": "RISK"
+            },
+            {
+              "const": "REASK_LIMIT"
+            },
+            {
+              "const": "OTHER"
+            }
+          ]
         }
       },
       "required": [

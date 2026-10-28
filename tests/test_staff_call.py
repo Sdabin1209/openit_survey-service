@@ -123,7 +123,7 @@ def test_interval_and_per_session_cap(mk):
     assert r.retry("rt-2")[0] == 200
     r.t[0] += 31
     code, body, h = r.retry("rt-3")                      # 상한 2회
-    assert code == 429 and body["details"]["reason"] == "RETRY_LIMIT" and "Retry-After" in h
+    assert code == 429 and body["details"]["reason"] == "RETRY_LIMIT" and "Retry-After" not in h      # 기다려도 풀리지 않는다
     assert r.retry("rt-1")[0] == 200                     # 이미 처리한 turn_id의 재전송은 상한과 무관하게 같은 응답
     assert r.service.stats["staff_call_retry_rejected_interval"] == 2 and r.service.stats["staff_call_retry_rejected_limit"] == 1
 
@@ -138,24 +138,69 @@ def test_no_open_alert_is_409_and_resolved_alert_is_not_resent(mk):
     assert code == 409 and body["details"]["reason"] == "NO_OPEN_ALERT"
 
 
-def test_crash_between_begin_and_finish_redelivers_same_alert_and_counts_once_more(mk, monkeypatch):
-    """begin_retry(시도 횟수 +1, 새 이벤트) 뒤 finish_retry(멱등 기록) 전에 죽은 구간(ADR-0021 '감수하는 것'):
-    같은 turn_id 재전송은 알림을 새로 만들지 않고 같은 alert_id로 다시 전달하며 시도 횟수가 한 번 더 늘어난다(안전한 방향: 더 보낸다)."""
+def test_crash_between_begin_and_finish_redelivers_same_alert_without_counting_again(mk, monkeypatch):
+    """begin_retry(시도 횟수 +1, turn_id 기록, 새 이벤트) 뒤 finish_retry(멱등 기록) 전에 죽은 구간(ADR-0021): 같은 turn_id 재전송은 간격·상한을 건너뛰고
+    알림을 새로 만들지 않고 같은 alert_id로 다시 전달하며(최소 한 번) 시도 횟수는 더 늘지 않고 응답을 돌려준다."""
     r = mk()
     failed_risk(r)
-    r.hub.subscribe()
+    q = r.hub.subscribe()
     real = r.store.finish_retry
     monkeypatch.setattr(r.store, "finish_retry", lambda *a, **k: (_ for _ in ()).throw(StoreError("crash")))
-    code, body, _ = r.retry("rt-1")
-    assert code == 503                                   # 호출자는 실패로 본다
+    assert r.retry("rt-1")[0] == 503
     assert r.store.list(None, 10, None)[0][0]["delivery_attempts"] == 2      # 시도는 셌다
+    assert q.get_nowait()["type"] == "alert"
     monkeypatch.setattr(r.store, "finish_retry", real)
-    r.t[0] += 31                                         # 간격 검사가 이 재전송을 막지 않게
-    code, body, _ = r.retry("rt-1")
+    code, body, _ = r.retry("rt-1")                      # 시간이 지나지 않아도(간격 안) 같은 turn_id는 막히지 않는다
     items = r.store.list(None, 10, None)[0]
     assert code == 200 and len(items) == 1 and body["alert_id"] == items[0]["alert_id"] == "al-1"
-    assert body["delivery_attempts"] == 3 and body["staff_alert"] == "DELIVERED"
+    assert body["delivery_attempts"] == 2 and body["staff_alert"] == "DELIVERED" and items[0]["delivery_attempts"] == 2
+    assert q.get_nowait()["alert"]["alert_id"] == "al-1"      # 다시 전달했다
     assert r.retry("rt-1")[1] == body                    # 이제 기록됐으니 같은 응답
+    assert r.retry("rt-other")[0] == 429                 # 다른 turn_id는 간격 검사를 받는다
+
+
+def test_resolve_and_retry_never_emit_an_open_alert_event_after_resolved(mk):
+    """M-1: 직원 해결과 재알림이 겹쳐도 해결된 알림에 'alert' 이벤트가 나가지 않는다. 저장소 수준의 원자 조건과 두 스레드 경합 둘 다."""
+    import threading
+    r = mk()
+    failed_risk(r)
+    r.store.resolve("K1", "RESUME", "s1")                # 서비스 잠금을 거치지 않은 해결 -> 1단계의 원자 조건이 막는다
+    from survey_service.alerts import StaffCallRejected
+    with pytest.raises(StaffCallRejected) as e:
+        r.store.begin_retry(1, "rt-x")
+    assert e.value.kind == "NO_OPEN_ALERT"
+    for i in range(12):                                   # 경합: 각 라운드는 새 세션
+        sid = f"R{i}"
+        r.start(sid)
+        r.risk(sid, f"tr{i}")
+        q = r.hub.subscribe()
+        bar = threading.Barrier(2)
+        res = []
+
+        def do_retry():
+            bar.wait(); res.append(r.retry(f"x{i}", sid)[0])
+
+        def do_resolve():
+            bar.wait(); r.service.resolve(sid, "RESUME", "s1")
+        ts = [threading.Thread(target=do_retry), threading.Thread(target=do_resolve)]
+        [t.start() for t in ts]; [t.join() for t in ts]
+        evs = []
+        while not q.empty():
+            evs.append(q.get_nowait())
+        r.hub.unsubscribe(q)
+        kinds = [(e["type"], e["alert"]["status"]) for e in evs if e["alert"]["session_id"] == sid]
+        assert res[0] in (200, 409), res
+        if ("resolved", "RESOLVED") in kinds:
+            assert not any(k == ("alert", "OPEN") for k in kinds[kinds.index(("resolved", "RESOLVED")):]), kinds     # resolved 뒤에 OPEN alert 없음
+
+
+def test_clock_going_backwards_does_not_extend_wait(mk):
+    r = mk(interval=30)
+    failed_risk(r)
+    assert r.retry("rt-1")[0] == 200
+    r.t[0] -= 3600                                        # 시계가 한 시간 거꾸로
+    code, body, h = r.retry("rt-2")
+    assert code == 429 and int(h["Retry-After"]) <= 30
 
 
 # ---------------------------------------------------------------- 실패 기록
@@ -175,6 +220,22 @@ def test_report_records_on_alert_and_in_audit_log_and_is_idempotent(mk):
     assert r.state()[1]["state"] == "PAUSED_RISK"                  # 세션은 그대로 정지
     code, view, _ = r.call("GET", "/v1/staff/sessions/K1", auth=STAFF)
     assert view["alerts"][0]["manual_notice_outcome"] == "STAFF_NOTIFIED_MANUALLY" and view["alerts"][0]["delivery_attempts"] == 1
+
+
+def test_report_on_resolved_alert_is_recorded_and_announced_and_capped(mk):
+    r = mk()
+    failed_risk(r)
+    r.service.resolve("K1", "RESUME", "dr")
+    q = r.hub.subscribe()
+    code, body, _ = r.report("rp-1", "NOT_NOTIFIED")
+    assert code == 200 and body["status"] == "RESOLVED" and body["manual_notice_outcome"] == "NOT_NOTIFIED"      # 사후 기록
+    ev = q.get_nowait()
+    assert ev["type"] == "alert" and ev["alert"]["manual_notice_outcome"] == "NOT_NOTIFIED"      # 콘솔이 안다
+    r.service.report_max_per_session = 2
+    assert r.report("rp-2")[0] == 200
+    code, body, h = r.report("rp-3")
+    assert code == 429 and body["details"]["reason"] == "RETRY_LIMIT" and "Retry-After" not in h
+    assert r.report("rp-1", "NOT_NOTIFIED")[0] == 200       # 이미 처리한 turn_id는 상한과 무관
 
 
 def test_report_without_any_alert_is_409(mk):
@@ -215,6 +276,8 @@ def test_bad_bodies_are_400(mk):
     for act, body in bad:
         assert r.call("POST", p + act, body)[0] == 400, (act, body)
     assert r.call("POST", p + "retry", None)[0] == 400 and r.call("POST", p + "retry", [1])[0] == 400
+    assert r.retry("rt-1\n")[0] == 400 and r.report("rp-1\n")[0] == 400 and r.call("POST", "/v1/sessions/K1\n/staff-call/retry", {"turn_id": "a"})[0] == 400      # 끝의 개행
+    assert r.api.handle("POST", p + "retry", KIOSK, b'{"turn_id":"d1","turn_id":"d2"}')[0] == 400        # 중복 키
     assert r.store.list(None, 10, None)[0][0]["delivery_attempts"] == 1        # 거절된 요청은 아무것도 바꾸지 않았다
 
 
@@ -257,6 +320,27 @@ def test_pause_reason_reask_limit_and_external_call_staff(mk):
     code, res, _ = r.call("POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-2"}, auth=STAFF)
     code, res, _ = r.call("POST", "/v1/sessions/K1/risk-signals", {"signal_id": "s2", "source": "vitals", "code": "HR", "severity": "RISK"}, auth="Bearer risk-tok-0123456789")
     assert r.state()[1]["pause_reason"] == "RISK"
+
+
+def test_pause_reason_comes_from_current_pause_even_when_alert_store_write_fails(mk, monkeypatch):
+    """M-2: RISK 정지 -> RESUME -> 알림 저장 실패 상태에서 되묻기 한도 정지. 이전 정지의 RISK가 남지 않고, 상태·직원 조회·턴 신호가 일치한다."""
+    r = mk(risk=True, max_consecutive_reask=2)
+    failed_risk(r)
+    r.call("POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, auth=STAFF)
+    monkeypatch.setattr(r.store, "create", lambda *a, **k: (_ for _ in ()).throw(StoreError("disk")))
+    for i in range(3):
+        r.rig.model.queue.append(REASK)
+        code, fi, _ = r.call("POST", "/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "음 잘 모르겠어요", "turn_id": f"q{i}"})
+    assert fi["turn_failure_signal"]["pause_reason"] == "REASK_LIMIT"
+    assert r.state()[1]["pause_reason"] == "REASK_LIMIT"
+    assert r.call("GET", "/v1/staff/sessions/K1", auth=STAFF)[1]["pause_reason"] == "REASK_LIMIT"
+
+
+def test_all_four_surfaces_agree_on_pause_reason(mk):
+    r = mk()
+    fi = r.risk()[1]
+    assert (fi["turn_failure_signal"]["pause_reason"], r.state()[1]["pause_reason"], r.store.list(None, 10, None)[0][0]["pause_reason"],
+            r.call("GET", "/v1/staff/sessions/K1", auth=STAFF)[1]["pause_reason"]) == ("RISK",) * 4
 
 
 def test_readyz_stats_expose_retry_counts(mk):

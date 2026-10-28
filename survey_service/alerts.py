@@ -29,7 +29,7 @@ from .risk_rules import rule_id_of
 log = logging.getLogger("survey_service.alerts")
 
 _NEW_COLUMNS = (("alerts", "rule_id"), ("alerts", "resolved_by"), ("staff_access_log", "detail"), ("staff_access_log", "user_id"), ("session_meta", "device_id"), ("alerts", "turn_id"), ("alerts", "delivered"),
-                ("alerts", "pause_reason"), ("alerts", "delivery_attempts"), ("alerts", "last_delivery_status"), ("alerts", "last_retry_at"),
+                ("alerts", "pause_reason"), ("alerts", "delivery_attempts"), ("alerts", "last_delivery_status"), ("alerts", "last_retry_at"), ("alerts", "last_retry_turn_id"),
                 ("alerts", "manual_notice_outcome"), ("alerts", "manual_notice_reported_at"))
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
 _SCHEMA = """
@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS alerts (
   delivery_attempts TEXT,
   last_delivery_status TEXT,
   last_retry_at TEXT,
+  last_retry_turn_id TEXT,
   manual_notice_outcome TEXT,
   manual_notice_reported_at TEXT
 );
@@ -118,6 +119,7 @@ CURRENT_PAUSE_REASON: contextvars.ContextVar = contextvars.ContextVar("survey_cu
 # 재알림 기본값(CR-H001, ADR-0021): 계약 PUBLIC_API G절의 기본 권고와 같다. 둘 다 측정하지 않은 값이다(현장 흐름 자료 없음).
 DEFAULT_RETRY_MIN_INTERVAL_S = 30
 DEFAULT_RETRY_MAX_PER_SESSION = 10
+DEFAULT_REPORT_MAX_PER_SESSION = 20      # 실패 기록 상한: 측정하지 않은 값(ADR-0021). 재알림 상한의 두 배로 잡았다: 보고는 재알림마다 한 번씩 + 여유
 
 
 class StaffCallRejected(SurveyServiceError):
@@ -296,19 +298,15 @@ class AlertStore:
             out.append(d)
         return out
 
-    def latest_pause_reason(self, session_id: str) -> Optional[str]:
-        """그 세션에서 가장 최근에 정지 사유가 기록된 알림의 사유(없으면 None). 세션 상태 조회가 쓴다."""
-        rows = self._read("SELECT pause_reason FROM alerts WHERE session_id=? AND pause_reason IS NOT NULL ORDER BY n DESC LIMIT 1", (session_id,))
-        return rows[0][0] if rows else None
-
     # ---- 직원 호출 재알림·실패 기록(CR-H001)
     def latest_alert(self, session_id: str, open_only: bool) -> Optional[dict]:
-        rows = self._read(f"SELECT {ALERT_COLS}, last_retry_at FROM alerts WHERE session_id=?" + (" AND status='OPEN'" if open_only else "") + " ORDER BY n DESC LIMIT 1",
+        rows = self._read(f"SELECT {ALERT_COLS}, last_retry_at, last_retry_turn_id FROM alerts WHERE session_id=?" + (" AND status='OPEN'" if open_only else "") + " ORDER BY n DESC LIMIT 1",
                           (session_id,))
         if not rows:
             return None
         a = _row_to_alert(rows[0][:12])
         a["_last_retry_at"] = None if rows[0][12] is None else float(rows[0][12])      # 내부 값(응답에 싣지 않는다)
+        a["_last_retry_turn_id"] = rows[0][13]
         return a
 
     def get_action(self, session_id: str, turn_id: str, action: str) -> Optional[tuple]:
@@ -324,13 +322,17 @@ class AlertStore:
         self._txn(lambda: self._db.execute(
             "UPDATE alerts SET delivery_attempts=CAST(CAST(COALESCE(delivery_attempts,'0') AS INTEGER)+1 AS TEXT), last_delivery_status=? WHERE n=?", (status, n)))
 
-    def begin_retry(self, n: int) -> dict:
-        """재알림 1단계(한 트랜잭션): 시도 횟수 +1, 최근 재알림 시각, 새 SSE 이벤트(같은 alert_id, 새 이벤트 순번: Last-Event-ID로 이어 받는 콘솔도 받는다).
-        돌려주는 값: 구독자에게 보낼 이벤트. 보낸 결과는 finish_retry가 남긴다."""
+    def begin_retry(self, n: int, turn_id: str, count_attempt: bool = True) -> dict:
+        """재알림 1단계(한 트랜잭션): 시도 횟수 +1(count_attempt), 최근 재알림 시각·turn_id, 새 SSE 이벤트(같은 alert_id, 새 이벤트 순번:
+        Last-Event-ID로 이어 받는 콘솔도 받는다). **열린 알림에만** 적용한다(UPDATE ... AND status='OPEN'의 영향 행이 0이면 NO_OPEN_ALERT):
+        직원의 해결과 겹쳐도 해결된 알림에 'alert' 이벤트가 나가지 않는다. 보낸 결과는 finish_retry가 남긴다."""
         now = self._clock()
 
         def fn():
-            self._db.execute("UPDATE alerts SET delivery_attempts=CAST(CAST(COALESCE(delivery_attempts,'0') AS INTEGER)+1 AS TEXT), last_retry_at=? WHERE n=?", (repr(now), n))
+            inc = "delivery_attempts=CAST(CAST(COALESCE(delivery_attempts,'0') AS INTEGER)+1 AS TEXT), " if count_attempt else ""
+            cur = self._db.execute(f"UPDATE alerts SET {inc}last_retry_at=?, last_retry_turn_id=? WHERE n=? AND status='OPEN'", (repr(now), turn_id, n))
+            if cur.rowcount == 0:
+                raise StaffCallRejected("NO_OPEN_ALERT")
             return self._event("alert", n)
         return self._txn(fn)
 
@@ -342,18 +344,20 @@ class AlertStore:
                              (session_id, turn_id, "retry", None, response, _iso(self._clock())))
         self._txn(fn)
 
-    def record_report(self, session_id: str, n: int, turn_id: str, outcome: str, role: str, user: Optional[str]) -> dict:
-        """실패 기록: 알림의 manual_notice_*, 멱등 기록, 접근 기록(감사)을 한 트랜잭션으로. 돌려주는 값: 갱신된 알림 모양."""
+    def record_report(self, session_id: str, n: int, turn_id: str, outcome: str, role: str, user: Optional[str]) -> tuple:
+        """실패 기록: 알림의 manual_notice_*, 멱등 기록, 접근 기록(감사), 새 SSE 이벤트를 한 트랜잭션으로. 돌려주는 값: (갱신된 알림 모양, 이벤트).
+        해결된 알림에도 기록한다(사후 감사). 이벤트로 직원 콘솔이 안다."""
         now = _iso(self._clock())
 
         def fn():
             self._db.execute("UPDATE alerts SET manual_notice_outcome=?, manual_notice_reported_at=? WHERE n=?", (outcome, now, n))
             self._db.execute("INSERT INTO staff_access_log(at, role, session_id, outcome, detail, user_id) VALUES (?,?,?,?,?,?)",
                              (now, role, session_id, "STAFF_CALL_REPORT", outcome, user))
-            alert = _row_to_alert(self._db.execute(f"SELECT {ALERT_COLS} FROM alerts WHERE n=?", (n,)).fetchone())
+            event = self._event("alert", n)
+            alert = event["alert"]
             self._db.execute("INSERT INTO staff_call_actions(session_id, turn_id, action, detail, response, created_at) VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING",
                              (session_id, turn_id, "report", outcome, json.dumps(alert, ensure_ascii=False), now))
-            return alert
+            return alert, event
         return self._txn(fn)
 
     def record(self, session_id: str, turn_index: int, turn_id: Optional[str]) -> None:
@@ -553,15 +557,19 @@ class WebPushSender:
 class AlertService:
     def __init__(self, store: AlertStore, hub: Optional[AlertHub] = None, push: Optional[PushSender] = None,
                  push_timeout: float = 3.0, retry_min_interval_s: int = DEFAULT_RETRY_MIN_INTERVAL_S,
-                 retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION) -> None:
+                 retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION) -> None:
         self.store, self.hub, self.push, self.push_timeout = store, hub or AlertHub(), push, push_timeout
         self.retry_min_interval_s, self.retry_max_per_session = max(0, int(retry_min_interval_s)), max(0, int(retry_max_per_session))
+        self.report_max_per_session = max(0, int(report_max_per_session))
         self.stats = {"deduplicated": 0, "created": 0, "delivered": 0, "delivery_failed": 0, "push_accepted": 0, "push_failed": 0, "push_gone": 0,
                       "staff_call_retries": 0, "staff_call_retry_delivered": 0, "staff_call_retry_failed": 0, "staff_call_retry_replayed": 0,
                       "staff_call_retry_rejected_interval": 0, "staff_call_retry_rejected_limit": 0, "staff_call_retry_no_open_alert": 0,
-                      "staff_call_reports": 0, "staff_call_reports_not_notified": 0}
+                      "staff_call_reports": 0, "staff_call_reports_not_notified": 0, "staff_call_report_rejected_limit": 0}
         self._slock = threading.Lock()
-        self._retry_lock = threading.Lock()     # 왜: 재알림의 "간격·상한 확인 -> 전달 -> 기록"을 직렬로 한다. 같은 세션의 동시 요청이 간격 검사를 함께 통과하지 못하게(이 서비스는 한 프로세스다, ADR-0021)
+        self._locks = [threading.Lock() for _ in range(64)]      # 세션별(해시 줄무늬 64개) 잠금. 한 세션의 재알림·보고·해결을 직렬로 한다(ADR-0021). 서로 다른 세션은 거의 막지 않는다
+
+    def _session_lock(self, session_id: str) -> threading.Lock:
+        return self._locks[hash(session_id) % len(self._locks)]
 
     def _count(self, k: str, n: int = 1) -> None:
         with self._slock:
@@ -642,8 +650,10 @@ class AlertService:
     # ---- 직원 호출 재알림·실패 기록 (CR-H001, PUBLIC_API G절)
     def retry_staff_call(self, session_id: str, turn_id: str) -> dict:
         """그 세션의 열린 알림을 새로 만들지 않고 같은 alert_id로 다시 전달한다. StaffCallRetryResult를 돌려준다.
-        같은 turn_id는 저장된 응답을 그대로(시도 횟수를 늘리지 않고, 간격·상한도 다시 보지 않는다). 거절은 StaffCallRejected, 저장소 오류는 StoreError."""
-        with self._retry_lock:
+        같은 turn_id는 저장된 응답을 그대로(시도 횟수를 늘리지 않고, 간격·상한도 다시 보지 않는다). 거절은 StaffCallRejected, 저장소 오류는 StoreError.
+        잠금은 확인·기록·SSE 발행까지만 쥔다(해결과의 순서를 지킨다). 웹 푸시 접수 대기와 결과 기록은 잠금 밖이다."""
+        lock = self._session_lock(session_id)
+        with lock:
             prev = self.store.get_action(session_id, turn_id, "retry")
             if prev is not None:
                 self._count("staff_call_retry_replayed")
@@ -652,39 +662,46 @@ class AlertService:
             if alert is None:                     # 열린 알림이 없다(없거나 RESOLVED): 해결된 알림은 다시 보내지 않는다
                 self._count("staff_call_retry_no_open_alert")
                 raise StaffCallRejected("NO_OPEN_ALERT")
-            if self.store.count_actions(session_id, "retry") >= self.retry_max_per_session:
-                self._count("staff_call_retry_rejected_limit")
-                raise StaffCallRejected("RETRY_LIMIT", self.retry_min_interval_s)
-            last = alert["_last_retry_at"]
-            if last is not None:
-                wait = self.retry_min_interval_s - (self.store._clock() - last)
-                if wait > 0:
-                    self._count("staff_call_retry_rejected_interval")
-                    raise StaffCallRejected("INTERVAL", max(1, int(wait + 0.999)))
             n = int(alert["alert_id"][3:])
-            event = self.store.begin_retry(n)          # StoreError는 그대로 올라간다(503): 기록 없이 전달하지 않는다
-            ok = self.hub.publish(event) + self._push(event) > 0
-            status = "DELIVERED" if ok else "DELIVERY_FAILED"
-            attempts = event["alert"].get("delivery_attempts", 1)
-            result = {"alert_id": alert["alert_id"], "staff_alert": status, "delivery_attempts": attempts, "retry_after_s": self.retry_min_interval_s}
-            self.store.finish_retry(session_id, n, turn_id, status, json.dumps(result))
-            self._count("staff_call_retries")
-            self._count("staff_call_retry_delivered" if ok else "staff_call_retry_failed")
-            return result
+            resumed = alert["_last_retry_turn_id"] == turn_id        # 같은 turn_id가 1단계까지 갔다가 기록 없이 끊겼다: 간격·상한을 건너뛰고 시도 횟수 없이 다시 전달한다(최소 한 번, 안전 방향)
+            if not resumed:
+                if self.store.count_actions(session_id, "retry") >= self.retry_max_per_session:
+                    self._count("staff_call_retry_rejected_limit")
+                    raise StaffCallRejected("RETRY_LIMIT")
+                last = alert["_last_retry_at"]
+                if last is not None:
+                    wait = min(self.retry_min_interval_s, self.retry_min_interval_s - (self.store._clock() - last))      # min: 시계가 거꾸로 가도 간격을 넘는 대기를 요구하지 않는다
+                    if wait > 0:
+                        self._count("staff_call_retry_rejected_interval")
+                        raise StaffCallRejected("INTERVAL", max(1, int(wait + 0.999)))
+            event = self.store.begin_retry(n, turn_id, count_attempt=not resumed)      # 열린 알림에만 적용(해결과 겹치면 NO_OPEN_ALERT). StoreError는 그대로(503)
+            live = self.hub.publish(event)
+        ok = live + self._push(event) > 0
+        status = "DELIVERED" if ok else "DELIVERY_FAILED"
+        result = {"alert_id": alert["alert_id"], "staff_alert": status, "delivery_attempts": event["alert"].get("delivery_attempts", 1),
+                  "retry_after_s": self.retry_min_interval_s}
+        self.store.finish_retry(session_id, n, turn_id, status, json.dumps(result))
+        self._count("staff_call_retries")
+        self._count("staff_call_retry_delivered" if ok else "staff_call_retry_failed")
+        return result
 
     def report_manual_notice(self, session_id: str, turn_id: str, outcome: str, role: str, user: Optional[str] = None) -> dict:
-        """키오스크의 '직접 알리셨나요?' 응답을 알림에 남기고 접근 기록(감사)에 남긴다. 갱신된 StaffAlert를 돌려준다. 같은 turn_id는 같은 응답,
-        같은 turn_id에 다른 outcome은 StaffCallRejected(OUTCOME_MISMATCH). 알림이 하나도 없으면 NO_OPEN_ALERT."""
-        with self._retry_lock:
+        """키오스크의 '직접 알리셨나요?' 응답을 알림에 남기고 접근 기록(감사)에 남기며 SSE 이벤트를 낸다. 갱신된 StaffAlert를 돌려준다.
+        같은 turn_id는 같은 응답, 같은 turn_id에 다른 outcome은 OUTCOME_MISMATCH, 세션당 상한 초과는 RETRY_LIMIT(429), 알림이 하나도 없으면 NO_OPEN_ALERT."""
+        with self._session_lock(session_id):
             prev = self.store.get_action(session_id, turn_id, "report")
             if prev is not None:
                 if prev[0] != outcome:
                     raise StaffCallRejected("OUTCOME_MISMATCH")
                 return json.loads(prev[1])
-            alert = self.store.latest_alert(session_id, open_only=False)      # 왜 OPEN만이 아닌가: 직원이 먼저 해결했어도 키오스크의 보고는 그 호출 기록에 남는다
+            alert = self.store.latest_alert(session_id, open_only=False)      # 왜 OPEN만이 아닌가: 직원이 먼저 해결했어도 키오스크의 보고는 그 호출의 사후 기록으로 남긴다(감사 가치). 이벤트로 콘솔이 안다
             if alert is None:
                 raise StaffCallRejected("NO_OPEN_ALERT")
-            out = self.store.record_report(session_id, int(alert["alert_id"][3:]), turn_id, outcome, role, user)
+            if self.store.count_actions(session_id, "report") >= self.report_max_per_session:
+                self._count("staff_call_report_rejected_limit")
+                raise StaffCallRejected("RETRY_LIMIT")
+            out, event = self.store.record_report(session_id, int(alert["alert_id"][3:]), turn_id, outcome, role, user)
+            self.hub.publish(event)
             self._count("staff_call_reports")
             if outcome == "NOT_NOTIFIED":
                 self._count("staff_call_reports_not_notified")
@@ -692,9 +709,10 @@ class AlertService:
 
     # ---- 해결
     def resolve(self, session_id: str, decision: Optional[str], staff_id: Optional[str] = None) -> int:
-        events = self.store.resolve(session_id, decision, staff_id)
-        for e in events:
-            self.hub.publish(e)
+        with self._session_lock(session_id):       # 재알림·보고의 발행과 순서를 지킨다: 'resolved' 뒤에 같은 알림의 OPEN 'alert' 이벤트가 나가지 않게
+            events = self.store.resolve(session_id, decision, staff_id)
+            for e in events:
+                self.hub.publish(e)
         return len(events)
 
     def public_key(self) -> Optional[str]:
@@ -704,7 +722,7 @@ class AlertService:
     def status(self) -> dict:
         with self._slock:
             s = dict(self.stats)
-        s.update(retry_min_interval_s=self.retry_min_interval_s, retry_max_per_session=self.retry_max_per_session)
+        s.update(retry_min_interval_s=self.retry_min_interval_s, retry_max_per_session=self.retry_max_per_session, report_max_per_session=self.report_max_per_session)
         s.update(push_enabled=self.push is not None, sse_connections=self.hub.count(), subscriptions=self.store.count_subscriptions())
         return s
 

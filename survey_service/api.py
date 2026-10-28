@@ -46,14 +46,14 @@ from .orchestrator import Orchestrator
 
 log = logging.getLogger("survey_service.api")
 
-SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
+TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")      # $가 아니라 \Z: $는 끝의 개행 하나를 허용해 "id\n"이 다른 turn_id로 통과한다
 MAX_BODY = 64 * 1024
 HTTP_CODE = {"INVALID_RECORD": 400, "PERMISSION_DENIED": 401, "NOT_FOUND": 404, "CONFLICT": 409, "UNAVAILABLE": 503}
 STAFF_ROUTES = {"intervention", "staff_session", "alerts", "push_add", "push_del", "push_config"}
 ROLE_OF_ROUTE = {"result": "result-reader", "results": "result-reader", "risk_signal": "risk-source"}     # 그 밖의 직원 경로는 staff, 나머지는 kiosk
-SUBJECT_REF = re.compile(r"^[A-Za-z0-9._:/#=+-]{1,128}$")
-STAFF_ID = re.compile(r"^[A-Za-z0-9._:@/#=+-]{1,128}$")
+SUBJECT_REF = re.compile(r"^[A-Za-z0-9._:/#=+-]{1,128}\Z")
+STAFF_ID = re.compile(r"^[A-Za-z0-9._:@/#=+-]{1,128}\Z")
 SESSION_STATUSES = ("IN_PROGRESS", "PAUSED_RISK", "ENDED_COMPLETE", "ENDED_STAFF", "ENDED_LEFT", "ENDED_USER_STOP")
 START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID = "start", "end", "idle-expire"   # turn_id가 없는 동작의 고정 ID(CR-009)
 RESERVED = (START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID)
@@ -68,7 +68,17 @@ def _err(code: str, message: str, status: Optional[int] = None, headers: Optiona
     return status or HTTP_CODE[code], rec, headers or {}
 
 
-USER_ID = re.compile(r"^[A-Za-z0-9._@:+-]{1,128}$")      # X-Openit-User: gateway가 인증한 계정 ID. 형식이 어긋나면 개인 ID 없이 역할만 기록한다
+USER_ID = re.compile(r"^[A-Za-z0-9._@:+-]{1,128}\Z")      # X-Openit-User: gateway가 인증한 계정 ID. 형식이 어긋나면 개인 ID 없이 역할만 기록한다
+
+
+def _no_dup_keys(pairs):
+    """중복 키 본문은 거부한다(마지막 값만 남는 json 기본 동작은 검증된 값과 처리되는 값을 어긋나게 할 수 있다). ValueError -> 400."""
+    d = {}
+    for k, v in pairs:
+        if k in d:
+            raise ValueError("중복 키")
+        d[k] = v
+    return d
 
 
 def _has_surrogate(x) -> bool:
@@ -131,7 +141,7 @@ class PublicApi:
         self._tl.user = user if isinstance(user, str) and USER_ID.match(user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
         status, body, headers = self._handle(method, path, auth, raw, user)
         self._record(method, path, status)
-        if status in (429, 503) and "Retry-After" not in headers:
+        if status in (429, 503) and "Retry-After" not in headers and (body.get("details") or {}).get("reason") != "RETRY_LIMIT":      # 상한 초과는 기다려도 풀리지 않는다: 기본 헤더도 붙이지 않는다
             headers = {**headers, "Retry-After": str(self.retry_after)}
         return status, body, headers
 
@@ -170,7 +180,7 @@ class PublicApi:
         body = None
         if method == "POST":
             try:
-                body = json.loads(raw.decode("utf-8")) if raw else None
+                body = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dup_keys) if raw else None
             except (ValueError, UnicodeDecodeError, RecursionError):          # 아주 깊은 중첩은 json 자체가 RecursionError를 낸다
                 return _err("INVALID_RECORD", "본문이 JSON이 아니거나 중첩이 너무 깊다")
             if not isinstance(body, dict):
@@ -456,18 +466,11 @@ class PublicApi:
         return 200, out, {}
 
     def _pause_reason(self, sid: str, doc: Mapping) -> str:
-        """정지 사유(CR-H002, ADR-0022). 세션 문서의 마지막 PAUSE 기록에 위험 사유가 있으면 RISK(문서가 정본이라 알림 저장소가 죽어도 맞다).
-        없으면 그 정지를 낳은 알림에 기록된 사유(되묻기 한도 REASK_LIMIT, 외부 호출 OTHER). 알림이 없으면 OTHER(미상)."""
+        """정지 사유(CR-H002, ADR-0022). **현재 정지의** PAUSE 기록(세션 문서, 정본)만 읽는다. 알림 저장소를 보지 않으므로 알림 저장이 실패해도,
+        이전 정지의 사유가 새 정지에 남지도 않는다. 사유가 없는 옛 기록은 reasons가 있으면 RISK, 없으면 OTHER."""
         for entry in reversed(doc["progress_record"]["pause_history"]):
             if entry.get("kind") == "PAUSE":
-                if entry.get("reasons"):
-                    return "RISK"
-                break
-        if self.alerts is not None:
-            try:
-                return self.alerts.store.latest_pause_reason(sid) or "OTHER"
-            except StoreError:
-                log.warning("정지 사유를 읽지 못했다: OTHER로 응답한다")
+                return entry.get("pause_reason") or ("RISK" if entry.get("reasons") else "OTHER")
         return "OTHER"
 
     # ------------------------------------------------------------------ 직원 호출 재알림·실패 기록 (키오스크, 세션을 만든 기기)
@@ -492,8 +495,9 @@ class PublicApi:
             return _err("CONFLICT", "열린 직원 알림이 없다", details={"reason": "NO_OPEN_ALERT"})
         if e.kind == "OUTCOME_MISMATCH":
             return _err("CONFLICT", "같은 turn_id에 다른 outcome이 왔다")
-        return _err("UNAVAILABLE", "재알림이 너무 잦다" if e.kind == "INTERVAL" else "세션당 재알림 상한을 넘었다", 429,
-                    {"Retry-After": str(max(1, e.retry_after_s))}, details={"reason": e.kind})
+        if e.kind == "INTERVAL":
+            return _err("UNAVAILABLE", "재알림이 너무 잦다", 429, {"Retry-After": str(max(1, e.retry_after_s))}, details={"reason": "INTERVAL"})
+        return _err("UNAVAILABLE", "세션당 상한을 넘었다", 429, details={"reason": "RETRY_LIMIT"})        # Retry-After 없음(ADR-0021)
 
     def _staff_retry(self, body: Mapping, sid: str):
         tid, err = self._staff_call_common(self._retry_req, body, sid)

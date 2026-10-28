@@ -9,7 +9,7 @@ from survey_service.risk_rules import RuleRiskSource
 from .e2e_support import ANSWER_OUT, Rig, ext, val
 from .sample_bank import sample_bank
 
-DELIVERED = {"write_committed": "COMMITTED", "staff_alert": "DELIVERED", "pause_reason": "RISK"}
+DELIVERED = {"write_committed": "COMMITTED", "staff_alert": "DELIVERED"}
 
 
 def _rig(**kw):
@@ -46,7 +46,7 @@ def test_alert_goes_out_even_when_the_write_commit_fails():
     rig.store.commit = lambda *a, **k: {"status": "DB_ERROR", "write_outcome": "NOT_WRITTEN", "revision": None}
     out = rig.say("가슴이 아파요")
     assert len(_alerts(rig)) == 1                                                    # 확정이 실패해도 알림은 나갔다
-    assert out.frontend_input["turn_failure_signal"] == {"session_id": "S1", "write_committed": "NOT_COMMITTED", "staff_alert": "DELIVERED", "pause_reason": "RISK"}
+    assert out.frontend_input["turn_failure_signal"] == {"session_id": "S1", "write_committed": "NOT_COMMITTED", "staff_alert": "DELIVERED"}
 
 
 def test_alert_goes_out_even_when_the_turn_deadline_is_exceeded():

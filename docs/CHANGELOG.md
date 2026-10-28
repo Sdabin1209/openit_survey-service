@@ -3,6 +3,7 @@
 ## 계약 2.1.0: 직원 호출 재알림·실패 기록(CR-H001), 정지 사유(CR-H002) [미출시, 푸시·태그 전]
 
 - 추가형. `POST /v1/sessions/{id}/staff-call/retry`·`/report`(키오스크, 세션을 만든 기기만), 알림 행의 delivery_attempts·last_delivery_status·manual_notice_*·pause_reason, 세션 상태·직원 세션 조회·턴 신호의 optional `pause_reason`(문진 스키마 `TurnFailureSignal`·`StaffSessionView`에 optional 필드 추가, 정수 버전 1 그대로), 설정 `SURVEY_STAFF_CALL_RETRY_*`, `/readyz` 건수. ADR-0021, ADR-0022. 의존 고정을 v2.1.0으로 올리는 일은 태그가 push된 뒤.
+- 독립 검토 반영: 해결된 알림에 재알림 거절(409), 정지 사유의 정본을 세션 문서 PAUSE 기록으로, 같은 turn_id 재전송 복구, 개행 turn_id 400, 중복 키 400, 세션별 잠금, 보고 상한·이벤트.
 
 ## 2차 점검 수정 (H1·H2·M1·M2·L1·L2·L6·L7) [미출시, 푸시·태그 전]
 
