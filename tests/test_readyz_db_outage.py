@@ -121,32 +121,16 @@ def test_readyz_db_timeout_setting():
         Settings.from_env({**base, "SURVEY_READYZ_DB_TIMEOUT_SECONDS": "0"})
 
 
-def _container_for(url: str):
-    """TEST_DATABASE_URL의 호스트 포트를 게시한 컨테이너 이름(없으면 None)."""
-    import re
-    import subprocess
-    m = re.search(r":(\d+)/", url)
-    try:
-        for cid in subprocess.run(["docker", "ps", "-q", "--filter", "label=io.openit.dev-postgres=1"], capture_output=True, text=True, timeout=20).stdout.split():
-            ports = subprocess.run(["docker", "port", cid, "5432/tcp"], capture_output=True, text=True, timeout=20).stdout
-            if m and f":{m.group(1)}" in ports:
-                return cid
-    except Exception:
-        return None
-    return None
-
-
 def test_turn_ends_not_committed_within_deadline_when_db_is_frozen(request):
     """docker pause 같은 무응답 DB: 서버 statement_timeout은 못 듣는다. 클라이언트 강제 끊기와 턴 총 마감으로 NOT_COMMITTED로 끝나고, 풀리면 복구된다."""
-    import subprocess
     from survey_service import pg
     from survey_service.store.postgres import PgSessionStore
     from .e2e_support import ANSWER_OUT, Rig
-    url = pg_url(request)
-    import os
-    cid = _container_for(os.environ["TEST_DATABASE_URL"])
-    if not cid:
-        pytest.skip("docker로 PostgreSQL 컨테이너를 멈출 수 없음")
+    from . import pg_container as pc
+    if not pc.docker_ready():
+        pytest.skip("docker 또는 postgres:16 이미지 없음: 일회용 PostgreSQL을 띄울 수 없음")
+    cid, url = pc.start_postgres()          # 이 시험이 띄운 컨테이너만 이름으로 멈춘다(남의 dev-postgres에 닿지 않게)
+    request.addfinalizer(lambda: pc.stop(cid))
     pg.configure(connect_timeout=1, statement_timeout=1)
     request.addfinalizer(lambda: pg.configure(connect_timeout=pg.DEFAULT_CONNECT_TIMEOUT, statement_timeout=pg.DEFAULT_STATEMENT_TIMEOUT))
     store = PgSessionStore(url)
@@ -155,19 +139,37 @@ def test_turn_ends_not_committed_within_deadline_when_db_is_frozen(request):
     rig.start()
     before = rig.doc()["answer_records"][0]["current_value"]
     rig.model.queue.append(ANSWER_OUT)
-    subprocess.check_call(["docker", "pause", cid], stdout=subprocess.DEVNULL)
+    pc.pause(cid)
     try:
         t = time.monotonic()
         out = rig.say("안 피움", turn_id="t-frozen")
         dt = time.monotonic() - t
         assert dt < 6 and out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", dt
     finally:
-        subprocess.call(["docker", "unpause", cid], stdout=subprocess.DEVNULL)
+        pc.unpause(cid)
     time.sleep(1)
     assert rig.doc()["answer_records"][0]["current_value"] == before          # 저장되지 않았다
     rig.model.queue.append(ANSWER_OUT)
     out = rig.say("안 피움", turn_id="t-frozen")                                 # 풀린 뒤 같은 turn_id 재전송은 처리된다
     assert out.frontend_input["turn_failure_signal"] is None
+
+
+def test_pausing_own_container_leaves_other_containers_running(request):
+    """멈춤 대상은 이름으로만 고른다: 같은 옛 라벨(io.openit.dev-postgres=1)을 단 다른 컨테이너가 있어도 영향이 없다."""
+    from . import pg_container as pc
+    if not pc.docker_ready():
+        pytest.skip("docker 또는 postgres:16 이미지 없음")
+    other = pc.run_container("--label", "io.openit.dev-postgres=1", "--entrypoint", "sleep", pc.IMAGE, "600")
+    request.addfinalizer(lambda: pc.stop(other))
+    mine = pc.run_container("--entrypoint", "sleep", pc.IMAGE, "600")
+    request.addfinalizer(lambda: pc.stop(mine))
+    pc.pause(mine)
+    try:
+        assert pc.state(mine) == "paused"
+        assert pc.state(other) == "running"
+    finally:
+        pc.unpause(mine)
+    assert pc.state(mine) == "running"
 
 
 def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, monkeypatch):

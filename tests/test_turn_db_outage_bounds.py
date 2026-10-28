@@ -14,17 +14,17 @@ from survey_service.store.postgres import PgSessionStore
 
 from .e2e_support import Rig
 from .pg_support import pg_url
-from .test_readyz_db_outage import _container_for
+from . import pg_container as pc
 
 REFUSED = "postgresql://u:p-canary-55@127.0.0.1:1/d"        # 닫힌 포트: 연결 거부
 BASE = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
 
 
-def _rig(request, deadline=None):
+def _rig(request, deadline=None, url=None):
     s = Settings.from_env(BASE)
     pg.configure(connect_timeout=s.db_connect_timeout_seconds, statement_timeout=s.db_statement_timeout_seconds,
                  reconnect_backoff=s.db_reconnect_backoff_seconds)
-    store = PgSessionStore(pg_url(request))
+    store = PgSessionStore(url or pg_url(request))
     request.addfinalizer(store.close)
     rig = Rig(store=store, turn_deadline_seconds=s.turn_deadline_seconds if deadline is None else deadline)
     api = PublicApi(rig.orch, "tok", max_utterance_chars=100)
@@ -63,15 +63,16 @@ def test_connection_refused_ends_fast_with_503_then_recovers(request):
 
 
 def test_frozen_db_ends_within_server_turn_deadline(request):
-    cid = _container_for(os.environ.get("TEST_DATABASE_URL", ""))
-    if not cid:
-        pytest.skip("docker로 PostgreSQL 컨테이너를 멈출 수 없음")
-    rig, api, store, s = _rig(request)
-    subprocess.check_call(["docker", "pause", cid], stdout=subprocess.DEVNULL)
+    if not pc.docker_ready():
+        pytest.skip("docker 또는 postgres:16 이미지 없음: 일회용 PostgreSQL을 띄울 수 없음")
+    cid, url = pc.start_postgres()          # 이 시험이 띄운 컨테이너만 이름으로 멈춘다(ADR-0019)
+    request.addfinalizer(lambda: pc.stop(cid))
+    rig, api, store, s = _rig(request, url=url)
+    pc.pause(cid)
     try:
         code, resp, dt = _turn(api, "t-frozen")
         # 어느 경로든(사전 확인의 503 또는 턴 마감의 NOT_COMMITTED) 서버 턴 마감 안에, gateway 응답 헤더 상한(8.5초)보다 충분히 짧게 끝난다
         assert dt < s.turn_deadline_seconds + 0.5 and dt < 7.0, dt
         assert code == 503 or resp["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
     finally:
-        subprocess.call(["docker", "unpause", cid], stdout=subprocess.DEVNULL)
+        pc.unpause(cid)
