@@ -85,3 +85,25 @@ def test_source_tree_loader_matches_files():
     assert s.schema_dir(1) == SCHEMA / "schemas"
     assert s.load_schema("QuestionBank", 1) == json.loads((SCHEMA / "schemas" / "QuestionBank.json").read_text(encoding="utf-8"))
     assert (SCHEMA / "CONTRACT_VERSION").read_text().strip() == "1"
+
+
+def _pkg_version() -> tuple:
+    import re
+    m = re.search(r'^version = "(\d+)\.(\d+)\.(\d+)"', (ROOT / "schema/pyproject.toml").read_text(), re.M)
+    return tuple(int(x) for x in m.groups())
+
+
+def test_package_version_major_is_the_contract_integer_version():
+    """태그 survey-schema-vMAJOR.MINOR.PATCH에서 MAJOR는 정수 CONTRACT_VERSION이다(D110). 비호환 변경은 정수를 올리고 MAJOR가 같이 오른다."""
+    assert _pkg_version()[0] == int((ROOT / "schema/CONTRACT_VERSION").read_text().strip())
+
+
+def test_package_version_is_not_older_than_the_latest_schema_tag():
+    """스키마를 바꾸고 패키지 버전을 올리지 않으면 설치본 표기가 태그보다 낡다(1.0.0 표기로 1.1.0 내용이 나갔던 일). git 태그가 없으면 건너뛴다."""
+    import re
+    import subprocess
+    r = subprocess.run(["git", "tag", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
+    tags = [tuple(int(x) for x in m.groups()) for t in r.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", t))]
+    if r.returncode != 0 or not tags:
+        pytest.skip("survey-schema-v* 태그를 읽을 수 없다")
+    assert _pkg_version() >= max(tags)

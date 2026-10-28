@@ -184,7 +184,7 @@
 
 ## 0.1.0 (미출시, 2026-10-15)
 
-- 문진 스키마 패키지 `openit-survey-schema` 1.0.0 (`schema/`): 정수 버전별 디렉터리, `load_schema(name, version=1)`, `schema_dir(version=1)`. `CONTRACT_VERSION`(1)과 스키마 파일은 바꾸지 않았다.
+- 문진 스키마 패키지 `openit-survey-schema` (`schema/`, 패키지 버전은 survey-schema-v 태그와 같다): 정수 버전별 디렉터리, `load_schema(name, version=1)`, `schema_dir(version=1)`. `CONTRACT_VERSION`(1)과 스키마 파일은 바꾸지 않았다.
 - survey-service 0.1.0: Orchestrator(처리 표 9-1, 쓰기 확정, 확정 뒤의 일, 실패 신호, 턴 멱등), Session Store(SQLite·메모리, 반영 효과 9-2), 릴리스 로더(승인·해시·계약 버전 검사, 거부 시 이전 유지, 새 세션부터 적용), 추론 서버(fake 백엔드), Trace outbox와 내보내기(최소 1회, UNAVAILABLE만 재시도), `/healthz` `/readyz`, 개발용 CLI.
 - 공개 API(PUBLIC_API.md, D55): 세션 시작·발화(turn_id 멱등)·종료, 인증·검증·상태 코드, 유휴 만료, 스모크에 공개 API 한 턴. 모델 런타임을 HTTP 경계 뒤에 두는 추론 서버(`inference_server`, `SURVEY_INFERENCE_URL`). 세션 저장소에 `updated_at`(이전 파일은 자동 이행). CR-009.
 - 직원 개입 경로(D58): `POST /v1/sessions/{id}/intervention`, 역할 staff 토큰 분리(403/401), 스모크에 멈춘 세션을 풀어 이어가는 한 바퀴.

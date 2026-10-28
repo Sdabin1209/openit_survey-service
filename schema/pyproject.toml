@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openit-survey-schema"
-version = "1.0.0"
+version = "1.1.0"
 description = "openit 문진 스키마(정수 계약 버전별 JSON Schema)를 설치 가능한 패키지로 낸다."
 requires-python = ">=3.10"
 dependencies = []
