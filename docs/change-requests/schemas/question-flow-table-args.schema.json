@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "survey-service/question-flow-table-args.schema.json",
+  "title": "QuestionFlowTableArgs",
+  "description": "survey-service가 turn-engine(I8)의 QuestionFlowTable 생성자에 넘기는 값. 만드는 쪽: survey-service flow.py build_flow가 문진 스키마 QuestionFlow(schema/schemas/QuestionFlow.json)에서 변환(op는 '=='만 있어 버린다). 읽는 쪽: turn_engine.QuestionFlowTable(order, skips=[SkipRule(slot, value, skip_item)]). INTERFACES.md I8은 이 형식을 정하지 않는다. 모르는 키는 거부한다(생성자 인자가 바뀌면 바로 알도록). 추론 서버(I9) 요청에는 QuestionFlow가 실리지 않는다: 그곳에는 이 표에서 계산한 ActionExtractionInput.state만 간다.",
+  "type": "object",
+  "required": [
+    "order",
+    "skips"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "skips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slot",
+          "value",
+          "skip_item"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "slot": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.]+\\.[A-Za-z0-9_]+$"
+          },
+          "value": {
+            "type": [
+              "boolean",
+              "number",
+              "string"
+            ],
+            "description": "bool과 수는 다르다(true != 1)"
+          },
+          "skip_item": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$comment": "불변식: skips[].skip_item과 slot의 문항은 order 안에 있다(JSON Schema로 표현 불가, flow.py가 아닌 문진 스키마 시험이 확인)."
+}

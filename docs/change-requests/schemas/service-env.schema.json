@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "survey-service/service-env.schema.json",
+  "title": "SurveyServiceEnv",
+  "description": "배포(deploy)가 survey-service 컨테이너에 주는 환경 변수 집합. 만드는 쪽: deploy(compose). 읽는 쪽: survey_service/settings.py. 값은 모두 문자열. 비밀(SECRETS)은 NAME_FILE(파일 경로)로 준다(D84); 값 NAME은 개발·시험용 호환.",
+  "type": "object",
+  "required": [
+    "SURVEY_RELEASE_READER",
+    "SURVEY_TRACE_INGEST",
+    "SURVEY_MODEL_BACKEND"
+  ],
+  "propertyNames": {
+    "anyOf": [
+      {
+        "not": {
+          "pattern": "^SURVEY_"
+        }
+      },
+      {
+        "enum": [
+          "SURVEY_ACCESS_LOG_RETENTION_DAYS",
+          "SURVEY_ALERT_DB",
+          "SURVEY_ALERT_RETENTION_DAYS",
+          "SURVEY_API_MAX_INFLIGHT",
+          "SURVEY_API_MAX_UTTERANCE_CHARS",
+          "SURVEY_API_TOKEN",
+          "SURVEY_API_TOKEN_ENV",
+          "SURVEY_API_TOKEN_FILE",
+          "SURVEY_DATABASE_URL",
+          "SURVEY_DATABASE_URL_FILE",
+          "SURVEY_DB_CONNECT_TIMEOUT_SECONDS",
+          "SURVEY_DB_RECONNECT_BACKOFF_SECONDS",
+          "SURVEY_DB_STATEMENT_TIMEOUT_SECONDS",
+          "SURVEY_DEAD_OUTBOX_RETENTION_DAYS",
+          "SURVEY_EXPORT_BACKOFF_MAX_SECONDS",
+          "SURVEY_EXPORT_INTERVAL_SECONDS",
+          "SURVEY_EXTRACT_INPUT_MAX_CHARS",
+          "SURVEY_HTTP_TIMEOUT_SECONDS",
+          "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS",
+          "SURVEY_INFERENCE_RETRIES",
+          "SURVEY_INFERENCE_TIMEOUT_SECONDS",
+          "SURVEY_INFERENCE_TOKEN",
+          "SURVEY_INFERENCE_TOKEN_ENV",
+          "SURVEY_INFERENCE_TOKEN_FILE",
+          "SURVEY_INFERENCE_URL",
+          "SURVEY_KEEP_RELEASES",
+          "SURVEY_KIOSK_DEVICE_TOKENS",
+          "SURVEY_KIOSK_DEVICE_TOKENS_FILE",
+          "SURVEY_LOG_LEVEL",
+          "SURVEY_MAX_CONNECTIONS",
+          "SURVEY_MAX_CONSECUTIVE_REASK",
+          "SURVEY_MAX_PUSH_SUBSCRIPTIONS",
+          "SURVEY_MAX_SSE_CONNECTIONS",
+          "SURVEY_MODEL_BACKEND",
+          "SURVEY_OUTBOX_DB",
+          "SURVEY_OUTBOX_KEEP_SENT_HOURS",
+          "SURVEY_OUTBOX_MAX_PENDING",
+          "SURVEY_PORT",
+          "SURVEY_PUSH_ALLOW_PRIVATE_HOSTS",
+          "SURVEY_PUSH_TIMEOUT_SECONDS",
+          "SURVEY_READYZ_DB_TIMEOUT_SECONDS",
+          "SURVEY_RELEASE_POLL_SECONDS",
+          "SURVEY_RELEASE_READER",
+          "SURVEY_RELEASE_READER_TOKEN",
+          "SURVEY_RELEASE_READER_TOKEN_ENV",
+          "SURVEY_RELEASE_READER_TOKEN_FILE",
+          "SURVEY_RELEASE_READER_URL",
+          "SURVEY_RELEASE_RETRY_BASE_SECONDS",
+          "SURVEY_RELEASE_RETRY_GIVE_UP_SECONDS",
+          "SURVEY_RELEASE_RETRY_MAX_SECONDS",
+          "SURVEY_REQUIRE_SUBJECT_REF",
+          "SURVEY_RESULT_DISPATCHER",
+          "SURVEY_RESULT_READER_TOKEN",
+          "SURVEY_RESULT_READER_TOKEN_ENV",
+          "SURVEY_RESULT_READER_TOKEN_FILE",
+          "SURVEY_RETENTION_INTERVAL_SECONDS",
+          "SURVEY_RETRY_AFTER_SECONDS",
+          "SURVEY_RISK_DEFAULT_RULES",
+          "SURVEY_RISK_RULES_FILE",
+          "SURVEY_RISK_SOURCE",
+          "SURVEY_RISK_SOURCE_TOKEN",
+          "SURVEY_RISK_SOURCE_TOKEN_ENV",
+          "SURVEY_RISK_SOURCE_TOKEN_FILE",
+          "SURVEY_SESSION_DB",
+          "SURVEY_SESSION_IDLE_SECONDS",
+          "SURVEY_SESSION_RETENTION_DAYS",
+          "SURVEY_SOCKET_TIMEOUT_SECONDS",
+          "SURVEY_SSE_HEARTBEAT_SECONDS",
+          "SURVEY_STAFF_API_TOKEN",
+          "SURVEY_STAFF_API_TOKEN_ENV",
+          "SURVEY_STAFF_API_TOKEN_FILE",
+          "SURVEY_STAFF_CALL_REPORT_MAX_PER_SESSION",
+          "SURVEY_STAFF_CALL_RETRY_MAX_PER_SESSION",
+          "SURVEY_STAFF_CALL_RETRY_MIN_INTERVAL_SECONDS",
+          "SURVEY_STAFF_CONSOLE",
+          "SURVEY_STARTUP_WAIT_SECONDS",
+          "SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS",
+          "SURVEY_TRACE_INGEST",
+          "SURVEY_TRACE_INGEST_TOKEN",
+          "SURVEY_TRACE_INGEST_TOKEN_ENV",
+          "SURVEY_TRACE_INGEST_TOKEN_FILE",
+          "SURVEY_TRACE_INGEST_URL",
+          "SURVEY_TURN_DEADLINE_SECONDS",
+          "SURVEY_VAPID_PRIVATE_KEY",
+          "SURVEY_VAPID_PRIVATE_KEY_ENV",
+          "SURVEY_VAPID_PRIVATE_KEY_FILE",
+          "SURVEY_VAPID_SUBJECT",
+          "SURVEY_WORK_DIR"
+        ]
+      }
+    ]
+  },
+  "additionalProperties": {
+    "type": "string"
+  },
+  "properties": {
+    "SURVEY_PORT": {
+      "type": "string",
+      "pattern": "^[0-9]{1,5}$"
+    },
+    "SURVEY_LOG_LEVEL": {
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ]
+    },
+    "SURVEY_MODEL_BACKEND": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SURVEY_API_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_STAFF_API_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_KIOSK_DEVICE_TOKENS_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_RESULT_READER_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_RISK_SOURCE_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_RELEASE_READER_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_TRACE_INGEST_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_INFERENCE_TOKEN_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_VAPID_PRIVATE_KEY_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    },
+    "SURVEY_DATABASE_URL_FILE": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "비밀이 든 파일의 절대 경로. 값 자체가 아니다."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "SURVEY_RELEASE_READER": {
+            "const": "http"
+          }
+        },
+        "required": [
+          "SURVEY_RELEASE_READER"
+        ]
+      },
+      "then": {
+        "required": [
+          "SURVEY_RELEASE_READER_URL"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "SURVEY_TRACE_INGEST": {
+            "const": "http"
+          }
+        },
+        "required": [
+          "SURVEY_TRACE_INGEST"
+        ]
+      },
+      "then": {
+        "required": [
+          "SURVEY_TRACE_INGEST_URL"
+        ]
+      }
+    },
+    {
+      "description": "운영에서 비밀 값을 환경 변수 NAME으로 직접 주면 안 된다(D84): NAME과 NAME_FILE을 함께 주지 않는다.",
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "SURVEY_API_TOKEN",
+              "SURVEY_API_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_STAFF_API_TOKEN",
+              "SURVEY_STAFF_API_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_KIOSK_DEVICE_TOKENS",
+              "SURVEY_KIOSK_DEVICE_TOKENS_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_RESULT_READER_TOKEN",
+              "SURVEY_RESULT_READER_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_RISK_SOURCE_TOKEN",
+              "SURVEY_RISK_SOURCE_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_RELEASE_READER_TOKEN",
+              "SURVEY_RELEASE_READER_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_TRACE_INGEST_TOKEN",
+              "SURVEY_TRACE_INGEST_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_INFERENCE_TOKEN",
+              "SURVEY_INFERENCE_TOKEN_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_VAPID_PRIVATE_KEY",
+              "SURVEY_VAPID_PRIVATE_KEY_FILE"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "SURVEY_DATABASE_URL",
+              "SURVEY_DATABASE_URL_FILE"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
