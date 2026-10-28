@@ -291,11 +291,11 @@ class App:
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "staff_alerts": dbs["staff_alerts"],
             "secrets": self._secret_sources(),
-            # D74: v2의 A 출력에는 위험 신호 필드가 없어 직원 알림의 입력원이 없다. 조용히 끄지 않고 여기에 드러낸다(CR-012, 헤드 결정 대기).
+            # 입력원이 없으면(기본 임시 목록을 SURVEY_RISK_DEFAULT_RULES=off로 끈 경우만) 조용히 끄지 않고 여기에 active=false로 드러낸다(ADR-0013, CR-012).
             "staff_alert_source": ((self.orchestrator.risk_source.describe() if hasattr(self.orchestrator.risk_source, "describe")
                                     else {"active": True}) if self.orchestrator.risk_source is not None else
                                    {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",
-                                    "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 알림이 만들어지지 않는다(docs/change-requests/CR-012)."}),
+                                    "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 입력원이 꺼져 알림이 만들어지지 않는다(SURVEY_RISK_DEFAULT_RULES=off, 병원 규칙 파일·입력원 없음; docs/change-requests/CR-012)."}),
             "validation_violations": self.orchestrator.violation_stats(),
             "result_dispatcher": self.orchestrator.dispatcher_status(),
             "retention": {"session_days": self.settings.session_retention_days, "access_log_days": self.settings.access_log_retention_days,

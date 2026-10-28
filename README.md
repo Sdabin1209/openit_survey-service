@@ -67,22 +67,22 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 
 비밀(API 토큰, VAPID 키 등)은 값을 환경 변수에 직접 넣지 않고 `NAME_FILE`(파일 경로)로 받는다(D84, docs/runbook.md §1). 이름 목록과 나머지 설정은 runbook §1. 실제 운영 실행에는 release-gate·ops-feedback·추론 서버 URL과 토큰 파일이 더 필요하다(설정 전체는 runbook 참조, 이 문서는 개발용 최소만 적었다).
 
-시험 개수와 통과 결과는 이 문서에 쓰지 않는다(어긋나기 쉽다). 현재 상태는 `docs/STATUS.md`의 마지막 기록과 `pytest` 실제 출력(위 2)의 명령)으로 확인한다. 명령은 문서(runbook, scripts)에서 옮겼다.
+시험 개수와 통과 결과는 아래 '현재 상태'에만 적는다. 변경 때마다 `pytest` 실제 출력(위 2)의 명령)으로 다시 확인한다. 명령은 문서(runbook, scripts)에서 옮겼다.
 
 ## 현재 상태
 
-- 시험 상태: 개수·통과 여부는 `docs/STATUS.md` 마지막 기록과 `pytest` 출력을 본다. 모두 이 PC 한 곳에서만 확인했다.
+- 시험 상태(2026-10-28, 이 PC 한 곳): `.venv/bin/python -m pytest` 1137 통과 + 37 SKIP(PostgreSQL 시험은 `TEST_DATABASE_URL`이 없어 SKIP). 일회용 PostgreSQL을 `TEST_DATABASE_URL`로 주면 1170 통과 + 4 SKIP. 이 숫자는 여기에만 적는다(`docs/STATUS.md`는 이전 시점 기록). 두 번째 깨끗한 환경에서는 확인하지 못했다.
 - 확인하지 못한 것(STATUS, OPEN_GAPS): 실제 model-runtime 서버 이미지와의 E2E, 두 번째 깨끗한 환경에서의 재현, 실제 브라우저·푸시 서비스, 실제 모델로 한 턴을 통과시키는 일(U07), 부하·동시성, 세션 문서 암호화·보존 기간.
 - 표 찾기는 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 확인 대기다(`schema/data/response_tables.json`의 `table_status: DATASET_RULES_UNCONFIRMED`, 승인 기록 미확인).
 - `/readyz`는 PostgreSQL이 죽거나 응답이 없어도 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본 2초)+약 2초 안에 503(db unavailable)으로 답하고 복구 뒤 200이 된다(CR-D23, docs/boundary.md §5·§6). 이 PC에서 로컬 PostgreSQL 컨테이너로 확인했고, 실제 compose 환경의 재측정은 deploy E2E 5p에서 헤드가 한다.
-- 직원 알림 API·SSE·푸시는 살아 있으나 알림을 만드는 입력원이 없어 알림은 나오지 않는다(`/readyz`의 `staff_alert_source.active=false`, docs/boundary.md §5).
+- 직원 알림은 기본으로 임시 규칙 목록(임상 검토 전)이 모든 발화 턴에서 돌아 만들어진다(`/readyz`의 `staff_alert_source.active=true, provisional=true`, `SURVEY_RISK_DEFAULT_RULES=off`이면 꺼짐, docs/boundary.md §5).
 
 ## 이 영역의 열린 항목 (head/docs/OPEN_GAPS.md, 읽기 전용으로 확인)
 
 | ID | 요약 | 막는 것 |
 |---|---|---|
-| G01 | 직원 알림의 입력원이 없다. 포트(`SURVEY_RISK_SOURCE`)와 시험은 있고 입력원은 비어 있다. 환자 안전과 닿는다 | 사용자 결정 |
-| G12 | 재질문 상한: 메커니즘(`SURVEY_MAX_CONSECUTIVE_REASK`, 기본 0=끔)은 구현됨. 값 N과 정지 이름 재사용 여부 미정, 지금은 무한 되묻기 가능 | 사용자 결정 |
+| G01 | 직원 알림의 임상 입력원이 확정되지 않았다. 지금은 임상 검토 전 임시 기본 규칙 목록이 켜져 있고(`provisional`), 병원 규칙 파일·포트(`SURVEY_RISK_SOURCE`)로 바꾼다. 환자 안전과 닿는다 | 사용자 결정(임상 검토) |
+| G12 | 재질문 상한: 기본 3(`SURVEY_MAX_CONSECUTIVE_REASK`, 0이면 끔, ADR-0020)으로 구현됨. 값은 측정하지 않은 헤드 결정이고, 정지 이름 `PAUSED_RISK` 재사용으로 키오스크가 위험 정지와 구분하지 못한다(변경 요청 필요 여부는 헤드 판단) | 헤드 판단 대기(계약) |
 | G03 | 표 찾기는 데이터셋 담당의 labels.py 규칙을 옮김, 표 승인 기록 미확인(IO_SPEC 7장 2번 미정) | 다른 영역(데이터셋 담당 확인) |
 | G13 | 표 `DATASET_RULES_UNCONFIRMED`, 57행 문제용 `next.text`를 B 모델이 어떻게 다루는지 미확인, A 입력 state 묶음 순서 13/549행 불일치 | 다른 영역(데이터셋)·GPU(모델 확인) |
 | G11 | 정수 버전 1 안에서 비호환 변경. ops-feedback과 같은 잠금으로 함께 배포해야 한다 | 다른 영역(ops-feedback), 사용자 결정 |

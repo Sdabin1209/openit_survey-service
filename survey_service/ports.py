@@ -31,8 +31,8 @@ class ReleaseProvider(Protocol):
 
 
 class RiskSource(Protocol):
-    """위험 신호·직원 호출 입력원(선택). v2의 A 출력(ActionExtraction)에는 위험 신호 필드가 없어 기본은 없음(None)이고 직원 알림은 비활성이다.
-    입력원이 정해지면(헤드 결정, docs/change-requests/CR-012) 이 접점에 꽂는다."""
+    """위험 신호·직원 호출 입력원(선택). v2의 A 출력(ActionExtraction)에는 위험 신호 필드가 없어 이 포트의 기본은 없음(None)이다.
+    그 경우 서비스는 규칙 감지(기본 임시 목록, ADR-0013)를 쓴다. 다른 입력원은 이 접점에 꽂는다(docs/change-requests/CR-012)."""
     def check(self, *, extract_input: Mapping, extract_output: Mapping, utterance: str) -> Optional[Mapping]:
         """StaffAlert(kind RISK | CALL_STAFF | USER_CALLED_STAFF)를 돌려주거나 None."""
 

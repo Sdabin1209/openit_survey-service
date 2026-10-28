@@ -62,7 +62,7 @@ class Settings:
     model_backend: str = ""         # 예: fake
     staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
     result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
-    risk_source: str = ""           # 선택 팩토리(RiskSource). 없으면 직원 알림의 입력원이 없다(v2 A 출력에는 위험 신호가 없다, CR-012). /readyz에 드러난다
+    risk_source: str = ""           # 선택 팩토리(RiskSource). 없으면 규칙 감지(기본 임시 목록, risk_default_rules)만 쓴다. 둘 다 꺼지면 입력원이 없고 /readyz에 active=false로 드러난다(CR-012)
     result_reader_token_env: str = "SURVEY_RESULT_READER_TOKEN"   # 결과 조회(역할 result-reader) 토큰이 든 변수 이름. 값이 없으면 /v1/results는 꺼진다(404)
     risk_source_token_env: str = "SURVEY_RISK_SOURCE_TOKEN"       # 외부 위험 신호(역할 risk-source) 토큰. 값이 없으면 risk-signals는 꺼진다(404)
     require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
