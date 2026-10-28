@@ -481,7 +481,7 @@ class TurnGraph:
                 tr["extract_status"] = "ERROR"
                 return {**upd, "trace": tr}
             over = len(json.dumps(inp, ensure_ascii=False)) - self.o.extract_input_max_chars
-            if over > 0 and self.o.extract_input_max_chars > 0:      # model-runtime v0.7.3의 입력 길이 상한(2500자)을 넘으면 400이 되므로 발화를 줄여 보낸다(위험 선별은 전체 발화로 이미 했다)
+            if over > 0 and self.o.extract_input_max_chars > 0:      # model-runtime의 입력 길이 상한(2500자)을 넘으면 400이 되므로 발화를 줄여 보낸다(위험 선별은 전체 발화로 이미 했다)
                 keep = max(100, len(inp["user_utterance"]) - over)
                 inp = {**inp, "user_utterance": inp["user_utterance"][:keep]}
                 self.o._count("extract_input_truncated")

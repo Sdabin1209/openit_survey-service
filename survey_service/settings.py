@@ -77,7 +77,7 @@ class Settings:
     db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초  [근거: ADR-0011]
     db_statement_timeout_seconds: float = 2.0     # 문장 하나의 상한(초). 서버 statement_timeout + 클라이언트 강제 끊기  [근거: ADR-0011]
     db_reconnect_backoff_seconds: float = 1.0     # 접속 실패 뒤 이 시간 동안은 재접속을 시도하지 않고 바로 실패(빠른 실패)  [근거: ADR-0011]
-    extract_input_max_chars: int = 2400           # 추출 입력(JSON) 길이 상한. model-runtime v0.7.3의 상한 2500자보다 약간 낮게(여유 100). 넘으면 발화를 줄여 보낸다 (ADR-0012)
+    extract_input_max_chars: int = 2400           # 추출 입력(JSON) 길이 상한. model-runtime의 상한 2500자보다 약간 낮게(여유 100). 넘으면 발화를 줄여 보낸다 (ADR-0012)
     socket_timeout_seconds: float = 15.0          # HTTP 요청 소켓 읽기 제한(초). 정상 요청은 수 ms~수 초, 길게 매달린 연결은 끊는다 (ADR-0018, 측정 안 함)
     max_connections: int = 256                    # 동시 접속 상한(SSE 포함). 넘으면 503을 쓰고 끊는다. 처리 단계 상한(api_max_inflight 32)과 별개  [근거: ADR-0018, 값은 측정 안 함]
     max_sse_connections: int = 50                 # 직원 알림 스트림 동시 연결 상한  [근거: ADR-0018, 값은 측정 안 함]
