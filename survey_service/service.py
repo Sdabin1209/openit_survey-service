@@ -258,10 +258,13 @@ class App:
         return dict(out)
 
     def _db_problems(self) -> list:
-        """세 저장소를 **동시에** 확인한다(직렬이면 연결 불가 때 시간이 저장소 수만큼 곱해진다). PostgreSQL의 각 확인은 주 연결·락을
-        쓰지 않는 별도 짧은 연결이고 자체 상한(`readyz_db_timeout_seconds`)이 있다. 그래도 안 끝나면 여유 1초 뒤 실패로 센다."""
+        """세 저장소를 **동시에** 확인하고 **총 마감 `readyz_db_timeout_seconds`(기본 2초)** 안에 끝나지 않은 것은 실패로 센다.
+        근거: FAULT_POLICY 5는 의존이 응답하지 않을 때 /readyz가 2초 안에 503을 내라고 한다(단언 허용 2.5초). 이전에는 확인 자체의 상한(2초)에 여유 1초를
+        더해 기다려 전체 E2E 5pn(postgres를 네트워크에서 분리)에서 3.1초가 걸렸다(이 PC 측정 1회). 여유를 없애고 마감을 총합에 건다.
+        각 확인은 자기 사유(session_db/outbox_db/alert_db)를 따로 보고하므로 하나가 죽어도 나머지의 상태는 그대로 나온다. PostgreSQL의 각 확인은
+        주 연결·락을 쓰지 않는 별도 짧은 연결이고 같은 값이 자체 상한(connect_timeout·statement_timeout)이다."""
         res = self._bounded({"session_db": self.store.ping, "outbox_db": self.outbox.ping, "alert_db": self.alert_store.ping},
-                            self.settings.readyz_db_timeout_seconds + 1.0)
+                            self.settings.readyz_db_timeout_seconds)
         return [n for n in ("session_db", "outbox_db", "alert_db") if res.get(n, ("error",))[0] != "ok"]
 
     def _db_stats(self, db_ok: bool) -> dict:

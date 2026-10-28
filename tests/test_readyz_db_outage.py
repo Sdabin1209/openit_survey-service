@@ -213,3 +213,27 @@ def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, m
     stopper.join(10)
     th.join(10)
     assert not stopper.is_alive() and res and res[0][0] == 200 and res[0][1]["turn_failure_signal"] is None
+
+
+def test_readyz_total_deadline_with_three_hanging_dbs_and_reasons_are_kept(tmp_path, monkeypatch):
+    """FAULT_POLICY 5: 의존이 응답하지 않아도 /readyz 총 시간은 마감(2초) + 작은 여유 안이다(허용 2.5초). 이전 구현은 +1초 여유로 3.1초(E2E 5pn).
+    확인 셋이 모두 멈추면 사유 셋이 모두 나오고, 하나만 멈추거나 실패하면 그 사유만 나온다."""
+    app = _app(tmp_path, monkeypatch)
+    try:
+        hang = threading.Event()
+        monkeypatch.setattr(app.store, "ping", lambda: hang.wait(30))
+        monkeypatch.setattr(app.outbox, "ping", lambda: hang.wait(30))
+        monkeypatch.setattr(app.alert_store, "ping", lambda: hang.wait(30))
+        ok, body, took = _timed(app)
+        assert ok is False and took < 2.5, took
+        assert {"session_db", "outbox_db", "alert_db"} <= set(body["problems"])
+        def boom():
+            raise RuntimeError("x")
+        monkeypatch.setattr(app.store, "ping", boom)                  # 하나는 즉시 실패, 하나는 멈춤, 하나는 정상
+        monkeypatch.setattr(app.alert_store, "ping", lambda: None)
+        ok, body, took = _timed(app)
+        assert ok is False and took < 2.5, took
+        assert [p for p in body["problems"] if p.endswith("_db")] == ["session_db", "outbox_db"]
+        hang.set()
+    finally:
+        app.stop() if hasattr(app, "stop") else None
