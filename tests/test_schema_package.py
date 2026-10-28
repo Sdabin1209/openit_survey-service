@@ -107,3 +107,14 @@ def test_package_version_is_not_older_than_the_latest_schema_tag():
     if r.returncode != 0 or not tags:
         pytest.skip("survey-schema-v* 태그를 읽을 수 없다")
     assert _pkg_version() >= max(tags)
+
+
+def test_package_version_equals_the_tag_when_head_is_tagged():
+    """HEAD에 survey-schema-vX.Y.Z 태그가 붙어 있으면 패키지 버전은 그 X.Y.Z와 같다(설치본 표기와 태그가 어긋나지 않게, D110). 태그 전에는 건너뛴다."""
+    import re
+    import subprocess
+    r = subprocess.run(["git", "tag", "--points-at", "HEAD", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
+    here = [tuple(int(x) for x in m.groups()) for t in r.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", t))]
+    if r.returncode != 0 or not here:
+        pytest.skip("HEAD에 survey-schema-v* 태그가 없다")
+    assert _pkg_version() == here[0]
