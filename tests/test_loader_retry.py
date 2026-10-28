@@ -147,8 +147,8 @@ def test_slow_load_within_the_wait_is_just_waited_for(tmp_path):
     e = Env(tmp_path, load_delay=0.5, load_timeout=5)
     try:
         with_clock(e)
-        t0 = time.time()
-        assert e.loader.poll_once().action == "LOADED" and time.time() - t0 >= 0.45 and e.loader.status.retry is None
+        t0 = time.monotonic()
+        assert e.loader.poll_once().action == "LOADED" and time.monotonic() - t0 >= 0.45 and e.loader.status.retry is None
     finally:
         e.close()
 
@@ -253,8 +253,8 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
     fport = server_port(front)
     started = False
     try:
-        deadline = time.time() + 5
-        while time.time() < deadline and not (app.loader.retry_info() or {}).get("attempts", 0) >= 2:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not (app.loader.retry_info() or {}).get("attempts", 0) >= 2:
             time.sleep(0.05)
         code, body = http(fport, "/readyz")
         assert code == 503 and body["problems"] == ["no_active_release", "release_loading"]
@@ -264,8 +264,8 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
         assert http(fport, "/healthz")[0] == 200                                                # 서비스는 살아 있다
         inf.put_fail_next = [UNAVAILABLE]                                                       # 서버가 뜨는 중: 첫 PUT은 503
         inf.start(port); started = True
-        deadline = time.time() + 8
-        while time.time() < deadline and http(fport, "/readyz")[0] != 200:
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline and http(fport, "/readyz")[0] != 200:
             time.sleep(0.1)
         code, body = http(fport, "/readyz")
         assert code == 200 and body["active_release"] == "rel-1" and body["problems"] == []
@@ -313,16 +313,16 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
     app = App(s, reader=gate, ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     front = None
     try:
-        t0 = time.time()
+        t0 = time.monotonic()
         app.start()
-        assert time.time() - t0 < 1.2                                                           # 적재를 끝까지 기다리지 않았다
+        assert time.monotonic() - t0 < 1.2                                                           # 적재를 끝까지 기다리지 않았다
         front = serve(app, 0)
         start_server(front)
         port = server_port(front)
         assert http(port, "/healthz")[0] == 200
         assert http(port, "/readyz")[0] == 503
-        deadline = time.time() + 8
-        while time.time() < deadline and http(port, "/readyz")[0] != 200:
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline and http(port, "/readyz")[0] != 200:
             time.sleep(0.1)
         assert http(port, "/readyz")[0] == 200
     finally:

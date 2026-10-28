@@ -55,9 +55,9 @@ def test_envelope_carries_release_and_contract_version(parts):
 def test_turn_does_not_wait_for_ingest_and_ingest_down_does_not_fail_turns(parts):
     clock, ob, ing, ex, sink = parts
     ing.script = [BoundaryError("UNAVAILABLE", "내림")] * 50
-    t0 = time.time()
+    t0 = time.monotonic()
     rig = run_turns(sink)
-    assert time.time() - t0 < 5 and ing.calls == 0          # 턴을 처리하는 동안 전송을 부르지 않았다
+    assert time.monotonic() - t0 < 5 and ing.calls == 0          # 턴을 처리하는 동안 전송을 부르지 않았다
     assert ob.counts()["PENDING"] == 3
     assert rig.doc()["progress_record"]["session_status"].startswith("ENDED")
 

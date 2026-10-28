@@ -268,8 +268,8 @@ def test_over_http_with_app(tmp_path):
         assert http("POST", "/v1/sessions/ZZ/turns", dict(turn, session_id="ZZ"))[0] == 404
         assert http("POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})[0] == 200
         assert http("GET", "/healthz")[0] == 200 and http("GET", "/readyz", token=None)[0] == 200
-        deadline = time.time() + 5
-        while time.time() < deadline and len(ing.received) < 3:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and len(ing.received) < 3:
             time.sleep(0.05)
         assert {k[1] for k in ing.received} == {"start", "t-1", "end"}          # 턴마다 Trace 한 건(재시도 응답은 다시 보내지 않는다)
     finally:

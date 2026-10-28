@@ -67,7 +67,7 @@ class FlakyRuntime(RuntimeReferenceServer):
             return "ABSENT"
         if self.load_error is not None:
             return "FAILED"
-        return "LOADED" if time.time() - t0 >= self.load_delay else "LOADING"
+        return "LOADED" if time.monotonic() - t0 >= self.load_delay else "LOADING"
 
     def _route(self, method, path, q, body, role):
         parts = path.split("/")
@@ -79,7 +79,7 @@ class FlakyRuntime(RuntimeReferenceServer):
                     e = self.put_fail_next.pop(0)
                     if e is not None:
                         raise e
-                self._load_started.setdefault(rid, time.time())
+                self._load_started.setdefault(rid, time.monotonic())
                 state = self._async_state(rid)
                 if state == "LOADED":
                     self.loaded.add(rid)

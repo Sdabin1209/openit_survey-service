@@ -81,9 +81,9 @@ def test_slow_but_within_timeout_is_fine(env):
 def test_slow_extract_beyond_timeout_fails_the_step_without_retry(env):
     env.start()
     env.srv.delay = 2.0
-    t0 = time.time()
+    t0 = time.monotonic()
     o = env.turn()
-    el = time.time() - t0
+    el = time.monotonic() - t0
     assert 0.4 < el < 1.5                                            # 타임아웃(0.5s)에서 끊고 다시 시도하지 않는다
     assert failed(o) == LORA_A_FAIL
     assert o.orchestrator_output["turn_failure_signal"] == {"session_id": "S1", "write_committed": "NOT_COMMITTED", "staff_alert": "NONE"}
@@ -138,9 +138,9 @@ def test_retries_zero_means_single_attempt(tmp_path):
 def test_server_down_fails_fast_after_one_retry(env):
     env.start()
     env.close()
-    t0 = time.time()
+    t0 = time.monotonic()
     o = env.turn()
-    assert time.time() - t0 < 1.5 and failed(o) == LORA_A_FAIL
+    assert time.monotonic() - t0 < 1.5 and failed(o) == LORA_A_FAIL
     assert env.client.stats.snapshot()["retries"] == 1
 
 
@@ -219,9 +219,9 @@ def test_forgotten_release_with_slow_reload_fails_the_turn_instead_of_waiting(tm
         assert e.loader.poll_once().action == "LOADED"                 # 적재 신호 뒤 끝날 때까지 기다린다
         e.start()
         e.srv.forget()
-        t0 = time.time()
+        t0 = time.monotonic()
         o = e.turn()
-        assert time.time() - t0 < 0.9 and failed(o) == LORA_A_FAIL
+        assert time.monotonic() - t0 < 0.9 and failed(o) == LORA_A_FAIL
         time.sleep(1.3)                                                # 서버가 다 올리면 다음 턴은 성공
         assert failed(e.turn()) == []
     finally:
@@ -231,8 +231,8 @@ def test_forgotten_release_with_slow_reload_fails_the_turn_instead_of_waiting(tm
 def test_async_load_is_polled_until_loaded(tmp_path):
     e = Env(tmp_path, load_delay=0.4)
     try:
-        t0 = time.time()
-        assert e.loader.poll_once().action == "LOADED" and time.time() - t0 >= 0.35
+        t0 = time.monotonic()
+        assert e.loader.poll_once().action == "LOADED" and time.monotonic() - t0 >= 0.35
         assert e.registry.active_id() == "rel-1"
     finally:
         e.close()
@@ -261,11 +261,11 @@ def test_other_sessions_are_not_blocked_by_slow_inference(tmp_path):
     try:
         e.loader.poll_once()
         e.srv.delay = 0.3
-        t0 = time.time()
+        t0 = time.monotonic()
         ts = [threading.Thread(target=lambda i=i: e.orch.handle_turn(turn_id="a", frontend_message={"session_id": f"P{i}", "kind": "SESSION_START"}))
               for i in range(4)]
         [t.start() for t in ts]; [t.join() for t in ts]
-        assert time.time() - t0 < 0.9                                   # 직렬이면 4 x 0.3 = 1.2초 이상
+        assert time.monotonic() - t0 < 0.9                                   # 직렬이면 4 x 0.3 = 1.2초 이상
     finally:
         e.close()
 

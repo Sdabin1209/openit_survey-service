@@ -53,8 +53,8 @@ def test_healthz_is_always_ok_and_readyz_waits_for_release(running):
     reader.add_release("rel-1", sample_bank())
     reader.set_pointer("rel-1")
     app.start()
-    deadline = time.time() + 5
-    while time.time() < deadline and get(port, "/readyz")[0] != 200:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and get(port, "/readyz")[0] != 200:
         time.sleep(0.05)
     code, body = get(port, "/readyz")
     assert code == 200 and body["ready"] and body["active_release"] == "rel-1" and body["contract_version"] == 1
@@ -85,8 +85,8 @@ def test_turn_through_app_reaches_ingest(running):
     app.start()
     out = app.orchestrator.handle_turn(turn_id="a1", frontend_message={"session_id": "S1", "kind": "SESSION_START"})
     assert out.release_id == "rel-1"
-    deadline = time.time() + 5
-    while time.time() < deadline and ("S1", "a1") not in ingest.received:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and ("S1", "a1") not in ingest.received:
         time.sleep(0.05)
     env = ingest.received[("S1", "a1")]
     assert env["release_id"] == "rel-1" and env["runtime_contract_version"] == 1

@@ -3,7 +3,7 @@
 
 기대값의 출처: ../boundary-contracts/CONVENTIONS.md 121~123행(2.2.0, D106): "model-runtime 요청 상한 extract 3.0초, respond 2.0초 ... 호출별 상한의 합(5.0초)에
 서버 처리 여유 1.0초를 더해 턴 마감 6초 안", "재시도는 남은 턴 예산이 호출 상한 이상일 때만 한다. 남은 예산이 모자라면 재시도하지 않고 실패로 처리한다".
-값은 측정이 아니라 잠정값이다(GPU 실측 전). 시험은 느린 가짜 추론 서버(tests/runtime_support.FlakyRuntime)로 실제 시간을 잰다.
+값은 측정이 아니라 잠정값이다(GPU 실측 전). 경과 시간은 time.monotonic으로 잰다: 이 PC(WSL2)에서 벽시계(time.time)가 수십~백여 ms 뒤로 되감겨 3.0초 호출이 2.87초로 읽힌 적이 있다(12회 중 2회, 같은 구간의 monotonic은 3.01초). 시험은 느린 가짜 추론 서버(tests/runtime_support.FlakyRuntime)로 실제 시간을 잰다.
 """
 import time
 
@@ -57,34 +57,34 @@ def test_default_settings_carry_the_contract_budget():
 
 def test_extract_is_cut_at_3_seconds_not_later(be):
     be.slow(extract=3.5)
-    t0 = time.time()
+    t0 = time.monotonic()
     o = be.turn()
-    el = time.time() - t0
+    el = time.monotonic() - t0
     assert 2.9 < el < 3.35, el                    # 3.5초 걸리는 extract는 3.0초에서 끊긴다(이전 4초면 3.5초에 성공한다)
     assert failed(o) == LORA_A_FAIL
 
 
 def test_respond_is_cut_at_2_seconds_not_later(be):
     be.slow(respond=2.5)
-    t0 = time.time()
+    t0 = time.monotonic()
     be.turn()
-    el = time.time() - t0
+    el = time.monotonic() - t0
     assert 1.9 < el < 2.35, el                    # 2.5초 걸리는 respond는 2.0초에서 끊긴다
 
 
 def test_both_calls_at_their_limits_still_fit_the_turn_deadline(be):
     be.slow(extract=2.8, respond=1.8)
-    t0 = time.time()
+    t0 = time.monotonic()
     o = be.turn()
-    el = time.time() - t0
+    el = time.monotonic() - t0
     assert el < 6.0 and o.orchestrator_output["turn_failure_signal"] is None, el      # 최악 5.0초 + 여유 1.0초 안
 
 
 def test_worst_case_with_both_calls_timing_out_is_within_6_seconds(be):
     be.slow(extract=0.1, respond=9.0)             # extract 성공 뒤 respond가 매달린다: 0.1 + 2.0
-    t0 = time.time()
+    t0 = time.monotonic()
     be.turn()
-    assert time.time() - t0 < 6.0
+    assert time.monotonic() - t0 < 6.0
 
 
 def test_no_retry_when_remaining_turn_budget_is_below_the_call_limit(tmp_path):

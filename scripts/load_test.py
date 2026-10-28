@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """동시 요청 부하 측정(FAULT_MATRIX N2·N3). pytest 수집 대상이 아니다(scripts/ 아래, 이름이 test_로 시작하지 않는다).
 
-PostgreSQL(LOAD_DATABASE_URL)을 붙인 App을 같은 프로세스에서 ThreadingHTTPServer로 띄우고(가짜 모델, 가짜 릴리스 읽기/Trace 수집),
+PostgreSQL(LOAD_DATABASE_URL)을 붙인 App을 같은 프로세스에서 실제 서버(survey_service.service.serve, waitress)로 띄우고(가짜 모델, 가짜 릴리스 읽기/Trace 수집),
 N개 세션이 동시에 발화를 보낼 때의 성공률, 턴 지연 p50/p95/max, 상태 코드별 건수, PostgreSQL 연결 수 최대, 서버 스레드 수·RSS 증가를 표로 낸다.
 실제 LLM 지연은 포함되지 않는다(--model-delay로 가짜 모델에 고정 지연을 줄 수 있고, 그 값은 가정이다).
 
@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-TOKEN, STAFF = "load-api-token", "load-staff-token"
+TOKEN, STAFF = "load-api-token-0123", "load-staff-token-0123"       # 토큰 최소 16자(ADR-0024)
 RUN = format(int(time.time()) % 10**8, "x")       # 실행마다 다른 세션 ID(같은 DB를 다시 써도 멱등 재생으로 빨라지지 않게)
 
 
