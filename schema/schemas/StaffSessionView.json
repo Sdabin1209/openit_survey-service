@@ -6,7 +6,7 @@
     "AlertKind": {
       "oneOf": [
         {
-          "const": "RISK"
+          "const": "RISK_STOP"
         },
         {
           "const": "CALL_STAFF"
@@ -14,7 +14,8 @@
         {
           "const": "USER_CALLED_STAFF"
         }
-      ]
+      ],
+      "description": "공개 알림 종류 이름. 목록 StaffAlert와 세션 보기가 같은 이름을 쓴다(PUBLIC_API.md 2.2.0). 내부 위험 알림 종류 RISK는 공개할 때 RISK_STOP이다."
     },
     "SessionId": {
       "type": "string",

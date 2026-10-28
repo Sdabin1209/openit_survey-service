@@ -206,7 +206,7 @@ def test_risk_signal_pauses_alerts_and_is_idempotent(env):
     assert "개인발화" not in json.dumps(env.store.alerts_of_session("K1")) and env.call("GET", "/v1/staff/alerts")[1]["items"][0]["kind"] == "RISK_STOP"
     st3, b3, _ = env.signal(sig={"signal_id": "sg-2", "source": "clf-a", "code": "C8", "severity": "CALL_STAFF"})
     assert st3 == 201 and b3["alert_id"] != body["alert_id"] and b3["session_status"] == "PAUSED_RISK"
-    assert [a["kind"] for a in env.call("GET", "/v1/staff/sessions/K1")[1]["alerts"]] == ["RISK", "CALL_STAFF"]
+    assert [a["kind"] for a in env.call("GET", "/v1/staff/sessions/K1")[1]["alerts"]] == ["RISK_STOP", "CALL_STAFF"]
 
 
 def test_risk_signal_errors(env):

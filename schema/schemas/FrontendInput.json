@@ -26,6 +26,11 @@
               "type": "null"
             }
           ]
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "description": "세션 시작(POST /v1/sessions) 응답에서 서버가 session_id를 발급했을 때만 있다(2.2.0). 이후 경로의 {session_id}에 쓴다. 다른 응답과 프론트가 ID를 정해 보낸 시작 응답에는 없다. PUBLIC_API.md"
         }
       },
       "required": [

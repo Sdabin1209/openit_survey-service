@@ -9,7 +9,8 @@
           "type": "object",
           "properties": {
             "session_id": {
-              "$ref": "#/$defs/SessionId"
+              "$ref": "#/$defs/SessionId",
+              "description": "선택(2.2.0): 생략하면 서버가 발급해 응답의 session_id로 돌려준다. 프론트가 정해 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식(3.0.0 제거). PUBLIC_API.md"
             },
             "kind": {
               "const": "SESSION_START"
@@ -21,7 +22,6 @@
             }
           },
           "required": [
-            "session_id",
             "kind"
           ],
           "additionalProperties": false

@@ -39,7 +39,7 @@ import jsonschema
 import survey_schema
 from boundary_contracts import PIPELINE_SCHEMA_VERSION, load_schema as load_contract_schema
 
-from .alerts import KIND_MAP, AlertService, StaffCallRejected
+from .alerts import AlertService, StaffCallRejected
 from .store.effects import model_key
 from . import netguard
 from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
@@ -628,11 +628,10 @@ class PublicApi:
             t = times.get(i) or {}
             turns.append({"turn_index": i, "turn_id": t.get("turn_id"), "at": t.get("at"), "utterance": e["input"]["utterance"],
                           "response_text": e["response_text"], "action": (e.get("extract_output") or {}).get("action")})
-        kinds = {v: k for k, v in KIND_MAP.items()}
         pr = self._pause_reason(sid, doc) if status == "PAUSED_RISK" else None
         view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": self.orch.store.release_id_of(sid),
                 "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": self._values(doc),
-                "alerts": [{"alert_id": a["alert_id"], "kind": kinds.get(a["kind"], a["kind"]), "status": a["status"],
+                "alerts": [{"alert_id": a["alert_id"], "kind": a["kind"], "status": a["status"],
                             "created_at": a["created_at"], "rule_id": a["rule_id"], "resolved_by": a["resolved_by"],
                             **{k: a[k] for k in ("pause_reason", "delivery_attempts", "last_delivery_status", "manual_notice_outcome",
                                                  "manual_notice_reported_at") if k in a}} for a in alerts]}
