@@ -1,0 +1,305 @@
+{
+ "fields": [
+  {
+   "slot": "Q1.D01.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D01.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D02.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D02.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D03.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D03.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D04.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D04.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D05.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D05.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D06.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D06.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D07.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D07.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D08.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D08.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D09.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D09.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D10.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D10.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D11.diagnosed",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q1.D11.on_medication",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q2.D01.family_history",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q2.D02.family_history",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q2.D03.family_history",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q2.D04.family_history",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q2.D05.family_history",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q3.answer",
+   "data_type": "option",
+   "options": [
+    "no",
+    "unknown",
+    "yes"
+   ]
+  },
+  {
+   "slot": "Q4.answer",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q4_1.daily_count",
+   "data_type": "number",
+   "unit": "개비",
+   "minimum": 0
+  },
+  {
+   "slot": "Q4_1.status",
+   "data_type": "option",
+   "options": [
+    "current",
+    "former"
+   ]
+  },
+  {
+   "slot": "Q4_1.total_years",
+   "data_type": "integer",
+   "unit": "년",
+   "minimum": 0
+  },
+  {
+   "slot": "Q4_1.years_since_quit",
+   "data_type": "number",
+   "unit": "년",
+   "minimum": 0
+  },
+  {
+   "slot": "Q5.answer",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q5_1.daily_count",
+   "data_type": "number",
+   "unit": "개비",
+   "minimum": 0
+  },
+  {
+   "slot": "Q5_1.status",
+   "data_type": "option",
+   "options": [
+    "current",
+    "former"
+   ]
+  },
+  {
+   "slot": "Q5_1.total_years",
+   "data_type": "integer",
+   "unit": "년",
+   "minimum": 0
+  },
+  {
+   "slot": "Q5_1.years_since_quit",
+   "data_type": "number",
+   "unit": "년",
+   "minimum": 0
+  },
+  {
+   "slot": "Q6.answer",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q6_1.use_pattern",
+   "data_type": "option",
+   "options": [
+    "daily",
+    "days_10_29",
+    "days_1_2",
+    "days_3_9",
+    "no"
+   ]
+  },
+  {
+   "slot": "Q7.does_not_drink",
+   "data_type": "boolean"
+  },
+  {
+   "slot": "Q7.frequency",
+   "data_type": "number",
+   "exclusive_minimum": 0
+  },
+  {
+   "slot": "Q7.unit",
+   "data_type": "option",
+   "options": [
+    "month",
+    "week",
+    "year"
+   ]
+  },
+  {
+   "slot": "Q7_1.amount",
+   "data_type": "number",
+   "minimum": 0,
+   "repeat_keys": [
+    "soju",
+    "beer",
+    "spirits",
+    "makgeolli",
+    "wine"
+   ]
+  },
+  {
+   "slot": "Q7_1.unit",
+   "data_type": "option",
+   "options": [
+    "bottle",
+    "can",
+    "cc",
+    "glass"
+   ],
+   "repeat_keys": [
+    "soju",
+    "beer",
+    "spirits",
+    "makgeolli",
+    "wine"
+   ]
+  },
+  {
+   "slot": "Q7_2.amount",
+   "data_type": "number",
+   "minimum": 0,
+   "repeat_keys": [
+    "soju",
+    "beer",
+    "spirits",
+    "makgeolli",
+    "wine"
+   ]
+  },
+  {
+   "slot": "Q7_2.unit",
+   "data_type": "option",
+   "options": [
+    "bottle",
+    "can",
+    "cc",
+    "glass"
+   ],
+   "repeat_keys": [
+    "soju",
+    "beer",
+    "spirits",
+    "makgeolli",
+    "wine"
+   ]
+  },
+  {
+   "slot": "Q8_1.days",
+   "data_type": "integer",
+   "unit": "day/week",
+   "maximum": 7,
+   "minimum": 0
+  },
+  {
+   "slot": "Q8_2.duration_minutes",
+   "data_type": "integer",
+   "unit": "minute",
+   "minimum": 0
+  },
+  {
+   "slot": "Q9_1.days",
+   "data_type": "integer",
+   "unit": "day/week",
+   "maximum": 7,
+   "minimum": 0
+  },
+  {
+   "slot": "Q9_2.duration_minutes",
+   "data_type": "integer",
+   "unit": "minute",
+   "minimum": 0
+  },
+  {
+   "slot": "Q10.days",
+   "data_type": "integer",
+   "unit": "day/week",
+   "maximum": 7,
+   "minimum": 0
+  }
+ ]
+}

@@ -34,3 +34,5 @@
 - [ADR-0030](ADR-0030.md) 스키마는 yoyo-migrations의 번호 붙은 마이그레이션으로 만들고 바꾼다 (표준 점검 A05)
 - [ADR-0031](ADR-0031.md) 키오스크 기기 인증은 gateway가 넘기는 X-Openit-Device 헤더를 믿는다 (ADR-0016 인증 부분 대체)
 - [ADR-0032](ADR-0032.md) 연속 상한은 REDIRECT와 실패 턴도 센다 (U34, ADR-0020의 반복 정의를 넓힘)
+- [ADR-0033](ADR-0033.md) 칸 규격(QuestionFieldSpec)은 문항 은행의 칸 정의에서 만들어 I9 extract 요청에 싣는다 (U32)
+- [ADR-0034](ADR-0034.md) 결과 목록의 순서와 커서는 쓸 때마다 매기는 단조 증가 번호를 따른다 (U26)

@@ -23,6 +23,10 @@ class MemorySessionStore:
     def ping(self) -> None:
         return None
 
+    def _next_seq(self) -> int:
+        self._seq = getattr(self, "_seq", 0) + 1          # 결과 목록의 순서·커서용 단조 증가 번호(U26, ADR-0034). 호출자가 self._lock을 쥐고 있다
+        return self._seq
+
     def load(self, session_id: str) -> dict:
         with self._lock:
             s = self._sessions.get(session_id)
@@ -34,7 +38,7 @@ class MemorySessionStore:
         with self._lock:
             if session_id in self._sessions:
                 raise StoreError("세션이 이미 있다")
-            self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id, "updated_at": self._clock()}
+            self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id, "updated_at": self._clock(), "update_seq": self._next_seq()}
             return 1
 
     def commit(self, request: dict, *, turn_id: str, input_hash: str, trace_envelope=None) -> dict:   # trace_envelope: 메모리 구현은 outbox가 없어 무시한다
@@ -55,6 +59,7 @@ class MemorySessionStore:
             s["doc"] = new_doc
             s["revision"] += 1
             s["updated_at"] = self._clock()
+            s["update_seq"] = self._next_seq()
             self._turns[(sid, turn_id)] = TurnRecord(input_hash, True, None)
             return {"session_id": sid, "status": "OK", "write_outcome": "APPLIED", "revision": s["revision"],
                     "detail": None}
@@ -67,6 +72,7 @@ class MemorySessionStore:
             s["doc"][key].append(copy.deepcopy(item))
             s["revision"] += 1
             s["updated_at"] = self._clock()
+            s["update_seq"] = self._next_seq()
 
     def append_log(self, session_id: str, entry: dict) -> None:
         self._append(session_id, "dialogue_log", entry)
@@ -96,10 +102,10 @@ class MemorySessionStore:
 
     def list_sessions(self, *, status=None, updated_after=None, session_ids=None, limit=50, after=None):
         with self._lock:
-            rows = [(k, s["doc"]["progress_record"]["session_status"], s["updated_at"]) for k, s in self._sessions.items()]
+            rows = [(k, s["doc"]["progress_record"]["session_status"], s["updated_at"], s["update_seq"]) for k, s in self._sessions.items()]
         rows = [r for r in rows if (not status or r[1] == status) and (updated_after is None or r[2] > updated_after)
-                and (session_ids is None or r[0] in set(session_ids)) and (after is None or (r[2], r[0]) > tuple(after))]
-        return sorted(rows, key=lambda r: (r[2], r[0]))[:limit]
+                and (session_ids is None or r[0] in set(session_ids)) and (after is None or r[3] > after)]
+        return sorted(rows, key=lambda r: r[3])[:limit]
 
     def list_ended_before(self, before: float) -> list[str]:
         with self._lock:

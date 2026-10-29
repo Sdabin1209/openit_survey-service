@@ -1,5 +1,10 @@
 # 변경 이력
 
+## D115: 칸 규격(U32)과 결과 목록 순서(U26) [미출시] (ADR-0033, ADR-0034, 계약 v2.4.0)
+
+- 문진 스키마 1.2.0(하위 호환, 정수 버전 1): `SlotDef`에 선택 속성 `data_type`, `unit`, `minimum`, `maximum`, `exclusive_minimum`. `survey_service/fields.py`가 문항 은행에서 `QuestionFieldSpec`을 만들고 `fields`를 받는 추론 세션에 싣는다. 계약 클라이언트 2.4.0이 `fields`를 못 받아 서버 전송은 CR-020 대기.
+- 결과 목록(`GET /v1/results`)의 순서·커서를 벽시계 `updated_at`에서 DB가 매기는 단조 증가 번호 `update_seq`로(마이그레이션 0006). 커서는 정수 문자열. 계약 핀 v2.4.0.
+
 ## U34: 되묻기 연속 상한이 REDIRECT와 실패 턴도 센다 [미출시] (ADR-0032)
 
 - 연속 상한(기본 3)이 REASK·CONFIRM에 더해 REDIRECT와 추출·검증 실패 턴을 센다. 같은 직원 호출 경로(PAUSED_RISK, CALL_STAFF, 고정 문장). 실패 턴 재전송(같은 turn_id)은 한 번만 센다. 값·정지 방식은 그대로.

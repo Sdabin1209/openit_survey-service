@@ -59,7 +59,7 @@ def test_migrate_twice_is_a_noop(tmp_path):
     for _ in range(2):
         migrate("sqlite", p)
     with sqlite3.connect(p) as db:
-        assert db.execute("SELECT COUNT(*) FROM _yoyo_migration").fetchone()[0] == 5        # 5개 각각 한 번씩
+        assert db.execute("SELECT COUNT(*) FROM _yoyo_migration").fetchone()[0] == 6        # 6개 각각 한 번씩
 
 
 def test_migration_error_does_not_leak_the_target():

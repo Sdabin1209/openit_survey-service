@@ -692,17 +692,16 @@ class PublicApi:
                 after_ts = datetime.fromisoformat(after.replace("Z", "+00:00")).timestamp()
             cur = None
             if cursor is not None:
-                ts, _, csid = cursor.partition("|")
-                cur = (float(ts), csid)
-                if not SESSION_ID.match(csid):
+                if not (cursor.isascii() and cursor.isdigit() and len(cursor) <= 18):         # 쓸 때마다 매기는 단조 증가 번호(U26, ADR-0034). 값은 처음 정수 문자열이다
                     raise ValueError
+                cur = int(cursor)
         except (ValueError, OverflowError):
             return _err("INVALID_RECORD", "limit(1~200), updated_after(ISO 8601), cursor가 잘못됐다")
         try:
             ids = self.alerts.store.sessions_of_subject(subject) if subject is not None else None
             rows = self.orch.store.list_sessions(status=status, updated_after=after_ts, session_ids=ids, limit=limit + 1, after=cur)
             items = []
-            for sid, _st, _ts in rows[:limit]:
+            for sid, _st, _ts, _seq in rows[:limit]:
                 r = self.orch.store.load(sid)
                 if r["status"] == "OK":
                     items.append(self._result_of(sid, r["state"], self.alerts.store.subject_of(sid), self.alerts.store.timeline(sid)))
@@ -711,7 +710,7 @@ class PublicApi:
         names = sorted(k for k, v in (("subject_ref", subject), ("status", status), ("updated_after", after), ("cursor", cursor)) if v is not None)
         if not self._audit(role, [i["session_id"] for i in items] or ["*"], "OK", "list " + ",".join(names)):     # 조건의 값(환자 참조)은 남기지 않는다
             return _err(*self._NO_AUDIT)
-        nxt = f"{rows[limit - 1][2]!r}|{rows[limit - 1][0]}" if len(rows) > limit else None
+        nxt = str(rows[limit - 1][3]) if len(rows) > limit else None
         return 200, {"items": items, "next_cursor": nxt}, {}
 
     # ------------------------------------------------------------------ 위험 신호 입력 (risk-source)

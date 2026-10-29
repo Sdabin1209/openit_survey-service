@@ -45,8 +45,8 @@ class SessionStorePort(Protocol):
 
     def list_sessions(self, *, status: Optional[str] = None, updated_after: Optional[float] = None, session_ids: Optional[list] = None,
                       limit: int = 50, after: Optional[tuple] = None) -> list[tuple]:
-        """결과 조회용 목록: (session_id, status, updated_at) 목록을 (updated_at, session_id) 오름차순으로 최대 limit개.
-        updated_after는 epoch 초(초과만), after는 마지막으로 본 (updated_at, session_id)(그 뒤만), session_ids는 후보 제한."""
+        """결과 조회용 목록: (session_id, status, updated_at, update_seq) 목록을 update_seq(쓸 때마다 매기는 단조 증가 번호) 오름차순으로 최대 limit개.
+        updated_after는 epoch 초(초과만, 시각으로 거르기만 한다), after는 마지막으로 본 update_seq(그보다 큰 것만), session_ids는 후보 제한. 순서에 벽시계를 쓰지 않는다(U26, ADR-0034)."""
 
     def list_ended_before(self, before: float) -> list[str]:
         """끝난(ENDED_*) 세션 중 마지막 기록이 before(epoch 초)보다 오래된 세션 ID. 보존 기간 정리에 쓴다."""

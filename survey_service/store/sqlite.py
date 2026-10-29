@@ -28,6 +28,8 @@ def _dump(o) -> str:
 class SqliteSessionStore:
     _ERRORS: tuple = (sqlite3.Error,)
     _FOR_UPDATE = ""        # PostgreSQL 구현은 행 잠금을 건다
+    # 쓸 때마다 매기는 단조 증가 번호(결과 목록의 순서·커서, U26, ADR-0034). 벽시계(updated_at)는 되감길 수 있어 순서에 쓰지 않는다. PostgreSQL 구현은 시퀀스
+    _NEXT_SEQ = "(SELECT COALESCE(MAX(update_seq), 0) + 1 FROM sessions)"
     supports_trace_outbox = True
     outbox_gate = None      # 서비스가 Outbox를 꽂는다(max_pending·dropped_full). 없으면 상한 없이 쓴다
 
@@ -70,7 +72,7 @@ class SqliteSessionStore:
     def create(self, session_id: str, release_id: str, state: dict) -> int:
         with self._lock:
             try:
-                self._db.execute("INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at) VALUES (?,?,?,?,?,?)",
+                self._db.execute(f"INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at, update_seq) VALUES (?,?,?,?,?,?,{self._NEXT_SEQ})",
                                  (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state), self._clock()))
             except self._ERRORS as e:
                 raise StoreError(f"세션을 만들 수 없다: {type(e).__name__}") from e
@@ -100,7 +102,7 @@ class SqliteSessionStore:
                     self._db.execute("ROLLBACK")
                     return result("DB_ERROR", "NOT_APPLIED", detail=f"반영할 수 없는 쓰기: {e}")
                 rev = row[0] + 1
-                self._db.execute("UPDATE sessions SET revision=?, status=?, doc=?, updated_at=? WHERE session_id=?",
+                self._db.execute(f"UPDATE sessions SET revision=?, status=?, doc=?, updated_at=?, update_seq={self._NEXT_SEQ} WHERE session_id=?",
                                  (rev, new_doc["progress_record"]["session_status"], _dump(new_doc), self._clock(), sid))
                 self._db.execute(
                     "INSERT INTO turns(session_id, turn_id, input_hash, committed) VALUES (?,?,?,1) "
@@ -130,7 +132,7 @@ class SqliteSessionStore:
                     raise StoreError("세션이 없다")
                 doc = json.loads(row[1])
                 doc[key].append(item)
-                self._db.execute("UPDATE sessions SET revision=?, doc=?, updated_at=? WHERE session_id=?", (row[0] + 1, _dump(doc), self._clock(), session_id))
+                self._db.execute(f"UPDATE sessions SET revision=?, doc=?, updated_at=?, update_seq={self._NEXT_SEQ} WHERE session_id=?", (row[0] + 1, _dump(doc), self._clock(), session_id))
                 self._db.execute("COMMIT")
             except self._ERRORS as e:
                 try:
@@ -202,12 +204,12 @@ class SqliteSessionStore:
         if updated_after is not None:
             conds.append("updated_at>?"); args.append(updated_after)
         if after is not None:
-            conds.append("(updated_at>? OR (updated_at=? AND session_id>?))"); args += [after[0], after[0], after[1]]
+            conds.append("update_seq>?"); args.append(after)
         if session_ids is not None:
             if not session_ids:
                 return []
             conds.append(f"session_id IN ({','.join('?' * len(session_ids))})"); args += list(session_ids)
-        q = "SELECT session_id, status, updated_at FROM sessions" + (" WHERE " + " AND ".join(conds) if conds else "") + " ORDER BY updated_at, session_id LIMIT ?"
+        q = "SELECT session_id, status, updated_at, update_seq FROM sessions" + (" WHERE " + " AND ".join(conds) if conds else "") + " ORDER BY update_seq LIMIT ?"
         with self._lock:
             try:
                 return [tuple(r) for r in self._db.execute(q, args + [limit]).fetchall()]

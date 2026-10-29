@@ -15,6 +15,7 @@ class PgSessionStore(SqliteSessionStore):
     _ERRORS = DRIVER_ERRORS
     _FOR_UPDATE = " FOR UPDATE"
     KIND = "postgresql"
+    _NEXT_SEQ = "nextval('sessions_update_seq')"
 
     def _open(self, url: str) -> None:
         migrate("postgresql", url)

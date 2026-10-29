@@ -140,8 +140,7 @@ def test_result_errors_and_roles(env, tmp_path):
 
 
 def test_result_list_filters_pagination_and_cursor(env):
-    # 목록 순서는 (updated_at, session_id)다. updated_at이 벽시계(time.time)면 시계가 되감기거나 간격이 좁을 때 순서가 시험 밖 요인에 달리므로,
-    # 쓰기마다 1초씩 늘어나는 시계를 꽂아 순서를 결정적으로 한다. 같은 시각 동률의 순서(session_id)는 아래 별도 시험이 본다.
+    # 목록 순서는 쓸 때마다 저장소가 매기는 단조 증가 번호(update_seq)다(U26, ADR-0034). 시각은 updated_after 거르기에만 쓴다.
     ticks = iter(range(1_000_000, 2_000_000))
     env.rig.store._clock = lambda: float(next(ticks))
     for sid, subj in (("K1", "PT-1"), ("K2", "PT-2"), ("K3", "PT-1")):
@@ -166,16 +165,6 @@ def test_result_list_filters_pagination_and_cursor(env):
     assert get(f"?updated_after={future}")[1]["items"] == []
     for bad in ("?limit=0", "?limit=201", "?limit=x", "?status=NOPE", "?updated_after=yesterday", "?cursor=zz", "?subject_ref=a%20b"):
         assert get(bad)[0] == 400, bad
-
-
-def test_result_list_breaks_updated_at_ties_by_session_id(env):
-    env.rig.store._clock = lambda: 1_700_000_000.0                      # 모든 쓰기가 같은 시각: 순서는 session_id가 정한다
-    for sid in ("K3", "K1", "K2"):
-        env.start(sid, subject="PT-1")
-    get = lambda q: env.call("GET", "/v1/results" + q, auth=RESULT)[1]
-    assert [i["session_id"] for i in get("")["items"]] == ["K1", "K2", "K3"]
-    b = get("?limit=2")
-    assert [i["session_id"] for i in b["items"]] == ["K1", "K2"] and [i["session_id"] for i in get("?limit=2&cursor=" + b["next_cursor"])["items"]] == ["K3"]
 
 
 

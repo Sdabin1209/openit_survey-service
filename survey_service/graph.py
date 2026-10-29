@@ -27,6 +27,7 @@ from boundary_contracts.clients import is_output_invalid
 
 from . import assembly, extraction
 from .errors import ReleaseUnavailable, StoreError
+from .fields import build_field_specs
 from .ports import LoadedRelease
 from .store import effects
 
@@ -166,6 +167,10 @@ def _model_call(ctx, op: str, request, flow=None):
         kw["deadline"] = ctx.deadline
     if op == "extract" and flow is not None and getattr(session, "accepts_flow", False):
         kw["flow"] = flow
+    if op == "extract" and getattr(session, "accepts_fields", False) and ctx.bank is not None:
+        specs = build_field_specs(ctx.bank.raw)          # 문항 은행의 칸 정의에서 칸 규격을 만든다(U32, ADR-0033)
+        if specs is not None:
+            kw["fields"] = specs
     return fn(request, **kw)
 
 

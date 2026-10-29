@@ -477,6 +477,32 @@
             "$ref": "#/$defs/ChoiceDef"
           },
           "minItems": 1
+        },
+        "data_type": {
+          "enum": [
+            "boolean",
+            "integer",
+            "number",
+            "option"
+          ],
+          "description": "칸 자료형(survey-schema 1.2.0, 선택). 계약 QuestionFieldSpec의 data_type과 같다. 값은 학습 데이터셋 question_fields와 같아야 한다. 있는 칸만 칸 규격(QuestionFieldSpec)에 들어간다. option이면 선택지 코드는 choices다."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "칸 값의 단위 이름(데이터셋 question_fields.unit: 개비, 년, minute, day/week). `units`(UnitDef 목록, 사용자 말의 단위 환산)와 다르다."
+        },
+        "minimum": {
+          "type": "number",
+          "description": "값의 최솟값(포함)."
+        },
+        "maximum": {
+          "type": "number",
+          "description": "값의 최댓값(포함)."
+        },
+        "exclusive_minimum": {
+          "type": "number",
+          "description": "값은 이 수보다 커야 한다(예: 횟수는 0 초과)."
         }
       },
       "required": [
