@@ -2,10 +2,20 @@
 # 왜: 영역 환경 준비의 정본은 이 파일 하나다. 새 머신으로 옮길 때 README마다 설치법이 달라 어긋났고,
 #     오래된 .venv(옛 계약 버전이 남아 conformance 모듈을 못 찾음)도 있었다. 핀은 requirements.txt/lock이 정본이다.
 set -euo pipefail
+# 계약 boundary-contracts 2.6.0 SetupEnvReport: 표준 출력 마지막 줄에 결과 JSON 한 줄을 낸다. 진행 기록(pip 출력 포함)은 모두 표준 오류로 보낸다(ADR-0039).
+START=$SECONDS
+exec 3>&1 1>&2      # 이후 표준 출력은 표준 오류로, 보고만 3번(원래 표준 출력)으로 낸다
 
 # 어느 폴더에서 실행해도 이 리포 루트 기준으로 동작한다(스크립트 위치 기준).
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+report() {   # report <종료 코드>: 종료할 때 한 번만 낸다(성공·실패 모두)
+  local rc=$1 status=ok
+  [ "$rc" = 0 ] || status=fail
+  printf '{"area":"survey-service","status":"%s","exit_code":%d,"seconds":%d,"environment":{"kind":"python-venv","path":".venv","test_command":[".venv/bin/python","-m","pytest"]}}\n' \
+    "$status" "$rc" "$((SECONDS - START))" >&3
+}
+trap 'report $?' EXIT
 fail() { echo "setup-env 실패: $*" >&2; exit 1; }
 
 command -v python3 >/dev/null || fail "python3가 없다(3.10 이상 필요)"

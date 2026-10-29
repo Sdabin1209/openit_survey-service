@@ -40,3 +40,4 @@
 - [ADR-0036](ADR-0036.md) 결과에 빈칸의 원인 코드를 남긴다 (skipped_details, U35)
 - [ADR-0037](ADR-0037.md) 이미지는 영역 빌드 진입점 build-image.sh가 계약 요청으로 만든다 (U42)
 - [ADR-0038](ADR-0038.md) 설정은 계약 SurveyServiceEnv로 검증하고 모르는 SURVEY_* 이름은 시작 때 거부한다 (U44)
+- [ADR-0039](ADR-0039.md) setup-env.sh는 마지막 출력 줄에 SetupEnvReport를 낸다 (U43)

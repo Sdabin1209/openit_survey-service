@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U43: setup-env.sh가 SetupEnvReport를 낸다, 계약 핀 v2.6.0 [미출시] (ADR-0039)
+
+- `scripts/setup-env.sh`의 표준 출력은 마지막 줄 보고(계약 SetupEnvReport) 한 줄뿐이고 진행 기록은 표준 오류다. 계약 핀 v2.6.0.
+
 ## U44: 설정을 계약 SurveyServiceEnv로 검증, 모르는 SURVEY_* 이름 거부 [미출시] (ADR-0038)
 
 - 시작 때 환경 변수를 계약 스키마로 검증한다. 오타 이름·형식 오류·필수 이름 누락은 `ConfigError`(종료 코드 2, 이름만 출력). **동작 변경:** `SURVEY_MODEL_BACKEND`는 필수(`SURVEY_INFERENCE_URL`만으로는 시작하지 못함). `SURVEY_TURN_ENGINE_VERSION`은 계약에 없어 예외(CR-021).
