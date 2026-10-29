@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BOUNDARY_TAG=${BOUNDARY_TAG:-v2.4.1}
-MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.9.0}
+MODEL_RUNTIME_TAG=${MODEL_RUNTIME_TAG:-v0.10.0}
 PIP=${PIP:-.venv/bin/pip}
 # 왜: 태그를 원격에 올리기 전(헤드가 E2E 뒤에 push)에도 같은 스크립트로 이미지를 만들어 볼 수 있게 저장소 위치만 바꿀 수 있다. 기본은 원격이다.
 REPO_BASE=${REPO_BASE:-git@github.com:Sdabin1209}

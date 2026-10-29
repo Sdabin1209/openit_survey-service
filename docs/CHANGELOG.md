@@ -2,7 +2,7 @@
 
 ## U24: 서버가 fields로 보증하는 값 검사 삭제 [미출시, 서버 model-runtime 새 태그 뒤] (ADR-0035)
 
-- 칸 규격(`data_type`)이 있는 칸의 VALUE_INVALID·VALUE_TYPE_MISMATCH 검사와 그 재호출을 지웠다. UNKNOWN_SLOT·OUT_OF_CURRENT_ITEM(서버가 못 보는 것)과 규격이 없는 문항 은행·칸의 값 검사는 남았다. model-runtime v0.9.0은 fields를 모른다: f99cf5a 이후 태그를 핀하기 전에는 배포하지 않는다.
+- 칸 규격(`data_type`)이 있는 칸의 VALUE_INVALID·VALUE_TYPE_MISMATCH 검사와 그 재호출을 지웠다. UNKNOWN_SLOT·OUT_OF_CURRENT_ITEM(서버가 못 보는 것)과 규격이 없는 문항 은행·칸의 값 검사는 남았다. model-runtime 핀을 v0.10.0(fields로 값 규칙 보증)으로 올렸다. 서버 이미지가 v0.10.0 이상일 때만 배포한다.
 
 ## D115: 칸 규격(U32)과 결과 목록 순서(U26) [미출시] (ADR-0033, ADR-0034, 계약 v2.4.0)
 
