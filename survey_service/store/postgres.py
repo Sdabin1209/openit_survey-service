@@ -16,6 +16,12 @@ class PgSessionStore(SqliteSessionStore):
     _FOR_UPDATE = " FOR UPDATE"
     KIND = "postgresql"
     _NEXT_SEQ = "nextval('sessions_update_seq')"
+    _SEQ_LOCK_KEY = 7264003        # update_seq 번호 부여를 직렬화하는 advisory lock 키(이 영역 고정값, 근거 ADR-0034)
+
+    def _number_lock(self) -> None:
+        # 번호를 받는 쓰기 트랜잭션은 커밋(또는 롤백)까지 이 잠금을 쥔다: 다음 쓰기는 앞 쓰기가 커밋한 뒤에야 번호를 받아 번호 순서 = 커밋 순서가 된다.
+        # 이어 읽는 쪽(커서)이 늦게 커밋된 작은 번호를 건너뛰지 않는다. 트랜잭션 수준이라 연결이 죽어도 서버가 풀어 준다.
+        self._db.execute("SELECT pg_advisory_xact_lock(?)", (self._SEQ_LOCK_KEY,)).fetchall()
 
     def _open(self, url: str) -> None:
         migrate("postgresql", url)

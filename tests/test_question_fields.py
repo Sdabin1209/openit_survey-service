@@ -12,6 +12,7 @@ from boundary_contracts import validator
 
 from survey_service.fields import build_field_specs
 from survey_service.remote import RemoteModelSession
+from survey_service.store import effects
 
 from .e2e_support import Rig, ext, val
 from .sample_bank import sample_bank
@@ -90,24 +91,38 @@ def test_graph_does_not_send_fields_to_a_session_that_cannot_take_them():
 RESULT = SimpleNamespace(is_fallback=False, protections={})
 
 
-def test_remote_session_passes_fields_only_when_the_client_supports_them():
+def test_remote_session_passes_flow_and_fields_to_the_contract_client():
     class Client:
-        def __init__(self, with_fields):
-            self.calls = []
-            self._timeout = 1.0
-            if with_fields:
-                self.extract = self._with
-            else:
-                self.extract = self._without
+        _timeout = 1.0
 
-        def _with(self, rid, request, flow=None, fields=None):
+        def __init__(self):
+            self.calls = []
+
+        def extract(self, rid, request, flow=None, fields=None):
             self.calls.append((flow, fields))
             return RESULT
-
-        def _without(self, rid, request, flow=None):
-            self.calls.append((flow, "no-fields-param"))
-            return RESULT
     f, spec = {"order": ["Q1"], "skips": []}, {"fields": [{"slot": "Q1.a", "data_type": "boolean"}]}
-    a, b = Client(True), Client(False)
-    assert RemoteModelSession(a, "rel").extract({"x": 1}, flow=f, fields=spec) is RESULT and a.calls == [(f, spec)]
-    assert RemoteModelSession(b, "rel").extract({"x": 1}, flow=f, fields=spec) is RESULT and b.calls == [(f, "no-fields-param")]       # 지원하지 않는 클라이언트에는 보내지 않는다(CR-020)
+    c = Client()
+    assert RemoteModelSession(c, "rel").extract({"x": 1}, flow=f, fields=spec) is RESULT
+    assert RemoteModelSession(c, "rel").extract({"x": 1}, flow=f) is RESULT              # 칸 규격이 없는 문항 은행: fields를 보내지 않는다
+    assert c.calls == [(f, spec), (f, None)]
+
+
+def test_reference_server_gets_fields_and_returns_the_dataset_answer_shape_for_an_out_of_range_value(tmp_path):
+    """계약 기준 서버(RuntimeReferenceServer)는 fields가 오면 값 규칙을 적용한다: Q10.days=8(범위 0~7)은 데이터셋이 낸 정답 모양(REASK/OUT_OF_RANGE, 값 null, UNCLEAR)으로 돌아온다."""
+    from .test_inference_client import Env
+    e = Env(tmp_path)
+    try:
+        assert e.loader.poll_once().action == "LOADED"
+        e.orch.store.create("S2", "rel-1", effects.initial_state("S2", sample_bank(), "Q10"))      # 마지막 문항에서 시작: REASK의 next_item은 현재 문항이어야 한다
+        e.srv.extract_fn = lambda req: ext("NEXT", "END", val("Q10.days", 8))
+        o = e.turn("여덟 일", sid="S2")
+        body = e.srv.extract_bodies[-1]
+        assert body["fields"] == build_field_specs(sample_bank()) and list(validator("ExtractRequest").iter_errors(body)) == []
+        out = e.orch.store.load("S2")["state"]["dialogue_log"][-1]["extract_output"]
+        assert out["action"] == "REASK" and out["reason"] == "OUT_OF_RANGE" and out["targets"] == ["Q10.days"] and out["next_item"] == "Q10"
+        v = next(x for x in out["values"] if x["key"] == "Q10.days")
+        assert v["value"] is None and v["status"] == "UNCLEAR" and v["save"] is False and v["precision"] == "unspecified"
+        assert o.orchestrator_output["turn_failure_signal"] is None
+    finally:
+        e.close()

@@ -2,8 +2,8 @@
 
 ## D115: 칸 규격(U32)과 결과 목록 순서(U26) [미출시] (ADR-0033, ADR-0034, 계약 v2.4.0)
 
-- 문진 스키마 1.2.0(하위 호환, 정수 버전 1): `SlotDef`에 선택 속성 `data_type`, `unit`, `minimum`, `maximum`, `exclusive_minimum`. `survey_service/fields.py`가 문항 은행에서 `QuestionFieldSpec`을 만들고 `fields`를 받는 추론 세션에 싣는다. 계약 클라이언트 2.4.0이 `fields`를 못 받아 서버 전송은 CR-020 대기.
-- 결과 목록(`GET /v1/results`)의 순서·커서를 벽시계 `updated_at`에서 DB가 매기는 단조 증가 번호 `update_seq`로(마이그레이션 0006). 커서는 정수 문자열. 계약 핀 v2.4.0.
+- 문진 스키마 1.2.0(하위 호환, 정수 버전 1): `SlotDef`에 선택 속성 `data_type`, `unit`, `minimum`, `maximum`, `exclusive_minimum`. `survey_service/fields.py`가 문항 은행에서 `QuestionFieldSpec`을 만들고 `fields`를 받는 추론 세션에 싣는다. 계약 v2.4.1(CR-020 반영)의 `extract(..., fields=)`로 항상 보낸다. 기준 서버가 범위 밖 값을 데이터셋 정답 모양으로 돌려주는 것을 시험한다.
+- 결과 목록(`GET /v1/results`)의 순서·커서를 벽시계 `updated_at`에서 DB가 매기는 단조 증가 번호 `update_seq`로(마이그레이션 0006). 커서는 정수 문자열. 번호 순서 = 커밋 순서(PostgreSQL은 트랜잭션 수준 advisory lock으로 번호 부여를 직렬화). 계약 핀 v2.4.1.
 
 ## U34: 되묻기 연속 상한이 REDIRECT와 실패 턴도 센다 [미출시] (ADR-0032)
 

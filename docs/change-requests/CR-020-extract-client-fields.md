@@ -1,6 +1,6 @@
 # CR-020: 계약 클라이언트 `HttpModelRuntime.extract`가 `fields`를 넘기게 해 달라 (U32, 2026-10-30)
 
-상태: **헤드 반영 요청.** 계약은 건드리지 않았다. 서비스 쪽 준비는 끝났다(ADR-0033).
+상태: **반영됨(계약 v2.4.1, boundary-contracts a8851e3).** `HttpModelRuntime.extract(release_id, request, flow=None, fields=None)`. 서비스는 우회 없이 문항 은행에 칸 규격이 있으면 항상 `fields=`로 보낸다. 아래는 당시 요청이다. 계약은 건드리지 않았다(ADR-0033).
 
 ## 사실
 - 계약 2.4.0은 `ExtractRequest`에 선택 필드 `fields`(`QuestionFieldSpec`)를 더했다(`schemas/ExtractRequest.schema.json`, CHANGELOG 2.4.0).

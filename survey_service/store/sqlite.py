@@ -69,12 +69,23 @@ class SqliteSessionStore:
             return {"session_id": session_id, "status": "NOT_FOUND", "revision": None, "state": None}
         return {"session_id": session_id, "status": "OK", "revision": row[0], "state": json.loads(row[1])}
 
+    def _number_lock(self) -> None:
+        """update_seq를 받는 모든 쓰기 트랜잭션이 BEGIN 직후 부른다. SQLite는 BEGIN IMMEDIATE가 쓰기 잠금을 커밋까지 쥐어 번호 순서가 커밋 순서다.
+        PostgreSQL 구현은 트랜잭션 수준 advisory lock으로 번호 부여를 직렬화한다(ADR-0034)."""
+
     def create(self, session_id: str, release_id: str, state: dict) -> int:
         with self._lock:
             try:
+                self._db.execute("BEGIN IMMEDIATE")
+                self._number_lock()
                 self._db.execute(f"INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at, update_seq) VALUES (?,?,?,?,?,?,{self._NEXT_SEQ})",
                                  (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state), self._clock()))
+                self._db.execute("COMMIT")
             except self._ERRORS as e:
+                try:
+                    self._db.execute("ROLLBACK")
+                except self._ERRORS:
+                    pass
                 raise StoreError(f"세션을 만들 수 없다: {type(e).__name__}") from e
         return 1
 
@@ -89,6 +100,7 @@ class SqliteSessionStore:
             stage = "begin"
             try:
                 self._db.execute("BEGIN IMMEDIATE")
+                self._number_lock()
                 row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?" + self._FOR_UPDATE, (sid,)).fetchone()
                 if row is None:
                     self._db.execute("ROLLBACK")
@@ -126,6 +138,7 @@ class SqliteSessionStore:
         with self._lock:
             try:
                 self._db.execute("BEGIN IMMEDIATE")
+                self._number_lock()
                 row = self._db.execute("SELECT revision, doc FROM sessions WHERE session_id=?" + self._FOR_UPDATE, (session_id,)).fetchone()
                 if row is None:
                     self._db.execute("ROLLBACK")
