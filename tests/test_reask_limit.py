@@ -1,4 +1,4 @@
-"""G12: REASK·CONFIRM 연속 상한(SURVEY_MAX_CONSECUTIVE_REASK, 기본 3, ADR-0020). 연속은 문항과 무관하게 REASK·CONFIRM이 이어진 턴 수이고 다른 action이 나오면 끊긴다.
+"""G12: REASK·CONFIRM(U34부터 REDIRECT와 실패 턴도) 연속 상한(SURVEY_MAX_CONSECUTIVE_REASK, 기본 3, ADR-0020, ADR-0032). 연속은 문항과 무관하게 이어진 턴 수이고 다른 action이 나오면 끊긴다.
 상한 동작 시험은 값 2를, 기본값 N=3의 경계 시험은 3을 쓴다."""
 from survey_service.settings import Settings
 
@@ -8,7 +8,7 @@ from .e2e_support import Rig, ext, val
 from .sample_bank import sample_bank
 
 REASK = ext("REASK", "Q1.D01", val("Q1.D01.on_medication", None, "MISSING"), reason="MISSING", targets=["Q1.D01.on_medication"])
-OTHER = ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC")
+OTHER = ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", False), val("Q1.D01.on_medication", False))       # 연속을 끊는 정상 진행(REDIRECT는 U34부터 연속에 센다, ADR-0032)
 SENT = "직원을 불러 드리겠습니다. 잠시만 기다려 주세요."          # 문항 세트의 CALL_STAFF 고정 문장(새 문구 없음)
 
 

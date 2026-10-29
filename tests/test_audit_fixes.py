@@ -199,6 +199,8 @@ def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_v
         for s_ in q["slots"]:
             if (q["question_id"], s_["slot_id"]) == ("Q1.D01", "on_medication"):
                 s_["choices"] = ["복용", "중단"]
+    for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
+        bank["session_settings"].pop(k, None)          # 연속 실패가 직원 호출로 바뀌는 상한(U34, ADR-0032)과 무관하게 값 검사만 본다
     rig = Rig(bank=bank)
     rig.start()
     for value, code in [("열대여섯", None), (123456789, "VALUE_INVALID"), ("", "VALUE_INVALID"), ("x" * 500, "VALUE_INVALID")]:

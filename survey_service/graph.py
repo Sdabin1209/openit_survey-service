@@ -39,6 +39,7 @@ TRACE_KEYS = ["frontend_message", "intervention_decision", "orchestrator_input",
               "response_outcome", "response_protections", "frontend_input", "staff_console_input", "dispatch_input", "dispatch_output",
               "orchestrator_output", "session_before", "session_after", "log_entry", "persistence_load_request", "persistence_load_result",
               "persistence_commit_request", "persistence_commit_result"]
+STREAK_ACTIONS = ("REASK", "CONFIRM", "REDIRECT")   # 연속 상한이 세는 action (ADR-0020, REDIRECT는 U34 ADR-0032)
 MAX_EXTRACT_CALLS = 2         # 첫 호출 + 같은 요청의 1회 재시도(D75)
 
 
@@ -116,6 +117,7 @@ class TurnState(TypedDict, total=False):
     flow_end: bool
     resp: Optional[dict]            # 응답 계획 {kind: model_start | model | fixed | none, text?}
     alert: Optional[dict]           # 직원 알림(RiskSource가 낸 것). 입력원이 없으면 항상 None
+    fail_escalation: bool           # 추출·검증 실패가 연속 상한에 닿아 직원 호출로 바뀐 턴(U34, ADR-0032): 합성 REASK로 같은 직원 호출 경로를 탄다
     prescreen_hit: bool             # 모델 추출 전에 발화 원문에서 위험이 걸렸다(D88 U1, ADR-0013)
     pause_reason: Optional[str]     # 이 턴이 낳은 정지의 사유 REASK_LIMIT(되묻기 한도). 위험 매처는 alert.kind RISK로 도출한다(CR-H002, ADR-0022)
     alert_sent: bool                # 직원 알림을 이미 전달했다(prescreen이 쓰기 확정과 분리해 먼저 보낸다)
@@ -183,7 +185,7 @@ def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optio
         response_text=None, signal=None, intervention_result=None, dispatch_called=False, console_delivered=False,
         console={"staff_alert": None, "turn_failure_signal": None, "intervention_result": None},
         fatal=None, created=None, extract_in=None, extract_out=None, extract_calls=0, extract_next="validate", violations=None,
-        writes=None, flow_end=False, resp=None, alert=None, prescreen_hit=False, alert_sent=False, post_doc=None, state_doc=None, release_id=None)
+        writes=None, flow_end=False, resp=None, alert=None, fail_escalation=False, prescreen_hit=False, alert_sent=False, post_doc=None, state_doc=None, release_id=None)
 
 
 def _ctx(config) -> TurnCtx:
@@ -229,7 +231,7 @@ class TurnGraph:
                                                                     "extract": "extract", "plan_other": "plan_other", "plan_risk": "plan_risk"})
         g.add_conditional_edges("plan_risk", self.r_ok("commit"), {"commit": "commit", "finalize": "finalize"})
         g.add_conditional_edges("extract", self.r_extract, {"validate_extraction": "validate_extraction", "extract": "extract",
-                                                           "finalize": "finalize"})
+                                                           "plan_writes": "plan_writes", "finalize": "finalize"})
         g.add_conditional_edges("validate_extraction", self.r_validated, {"plan_writes": "plan_writes", "extract": "extract",
                                                                          "finalize": "finalize"})
         g.add_conditional_edges("plan_writes", self.r_ok("commit"), {"commit": "commit", "finalize": "finalize"})
@@ -266,7 +268,7 @@ class TurnGraph:
 
     @staticmethod
     def r_extract(st) -> str:
-        return {"validate": "validate_extraction", "extract": "extract"}.get(st["extract_next"], "finalize")
+        return {"validate": "validate_extraction", "extract": "extract", "plan": "plan_writes"}.get(st["extract_next"], "finalize")
 
     @staticmethod
     def r_validated(st) -> str:
@@ -476,6 +478,12 @@ class TurnGraph:
         return _step_failed(("BEFORE_COMMIT", step))
 
     def n_extract(self, st, config):
+        return self._escalate_failure(st, _ctx(config), self._extract(st, config))
+
+    def n_validate_extraction(self, st, config):
+        return self._escalate_failure(st, _ctx(config), self._validate(st, config))
+
+    def _extract(self, st, config):
         """LoRA-A를 한 번 부른다(이 노드가 다시 실행되면 같은 요청의 재시도). 시작·정지 같은 비발화 턴은 이 노드에 오지 않는다."""
         ctx, doc = _ctx(config), st["state_doc"]
         calls = st["extract_calls"]
@@ -517,7 +525,7 @@ class TurnGraph:
         tr.update(extract_output=copy.deepcopy(res.output), extract_protections=dict(res.protections) or None)
         return {**upd, "trace": tr}
 
-    def n_validate_extraction(self, st, config):
+    def _validate(self, st, config):
         """서버가 보증하는 의미 규칙(save·targets·next_item 등, 계약 action_extraction_rules)은 다시 검사하지 않는다(R7, ADR 0010).
         문항 세트에 의존하는 서비스 고유 검사만 한다: 저장할 칸이 문항 세트에 있는지, 값 타당성. 위반이면 같은 요청을 1회 재시도, 그래도면 턴 실패(D75)."""
         ctx, doc = _ctx(config), st["state_doc"]
@@ -552,7 +560,7 @@ class TurnGraph:
             return {"failed": self._fail(st, "VALIDATE", e)}
         upd: dict = {"writes": writes, "resp": {"kind": "model"}, "flow_end": out["next_item"] == "END"}
         src = self.o.risk_source
-        if src is not None and not getattr(src, "utterance_only", False):      # 발화만 보는 입력원은 prescreen이 이미 봤다
+        if src is not None and not getattr(src, "utterance_only", False) and not st.get("fail_escalation"):      # 발화만 보는 입력원은 prescreen이 이미 봤다. 합성 출력은 입력원에 보여 주지 않는다
             # (입력원이 없으면 직원 알림은 비활성이다, 설계 17.6)
             try:
                 alert = src.check(extract_input=st["extract_in"], extract_output=out, utterance=st["utterance"])
@@ -618,25 +626,63 @@ class TurnGraph:
     def _reask_escalation(self, st, ctx, out) -> Optional[dict]:
         """G12: A가 REASK·CONFIRM을 연달아 내는 횟수를 대화 로그에서 센다(세션 문서에서 계산하므로 재시작·재전송에도 같다).
         상한(SURVEY_MAX_CONSECUTIVE_REASK, 0이면 끔)을 넘는 REASK·CONFIRM이 나오면 되묻는 대신 직원을 부른다."""
-        cap = self.o.max_consecutive_reask
-        authored = [ctx.bank.settings.get(k) for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit")] if ctx.bank else []
-        authored = [a for a in authored if isinstance(a, int) and not isinstance(a, bool) and a >= 1]
-        if authored:            # 문항 세트가 정한 상한(U2). 세 값은 같은 연속 REASK·CONFIRM 횟수에 적용하는 근사다(ADR-0014): 가장 작은 값을 쓴다
-            cap = min(authored + ([cap] if cap > 0 else []))
-        if cap <= 0 or out["action"] not in ("REASK", "CONFIRM"):
+        cap = self._reask_cap(ctx)
+        if cap <= 0 or out["action"] not in STREAK_ACTIONS:
             return None
-        n = 0
-        for e in reversed(st["state_doc"]["dialogue_log"]):
-            if e["turn_result"] != "COMMITTED":              # 실패·무시된 턴은 연속을 끊지 않는다
-                continue
-            ex = e.get("extract_output")
-            if ex is None or ex["action"] not in ("REASK", "CONFIRM"):
-                break                                        # 다른 action, 재개·시작 같은 턴이 연속을 끊는다
-            n += 1
-        if n < cap:
+        if self._streak(st) < cap:
             return None
         self.o._count("reask_limit_reached")
         return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF"), "pause_reason": "REASK_LIMIT"}
+
+    def _reask_cap(self, ctx) -> int:
+        cap = self.o.max_consecutive_reask
+        authored = [ctx.bank.settings.get(k) for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit")] if ctx.bank else []
+        authored = [a for a in authored if isinstance(a, int) and not isinstance(a, bool) and a >= 1]
+        if authored:            # 문항 세트가 정한 상한(U2). 세 값은 같은 연속 횟수에 적용하는 근사다(ADR-0014): 가장 작은 값을 쓴다
+            cap = min(authored + ([cap] if cap > 0 else []))
+        return cap
+
+    def _streak(self, st) -> int:
+        """이번 턴 앞까지 이어진 '진전 없는 턴' 수(U34, ADR-0032): REASK·CONFIRM·REDIRECT로 확정된 턴과 추출·검증이 실패한 턴(NOT_COMMITTED).
+        실패한 턴은 같은 turn_id로 다시 올 수 있고 그때마다 대화 로그에 항목이 쌓이므로, 세션 시각 기록(turn_index -> turn_id)으로 같은 turn_id를 한 번만 센다.
+        시각 기록을 읽을 수 없으면 거르지 않는다(직원을 더 일찍 부르는 쪽이 안전하다). 다른 action, 재개·시작 같은 턴이 연속을 끊는다."""
+        log_ = st["state_doc"]["dialogue_log"]
+        tl: dict = {}
+        if self.o.timeline is not None:
+            try:
+                tl = self.o.timeline.timeline(st["session_id"])
+            except Exception as e:
+                log.warning("연속 판정의 시각 기록을 읽지 못했다 session=%s error=%s", st["session_id"], type(e).__name__)
+        seen = {st["turn_id"]}                                 # 이번 턴의 이전 실패 시도(같은 turn_id 재전송)도 거른다
+        n = 0
+        for i in range(len(log_) - 1, -1, -1):
+            e = log_[i]
+            tid = (tl.get(i) or {}).get("turn_id")
+            if tid is not None:
+                if tid in seen:
+                    continue
+                seen.add(tid)
+            r = e["turn_result"]
+            if r == "COMMITTED":
+                ex = e.get("extract_output")
+                if ex is None or ex["action"] not in STREAK_ACTIONS:
+                    break
+                n += 1
+            elif isinstance(r, dict) and any(s["phase"] == "BEFORE_COMMIT" and s["step"] in ("LoRA-A", "VALIDATE") for s in r["failed_steps"]):
+                n += 1                                         # 추출·검증 실패. 그 밖의 실패·무시된 턴은 연속을 끊지도 세지도 않는다
+        return n
+
+    def _escalate_failure(self, st, ctx, res: dict) -> dict:
+        """추출·검증이 끝내 실패한 턴(res가 종료 노드로 간다)이 연속 상한에 닿았으면, 실패로 끝내지 않고 합성 REASK로 plan_writes에 보내 같은 직원 호출 경로
+        (정지 + CALL_STAFF 알림 + 고정 문장)를 탄다. 턴 마감을 이미 넘겼으면 확정할 시간이 없어 그대로 실패로 둔다(이 턴은 다음 연속에 센다)."""
+        cap = self._reask_cap(ctx)
+        if cap <= 0 or res.get("extract_next") != "finalize" or not res.get("failed") or ctx.expired() or st["state_doc"]["progress_record"]["session_status"] != "IN_PROGRESS":
+            return res
+        if any(f["step"] not in ("LoRA-A", "VALIDATE") for f in res["failed"]) or self._streak(st) < cap:
+            return res
+        cur = st["state_doc"]["progress_record"]["current_question_id"]
+        synthetic = {"action": "REASK", "next_item": cur, "reason": "MISSING", "values": []}
+        return {**res, "extract_next": "plan", "failed": [], "extract_out": synthetic, "fail_escalation": True}
 
     @staticmethod
     def _fixed(ctx, key: str) -> dict:
