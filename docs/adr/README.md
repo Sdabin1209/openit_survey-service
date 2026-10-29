@@ -42,3 +42,4 @@
 - [ADR-0038](ADR-0038.md) 설정은 계약 SurveyServiceEnv로 검증하고 모르는 SURVEY_* 이름은 시작 때 거부한다 (U44)
 - [ADR-0039](ADR-0039.md) setup-env.sh는 마지막 출력 줄에 SetupEnvReport를 낸다 (U43)
 - [ADR-0040](ADR-0040.md) 문항 세트만 필요하면 I4 get_release_question_bank를 쓴다 (U47, SV-16)
+- [ADR-0041](ADR-0041.md) 노출 선언 라벨 io.openit.exposure (U47)

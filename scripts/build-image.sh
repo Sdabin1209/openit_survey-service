@@ -46,12 +46,15 @@ SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)
 LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
 [ -n "$SCHEMA_CONTRACT_VERSION" ] && [ -n "$LANGGRAPH_VERSION" ] || die "schema/CONTRACT_VERSION 또는 requirements.lock의 langgraph 고정을 읽지 못했다"
 
+# 노출 선언(계약 Exposure): 정본은 리포 안 deploy-exposure.json. 이미지 라벨 io.openit.exposure(JSON 한 줄 문자열)로 단다(ADR-0041)
+EXPOSURE=$("$PYTHON" -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1],encoding="utf-8")),ensure_ascii=False,separators=(",",":")))' deploy-exposure.json) || die "deploy-exposure.json을 읽지 못했다"
+
 # 3) 빌드: 이웃 소스는 이름 있는 빌드 컨텍스트로 준다(Dockerfile이 pip로 설치). 빌드 출력은 표준 오류로 보낸다.
 echo "build-image: $IMAGE_TAG (revision $REVISION, boundary $BOUNDARY_TAG, model-runtime $MODEL_RUNTIME_TAG)" >&2
 "$DOCKER" build -t "$IMAGE_TAG" \
   --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
   --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" \
-  --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" . >&2
+  --label "io.openit.exposure=$EXPOSURE" --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" . >&2
 
 # 4) 결과: 이미지에 실제로 붙은 io.openit.* 라벨을 docker inspect로 읽어 마지막 줄에 낸다
 "$DOCKER" image inspect "$IMAGE_TAG" | "$PYTHON" -c '

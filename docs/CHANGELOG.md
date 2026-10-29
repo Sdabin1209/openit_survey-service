@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U47(1): 노출 선언 라벨 io.openit.exposure [미출시] (ADR-0041)
+
+- `deploy-exposure.json`(노출 표 정본)을 이미지 라벨 `io.openit.exposure`로 단다(`build-image.sh`). 시험이 표와 코드 라우트의 일치를 본다.
+
 ## U47(5): 문항 세트만 받는 I4 호출 [미출시] (ADR-0040)
 
 - 원격 추론 구성에서 릴리스 로더가 `get_release_question_bank`(계약 2.7.0)로 문항 세트만 받고 어댑터를 내려받지 않는다. 서비스 안 가짜 백엔드는 어댑터가 필요해 `load_bundle`을 쓴다.

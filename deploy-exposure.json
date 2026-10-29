@@ -1,0 +1,150 @@
+{
+  "service": "survey-service",
+  "routes": [
+    {
+      "paths": [
+        "/healthz"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "auth": {
+        "kind": "none"
+      },
+      "user_header": "strip"
+    },
+    {
+      "paths": [
+        "/readyz"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "auth": {
+        "kind": "none"
+      },
+      "user_header": "strip",
+      "timeouts_ms": {
+        "dial": 1000,
+        "response_header": 2000
+      }
+    },
+    {
+      "paths": [
+        "/v1/sessions",
+        "/v1/sessions/*/turns",
+        "/v1/sessions/*/end",
+        "/v1/sessions/*/staff-call/retry",
+        "/v1/sessions/*/staff-call/report"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "auth": {
+        "kind": "device-token"
+      },
+      "user_header": "strip",
+      "timeouts_ms": {
+        "dial": 1000,
+        "response_header": 8500
+      }
+    },
+    {
+      "paths": [
+        "/v1/sessions/*/state"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "auth": {
+        "kind": "device-token"
+      },
+      "user_header": "strip",
+      "timeouts_ms": {
+        "dial": 1000,
+        "response_header": 8500
+      }
+    },
+    {
+      "paths": [
+        "/v1/staff/alerts",
+        "/v1/staff/alerts/stream",
+        "/v1/staff/sessions/*",
+        "/v1/staff/push-config"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "auth": {
+        "kind": "account",
+        "roles": [
+          "staff"
+        ]
+      },
+      "upstream_token": "survey-api-staff",
+      "user_header": "set",
+      "streaming": true,
+      "timeouts_ms": {
+        "dial": 2000,
+        "response_header": 10000,
+        "read": 3600000
+      }
+    },
+    {
+      "paths": [
+        "/v1/staff/push-subscriptions",
+        "/v1/staff/push-subscriptions/unsubscribe",
+        "/v1/sessions/*/intervention"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "auth": {
+        "kind": "account",
+        "roles": [
+          "staff"
+        ]
+      },
+      "upstream_token": "survey-api-staff",
+      "user_header": "set",
+      "streaming": true,
+      "timeouts_ms": {
+        "dial": 2000,
+        "response_header": 10000,
+        "read": 3600000
+      }
+    },
+    {
+      "paths": [
+        "/v1/staff/push-subscriptions"
+      ],
+      "methods": [
+        "DELETE"
+      ],
+      "auth": {
+        "kind": "account",
+        "roles": [
+          "staff"
+        ]
+      },
+      "upstream_token": "survey-api-staff",
+      "user_header": "set",
+      "streaming": true,
+      "timeouts_ms": {
+        "dial": 2000,
+        "response_header": 10000,
+        "read": 3600000
+      }
+    },
+    {
+      "paths": [
+        "/v1/sessions/*/risk-signals",
+        "/v1/results",
+        "/v1/results/*"
+      ],
+      "auth": {
+        "kind": "denied"
+      }
+    }
+  ]
+}
