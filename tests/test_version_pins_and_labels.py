@@ -4,7 +4,7 @@
 model-runtime 핀은 설치된 패키지의 버전과 같다. 기대값의 출처는 설치된 패키지(`model_runtime.RUNTIME_VERSION`)다: 시험이 숫자를 따로 적지 않는다.
 
 라벨: deploy의 ImageLabels(`io.openit.contracts.survey-schema`는 `^([0-9]+|n/a)$`, `unknown`·`survey-schema-v1.0.0` 같은 문자열 불가)를
-이 영역의 이미지 라벨 입력(Dockerfile 기본값, build-image.sh가 읽는 schema/CONTRACT_VERSION)이 지키는지 본다.
+이 영역의 이미지 라벨 입력(Dockerfile 기본값, build-image.sh가 읽는 schema/pyproject.toml의 버전)이 지키는지 본다.
 """
 import pathlib
 import re
@@ -34,17 +34,18 @@ def test_no_pins_outside_requirements_and_no_turn_engine():
     assert not (ROOT / "scripts/build_wheels.sh").exists()
 
 
-def test_schema_label_input_is_an_integer_not_a_tag_string():
-    ver = (ROOT / "schema/CONTRACT_VERSION").read_text().strip()
+def test_schema_label_input_is_the_major_of_the_repo_schema_package_not_a_tag_string():
+    """라벨 io.openit.contracts.survey-schema는 정수(주 버전)다. 값은 이 이미지가 실제로 쓰는 문진 스키마(리포의 schema/ 패키지)의 버전에서 나온다(U50)."""
+    ver = re.search(r'^version = "(\d+)\.\d+\.\d+"', (ROOT / "schema/pyproject.toml").read_text(), re.M).group(1)
     assert SURVEY_SCHEMA_LABEL.match(ver)
     script = (ROOT / "scripts/build-image.sh").read_text()
-    assert "SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)" in script
+    assert 'SCHEMA_ACTUAL=$(pkg_version schema openit-survey-schema)' in script and "SURVEY_SCHEMA_MAJOR=${SCHEMA_ACTUAL#v}" in script
 
 
 def test_dockerfile_does_not_default_labels_to_values_imagelabels_rejects():
     """`unknown` 기본값이 라벨에 남으면 deploy 게시 검사가 거부한다. 빌드 인자를 빠뜨리면 이미지가 만들어지지 않아야 한다."""
     text = (ROOT / "Dockerfile").read_text()
-    for arg in ("COMMIT", "SCHEMA_CONTRACT_VERSION", "BOUNDARY_TAG", "MODEL_RUNTIME_TAG"):
+    for arg in ("COMMIT", "SURVEY_SCHEMA_MAJOR", "BOUNDARY_TAG", "MODEL_RUNTIME_TAG"):
         assert not re.search(rf"^ARG {arg}=unknown", text, re.M), arg
 
 

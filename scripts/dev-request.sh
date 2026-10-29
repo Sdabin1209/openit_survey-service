@@ -16,10 +16,11 @@ git clone -q --depth 1 --branch "$BC" "$REPO_BASE/openit_boundary-contracts.git"
 git clone -q --depth 1 --branch "$MR" "$REPO_BASE/openit_model-runtime.git" "$WORK/model_runtime" >&2
 rm -rf "$WORK/boundary_contracts/.git" "$WORK/model_runtime/.git"
 REV=$(git rev-parse --short HEAD)
-python3 - "$WORK" "$PWD" "$REV" "$BC" "$MR" "$IMAGE_TAG" <<'PY' > "$WORK/request.json"
+SS=v$(sed -n 's/^version = "\(.*\)"/\1/p' schema/pyproject.toml | head -1)      # 이 리포 schema/의 실제 버전(요청과 달라야 할 이유가 없다)
+python3 - "$WORK" "$PWD" "$REV" "$BC" "$MR" "$IMAGE_TAG" "$SS" <<'PY' > "$WORK/request.json"
 import json, sys
-work, src, rev, bc, mr, tag = sys.argv[1:]
-print(json.dumps({"source_dir": src, "revision": rev, "versions": {"boundary": bc, "model_runtime": mr},
+work, src, rev, bc, mr, tag, ss = sys.argv[1:]
+print(json.dumps({"source_dir": src, "revision": rev, "versions": {"boundary": bc, "model_runtime": mr, "survey_schema": ss},
                   "dependency_sources": {"boundary": f"{work}/boundary_contracts", "model_runtime": f"{work}/model_runtime"}, "image_tag": tag}))
 PY
 echo "$WORK/request.json"

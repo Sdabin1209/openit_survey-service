@@ -2,6 +2,7 @@
 요청 검증(모르는 키·필요한 키 없음은 실패)은 docker 없이 시험하고, 실제 빌드는 도커가 있을 때 한 번 한다(이미지 이름에 리포 이름, 끝나면 지운다)."""
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -69,6 +70,16 @@ def test_label_honesty_requested_version_that_differs_from_the_tree_fails_withou
     assert r.returncode != 0 and "요청 versions.model_runtime(v0.10.0)" in r.stderr and "실제 버전(v0.9.0)" in r.stderr
 
 
+def test_label_honesty_requested_survey_schema_version_that_differs_from_the_repo_schema_fails(tmp_path):
+    """U50 구멍: 이 이미지가 실제로 쓰는 문진 스키마는 리포의 schema/다. 요청 versions.survey_schema가 그 버전과 다르면 라벨을 찍지 않고 실패한다."""
+    actual = "v" + re.search(r'^version = "(.*)"', (ROOT / "schema/pyproject.toml").read_text(), re.M).group(1)
+    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "3.0.0"), _tree(tmp_path / "mr", "model-runtime", "0.10.0")
+    r = run(request(tmp_path, versions={"boundary": "v3.0.0", "model_runtime": "v0.10.0", "survey_schema": "v1.3.0"}, dependency_sources={"boundary": bc, "model_runtime": mr}))
+    assert r.returncode != 0 and "요청 versions.survey_schema(v1.3.0)" in r.stderr and f"실제 버전({actual})" in r.stderr and "라벨이 거짓" in r.stderr
+    r = run(request(tmp_path, versions={"boundary": "v3.0.0", "model_runtime": "v0.10.0", "survey_schema": actual}, dependency_sources={"boundary": bc, "model_runtime": mr}))
+    assert "라벨이 거짓" not in r.stderr and "build-image: openit-survey-service-test" in r.stderr          # 같으면 통과해 docker 단계(false)까지 간다
+
+
 def test_label_honesty_a_tree_of_another_package_is_not_accepted(tmp_path):
     bc, mr = _tree(tmp_path / "bc", "something-else", "3.0.0"), _tree(tmp_path / "mr", "model-runtime", "0.10.0")
     r = run(request(tmp_path, dependency_sources={"boundary": bc, "model_runtime": mr}))
@@ -105,6 +116,9 @@ def test_real_build_prints_a_valid_result_as_the_last_line_with_the_requested_la
         assert labels["io.openit.contracts.boundary"] == "v" + inst[0] and labels["io.openit.model-runtime"] == "v" + inst[1]         # 라벨 = 실제 설치 버전(U50)
         assert labels["io.openit.service"] == "survey-service" and labels["io.openit.revision"] == want["revision"]
         assert labels["io.openit.contracts.boundary"] == want["versions"]["boundary"] and labels["io.openit.model-runtime"] == want["versions"]["model_runtime"]
-        assert labels["io.openit.contracts.survey-schema"] == (ROOT / "schema/CONTRACT_VERSION").read_text().strip() and "io.openit.turn-engine" not in labels
+        major = re.search(r'^version = "(\d+)\.', (ROOT / "schema/pyproject.toml").read_text(), re.M).group(1)
+        assert labels["io.openit.contracts.survey-schema"] == major           # 라벨 = 이 이미지가 쓰는 문진 스키마(리포의 schema/)의 주 버전. 요청 versions.survey_schema와 같아야 빌드된다
+        assert want["versions"]["survey_schema"] == "v" + (ROOT / "schema/pyproject.toml").read_text().split('version = "')[1].split('"')[0]
+        assert "io.openit.turn-engine" not in labels
     finally:
         subprocess.run(["docker", "rmi", "-f", tag], capture_output=True)

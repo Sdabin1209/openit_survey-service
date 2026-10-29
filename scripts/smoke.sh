@@ -17,7 +17,7 @@ REQ=$(bash scripts/dev-request.sh "$WORK" "$IMG")      # requirements.txt의 태
 RESULT=$(bash scripts/build-image.sh "$REQ" | tail -1)    # 영역 빌드 진입점(계약 2.5.0). 마지막 줄 = BuildImageResult
 BOUNDARY_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["boundary"])' "$REQ")
 MODEL_RUNTIME_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["model_runtime"])' "$REQ")
-SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)
+SURVEY_SCHEMA_MAJOR=$(sed -n 's/^version = "\([0-9]*\)\..*/\1/p' schema/pyproject.toml | head -1)
 LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
 echo "$RESULT" | python3 -c 'import json,sys;r=json.loads(sys.stdin.read());assert r["image_id"].startswith("sha256:") and r["labels"]["io.openit.service"]=="survey-service"' || { echo "SMOKE FAIL: 빌드 결과(BuildImageResult)가 올바르지 않다: $RESULT"; exit 1; }
 trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true' EXIT
@@ -62,7 +62,7 @@ echo "$READY" | grep -q '"response_tables": {"status": "DATASET_RULES_UNCONFIRME
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")
 echo "labels:  $LABELS"
 for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" \
-            "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SCHEMA_CONTRACT_VERSION" "io.openit.langgraph\":\"$LANGGRAPH_VERSION"; do
+            "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SURVEY_SCHEMA_MAJOR" "io.openit.langgraph\":\"$LANGGRAPH_VERSION"; do
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://127.0.0.1:$PORT/v1/turns")
