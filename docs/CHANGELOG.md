@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U48: 위험 규칙 파일 형식을 계약 SurveyRiskRulesFile로 검증 [미출시] (ADR-0042)
+
+- `parse_rules`가 형식 검사를 계약 validator에 맡기고 id 중복·정규식 유효성만 따로 거부한다. 거부 문구는 그대로. 계약 핀 v2.8.0.
+
 ## U49: 승격된 계약 스키마의 영역 사본 정리 [미출시]
 
 `docs/change-requests/` 아래 스키마 파일을 하나씩 분류했다. 정본은 계약 패키지(boundary-contracts)다. 이 사본을 읽는 시험·스크립트는 없었다(`verify_*.py` 둘은 사본을 검증하던 것이라 함께 지움).

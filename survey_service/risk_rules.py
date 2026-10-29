@@ -20,6 +20,8 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
+from boundary_contracts import validator
+
 from .settings import ConfigError
 
 RULE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -44,10 +46,76 @@ def _bad(msg: str) -> ConfigError:
     return ConfigError("위험 규칙 파일 오류: " + msg)
 
 
-def _only(obj, allowed: set, where: str) -> None:
-    extra = set(obj) - allowed
-    if extra:
-        raise _bad(f"{where}에 모르는 키가 있다: {sorted(extra)}")
+# 파일 형식의 정본은 계약 SurveyRiskRulesFile(boundary-contracts 2.8.0)이다. 거부 메시지는 이전(손 검사) 문구를 그대로 낸다: 스키마 오류의 위치(경로)와 종류로 같은 문구를 고른다.
+_FIELD_ORDER = {"id": 0, "description": 1, "match": 2}
+
+
+def _extra_keys(e) -> list:
+    return sorted(set(e.instance) - set(e.schema.get("properties", {})))
+
+
+def _schema_message(e) -> str:
+    """계약 스키마 위반 하나를 이전 손 검사와 같은 문구로 바꾼다."""
+    p = list(e.path)
+    if not p:                                                                   # 최상위
+        if e.validator == "type":
+            return "최상위가 객체가 아니다"
+        if e.validator == "additionalProperties":
+            return f"최상위에 모르는 키가 있다: {_extra_keys(e)}"
+        missing = e.message.split("'")[1] if e.validator == "required" else ""
+        return "version은 비어 있지 않은 문자열이어야 한다" if missing == "version" else "rules는 비어 있지 않은 배열이어야 한다"
+    if p == ["version"]:
+        return "version은 비어 있지 않은 문자열이어야 한다"
+    if p == ["rules"]:
+        return "rules는 비어 있지 않은 배열이어야 한다"
+    where = f"rules[{p[1]}]"
+    rest = p[2:]
+    if not rest:                                                                # 규칙 하나
+        if e.validator == "type":
+            return f"{where}가 객체가 아니다"
+        if e.validator == "additionalProperties":
+            return f"{where}에 모르는 키가 있다: {_extra_keys(e)}"
+        field = e.message.split("'")[1]                                         # required
+        return _field_message(where, field)
+    if rest[0] in ("id", "description"):
+        return _field_message(where, rest[0])
+    if rest[0] == "match" and len(rest) == 1:
+        if e.validator == "additionalProperties":
+            return f"{where}.match에 모르는 키가 있다: {_extra_keys(e)}"
+        if e.validator == "required":                                           # any_of 없음
+            return f"{where}.match.any_of는 비어 있지 않은 배열이어야 한다"
+        return f"{where}.match가 객체가 아니다"
+    if rest[0] == "match" and rest[1] == "any_of":
+        if len(rest) == 2:
+            return f"{where}.match.any_of는 비어 있지 않은 배열이어야 한다"
+        cw = f"{where}.match.any_of[{rest[2]}]"
+        c = e.instance
+        if isinstance(c, dict) and len(c) == 1 and next(iter(c)) in ("contains", "regex"):
+            return f"{cw}.{next(iter(c))}는 비어 있지 않은 {MAX_PATTERN}자 이하 문자열이어야 한다"
+        return f"{cw}는 contains 또는 regex 하나만 가져야 한다"
+    return "형식이 계약 SurveyRiskRulesFile과 다르다"
+
+
+def _field_message(where: str, field: str) -> str:
+    if field == "id":
+        return f"{where}.id는 영문·숫자·._- 1~64자여야 한다"
+    if field == "description":
+        return f"{where}.description은 비어 있지 않은 문자열이어야 한다"
+    return f"{where}.match가 객체가 아니다"
+
+
+def _first_error(doc) -> Optional[str]:
+    """계약 위반 중 이전 손 검사가 처음 발견했을 것(규칙 순서, 규칙 안 id -> description -> match)을 골라 문구로."""
+    errs = list(validator("SurveyRiskRulesFile").iter_errors(doc))
+    if not errs:
+        return None
+
+    def key(e):
+        p = list(e.path)
+        if len(p) >= 2 and p[0] == "rules":
+            return (1, p[1], _FIELD_ORDER.get(p[2], 3) if len(p) > 2 else -1, [str(x) for x in p])
+        return (0, 0, 0, [str(x) for x in p])
+    return _schema_message(min(errs, key=key))
 
 
 def parse_rules(raw: bytes) -> tuple[str, list[Rule]]:
@@ -55,53 +123,28 @@ def parse_rules(raw: bytes) -> tuple[str, list[Rule]]:
         doc = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         raise _bad("UTF-8 JSON이 아니다") from None
-    if not isinstance(doc, dict):
-        raise _bad("최상위가 객체가 아니다")
-    _only(doc, {"version", "rules", "_comment"}, "최상위")   # _comment: JSON에 주석이 없어 설명용 키 하나만 허용(무시)
-    version = doc.get("version")
-    if not isinstance(version, str) or not version.strip():
-        raise _bad("version은 비어 있지 않은 문자열이어야 한다")
-    rules_raw = doc.get("rules")
-    if not isinstance(rules_raw, list) or not rules_raw:
-        raise _bad("rules는 비어 있지 않은 배열이어야 한다")
+    msg = _first_error(doc)                                   # 형식은 계약 스키마가 본다
+    if msg is not None:
+        raise _bad(msg)
+    # 스키마로 표현하지 못하는 것만 여기서 거부한다: 규칙 id 중복, 정규식 유효성 (계약 SurveyRiskRulesFile 설명이 서비스 몫이라고 적는다)
     seen, rules = set(), []
-    for i, r in enumerate(rules_raw):
-        where = f"rules[{i}]"
-        if not isinstance(r, dict):
-            raise _bad(f"{where}가 객체가 아니다")
-        _only(r, {"id", "description", "match"}, where)
-        rid = r.get("id")
-        if not isinstance(rid, str) or not RULE_ID.match(rid):
-            raise _bad(f"{where}.id는 영문·숫자·._- 1~64자여야 한다")
+    for i, r in enumerate(doc["rules"]):
+        rid = r["id"]
         if rid in seen:
             raise _bad(f"규칙 id가 겹친다: {rid}")
         seen.add(rid)
-        if not isinstance(r.get("description"), str) or not r["description"].strip():
-            raise _bad(f"{where}.description은 비어 있지 않은 문자열이어야 한다")
-        match = r.get("match")
-        if not isinstance(match, dict):
-            raise _bad(f"{where}.match가 객체가 아니다")
-        _only(match, {"any_of"}, where + ".match")
-        any_of = match.get("any_of")
-        if not isinstance(any_of, list) or not any_of:
-            raise _bad(f"{where}.match.any_of는 비어 있지 않은 배열이어야 한다")
         contains, regexes = [], []
-        for j, c in enumerate(any_of):
-            cw = f"{where}.match.any_of[{j}]"
-            if not isinstance(c, dict) or len(c) != 1 or next(iter(c)) not in ("contains", "regex"):
-                raise _bad(f"{cw}는 contains 또는 regex 하나만 가져야 한다")
+        for j, c in enumerate(r["match"]["any_of"]):
             kind, text = next(iter(c.items()))
-            if not isinstance(text, str) or not text.strip() or len(text) > MAX_PATTERN:
-                raise _bad(f"{cw}.{kind}는 비어 있지 않은 {MAX_PATTERN}자 이하 문자열이어야 한다")
             if kind == "contains":
                 contains.append(_norm(text).casefold())
             else:
                 try:
                     regexes.append(re.compile(text))
                 except re.error:
-                    raise _bad(f"{cw}.regex가 올바른 정규식이 아니다") from None
+                    raise _bad(f"rules[{i}].match.any_of[{j}].regex가 올바른 정규식이 아니다") from None
         rules.append(Rule(rid, r["description"], tuple(contains), tuple(regexes)))
-    return version, rules
+    return doc["version"], rules
 
 
 # ADR-0013(위험 규칙 엔진 위치), D88 U2. **임상 검토 전 임시 기본 목록이다.** 널리 쓰이는 레드플래그(자해·자살, 흉통, 호흡곤란, 의식저하, 심한 출혈, 마비·뇌졸중 증상, 도움 요청)를

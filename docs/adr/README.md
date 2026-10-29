@@ -43,3 +43,4 @@
 - [ADR-0039](ADR-0039.md) setup-env.sh는 마지막 출력 줄에 SetupEnvReport를 낸다 (U43)
 - [ADR-0040](ADR-0040.md) 문항 세트만 필요하면 I4 get_release_question_bank를 쓴다 (U47, SV-16)
 - [ADR-0041](ADR-0041.md) 노출 선언 라벨 io.openit.exposure (U47)
+- [ADR-0042](ADR-0042.md) 위험 규칙 파일 형식은 계약 SurveyRiskRulesFile로 검증한다 (U48)
