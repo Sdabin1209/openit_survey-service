@@ -93,9 +93,10 @@ def _pkg_version() -> tuple:
     return tuple(int(x) for x in m.groups())
 
 
-def test_package_version_major_is_the_contract_integer_version():
-    """태그 survey-schema-vMAJOR.MINOR.PATCH에서 MAJOR는 정수 CONTRACT_VERSION이다(D110). 비호환 변경은 정수를 올리고 MAJOR가 같이 오른다."""
-    assert _pkg_version()[0] == int((ROOT / "schema/CONTRACT_VERSION").read_text().strip())
+def test_package_major_is_not_behind_the_contract_integer_version():
+    """패키지 MAJOR는 정수 CONTRACT_VERSION(런타임 호환 번호: 문항 은행·칸 키를 학습한 모델 패키지와의 호환)보다 뒤처지지 않는다.
+    2.0.0은 SessionResult.skipped 폐지(결과 읽는 쪽의 깨지는 변경)라 MAJOR만 올렸고 CONTRACT_VERSION은 1 그대로다(ADR-0044): 둘은 같은 번호가 아니다."""
+    assert _pkg_version()[0] >= int((ROOT / "schema/CONTRACT_VERSION").read_text().strip())
 
 
 def test_package_version_is_not_older_than_the_latest_schema_tag():

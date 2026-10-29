@@ -24,6 +24,7 @@ from boundary_contracts import BoundaryError, canonical, validator
 
 import survey_schema
 
+from ..fields import missing_field_specs
 from ..inference import InferenceLoadError, InferenceServer
 from ..ports import LoadedRelease
 from .registry import ReleaseRegistry
@@ -234,16 +235,22 @@ class ReleaseLoader:
             raise LoadRejected("INTEGRITY_ERROR", "문항 세트 해시가 매니페스트와 다르다")
         if str(bank["version"]) != str(manifest["question_set"]["version"]):
             raise LoadRejected("INVALID_RECORD", "문항 세트 버전이 ArtifactRef와 다르다")
+        no_spec = missing_field_specs(bank)
+        if no_spec:      # 칸 규격(data_type, option이면 choices)이 없는 칸이 있으면 서버가 값 규칙을 보증하지 못한다: extract는 항상 fields와 함께 부른다(계약 3.0.0, ADR-0043)
+            raise LoadRejected("MISSING_FIELD_SPEC", f"칸 규격이 없는 칸이 {len(no_spec)}개 있다: " + ", ".join(no_spec[:5]) + (" ..." if len(no_spec) > 5 else ""))
         have = {f["key"] for f in bank["session_settings"]["fixed_sentences"] if isinstance(f.get("sentence"), str) and f["sentence"].strip()}
         missing = sorted(set(REQUIRED_FIXED_SENTENCES) - have)
         if missing:      # 위험 정지 안내·직원 호출·재개·종료 안내가 비면 환자 화면이 비므로 적재 단계에서 거부한다(감사 I3)
             raise LoadRejected("MISSING_FIXED_SENTENCE", "필수 고정 문장이 없거나 비어 있다: " + ", ".join(missing))
 
     def _check_library_versions(self, manifest: dict) -> list:
-        """게이트가 승인한 동작과 서비스 동작이 달라지지 않게(I4): turn-engine·model-runtime의 MAJOR.MINOR가 설치본과 다르면 거부,
-        PATCH 차이는 경고만 하고 적재한다(헤드 결정, CR-005)."""
+        """게이트가 승인한 동작과 서비스 동작이 달라지지 않게(I4): 릴리스의 action_rules_version(LoRA-A 출력 규칙 판, 계약 3.0.0)이 설치된 계약의 규칙 판과 같지 않으면 거부하고,
+        model-runtime의 MAJOR.MINOR가 설치본과 다르면 거부, PATCH 차이는 경고만 하고 적재한다(헤드 결정, CR-005)."""
         out = []
-        for key, name in (("turn_engine_version", "turn-engine"), ("model_runtime_version", "model-runtime")):
+        have_rules = self.installed.get("action_rules_version")
+        if have_rules is not None and manifest["action_rules_version"] != have_rules:         # 규칙 판은 순번이라 같음만 본다(MAJOR.MINOR 비교가 아니다)
+            raise LoadRejected("VERSION_MISMATCH", f"action_rules_version이 다르다(릴리스 {manifest['action_rules_version']}, 설치 {have_rules})")
+        for key, name in (("model_runtime_version", "model-runtime"),):
             have = self.installed.get(key)
             if not have:
                 continue

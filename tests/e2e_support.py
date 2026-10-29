@@ -64,11 +64,15 @@ class RecordingSession(LocalModelSession):
     def __init__(self, session) -> None:
         super().__init__(session)
         self.extract_requests: list = []
+        self.extract_flows: list = []
+        self.extract_fields: list = []
         self.respond_requests: list = []
 
-    def extract(self, request):
+    def extract(self, request, *, flow, fields):
         self.extract_requests.append(copy.deepcopy(dict(request)))
-        return super().extract(request)
+        self.extract_flows.append(copy.deepcopy(flow))
+        self.extract_fields.append(copy.deepcopy(fields))
+        return super().extract(request, flow=flow, fields=fields)
 
     def respond(self, request):
         self.respond_requests.append(copy.deepcopy(dict(request)))

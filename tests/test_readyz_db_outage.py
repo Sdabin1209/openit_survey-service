@@ -21,7 +21,7 @@ LIMIT = 6.0        # 기본 2초 상한 + 동시 확인 여유 1초 + 보조 수
 
 def _app(tmp_path, monkeypatch, url=None, extra=None):
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
            "SURVEY_SESSION_IDLE_SECONDS": "0", "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db")}
@@ -187,10 +187,10 @@ def test_graceful_shutdown_finishes_in_flight_turn_and_readyz_drains(tmp_path, m
     sess = app.registry.active().session
     real, gate, entered = sess.extract, threading.Event(), threading.Event()
 
-    def slow(req):
+    def slow(req, **kw):
         entered.set()
         gate.wait(10)
-        return real(req)
+        return real(req, **kw)
     sess.extract = slow
 
     def post(path, body):

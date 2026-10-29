@@ -157,20 +157,16 @@ class TurnCtx:
         return self.cancelled.is_set() or (self.deadline is not None and time.monotonic() >= self.deadline)
 
 
-def _model_call(ctx, op: str, request, flow=None):
+def _model_call(ctx, op: str, request, flow=None, fields=None):
     """모델 호출. 세션이 턴 마감을 받을 수 있으면(원격 추론) 넘겨 재시도 판단에 쓰게 한다 (ADR-0026).
-    extract는 세션이 flow를 받을 수 있으면(원격 추론, I9 ExtractRequest) 문항 순서표를 함께 보내 서버가 출력 규칙을 보증하게 한다 (ADR-0028)."""
+    extract는 항상 문항 순서표(flow)와 칸 규격(fields)을 함께 보낸다: I9 본문은 ExtractRequest{input, flow, fields}뿐이고 서버가 출력 규칙과 값 규칙을 보증한다 (계약 3.0.0, ADR-0043)."""
     session = ctx.release.session
     fn = getattr(session, op)
     kw: dict = {}
     if getattr(session, "accepts_deadline", False):
         kw["deadline"] = ctx.deadline
-    if op == "extract" and flow is not None and getattr(session, "accepts_flow", False):
-        kw["flow"] = flow
-    if op == "extract" and getattr(session, "accepts_fields", False) and ctx.bank is not None:
-        specs = build_field_specs(ctx.bank.raw)          # 문항 은행의 칸 정의에서 칸 규격을 만든다(U32, ADR-0033)
-        if specs is not None:
-            kw["fields"] = specs
+    if op == "extract":
+        return fn(request, flow=flow, fields=fields, **kw)
     return fn(request, **kw)
 
 
@@ -513,7 +509,7 @@ class TurnGraph:
             upd["extract_in"] = inp
             tr["extract_input"] = copy.deepcopy(inp)
         try:
-            res = _model_call(ctx, "extract", inp, self.o.flow.table.wire())
+            res = _model_call(ctx, "extract", inp, self.o.flow.table.wire(), build_field_specs(ctx.bank.raw))        # 칸 규격은 적재 때 문항 은행 검증이 보장한다(ADR-0043)
         except BoundaryError as e:
             invalid = is_output_invalid(e)
             if invalid and calls + 1 < MAX_EXTRACT_CALLS:
@@ -537,7 +533,7 @@ class TurnGraph:
         out = st["extract_out"]
         try:
             viol = list(extraction.check_slots(out, doc["answer_records"]))
-            viol += extraction.check_values(out, doc, ctx.bank, self.o.flow)                # 값 타당성(TE-1): 타입·크기·현재 문항 밖 저장 (ADR-0017)
+            viol += extraction.check_current_item(out, doc, self.o.flow)                # 현재 문항 밖 저장(서버가 못 보는 것). 자료형·범위는 서버가 fields로 보증한다 (ADR-0043)
         except Exception as e:                               # 서비스 쪽 검사가 입력을 읽지 못했다: 재시도해도 같다
             return {"extract_next": "finalize", "failed": self._fail(st, "VALIDATE", e),
                     "trace": {"extract_status": "ERROR", "validation_ok": False, "validation_violations": None}}

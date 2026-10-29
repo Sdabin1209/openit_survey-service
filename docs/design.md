@@ -60,7 +60,7 @@
   1. `runtime_contract_version`이 지원 값(이 이미지가 설치한 문진 스키마의 정수 버전 집합)에 없으면 **적재하지 않고 이전 릴리스를 유지**한다 [확인: I4]. 같은 포인터 버전은 다시 시도하지 않는다.
   2. `gate_decision_id`의 `GateDecision`이 PASS이고 이 조합을 가리키는지 확인한다(승인 기록 없는 묶음 거부, brief §4). `load_bundle`도 통과하지 않은 릴리스를 `FAILED_PRECONDITION`으로 거절한다.
   3. 문항 세트가 `QuestionBank` 스키마를 통과하고 `manifest.question_set.content_hash`와 해시가 같은지, `manifest.content_hash`가 맞는지 확인한다(기준 구현 `boundary_contracts.canonical`).
-  4. `manifest.turn_engine_version`, `model_runtime_version`의 **MAJOR.MINOR가 설치된 값과 다르면 적재를 거부**하고 이전 릴리스를 유지한다(`VERSION_MISMATCH`, 사유는 `/readyz`의 `release_loader.rejections`). **PATCH만 다르면 경고만 하고 적재한다**. 게이트가 승인한 동작과 서비스 동작이 달라지지 않게 하기 위해서다 [확인: 헤드 결정 D45, CR-005]. 해석할 수 없는 버전 문자열도 거부한다.
+  4. `manifest.action_rules_version`이 설치된 계약의 규칙 판과 다르거나 `model_runtime_version`의 **MAJOR.MINOR가 설치된 값과 다르면 적재를 거부**하고 이전 릴리스를 유지한다(`VERSION_MISMATCH`, 사유는 `/readyz`의 `release_loader.rejections`). **PATCH만 다르면 경고만 하고 적재한다**. 게이트가 승인한 동작과 서비스 동작이 달라지지 않게 하기 위해서다 [확인: 헤드 결정 D45, CR-005]. 해석할 수 없는 버전 문자열도 거부한다.
   5. `model_runtime.load`가 거부하면(`ServingConfigMismatch`, `UnsupportedServingConfig`, `ContractVersionMismatch`, 백엔드 없음) 적재 실패로 보고 이전 릴리스를 유지한다.
 - 성공하면 레지스트리에 넣고 활성 릴리스를 바꾼다. **새 세션만** 새 릴리스에 묶인다. 진행 중인 세션은 자기 릴리스로 끝까지 처리한다(세션은 `release_id`를 가진다).
 - **턴을 처리하는 동안 이웃(I4)을 부르지 않는다** [확인: brief §4]. 그래서 서비스를 다시 띄운 뒤 진행 중 세션이 가리키는 릴리스는 시작할 때와 폴링 주기마다 턴 밖에서 `ensure_loaded`로 미리 적재한다. 적재하지 못한 릴리스는 `/readyz`의 `release_loader.unavailable_releases`에 나오고, 그 세션의 턴은 첫 단계 실패(`BEFORE_COMMIT/LoRA-A`)로 처리한다 [제안]. 새 세션을 받는 능력(준비 여부)에는 영향이 없다.
@@ -103,7 +103,7 @@
 
 - `/healthz`: 프로세스가 응답하면 200. `/readyz`: 세션 DB 열림, outbox DB 열림, 활성 릴리스 적재됨이면 200, 아니면 503과 사유. 수집(I6) 도달 여부는 준비 조건이 아니다(outbox가 분리하므로).
 - 로그는 표준 출력(JSON 한 줄). 발화·모델 출력 원문과 `TraceEnvelope` 내용을 로그에 남기지 않는다.
-- 이미지: `Dockerfile`, 비root(uid 10001), 라벨 `io.openit.contracts.boundary`, `io.openit.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`, 커밋. 이웃 의존은 영역 빌드 진입점 `scripts/build-image.sh`가 요청의 소스 트리로 설치한다(ADR-0037).
+- 이미지: `Dockerfile`, 비root(uid 10001), 라벨 `io.openit.contracts.boundary`, `io.openit.survey-schema`, `io.openit.model-runtime`, 커밋. 이웃 의존은 영역 빌드 진입점 `scripts/build-image.sh`가 요청의 소스 트리로 설치한다(ADR-0037).
 
 ## 9. 문진 스키마 패키지
 

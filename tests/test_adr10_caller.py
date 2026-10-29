@@ -57,12 +57,6 @@ def test_service_does_not_revalidate_or_retry_on_server_guaranteed_rules():
     assert not any(v["code"] == "NEXT_ITEM_MISMATCH" for v in (o.trace["validation_violations"] or []))
 
 
-def test_turn_engine_version_comes_from_settings_not_from_a_library():
-    env = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
-    assert Settings.from_env(env).turn_engine_version == "0.4.3"                       # 헤드 기준(D109)
-    assert Settings.from_env({**env, "SURVEY_TURN_ENGINE_VERSION": "0.5.1"}).turn_engine_version == "0.5.1"
-
-
 def test_service_imports_without_turn_engine():
     code = ("import sys\n"
             "class B:\n"

@@ -1,6 +1,6 @@
 # CR-021: SurveyServiceEnv에 SURVEY_TURN_ENGINE_VERSION을 추가해 달라 (U44, 2026-10-30)
 
-상태: **헤드 반영 요청.** 계약은 건드리지 않았다.
+상태: **무효(계약 3.0.0 전환으로 설정 SURVEY_TURN_ENGINE_VERSION이 없어졌다, ADR-0043).** 아래는 당시 요청이다.
 
 ## 사실
 - 서비스는 설정 `SURVEY_TURN_ENGINE_VERSION`(릴리스 매니페스트의 `turn_engine_version`과 MAJOR.MINOR를 비교하는 기준값, 기본 0.4.3, D109, ADR-0028)을 읽는다.

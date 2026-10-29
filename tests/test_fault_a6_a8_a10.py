@@ -125,7 +125,7 @@ def test_outbox_has_a_pending_cap_and_counts_drops(tmp_path):
 # ---------------------------------------------------------------- A8
 def _loader(tmp_path):
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
     return reader, reg, ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0)

@@ -1,4 +1,4 @@
-# survey-service 이미지. turn-engine에는 코드 의존이 없다(D109): 라벨 io.openit.turn-engine은 n/a. 설정은 환경 변수로만 받고 비밀 값은 넣지 않는다. 로그는 표준 출력. 비root로 실행.
+# survey-service 이미지. 설정은 환경 변수로만 받고 비밀 값은 넣지 않는다. 로그는 표준 출력. 비root로 실행.
 # 이웃 라이브러리(boundary-contracts, model-runtime)는 이름 있는 빌드 컨텍스트(--build-context boundary_contracts=..., model_runtime=...)로 받는다:
 # 영역 빌드 진입점 scripts/build-image.sh가 요청의 dependency_sources(해당 버전 소스 트리)를 준다(계약 2.5.0). 이 Dockerfile은 네트워크로 이웃을 받지 않는다(서드파티는 잠금 파일에서 PyPI).
 FROM python:3.12-slim AS build
@@ -25,7 +25,6 @@ LABEL io.openit.service=survey-service \
       io.openit.revision=$COMMIT \
       io.openit.contracts.boundary=$BOUNDARY_TAG \
       io.openit.contracts.survey-schema=$SCHEMA_CONTRACT_VERSION \
-      io.openit.turn-engine=n/a \
       io.openit.model-runtime=$MODEL_RUNTIME_TAG \
       io.openit.langgraph=$LANGGRAPH_VERSION
 COPY --from=build /install /usr/local

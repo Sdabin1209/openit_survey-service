@@ -11,6 +11,7 @@ import survey_schema
 from boundary_contracts import validator
 
 from survey_service.fields import build_field_specs
+from survey_service.flow import load_flow
 from survey_service.remote import RemoteModelSession
 from survey_service.store import effects
 
@@ -56,36 +57,33 @@ def test_a_bank_without_typed_slots_has_no_field_specs():
     assert build_field_specs(bank) is None
 
 
-class FieldsSession:
-    """fields를 받을 수 있는 추론 세션 대역(accepts_fields). 받은 fields를 남긴다."""
-    accepts_fields = True
-
-    def __init__(self, inner):
-        self.inner, self.fields_seen = inner, []
-
-    def extract(self, request, fields=None):
-        self.fields_seen.append(fields)
-        return self.inner.extract(request)
-
-    def respond(self, request):
-        return self.inner.respond(request)
-
-    def __getattr__(self, name):
-        return getattr(self.inner, name)
-
-
-def test_graph_sends_the_fields_built_from_the_bank_to_a_session_that_accepts_them():
+def test_graph_always_sends_flow_and_the_fields_built_from_the_bank():
     rig = Rig()
-    rig.release.session = fs = FieldsSession(rig.session)
     rig.start()
     rig.say("음", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"))
-    assert fs.fields_seen == [build_field_specs(rig.bank)]
+    assert rig.session.extract_fields == [build_field_specs(rig.bank)] and rig.session.extract_flows == [load_flow().table.wire()]
 
 
-def test_graph_does_not_send_fields_to_a_session_that_cannot_take_them():
-    rig = Rig()
-    rig.start()
-    assert rig.say("음", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC")).orchestrator_output["turn_failure_signal"] is None      # RecordingSession.extract(request)만 받는다
+def test_a_bank_with_a_slot_lacking_its_field_spec_is_rejected_at_load(tmp_path):
+    """계약 3.0.0: extract는 항상 fields와 함께 부른다. 칸 규격이 없는 문항 은행은 서버가 값 규칙을 보증하지 못하므로 적재를 거부한다(ADR-0043)."""
+    from survey_service.fields import missing_field_specs
+    from survey_service.inference import InferenceServer
+    from survey_service.release import ReleaseLoader, ReleaseRegistry
+
+    from .fakes import FakeReleaseReader
+    from .test_release_loader import INSTALLED
+    bank = copy.deepcopy(sample_bank())
+    bank["questions"][0]["slots"][0].pop("data_type")
+    assert missing_field_specs(bank) == ["Q1.D01.diagnosed"]
+    option = copy.deepcopy(sample_bank())
+    next(s for q in option["questions"] for s in q["slots"] if s["slot_id"] == "use_pattern")["choices"] = []      # option 칸에 선택지가 없다
+    assert missing_field_specs(option) == ["Q6_1.use_pattern"] and missing_field_specs(sample_bank()) == []
+    reader = FakeReleaseReader(tmp_path / "gate")
+    reader.add_release("rel-1", bank, **INSTALLED)
+    reader.set_pointer("rel-1")
+    loader = ReleaseLoader(reader, ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
+    r = loader.poll_once()
+    assert r.action == "REJECTED" and r.code == "MISSING_FIELD_SPEC"
 
 
 RESULT = SimpleNamespace(is_fallback=False, protections={})
@@ -98,14 +96,15 @@ def test_remote_session_passes_flow_and_fields_to_the_contract_client():
         def __init__(self):
             self.calls = []
 
-        def extract(self, rid, request, flow=None, fields=None):
+        def extract(self, rid, request, flow, fields):
             self.calls.append((flow, fields))
             return RESULT
     f, spec = {"order": ["Q1"], "skips": []}, {"fields": [{"slot": "Q1.a", "data_type": "boolean"}]}
     c = Client()
     assert RemoteModelSession(c, "rel").extract({"x": 1}, flow=f, fields=spec) is RESULT
-    assert RemoteModelSession(c, "rel").extract({"x": 1}, flow=f) is RESULT              # 칸 규격이 없는 문항 은행: fields를 보내지 않는다
-    assert c.calls == [(f, spec), (f, None)]
+    assert c.calls == [(f, spec)]
+    with pytest.raises(TypeError):
+        RemoteModelSession(c, "rel").extract({"x": 1}, flow=f)              # fields 없는 호출은 없다(3.0.0: flow·fields 필수)
 
 
 def test_reference_server_gets_fields_and_returns_the_dataset_answer_shape_for_an_out_of_range_value(tmp_path):

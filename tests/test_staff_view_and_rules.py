@@ -213,7 +213,7 @@ def _env(tmp_path, **extra):
 
 def _app(tmp_path, **extra):
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                        model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     return App(Settings.from_env(_env(tmp_path, **extra)), reader=reader, ingest=FakeTraceIngest())

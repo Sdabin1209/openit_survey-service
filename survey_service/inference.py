@@ -58,7 +58,8 @@ class LocalModelSession:
     def serving_config_hashes(self):
         return self._s.serving_config_hashes
 
-    def extract(self, request: Mapping) -> RuntimeResult:
+    def extract(self, request: Mapping, *, flow: Mapping, fields: Mapping) -> RuntimeResult:
+        # 서비스 안 가짜 백엔드(개발·시험용)는 flow·fields를 쓰지 않는다: 규칙 보증이 없다. 시그니처만 원격 세션과 같다(graph가 항상 같은 모양으로 부른다).
         try:
             out = self._s.extract(request)
         except model_runtime.ModelOutputInvalid as e:

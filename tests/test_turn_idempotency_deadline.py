@@ -27,10 +27,10 @@ def _gate_extract(rig):
     gate, entered = threading.Event(), threading.Event()
     real = rig.session.extract
 
-    def slow(req):
+    def slow(req, **kw):
         entered.set()
         gate.wait(20)
-        return real(req)
+        return real(req, **kw)
     rig.session.extract = slow
     return gate, entered
 
@@ -106,7 +106,7 @@ def test_deadline_slow_model_ends_not_committed_and_late_work_does_not_commit():
     assert not commits and _answers(rig) == before    # 확정하지 않았다
     assert rig.store.get_turn("S1", "t-slow") is None
     rig.model.queue.append(ANSWER_OUT)                # 같은 turn_id 재전송은 안전하게 새로 처리된다
-    rig.session.extract = lambda req, real=rig.session.__class__.extract, s=rig.session: real(s, req)
+    rig.session.extract = lambda req, real=rig.session.__class__.extract, s=rig.session, **kw: real(s, req, **kw)
     assert _say(rig, "t-slow").frontend_input["turn_failure_signal"] is None and _answers(rig) != before
 
 

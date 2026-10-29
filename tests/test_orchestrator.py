@@ -294,7 +294,7 @@ def test_other_extract_error_is_not_retried_as_output_invalid():
     rig = Rig()
     rig.start()
 
-    def boom(_):
+    def boom(_, **kw):
         raise RuntimeError("시험용 실패")
     rig.session.extract = boom
     o = rig.say("안 먹어요")
@@ -345,7 +345,7 @@ def test_response_failure_after_commit():
     rig = Rig()
     rig.start()
 
-    def boom(_):
+    def boom(_, **kw):
         raise RuntimeError("시험용 실패")
     rig.session.respond = boom
     o = rig.say("안 먹어요", out=HEALTH)
@@ -486,7 +486,7 @@ def test_same_session_turns_are_serialized():
     lock = threading.Lock()
     real = rig.session.extract
 
-    def slow(req):
+    def slow(req, **kw):
         with lock:
             active[0] += 1
             peak[0] = max(peak[0], active[0])
@@ -494,7 +494,7 @@ def test_same_session_turns_are_serialized():
         time.sleep(0.02)
         with lock:
             active[0] -= 1
-        return real(req)
+        return real(req, **kw)
     rig.session.extract = slow
     ts = [threading.Thread(target=lambda i=i: rig.orch.handle_turn(turn_id=f"c{i}", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": f"x{i}"})) for i in range(6)]
     [t.start() for t in ts]

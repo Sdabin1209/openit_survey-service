@@ -141,7 +141,7 @@ def validation_check(d: Path, splits, bank, flow, limit):
             viol = []
             viol += [("engine", v.code, v.path) for v in check_action_extraction(inp, out, flow.table.wire())]
             viol += [("slots", v.code, v.path) for v in extraction.check_slots(out, doc["answer_records"])]
-            viol += [("values", v.code, v.path) for v in extraction.check_values(out, doc, bank, flow)]
+            viol += [("values", v.code, v.path) for v in extraction.check_current_item(out, doc, flow)]
             if not viol:
                 tot["통과"] += 1
                 continue

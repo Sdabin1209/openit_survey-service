@@ -41,7 +41,7 @@ def test_bank_that_differs_from_the_manifest_is_rejected_on_the_question_bank_pa
     e = Env(tmp_path)
     try:
         e.reader.add_release("rel-2", sample_bank(2), tamper_bank=True,
-                             turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=INSTALLED["model_runtime_version"])
+                             action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
         e.reader.set_pointer("rel-2")
         r = e.loader.poll_once()
         assert r.action == "REJECTED" and r.code == "INTEGRITY_ERROR"
@@ -64,3 +64,10 @@ def test_http_question_bank_endpoint_is_used_with_remote_inference(tmp_path):
             assert any(p.endswith("/question-bank") for p in paths) and not any(p.endswith("/bundle") for p in paths)
     finally:
         rt.stop()
+
+
+def test_the_fake_reader_and_the_http_client_satisfy_the_release_reader_protocol(tmp_path):
+    """계약 3.0.0: sdk.ReleaseReader Protocol에 get_release_question_bank가 들어갔다. 시험용 가짜와 계약 HTTP 클라이언트가 둘 다 만족한다."""
+    from boundary_contracts import sdk
+    assert isinstance(FakeReleaseReader(tmp_path / "gate"), sdk.ReleaseReader)
+    assert isinstance(HttpReleaseReader("http://127.0.0.1:1", "t", 1), sdk.ReleaseReader)

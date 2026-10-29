@@ -23,7 +23,7 @@ TOKEN = "inf-tok"
 class Env:
     def __init__(self, tmp, *, timeout=0.5, retries=1, load_timeout=5.0, **srv_kw):
         self.reader = FakeReleaseReader(tmp / "gate")
-        self.reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
+        self.reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                                 model_runtime_version=INSTALLED["model_runtime_version"])
         self.reader.set_pointer("rel-1")
         self.srv = FlakyRuntime({TOKEN: "survey-service"}, **srv_kw).start()

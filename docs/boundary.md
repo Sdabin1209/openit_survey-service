@@ -26,7 +26,7 @@
 | I6 TraceIngest | `send(TraceEnvelope)`. 턴마다 한 건, 영속 outbox를 거쳐 |
 | 웹 푸시 | pywebpush 2.5.0(잠금 고정). VAPID 키는 비밀 파일(`SURVEY_VAPID_PRIVATE_KEY_FILE`, D84), 없으면 SSE만 |
 | 오케스트레이션 | LangGraph **1.2.15**(잠금 파일에 고정, 이미지 라벨 `io.openit.langgraph`). 외부 추적(LangSmith)은 이미지에서 끈다 |
-| turn-engine | 코드 의존 없음(D109, ADR-0028). 릴리스 매니페스트의 `turn_engine_version`은 계약이 필수로 싣는 값이라 MAJOR.MINOR 비교만 남기고, 기준값은 설정 `SURVEY_TURN_ENGINE_VERSION`(기본 0.4.3, 배포가 준다)이다. 불일치하면 적재 거부, PATCH는 경고. 문항 순서·건너뛰기 표는 이 영역이 문진 스키마에서 만들어 I9 extract 요청의 `flow`로 서버에 보낸다 |
+| action_rules_version | 릴리스 매니페스트의 `action_rules_version`(LoRA-A 출력 규칙 판, 계약 3.0.0)이 설치된 계약 `ActionExtractionRules.rules_version`과 같아야 적재된다(다르면 `VERSION_MISMATCH`). turn-engine 코드 의존·표지·라벨은 없다(D109, ADR-0043). 문항 순서·건너뛰기 표는 이 영역이 문진 스키마에서 만들어 I9 extract 요청의 `flow`로, 칸 규격은 문항 은행에서 만들어 `fields`로 서버에 보낸다 |
 | I9 model-runtime | (고정 태그는 `requirements.txt`, 설치본의 `RUNTIME_VERSION`이 기준. 같은 규칙) HTTP 서버 `PUT /v1/releases/{id}`, `POST .../extract`(JSON), `POST .../respond`(text/plain). 매니페스트 기대값: `model_runtime_version`(MAJOR.MINOR가 설치본과 같아야 함), 역할별 `system_prompt`, serving_config의 prompt·보호 정책 버전은 model-runtime이 내보내는 값(`fake_serving_config()`, `PROTECTION_POLICY_VERSION`)과 같아야 하며 옛 prompt 버전은 적재되지 않는다. 프로세스 안 `load`는 개발·스모크용 |
 
 버전 고정: Git 태그(`requirements.txt`), 서드파티는 `requirements.lock`, 이미지는 원격 태그를 얕게 clone해 만든 wheel. 이미지 라벨: `org.opencontainers.image.revision`(커밋), `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`.
@@ -151,6 +151,6 @@
 
 | 이웃 | 메모 |
 |---|---|
-| release-gate | 활성 포인터는 값싸게 자주 읽힌다(기본 5초). 매니페스트 `content_hash`와 `question_set.content_hash`를 서비스가 다시 계산해 검증한다. `adapters.LORA_A/B.serving_config`가 달라지면 거부된다(model-runtime 0.3.0 전까지, CR-006). `turn_engine_version`·`model_runtime_version`은 이미지에 설치된 것과 MAJOR.MINOR가 같아야 한다. |
+| release-gate | 활성 포인터는 값싸게 자주 읽힌다(기본 5초). 매니페스트 `content_hash`와 `question_set.content_hash`를 서비스가 다시 계산해 검증한다. `adapters.LORA_A/B.serving_config`가 달라지면 거부된다(model-runtime 0.3.0 전까지, CR-006). `action_rules_version`(계약 규칙 판)과 `model_runtime_version`(MAJOR.MINOR)은 이미지에 설치된 것과 같아야 한다. |
 | ops-feedback | 봉투의 `release_id`는 세션이 묶인 릴리스다. `Id` 형식이 아닌 세션 ID·턴 ID는 `x-`+SHA-256 앞 32자로 바꿔 봉투에 넣는다(CONVENTIONS 10절). 원본은 `trace` 본문에 있다. 같은 (세션, 턴)이 두 번 올 수 있다(최소 1회). |
 | 다른 영역의 문진 스키마 소비 | `openit-survey-schema`를 설치한다. 정수 버전을 여러 개 지원하면 `load_schema(name, version=N)`. |

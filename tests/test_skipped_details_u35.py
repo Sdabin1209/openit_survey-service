@@ -30,7 +30,7 @@ def test_unknown_from_hold_is_recorded_with_item_and_slot(env):
     env.start("K1")
     env.say("K1", "모르겠어요", "t1", hold("Q1.D01.diagnosed", "Q1.D01.on_medication"))
     r = result(env)
-    assert r["skipped"] == ["Q1.D01"]                                                   # 기존 필드는 그대로
+    assert "skipped" not in r                                                           # 문진 스키마 2.0.0: 문자열 목록 skipped는 폐지됐다
     assert r["skipped_details"] == [{"item": "Q1.D01", "slot": "Q1.D01.diagnosed", "reason": "UNKNOWN"},
                                     {"item": "Q1.D01", "slot": "Q1.D01.on_medication", "reason": "UNKNOWN"}]
 
@@ -78,3 +78,9 @@ def test_a_skipped_item_without_slot_information_is_still_explained(env):
     doc = {"progress_record": {"skipped": [{"question_id": "Q2.D01", "reason": "UNCERTAIN"}, {"question_id": "Q2.D02", "reason": "REFUSED"},
                                            {"question_id": "Q2.D03", "reason": "REQUEST_SKIP"}]}, "dialogue_log": [], "answer_records": []}
     assert blank_details(doc) == [{"item": "Q2.D01", "reason": "UNKNOWN"}, {"item": "Q2.D02", "reason": "REJECTED"}, {"item": "Q2.D03", "reason": "REJECTED"}]
+
+
+def test_session_result_schema_2_0_0_has_no_skipped_field_and_requires_skipped_details():
+    import survey_schema
+    d = survey_schema.load_schema("SessionResult")["$defs"]["SessionResult"]
+    assert "skipped" not in d["properties"] and "skipped" not in d["required"] and "skipped_details" in d["required"]

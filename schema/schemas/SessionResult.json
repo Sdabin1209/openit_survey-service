@@ -131,17 +131,9 @@
             "additionalProperties": false
           }
         },
-        "skipped": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "값이 저장되지 않고 건너뛴 문항 ID 목록(기존 필드, 2.0.0 폐지 후보). 원인은 skipped_details."
-        },
         "skipped_details": {
           "type": "array",
-          "description": "빈칸의 원인(survey-schema 1.3.0, 추가형). 값이 저장되지 않은 칸(slot, 모델 키)과 건너뛴 문항(item)의 원인 코드. UNKNOWN=환자가 모름, REJECTED=거절·나중에, UNCLEAR=불분명하거나 범위 밖이라 끝내 값이 정해지지 않음. 환자 발화 원문은 없다(감사 C2). 이 필드가 없는 결과는 1.2.0 이전 형식이다.",
+          "description": "빈칸의 원인(survey-schema 1.3.0에서 추가, 2.0.0에서 문자열 목록 `skipped`를 폐지하고 이 필드만 남았다). 값이 저장되지 않은 칸(slot, 모델 키)과 건너뛴 문항(item)의 원인 코드. UNKNOWN=환자가 모름, REJECTED=거절·나중에, UNCLEAR=불분명하거나 범위 밖이라 끝내 값이 정해지지 않음. 환자 발화 원문은 없다(감사 C2).",
           "items": {
             "type": "object",
             "properties": {
@@ -180,7 +172,7 @@
         "release_id",
         "question_bank_version",
         "answers",
-        "skipped"
+        "skipped_details"
       ],
       "additionalProperties": false
     }

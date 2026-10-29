@@ -169,9 +169,9 @@ def test_too_many_in_flight_is_429():
     gate, entered = threading.Event(), threading.Event()
     real = rig.release.session.extract
 
-    def slow(inp):
+    def slow(inp, **kw):
         entered.set(); gate.wait(5)
-        return real(inp)
+        return real(inp, **kw)
     rig.release.session.extract = slow
     t = threading.Thread(target=lambda: say(api, "느린 말", "t-slow"))
     t.start()
@@ -235,7 +235,7 @@ def test_sqlite_list_idle_and_migration(tmp_path):
 # ---------------------------------------------------------------- HTTP로 본 공개 API
 def test_over_http_with_app(tmp_path):
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                        model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     from .fakes import FakeTraceIngest

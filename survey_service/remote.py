@@ -66,8 +66,6 @@ class RemoteModelSession:
     """graph가 아는 extract/respond. 둘 다 RuntimeResult(output, outcome, attempts, protections)를 돌려준다."""
 
     accepts_deadline = True      # graph가 턴 마감(time.monotonic 기준)을 넘겨 준다: 재시도 판단에 쓴다
-    accepts_fields = True        # graph가 칸 규격(QuestionFieldSpec)을 넘겨 준다: extract 본문의 ExtractRequest.fields가 된다 (ADR-0033)
-    accepts_flow = True          # graph가 문항 순서표(QuestionFlowTable)를 넘겨 준다: extract 본문이 ExtractRequest가 된다 (ADR-0028)
 
     def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None,
                  op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None) -> None:
@@ -80,9 +78,7 @@ class RemoteModelSession:
 
     def _call_once(self, op: str, request: Mapping, flow: Optional[Mapping] = None, fields: Optional[Mapping] = None) -> RuntimeResult:
         fn = getattr(self._op_rt(op), op)
-        kw = {"flow": dict(flow)} if flow is not None else {}
-        if fields is not None:                                  # 문항 은행에 칸 규격이 있으면 항상 보낸다(계약 2.4.1 `extract(..., fields=)`, CR-020). flow와 함께만 간다
-            kw["fields"] = dict(fields)
+        kw = {"flow": dict(flow), "fields": dict(fields)} if op == "extract" else {}      # extract는 항상 flow·fields와 부른다(계약 3.0.0: ExtractRequest{input, flow, fields}만)
         try:
             return fn(self.release_id, dict(request), **kw)
         except BoundaryError as e:
@@ -136,7 +132,7 @@ class RemoteModelSession:
             self.stats.add_protections(res.protections)
         return res
 
-    def extract(self, request: Mapping, deadline: Optional[float] = None, flow: Optional[Mapping] = None, fields: Optional[Mapping] = None) -> RuntimeResult:
+    def extract(self, request: Mapping, deadline: Optional[float] = None, *, flow: Mapping, fields: Mapping) -> RuntimeResult:
         return self._call("extract", request, deadline, flow, fields)
 
     def respond(self, request: Mapping, deadline: Optional[float] = None) -> RuntimeResult:

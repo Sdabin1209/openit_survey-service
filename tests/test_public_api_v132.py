@@ -140,8 +140,8 @@ def test_inflight_overflow_is_429_unavailable_with_retry_after():
     api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
     gate, entered = threading.Event(), threading.Event()
     real = rig.release.session.extract
-    def slow(inp):
-        entered.set(); gate.wait(5); return real(inp)
+    def slow(inp, **kw):
+        entered.set(); gate.wait(5); return real(inp, **kw)
     rig.release.session.extract = slow
     body = json.dumps({"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "t1"}).encode()
     t = threading.Thread(target=lambda: api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body)); t.start()

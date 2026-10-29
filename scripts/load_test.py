@@ -49,7 +49,7 @@ def build_app(args, tmp: Path):
     os.environ["SURVEY_DATABASE_URL"] = os.environ["LOAD_DATABASE_URL"]
     os.environ["SURVEY_API_TOKEN"], os.environ["SURVEY_STAFF_API_TOKEN"] = TOKEN, STAFF
     reader = FakeReleaseReader(tmp / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     env = {"SURVEY_WORK_DIR": str(tmp / "w"), "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
            "SURVEY_SESSION_IDLE_SECONDS": "0", "SURVEY_API_MAX_INFLIGHT": str(args.max_inflight), "SURVEY_TURN_DEADLINE_SECONDS": str(args.deadline)}

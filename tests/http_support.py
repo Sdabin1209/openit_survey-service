@@ -3,7 +3,7 @@ import json
 
 import model_runtime
 
-from .fakes import TURN_ENGINE_VERSION, FakeReleaseReader
+from .fakes import ACTION_RULES_VERSION, FakeReleaseReader
 from .sample_bank import sample_bank
 
 TOK = {"r-tok": "reader", "w-tok": "survey-service"}
@@ -12,7 +12,7 @@ TOK = {"r-tok": "reader", "w-tok": "survey-service"}
 def publish(server, tmp_path, rid, version=1, pointer=True, tamper_bank=False, **kw):
     """FakeReleaseReader로 일관된 릴리스(매니페스트·판정·어댑터)를 만들어 참조 서버에 올린다."""
     fr = FakeReleaseReader(tmp_path / "src")
-    fr.add_release(rid, sample_bank(version), turn_engine_version=TURN_ENGINE_VERSION,
+    fr.add_release(rid, sample_bank(version), action_rules_version=ACTION_RULES_VERSION,
                    model_runtime_version=model_runtime.RUNTIME_VERSION, **kw)
     m = fr.manifests[rid]
     adapters = {r: {f.name: f.read_bytes() for f in sorted((fr.root / "adapters" / rid / r).iterdir())} for r in ("LORA_A", "LORA_B")}

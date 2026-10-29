@@ -20,4 +20,4 @@
 | CR-014 | 결과 조회의 종료 상태 정의와 완료 여부 표시 | 헤드 확인 요청(서비스 동작 변경 없음) | 선택 제안 2는 있음 |
 | CR-018 | 영역 경계를 넘는 형식의 스키마 초안 6개(환경 변수·비밀 이름, /readyz, purge 출력, 이미지 라벨, 흐름 표→turn-engine, 문항 세트만 읽는 I4 호출)와 문진 스키마 8개 위치 표 | 해결됨(계약 승격, 초안 삭제 U49) | 계약에 올릴 때 있음 |
 | CR-020 | 계약 클라이언트 `HttpModelRuntime.extract`가 `fields`를 넘기게 해 달라 | 반영됨(계약 2.4.1) | 계약 패치(2.4.1) |
-| CR-021 | SurveyServiceEnv에 SURVEY_TURN_ENGINE_VERSION 추가 | **헤드 반영 요청** | 계약 패치 |
+| CR-021 | SurveyServiceEnv에 SURVEY_TURN_ENGINE_VERSION 추가 | 무효(3.0.0에서 설정이 없어짐) | 계약 패치 |

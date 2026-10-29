@@ -103,7 +103,7 @@ def test_deterministic_refusal_is_permanent_with_no_retry(e, response, code):
 def test_new_pointer_takes_priority_over_a_retrying_one(e):
     clock = with_clock(e)
     e.srv.put_fail_next = [UNAVAILABLE] * 3
-    e.reader.add_release("rel-2", sample_bank(2), turn_engine_version=INSTALLED["turn_engine_version"],
+    e.reader.add_release("rel-2", sample_bank(2), action_rules_version=INSTALLED["action_rules_version"],
                          model_runtime_version=INSTALLED["model_runtime_version"])
     e.srv.available["rel-2"] = "ok"
     e.loader.poll_once()
@@ -118,7 +118,7 @@ def test_new_pointer_takes_priority_over_a_retrying_one(e):
 def test_new_pointer_that_is_also_failing_restarts_the_retry_count(e):
     clock = with_clock(e)
     e.srv.put_fail_next = [UNAVAILABLE] * 5
-    e.reader.add_release("rel-2", sample_bank(2), turn_engine_version=INSTALLED["turn_engine_version"],
+    e.reader.add_release("rel-2", sample_bank(2), action_rules_version=INSTALLED["action_rules_version"],
                          model_runtime_version=INSTALLED["model_runtime_version"])
     e.srv.available["rel-2"] = "ok"
     e.loader.poll_once(); clock.t += 5; e.loader.poll_once()
@@ -235,7 +235,7 @@ def free_port():
 
 def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishes_starting(tmp_path, monkeypatch):
     gate = FakeReleaseReader(tmp_path / "gate")
-    gate.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
+    gate.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                      model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
     port = free_port()                                                                           # 추론 서버가 아직 안 떴다: 연결 거부 -> 이어서 503 -> 정상
@@ -279,7 +279,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
 def test_previous_release_keeps_serving_while_a_new_one_is_retrying(tmp_path, monkeypatch):
     gate = FakeReleaseReader(tmp_path / "gate")
     for i in (1, 2):
-        gate.add_release(f"rel-{i}", sample_bank(i), turn_engine_version=INSTALLED["turn_engine_version"],
+        gate.add_release(f"rel-{i}", sample_bank(i), action_rules_version=INSTALLED["action_rules_version"],
                          model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
     e = Env(tmp_path / "e", timeout=0.5)
@@ -302,7 +302,7 @@ def test_previous_release_keeps_serving_while_a_new_one_is_retrying(tmp_path, mo
 def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monkeypatch):
     """GPU 모델 적재에 수 분이 걸려도 서비스는 열려 있고 /healthz는 200이다. 끝나면 스스로 ready가 된다."""
     gate = FakeReleaseReader(tmp_path / "gate")
-    gate.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
+    gate.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                      model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
     srv = FlakyRuntime({TOKEN: "survey-service"}, load_delay=1.5).start()

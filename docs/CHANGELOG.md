@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 계약 3.0.0 전환 [미출시] (ADR-0043, ADR-0044)
+
+- 계약 고정 v3.0.0. 릴리스 매니페스트 `turn_engine_version` -> `action_rules_version`(계약 규칙 판과 같아야 적재). `SURVEY_TURN_ENGINE_VERSION`·`io.openit.turn-engine` 라벨 삭제.
+- extract는 항상 flow·fields와 부른다. 칸 규격이 없는 문항 은행은 적재 거부(`MISSING_FIELD_SPEC`). U24 잔여 값 검사 삭제(`check_values` -> `check_current_item`).
+- 문진 스키마 2.0.0: `SessionResult.skipped` 폐지, `skipped_details`만(깨지는 변경). 정수 `CONTRACT_VERSION`은 1 그대로.
+- U50: `build-image.sh`가 라벨을 요청 버전이 아니라 실제 설치할 소스 트리(pyproject)의 버전에서 찍고, 요청과 다르면 이미지를 만들지 않고 실패한다. 빌드 뒤 이미지에 실제 설치된 버전과 라벨이 같은지 확인한다.
+
 ## U48: 위험 규칙 파일 형식을 계약 SurveyRiskRulesFile로 검증 [미출시] (ADR-0042)
 
 - `parse_rules`가 형식 검사를 계약 validator에 맡기고 id 중복·정규식 유효성만 따로 거부한다. 거부 문구는 그대로. 계약 핀 v2.8.0.

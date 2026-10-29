@@ -376,7 +376,7 @@ def test_vapid_key_validation():
 # ---------------------------------------------------------------- 서비스 조립, HTTP, SSE
 def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com", hb="0.2", extra=None):
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"],
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                        model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     env = {"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
@@ -551,7 +551,7 @@ def test_replaceable_console_still_works(tmp_path, monkeypatch):
     from .fakes import RecordingConsole
     rec = RecordingConsole()
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"), release_reader="x:y",
                  trace_ingest="x:y", model_backend="fake", session_idle_seconds=0)

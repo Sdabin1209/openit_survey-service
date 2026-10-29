@@ -20,6 +20,7 @@ from typing import Optional
 import model_runtime
 import survey_schema
 from boundary_contracts import PIPELINE_SCHEMA_VERSION, SecretError, read_secret, secret_source
+from boundary_contracts.action_rules import load_rules
 from waitress import create_server
 from waitress import wasyncore
 
@@ -112,7 +113,7 @@ class App:
         self.ingest = ingest if ingest is not None else load_factory(_spec(settings.trace_ingest, 'trace'))()
         self.loader = ReleaseLoader(
             self.reader, self.registry, self.inference, workdir=Path(settings.work_dir), keep_releases=settings.keep_releases,
-            installed_versions={"turn_engine_version": settings.turn_engine_version, "model_runtime_version": model_runtime.RUNTIME_VERSION},
+            installed_versions={"action_rules_version": load_rules()["rules_version"], "model_runtime_version": model_runtime.RUNTIME_VERSION},
             open_release_ids=self.store.open_release_ids, retry_base_seconds=settings.release_retry_base_seconds,
             retry_max_seconds=settings.release_retry_max_seconds, give_up_seconds=settings.release_retry_give_up_seconds)
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,

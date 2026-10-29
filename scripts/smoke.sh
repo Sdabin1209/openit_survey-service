@@ -61,7 +61,7 @@ echo "$READY" | grep -q '"response_tables": {"status": "DATASET_RULES_UNCONFIRME
 [ "$($DOCKER exec "$NAME" id -u | tr -d '\r')" != "0" ] || fail "root로 실행 중"
 LABELS=$($DOCKER inspect --format '{{json .Config.Labels}}' "$IMG")
 echo "labels:  $LABELS"
-for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" "io.openit.turn-engine\":\"n/a" \
+for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMMIT" "io.openit.contracts.boundary\":\"$BOUNDARY_TAG" \
             "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SCHEMA_CONTRACT_VERSION" "io.openit.langgraph\":\"$LANGGRAPH_VERSION"; do
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done

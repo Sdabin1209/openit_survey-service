@@ -30,7 +30,7 @@ def test_not_committed_turn_is_reprocessed_on_same_turn_id():
 
 def _loader(tmp_path, bank):
     reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", bank, turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.add_release("rel-1", bank, action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
     return reg, ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0)
@@ -193,47 +193,7 @@ def test_value_from_outside_the_current_item_is_not_saved_unless_it_is_a_correct
     assert rig.orch.violations.get("OUT_OF_CURRENT_ITEM", 0) >= 1
 
 
-def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_value():
-    from .test_service_checks_u24 import untyped_bank
-    bank = untyped_bank()          # 칸 규격이 없는 문항 은행: 서버가 값 규칙을 보증하지 못해 서비스가 검사한다(U24, ADR-0035)
-    for q in bank["questions"]:
-        for s_ in q["slots"]:
-            if (q["question_id"], s_["slot_id"]) == ("Q1.D01", "on_medication"):
-                s_["choices"] = ["복용", "중단"]
-    for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
-        bank["session_settings"].pop(k, None)          # 연속 실패가 직원 호출로 바뀌는 상한(U34, ADR-0032)과 무관하게 값 검사만 본다
-    rig = Rig(bank=bank)
-    rig.start()
-    for value, code in [("열대여섯", None), (123456789, "VALUE_INVALID"), ("", "VALUE_INVALID"), ("x" * 500, "VALUE_INVALID")]:
-        n = rig.orch.violations.get(code, 0) if code else 0
-        before = rig.doc()["answer_records"]
-        out = rig.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", value)), times=2)
-        rig.model.queue.clear()
-        if code:
-            assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", value
-            assert rig.doc()["answer_records"] == before and rig.orch.violations.get(code, 0) > n
-        else:
-            # 자유 칸의 처음 쓰는 값은 타입을 알 수 없어 통과한다(한계, CR-017). 저장된 뒤에는 종류가 달라지면 막힌다
-            assert out.frontend_input["turn_failure_signal"] is None
-    rig2 = Rig(bank=bank)
-    rig2.start()
-    out = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "아무거나")), times=2)             # 선택지 밖
-    rig2.model.queue.clear()
-    assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
-    ok = rig2.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.on_medication", "복용")), turn_id="ok")
-    assert ok.frontend_input["turn_failure_signal"] is None
-
-
-def test_saved_value_kind_cannot_change_to_another_kind():
-    from .test_service_checks_u24 import untyped_bank
-    rig = Rig(bank=untyped_bank())          # 칸 규격이 없는 문항 은행의 서비스 검사(U24, ADR-0035)
-    rig.start()
-    rig.say("안 피움", out=ANSWER_OUT)                                                   # Q1.D01.diagnosed=False 저장
-    out = rig.say("아니 열대여섯", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", "열대여섯", "CORRECTION")), times=2)
-    rig.model.queue.clear()
-    assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED" and _answer(rig) == {"answer": False}
-    ok = rig.say("아니 먹어요", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", True, "CORRECTION")), turn_id="ok")
-    assert ok.frontend_input["turn_failure_signal"] is None and _answer(rig) == {"answer": True}
+# 값 형식·크기·선택지·종류 검사(VALUE_INVALID, VALUE_TYPE_MISMATCH)는 서버가 fields로 보증하므로 서비스에서 지웠다(R7, ADR-0043). 시험은 tests/test_service_checks_u24.py가 "다시 검사하지 않음"을 본다.
 
 
 def test_extract_input_is_trimmed_to_the_model_runtime_limit():
@@ -255,9 +215,9 @@ def test_one_utterance_may_answer_several_following_items_up_to_next_item():
     from survey_service.store import effects
     doc = effects.initial_state("S", bank.raw, "Q8_1")
     out = ext("NEXT", "END", val("Q8_1.days", 0), val("Q9_1.days", 0), val("Q10.days", 0))
-    assert extraction.check_values(out, doc, bank, flow) == []
+    assert extraction.check_current_item(out, doc, flow) == []
     out2 = ext("NEXT", "Q8_2", val("Q8_1.days", 3), val("Q1.D01.diagnosed", True))                 # 앞 문항(범위 밖)은 여전히 거부
-    assert [v.code for v in extraction.check_values(out2, doc, bank, flow)] == ["OUT_OF_CURRENT_ITEM"]
+    assert [v.code for v in extraction.check_current_item(out2, doc, flow)] == ["OUT_OF_CURRENT_ITEM"]
 
 
 # ---------------------------------------------------------------- 2차 점검 M1·M2

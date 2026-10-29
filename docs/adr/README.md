@@ -44,3 +44,5 @@
 - [ADR-0040](ADR-0040.md) 문항 세트만 필요하면 I4 get_release_question_bank를 쓴다 (U47, SV-16)
 - [ADR-0041](ADR-0041.md) 노출 선언 라벨 io.openit.exposure (U47)
 - [ADR-0042](ADR-0042.md) 위험 규칙 파일 형식은 계약 SurveyRiskRulesFile로 검증한다 (U48)
+- [ADR-0043](ADR-0043.md) extract는 항상 flow·fields와 부르고 칸 규격 없는 문항 은행은 적재를 거부한다 (계약 3.0.0)
+- [ADR-0044](ADR-0044.md) 문진 스키마 2.0.0: SessionResult.skipped 폐지 (정수 CONTRACT_VERSION은 그대로)

@@ -41,6 +41,18 @@ eval "$VARS"
 [ "$(cd "$SRC" && pwd -P)" = "$(pwd -P)" ] || die "source_dir($SRC)이 이 리포 루트가 아니다"
 for d in "$BOUNDARY_SRC" "$MODEL_RUNTIME_SRC"; do [ -d "$d" ] || die "dependency_sources 경로가 디렉터리가 아니다: $d"; done
 
+# 1-1) 라벨 정직성(U50): 라벨은 요청의 versions가 아니라 **실제로 설치할 소스 트리의 버전**(pyproject.toml)에서 찍는다. 요청 버전과 다르면 라벨이 거짓이 되므로 이미지를 만들지 않고 실패한다.
+pkg_version() {   # pkg_version <소스 트리> <패키지 이름> -> vX.Y.Z
+  local name ver
+  name=$(sed -n 's/^name = "\(.*\)"$/\1/p' "$1/pyproject.toml" | head -1); ver=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$1/pyproject.toml" | head -1)
+  [ "$name" = "$2" ] && [ -n "$ver" ] || die "$1 가 $2 의 소스 트리가 아니거나 버전을 읽지 못했다(pyproject.toml)"
+  echo "v$ver"
+}
+BOUNDARY_ACTUAL=$(pkg_version "$BOUNDARY_SRC" boundary-contracts) || exit 1
+MODEL_RUNTIME_ACTUAL=$(pkg_version "$MODEL_RUNTIME_SRC" model-runtime) || exit 1
+[ "$BOUNDARY_ACTUAL" = "$BOUNDARY_TAG" ] || die "요청 versions.boundary($BOUNDARY_TAG)와 dependency_sources.boundary의 실제 버전($BOUNDARY_ACTUAL)이 다르다. 라벨이 거짓이 되므로 이미지를 만들지 않는다"
+[ "$MODEL_RUNTIME_ACTUAL" = "$MODEL_RUNTIME_TAG" ] || die "요청 versions.model_runtime($MODEL_RUNTIME_TAG)과 dependency_sources.model_runtime의 실제 버전($MODEL_RUNTIME_ACTUAL)이 다르다. 라벨이 거짓이 되므로 이미지를 만들지 않는다"
+
 # 2) 라벨 값: 문진 스키마 주 버전과 langgraph 버전은 이 영역 자신의 소스에서 읽는다(deploy가 이 영역의 파일 위치를 알 필요가 없다)
 SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)
 LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
@@ -50,11 +62,18 @@ LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
 EXPOSURE=$("$PYTHON" -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1],encoding="utf-8")),ensure_ascii=False,separators=(",",":")))' deploy-exposure.json) || die "deploy-exposure.json을 읽지 못했다"
 
 # 3) 빌드: 이웃 소스는 이름 있는 빌드 컨텍스트로 준다(Dockerfile이 pip로 설치). 빌드 출력은 표준 오류로 보낸다.
-echo "build-image: $IMAGE_TAG (revision $REVISION, boundary $BOUNDARY_TAG, model-runtime $MODEL_RUNTIME_TAG)" >&2
+echo "build-image: $IMAGE_TAG (revision $REVISION, boundary $BOUNDARY_ACTUAL, model-runtime $MODEL_RUNTIME_ACTUAL)" >&2
 "$DOCKER" build -t "$IMAGE_TAG" \
-  --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
-  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" \
+  --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_ACTUAL" --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
+  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_ACTUAL" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" \
   --label "io.openit.exposure=$EXPOSURE" --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" . >&2
+
+# 3-1) 이미지에 실제로 설치된 버전이 라벨과 같은지 확인한다(U50). 다르면 이미지를 지우고 실패한다.
+INSTALLED=$("$DOCKER" run --rm --entrypoint python "$IMAGE_TAG" -c "import importlib.metadata as m; print(m.version('boundary-contracts')); print(m.version('model-runtime'))") || die "이미지에서 설치된 버전을 읽지 못했다"
+if [ "$INSTALLED" != "$(printf '%s\n%s' "${BOUNDARY_ACTUAL#v}" "${MODEL_RUNTIME_ACTUAL#v}")" ]; then
+  "$DOCKER" rmi -f "$IMAGE_TAG" >&2 || true
+  die "이미지에 설치된 버전이 라벨과 다르다(설치: $(echo $INSTALLED), 라벨: ${BOUNDARY_ACTUAL#v} ${MODEL_RUNTIME_ACTUAL#v}). 이미지를 지웠다"
+fi
 
 # 4) 결과: 이미지에 실제로 붙은 io.openit.* 라벨을 docker inspect로 읽어 마지막 줄에 낸다
 "$DOCKER" image inspect "$IMAGE_TAG" | "$PYTHON" -c '

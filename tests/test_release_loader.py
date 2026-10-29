@@ -9,10 +9,10 @@ from survey_service.orchestrator import Orchestrator
 from survey_service.release import ReleaseLoader, ReleaseRegistry
 from survey_service.store.memory import MemorySessionStore
 
-from .fakes import TURN_ENGINE_VERSION, FakeReleaseReader, RecordingConsole
+from .fakes import ACTION_RULES_VERSION, FakeReleaseReader, RecordingConsole
 from .sample_bank import sample_bank
 
-INSTALLED = {"turn_engine_version": TURN_ENGINE_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION}
+INSTALLED = {"action_rules_version": ACTION_RULES_VERSION, "model_runtime_version": model_runtime.RUNTIME_VERSION}
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def env(tmp_path):
 
 
 def add(reader, rid, version=1, **kw):
-    reader.add_release(rid, sample_bank(version), turn_engine_version=INSTALLED["turn_engine_version"],
+    reader.add_release(rid, sample_bank(version), action_rules_version=INSTALLED["action_rules_version"],
                        model_runtime_version=INSTALLED["model_runtime_version"], **kw)
 
 
@@ -105,7 +105,7 @@ def test_missing_decision_rejected(env):
 def test_manifest_hash_mismatch_rejected(env):
     reader, reg, loader = env
     add(reader, "rel-1")
-    reader.manifests["rel-1"]["turn_engine_version"] = "9.9.9"        # content_hash가 더는 맞지 않는다
+    reader.manifests["rel-1"]["action_rules_version"] = "999"        # content_hash가 더는 맞지 않는다
     reader.set_pointer("rel-1")
     assert loader.poll_once().code == "INTEGRITY_ERROR"
 
@@ -167,35 +167,44 @@ def _bump(v, part):
     return {"major": f"{a + 1}.{b}.{c}", "minor": f"{a}.{b + 1}.{c}", "patch": f"{a}.{b}.{c + 1}"}[part]
 
 
-@pytest.mark.parametrize("lib", ["turn_engine_version", "model_runtime_version"])
 @pytest.mark.parametrize("part", ["major", "minor"])
-def test_library_major_minor_mismatch_is_rejected_and_previous_kept(env, lib, part):
+def test_model_runtime_major_minor_mismatch_is_rejected_and_previous_kept(env, part):
     reader, reg, loader = env
     add(reader, "rel-1")
     reader.set_pointer("rel-1"); loader.poll_once()
-    kw = {"turn_engine_version": INSTALLED["turn_engine_version"], "model_runtime_version": INSTALLED["model_runtime_version"]}
-    kw[lib] = _bump(INSTALLED[lib], part)
-    reader.add_release("rel-2", sample_bank(2), **kw)
+    reader.add_release("rel-2", sample_bank(2), action_rules_version=INSTALLED["action_rules_version"],
+                       model_runtime_version=_bump(INSTALLED["model_runtime_version"], part))
     reader.set_pointer("rel-2")
     r = loader.poll_once()
     assert r.action == "REJECTED" and r.code == "VERSION_MISMATCH" and reg.active_id() == "rel-1"
     assert "MAJOR.MINOR" in loader.status.rejections[-1]["detail"]
 
 
-@pytest.mark.parametrize("lib", ["turn_engine_version", "model_runtime_version"])
-def test_library_patch_mismatch_only_warns(env, lib):
+def test_action_rules_version_must_equal_the_installed_contract_rules_version(env):
+    """3.0.0: 계보 표지는 LoRA-A 출력 규칙 판(순번)이다. 다르면 거부하고 이전 릴리스를 유지한다. 같은 판이면 적재된다."""
     reader, reg, loader = env
-    kw = {"turn_engine_version": INSTALLED["turn_engine_version"], "model_runtime_version": INSTALLED["model_runtime_version"]}
-    kw[lib] = _bump(INSTALLED[lib], "patch")
-    reader.add_release("rel-1", sample_bank(), **kw)
+    add(reader, "rel-1")
+    reader.set_pointer("rel-1"); loader.poll_once()
+    reader.add_release("rel-2", sample_bank(2), action_rules_version=str(int(INSTALLED["action_rules_version"]) + 1),
+                       model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.set_pointer("rel-2")
+    r = loader.poll_once()
+    assert r.action == "REJECTED" and r.code == "VERSION_MISMATCH" and reg.active_id() == "rel-1"
+    assert "action_rules_version" in loader.status.rejections[-1]["detail"]
+
+
+def test_model_runtime_patch_mismatch_only_warns(env):
+    reader, reg, loader = env
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
+                       model_runtime_version=_bump(INSTALLED["model_runtime_version"], "patch"))
     reader.set_pointer("rel-1")
     assert loader.poll_once().action == "LOADED" and reg.active_id() == "rel-1"
     assert "PATCH" in loader.status.warnings[-1]["warning"] and reg.active().warnings
 
 
-def test_unparsable_library_version_rejected(env):
+def test_unparsable_model_runtime_version_rejected(env):
     reader, reg, loader = env
-    reader.add_release("rel-1", sample_bank(), turn_engine_version="latest", model_runtime_version=INSTALLED["model_runtime_version"])
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version="latest")
     reader.set_pointer("rel-1")
     assert loader.poll_once().code == "VERSION_MISMATCH"
 
@@ -302,7 +311,7 @@ def test_release_built_with_older_model_runtime_minor_is_rejected(env):
     major, minor, patch = (int(x) for x in INSTALLED["model_runtime_version"].split(".")[:3])
     assert minor > 0
     older = f"{major}.{minor - 1}.{patch}"      # 현재 MINOR -1: 거부되어야 하는 옛 값은 현재 값에서 계산한다
-    reader.add_release("rel-1", sample_bank(), turn_engine_version=INSTALLED["turn_engine_version"], model_runtime_version=older)
+    reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=older)
     reader.set_pointer("rel-1")
     r = loader.poll_once()
     assert r.action == "REJECTED" and r.code == "VERSION_MISMATCH" and reg.active() is None
