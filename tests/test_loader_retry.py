@@ -243,7 +243,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
     monkeypatch.setenv("SURVEY_API_TOKEN", "a-0123456789abcdef"); monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s-0123456789abcdef")
     monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", TOKEN)
     s = Settings.from_env({"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
-                           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": f"http://127.0.0.1:{port}",
+                           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_INFERENCE_URL": f"http://127.0.0.1:{port}",
                            "SURVEY_INFERENCE_TIMEOUT_SECONDS": "0.5", "SURVEY_RELEASE_POLL_SECONDS": "0.05",
                            "SURVEY_RELEASE_RETRY_BASE_SECONDS": "0.1", "SURVEY_RELEASE_RETRY_MAX_SECONDS": "0.3", "SURVEY_SESSION_IDLE_SECONDS": "0"})
     app = App(s, reader=gate, ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
@@ -308,7 +308,7 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
     srv = FlakyRuntime({TOKEN: "survey-service"}, load_delay=1.5).start()
     monkeypatch.setenv("SURVEY_API_TOKEN", "a-0123456789abcdef"); monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s-0123456789abcdef"); monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", TOKEN)
     s = Settings.from_env({"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
-                           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": srv.url,
+                           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_INFERENCE_URL": srv.url,
                            "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS": "30", "SURVEY_STARTUP_WAIT_SECONDS": "0.3", "SURVEY_SESSION_IDLE_SECONDS": "0"})
     app = App(s, reader=gate, ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     front = None

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional
 
@@ -49,6 +50,36 @@ def _float(env: Mapping, key: str, default: float) -> float:
     if v <= 0:
         raise ConfigError(f"{key}는 0보다 커야 한다")
     return v
+
+
+# 계약 SurveyServiceEnv(boundary-contracts)에 아직 없는 이 영역의 설정 이름. CR-021이 반영되면 지운다.
+_NOT_YET_IN_CONTRACT = ("SURVEY_TURN_ENGINE_VERSION",)
+
+
+def validate_env(env: Mapping[str, str]) -> None:
+    """환경 변수를 계약 SurveyServiceEnv 스키마로 검증한다(U44, ADR-0038): 필수 이름, 값 형식, 그리고 알려지지 않은 SURVEY_* 이름(오타)을 시작 때 거부한다.
+    오류 문구에는 이름만 싣고 값은 싣지 않는다(값이 비밀일 수 있다)."""
+    from boundary_contracts import validator
+    checked = {k: v for k, v in env.items() if isinstance(k, str) and isinstance(v, str) and k not in _NOT_YET_IN_CONTRACT}
+    unknown, bad, missing = [], [], []
+    for e in validator("SurveyServiceEnv").iter_errors(checked):
+        if e.validator == "required":
+            missing.append(re.match(r"'([^']+)'", e.message).group(1))
+        elif not e.path and isinstance(e.instance, str):           # propertyNames: 계약 목록에 없는 SURVEY_* 이름
+            unknown.append(e.instance)
+        elif e.path:
+            bad.append(str(e.path[0]))
+        else:
+            bad.append("(환경 변수 전체)")
+    parts = []
+    if unknown:
+        parts.append("모르는 SURVEY_* 설정 이름(오타인지 확인): " + ", ".join(sorted(set(unknown))))
+    if missing:
+        parts.append("필수 환경 변수가 없다: " + ", ".join(sorted(set(missing))))
+    if bad:
+        parts.append("계약 SurveyServiceEnv 형식에 맞지 않는 값: " + ", ".join(sorted(set(bad))))
+    if parts:
+        raise ConfigError("; ".join(parts))
 
 
 @dataclass(frozen=True)
@@ -136,6 +167,7 @@ class Settings:
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> "Settings":
         env = os.environ if env is None else env
+        validate_env(env)
         s = cls(
             port=_int(env, "SURVEY_PORT", 8080, 1), session_db=env.get("SURVEY_SESSION_DB", cls.session_db),
             outbox_db=env.get("SURVEY_OUTBOX_DB", cls.outbox_db), work_dir=env.get("SURVEY_WORK_DIR", cls.work_dir),
@@ -203,7 +235,7 @@ class Settings:
             outbox_keep_sent_hours=_int(env, "SURVEY_OUTBOX_KEEP_SENT_HOURS", 24, 1),
             outbox_stage_grace_seconds=_float(env, "SURVEY_OUTBOX_STAGE_GRACE_SECONDS", 60.0), log_level=env.get("SURVEY_LOG_LEVEL", "INFO").upper())
         missing = [n for n, v in (("SURVEY_RELEASE_READER", s.release_reader), ("SURVEY_TRACE_INGEST", s.trace_ingest),
-                                  ("SURVEY_MODEL_BACKEND", s.model_backend or s.inference_url)) if not v]
+                                  ("SURVEY_MODEL_BACKEND", s.model_backend)) if not v]     # 계약은 이름의 존재만 요구한다. 빈 값은 설정이 아니다
         for name, spec, url in (("SURVEY_RELEASE_READER", s.release_reader, s.release_reader_url),
                                 ("SURVEY_TRACE_INGEST", s.trace_ingest, s.trace_ingest_url)):
             if spec == "http" and not url:

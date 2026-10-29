@@ -39,3 +39,4 @@
 - [ADR-0035](ADR-0035.md) 서버가 fields로 보증하는 값 규칙은 서비스가 다시 검사하지 않는다 (U24, R7)
 - [ADR-0036](ADR-0036.md) 결과에 빈칸의 원인 코드를 남긴다 (skipped_details, U35)
 - [ADR-0037](ADR-0037.md) 이미지는 영역 빌드 진입점 build-image.sh가 계약 요청으로 만든다 (U42)
+- [ADR-0038](ADR-0038.md) 설정은 계약 SurveyServiceEnv로 검증하고 모르는 SURVEY_* 이름은 시작 때 거부한다 (U44)

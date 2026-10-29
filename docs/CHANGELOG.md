@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U44: 설정을 계약 SurveyServiceEnv로 검증, 모르는 SURVEY_* 이름 거부 [미출시] (ADR-0038)
+
+- 시작 때 환경 변수를 계약 스키마로 검증한다. 오타 이름·형식 오류·필수 이름 누락은 `ConfigError`(종료 코드 2, 이름만 출력). **동작 변경:** `SURVEY_MODEL_BACKEND`는 필수(`SURVEY_INFERENCE_URL`만으로는 시작하지 못함). `SURVEY_TURN_ENGINE_VERSION`은 계약에 없어 예외(CR-021).
+
 ## U42: 영역 빌드 진입점 scripts/build-image.sh, 계약 핀 v2.5.1 [미출시] (ADR-0037)
 
 - `scripts/build-image.sh <요청 JSON>`(계약 BuildImageRequest/BuildImageResult). `scripts/build_wheels.sh`와 `build/wheels/VERSIONS.env`는 없어졌다: deploy가 새 진입점으로 바꿔야 한다. Dockerfile이 이름 있는 빌드 컨텍스트로 이웃 소스를 설치한다. 계약 핀 v2.5.1.
