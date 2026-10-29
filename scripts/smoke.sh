@@ -14,7 +14,7 @@ NAME=openit-survey-service-smoke-$$
 COMMIT=$(git rev-parse --short HEAD)      # 해시를 못 얻으면 실패한다(라벨 revision은 hex만 허용: ImageLabels)
 WORK=$(mktemp -d)
 REQ=$(bash scripts/dev-request.sh "$WORK" "$IMG")      # requirements.txt의 태그로 이웃 소스를 받아 BuildImageRequest를 만든다(운영은 deploy가 만든다)
-RESULT=$(PYTHON=${PYTHON:-python3} bash scripts/build-image.sh "$REQ" | tail -1)    # 영역 빌드 진입점(계약 2.5.0). 마지막 줄 = BuildImageResult
+RESULT=$(bash scripts/build-image.sh "$REQ" | tail -1)    # 영역 빌드 진입점(계약 2.5.0). 마지막 줄 = BuildImageResult
 BOUNDARY_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["boundary"])' "$REQ")
 MODEL_RUNTIME_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["model_runtime"])' "$REQ")
 SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)

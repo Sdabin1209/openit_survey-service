@@ -3,12 +3,14 @@
 # 사용: bash scripts/build-image.sh <요청 JSON 파일>   (영역 리포 루트에서)
 # 표준 출력 마지막 줄 = BuildImageResult JSON 한 줄. 진행 기록은 표준 오류. 종료 0 성공.
 # 이웃 라이브러리(boundary-contracts, model-runtime)는 요청의 dependency_sources(소스 트리)만 쓴다: 이웃 리포 경로·빌드 중 네트워크(SSH) 없음.
-# 환경 변수: DOCKER(도커 실행 파일, 기본 docker), PYTHON(boundary-contracts가 설치된 파이썬, 기본 python3: 요청 검증용). 비밀 값 없음.
+# 환경 변수: DOCKER(도커 실행 파일, 기본 docker)뿐이다. 요청 검증용 파이썬은 이 영역 자신의 .venv(scripts/setup-env.sh가 만든 것)로 정해져 있다:
+# deploy가 파이썬 경로를 넘기면 deploy가 영역의 환경을 아는 것이다(구조 규칙 1). 비밀 값 없음.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
-PYTHON=${PYTHON:-python3}
+PYTHON=.venv/bin/python      # 이 영역의 시험 환경(setup-env.sh). 리포 루트 기준 상대 경로: 위에서 루트로 cd했다
 die() { echo "build-image: $*" >&2; exit 1; }
+[ -x "$PYTHON" ] || die "$PYTHON 이 없다. 먼저 bash scripts/setup-env.sh 로 이 영역의 환경을 만든다"
 [ $# -eq 1 ] && [ -f "$1" ] || die "사용: bash scripts/build-image.sh <요청 JSON 파일>"
 
 # 1) 요청을 계약 validator로 검증하고(영역 경계 입력) 이 영역이 쓰는 키가 모두 있는지 본다. 기본값을 영역 안에 두지 않는다(기준표와 어긋나지 않게).
@@ -17,7 +19,7 @@ import json, shlex, sys
 try:
     from boundary_contracts import validator
 except ImportError:
-    sys.exit("build-image: boundary_contracts를 가져올 수 없다. PYTHON 환경 변수로 boundary-contracts가 설치된 파이썬을 준다")
+    sys.exit("build-image: .venv에서 boundary_contracts를 가져올 수 없다. bash scripts/setup-env.sh 를 다시 실행한다")
 req = json.load(open(sys.argv[1], encoding="utf-8"))
 errs = list(validator("BuildImageRequest").iter_errors(req))
 if errs:

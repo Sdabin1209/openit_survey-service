@@ -4,13 +4,14 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from boundary_contracts import validator
 
 ROOT = Path(__file__).resolve().parents[1]
+VENV_PY = ROOT / ".venv/bin/python"
+pytestmark = pytest.mark.skipif(not VENV_PY.exists(), reason=".venv가 없다(bash scripts/setup-env.sh를 먼저 실행: 진입점은 이 영역의 .venv로 요청을 검증한다)")
 SCRIPT = ROOT / "scripts/build-image.sh"
 TAG = "openit-survey-service-test:entry-{}"
 
@@ -26,7 +27,7 @@ def request(tmp_path, **override):
 
 def run(f, **env):
     return subprocess.run(["bash", str(SCRIPT), str(f)], capture_output=True, text=True, cwd=ROOT,
-                          env={**os.environ, "PYTHON": sys.executable, "DOCKER": "false", **env})
+                          env={**{k: v for k, v in os.environ.items() if k != "PYTHON"}, "DOCKER": "false", **env})
 
 
 def test_request_with_an_unknown_key_is_rejected(tmp_path):
@@ -62,7 +63,7 @@ def test_real_build_prints_a_valid_result_as_the_last_line_with_the_requested_la
                              env={**os.environ, "REPO_BASE": os.environ.get("REPO_BASE", "git@github.com:Sdabin1209")})
         if req.returncode != 0:
             pytest.skip("이웃 소스를 받지 못했다(REPO_BASE 또는 네트워크): " + req.stderr[-200:])
-        r = subprocess.run(["bash", str(SCRIPT), req.stdout.strip()], capture_output=True, text=True, cwd=ROOT, env={**os.environ, "PYTHON": sys.executable})
+        r = subprocess.run(["bash", str(SCRIPT), req.stdout.strip()], capture_output=True, text=True, cwd=ROOT, env={k: v for k, v in os.environ.items() if k != "PYTHON"})       # PYTHON 없이: 진입점이 영역의 .venv를 스스로 고른다
         assert r.returncode == 0, r.stderr[-800:]
         last = r.stdout.strip().splitlines()[-1]
         result = json.loads(last)
