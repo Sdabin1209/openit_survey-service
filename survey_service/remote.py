@@ -146,6 +146,7 @@ class RemoteModelSession:
 class RemoteInference:
     """InferenceServer와 같은 load 인터페이스. 모델을 적재하는 대신 추론 서버에 릴리스 적재를 요청하고 끝나길 기다린다."""
     production_safe = True
+    needs_adapters = False     # 어댑터는 추론 서버(model-runtime)가 직접 받는다. 서비스는 문항 세트만 받는다 (ADR-0040)
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
                  poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 2.0) -> None:

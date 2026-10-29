@@ -74,6 +74,7 @@ class LocalModelSession:
 
 
 class InferenceServer:
+    needs_adapters = True      # 서비스 안에서 모델(가짜 백엔드)을 올리므로 어댑터 파일이 필요하다: 릴리스 번들을 받는다 (ADR-0040)
     def __init__(self, backend: str, *, contract_version: int = 1, backend_factory: Optional[Callable[[], Any]] = None) -> None:
         if backend not in KNOWN_BACKENDS and backend_factory is None:
             raise InferenceLoadError("UNKNOWN_BACKEND", f"구현된 백엔드가 아니다: {backend!r} (있는 것: {KNOWN_BACKENDS})")

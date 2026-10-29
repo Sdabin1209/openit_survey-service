@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U47(5): 문항 세트만 받는 I4 호출 [미출시] (ADR-0040)
+
+- 원격 추론 구성에서 릴리스 로더가 `get_release_question_bank`(계약 2.7.0)로 문항 세트만 받고 어댑터를 내려받지 않는다. 서비스 안 가짜 백엔드는 어댑터가 필요해 `load_bundle`을 쓴다.
+
 ## U43: setup-env.sh가 SetupEnvReport를 낸다, 계약 핀 v2.6.0 [미출시] (ADR-0039)
 
 - `scripts/setup-env.sh`의 표준 출력은 마지막 줄 보고(계약 SetupEnvReport) 한 줄뿐이고 진행 기록은 표준 오류다. 계약 핀 v2.6.0.

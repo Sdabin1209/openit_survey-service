@@ -179,17 +179,20 @@ class ReleaseLoader:
         self._check_manifest(manifest, rid)
         self._check_decision(manifest)
         # 클라이언트가 dest/<릴리스 ID>에 풀고 모든 해시를 검증한다. PASS가 아니면 FAILED_PRECONDITION(BoundaryError).
-        # 어댑터와 질문지는 번들이 돌려준 경로·내용을 그대로 쓴다. 로컬 사본은 재사용하지 않고 매번 새로 받아 검증한 뒤 교체한다(손상된 사본은 덮어쓴다).
+        # 어댑터와 질문지는 번들(또는 문항 세트 호출)이 돌려준 경로·내용을 그대로 쓴다. 로컬 사본은 재사용하지 않고 매번 새로 받아 검증한 뒤 교체한다(손상된 사본은 덮어쓴다).
         try:
             self.workdir.mkdir(parents=True, exist_ok=True)
-            bundle = self.reader.load_bundle(rid, dest=self.workdir)
+            if getattr(self.inference, "needs_adapters", True):      # 서비스 안에서 모델을 올리는 백엔드만 어댑터를 쓴다
+                bundle = self.reader.load_bundle(rid, dest=self.workdir)
+                bank, adapters = bundle.question_bank, bundle.adapters
+            else:                                                    # 원격 추론: 어댑터는 model-runtime이 따로 받는다. 문항 세트만 받는다(I4, 계약 2.7.0, ADR-0040)
+                bank, adapters = self.reader.get_release_question_bank(rid)["question_bank"], {}
         except OSError as e:               # 볼륨을 쓸 수 없다(읽기 전용, 가득 참, 권한): 폴링 스레드를 죽이지 않고 일시 실패로 다시 시도한다
             raise LoadRejected("STORAGE_UNAVAILABLE", f"작업 폴더를 쓸 수 없다: {type(e).__name__}", retryable=True) from None
-        bank = bundle.question_bank
         self._check_bank(manifest, bank)
         warnings = self._check_library_versions(manifest)
         try:
-            session = self.inference.load(manifest, bundle.adapters, contract_version=manifest["runtime_contract_version"])
+            session = self.inference.load(manifest, adapters, contract_version=manifest["runtime_contract_version"])
         except InferenceLoadError as e:
             raise LoadRejected(e.code, str(e), retryable=e.retryable) from e
         for w in warnings:

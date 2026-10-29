@@ -185,6 +185,18 @@ class FakeReleaseReader:
             adapters[role] = out
         return ReleaseBundle(copy.deepcopy(m), copy.deepcopy(self.banks[release_id]), adapters)
 
+    def get_release_question_bank(self, release_id: str):
+        """I4(계약 2.7.0): 어댑터 없이 문항 세트만. HttpReleaseReader와 같이 응답의 content_hash는 본문의 해시다(매니페스트와의 결속은 호출자 몫)."""
+        self._maybe_fail("get_release_question_bank")
+        from boundary_contracts import canonical
+        m = self.manifests.get(release_id)
+        if m is None:
+            raise BoundaryError("NOT_FOUND", "릴리스가 없다")
+        if self.decisions[m["gate_decision_id"]]["result"] != "PASS":
+            raise BoundaryError("FAILED_PRECONDITION", "통과하지 않은 릴리스")
+        bank = copy.deepcopy(self.banks[release_id])
+        return {"release_id": release_id, "content_hash": canonical.sha256_hash(bank), "question_bank": bank}
+
     def get_decision(self, decision_id: str):
         self._maybe_fail("get_decision")
         if decision_id not in self.decisions:
