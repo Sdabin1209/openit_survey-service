@@ -117,8 +117,10 @@ def _is_num(x: Any) -> bool:
 
 
 def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank], flow: Optional[Flow] = None) -> list[Violation]:
-    """서버가 보증하는 의미 규칙 밖에서 서비스가 보는 값 타당성(문항 은행 의존)(감사 TE-1, D88): 위반이면 값을 저장하지 않고 같은 요청을 1회 재시도, 그래도면 턴 NOT_COMMITTED.
-    (1) 저장하는 값의 칸이 현재 문항이어야 한다(정정은 예외: status CORRECTION 또는 action CORRECT). (2) 값이 Value 형식이고 합리적인 크기다.
+    """서버가 보증하지 못하는 것만 서비스가 본다(감사 TE-1, D88, ADR-0035): 위반이면 값을 저장하지 않고 같은 요청을 1회 재시도, 그래도면 턴 NOT_COMMITTED.
+    (1) 저장하는 값의 칸이 현재 문항이어야 한다(정정은 예외: status CORRECTION 또는 action CORRECT). 서버는 현재 문항 밖 칸을 보지 않는다.
+    아래 (2)~(4)는 칸 규격(`data_type`)이 없는 칸에만 한다: 규격이 있는 칸은 서버가 fields로 자료형·범위·선택지를 보증하므로 다시 검사하지 않는다(R7). 규격이 없는 문항 은행(2.x 호환)은 그대로 검사한다.
+    (2) 값이 Value 형식이고 합리적인 크기다.
     (3) 슬롯 정의가 아는 만큼 타입이 맞는다: choices는 그 목록의 문자열, yes_no_map은 불리언(또는 yes/no 문자열), units는 단위가 목록에 있는 양 또는 숫자.
     (4) 이미 저장된 값이 있으면 같은 종류(불리언/숫자/문자열/양)여야 한다. 한계: QuestionBank에 칸의 값 타입 필드가 없어 처음 쓰는 자유 칸의 타입은 알 수 없다(CR-017)."""
     out: list[Violation] = []
@@ -144,8 +146,10 @@ def check_values(output: Mapping, doc: Mapping, bank: Optional[Bank], flow: Opti
         if _family(ref["question_id"]) not in fams and ref["question_id"] not in span and not (is_corr_action or v["status"] == "CORRECTION"):
             out.append(Violation("OUT_OF_CURRENT_ITEM", f"{path}/key", "현재 문항이 아닌 칸을 정정이 아닌데 저장하려 한다"))
             continue
-        val = v["value"]
         slot = _slot_def(bank, ref)
+        if slot is not None and "data_type" in slot:
+            continue                       # 칸 규격이 있는 칸의 자료형·범위·선택지는 서버가 fields로 보증한다: 다시 검사하지 않는다 (R7, U24, ADR-0035)
+        val = v["value"]
         kind = ("bool" if isinstance(val, bool) else "num" if _is_num(val) else "amount" if isinstance(val, dict) and "amount" in val and "unit" in val
                 else "str" if isinstance(val, str) and 0 < len(val) <= _MAX_STR else "coded" if isinstance(val, dict) and "amount" not in val and val else None)
         if kind is None:

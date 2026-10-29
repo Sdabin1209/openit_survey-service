@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U24: 서버가 fields로 보증하는 값 검사 삭제 [미출시, 서버 model-runtime 새 태그 뒤] (ADR-0035)
+
+- 칸 규격(`data_type`)이 있는 칸의 VALUE_INVALID·VALUE_TYPE_MISMATCH 검사와 그 재호출을 지웠다. UNKNOWN_SLOT·OUT_OF_CURRENT_ITEM(서버가 못 보는 것)과 규격이 없는 문항 은행·칸의 값 검사는 남았다. model-runtime v0.9.0은 fields를 모른다: f99cf5a 이후 태그를 핀하기 전에는 배포하지 않는다.
+
 ## D115: 칸 규격(U32)과 결과 목록 순서(U26) [미출시] (ADR-0033, ADR-0034, 계약 v2.4.0)
 
 - 문진 스키마 1.2.0(하위 호환, 정수 버전 1): `SlotDef`에 선택 속성 `data_type`, `unit`, `minimum`, `maximum`, `exclusive_minimum`. `survey_service/fields.py`가 문항 은행에서 `QuestionFieldSpec`을 만들고 `fields`를 받는 추론 세션에 싣는다. 계약 v2.4.1(CR-020 반영)의 `extract(..., fields=)`로 항상 보낸다. 기준 서버가 범위 밖 값을 데이터셋 정답 모양으로 돌려주는 것을 시험한다.

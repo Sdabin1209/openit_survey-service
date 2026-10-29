@@ -194,7 +194,8 @@ def test_value_from_outside_the_current_item_is_not_saved_unless_it_is_a_correct
 
 
 def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_value():
-    bank = copy.deepcopy(__import__("tests.sample_bank", fromlist=["sample_bank"]).sample_bank())
+    from .test_service_checks_u24 import untyped_bank
+    bank = untyped_bank()          # 칸 규격이 없는 문항 은행: 서버가 값 규칙을 보증하지 못해 서비스가 검사한다(U24, ADR-0035)
     for q in bank["questions"]:
         for s_ in q["slots"]:
             if (q["question_id"], s_["slot_id"]) == ("Q1.D01", "on_medication"):
@@ -224,7 +225,8 @@ def test_value_type_and_size_are_checked_against_the_slot_definition_and_saved_v
 
 
 def test_saved_value_kind_cannot_change_to_another_kind():
-    rig = Rig()
+    from .test_service_checks_u24 import untyped_bank
+    rig = Rig(bank=untyped_bank())          # 칸 규격이 없는 문항 은행의 서비스 검사(U24, ADR-0035)
     rig.start()
     rig.say("안 피움", out=ANSWER_OUT)                                                   # Q1.D01.diagnosed=False 저장
     out = rig.say("아니 열대여섯", out=ext("CORRECT", "Q1.D02", val("Q1.D01.diagnosed", "열대여섯", "CORRECTION")), times=2)
