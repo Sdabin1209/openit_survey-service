@@ -59,9 +59,9 @@ class LocalModelSession:
         return self._s.serving_config_hashes
 
     def extract(self, request: Mapping, *, flow: Mapping, fields: Mapping) -> RuntimeResult:
-        # 서비스 안 가짜 백엔드(개발·시험용)는 flow·fields를 쓰지 않는다: 규칙 보증이 없다. 시그니처만 원격 세션과 같다(graph가 항상 같은 모양으로 부른다).
+        # model-runtime 0.11.0부터 세션의 extract도 흐름 규칙과 값 규칙을 보증한다(서버와 같은 코드): flow·fields를 그대로 넘긴다.
         try:
-            out = self._s.extract(request)
+            out = self._s.extract(request, flow, fields)
         except model_runtime.ModelOutputInvalid as e:
             raise BoundaryError("UNAVAILABLE", "모델 출력이 ActionExtraction 형식을 지키지 못했다", {"reason": "OUTPUT_INVALID"}) from e
         info = self._s.last_call_info

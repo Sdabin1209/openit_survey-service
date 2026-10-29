@@ -181,10 +181,10 @@ def _answer(rig):
 
 
 def test_value_from_outside_the_current_item_is_not_saved_unless_it_is_a_correction():
+    from survey_service.store import effects
     rig = Rig()
-    rig.start()
-    rig.say("네", out=ANSWER_OUT)                                           # Q1.D01 답, 현재 문항은 Q1.D02
-    bad = ext("NEXT", "Q1.D03", val("Q4.answer", True))                     # 현재 문항이 아닌 Q4 칸 저장(정정 아님)
+    rig.store.create("S1", "rel-e2e-1", effects.initial_state("S1", rig.bank, "Q8_1"))          # 현재 문항 Q8_1
+    bad = ext("NEXT", "Q8_2", val("Q8_1.days", 3), val("Q1.D01.diagnosed", True))               # 흐름은 맞고(서버 통과) 앞 문항 칸을 정정 아닌데 저장
     before = rig.doc()["answer_records"]
     out = rig.say("아무 말", out=bad, times=2)
     rig.model.queue.clear()

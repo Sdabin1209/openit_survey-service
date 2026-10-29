@@ -1,5 +1,9 @@
 # 변경 이력
 
+## model-runtime 고정 v0.11.0 [미출시]
+
+- 라이브러리 고정 v0.10.0 -> v0.11.0(계약 3.0.0 대응). 세션 API가 `extract(input, flow, fields)`로 바뀌어 `LocalModelSession`이 flow·fields를 넘긴다(서비스 안 가짜 백엔드도 서버와 같은 규칙 보증). 영역 시험 두 개는 서버가 거부하는 출력(흐름 규칙 위반)을 쓰고 있어 흐름은 맞고 서비스만 거부하는 출력으로 고쳤다.
+
 ## U50 구멍: 문진 스키마 라벨 [미출시]
 
 - `io.openit.contracts.survey-schema` 라벨은 이 이미지가 실제로 쓰는 문진 스키마(이 리포 `schema/` 패키지 `openit-survey-schema`)의 **주 버전**에서 찍는다(이전: `schema/CONTRACT_VERSION` 정수). 요청 `versions.survey_schema`가 있고 `schema/`의 실제 버전과 다르면 라벨을 찍지 않고 실패한다(boundary·model-runtime과 같은 규칙). 빌드 뒤 이미지에 설치된 `openit-survey-schema` 버전도 라벨과 대조한다. Dockerfile 인자 `SCHEMA_CONTRACT_VERSION` -> `SURVEY_SCHEMA_MAJOR`.
