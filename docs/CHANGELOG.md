@@ -1,5 +1,9 @@
 # 변경 이력
 
+## model-runtime 고정 v0.11.1 [미출시]
+
+- 라이브러리 고정 v0.11.0 -> v0.11.1(이미지 서비스 라벨만 바뀐 PATCH, 라이브러리 코드 같음). 기준표와 라벨 `io.openit.model-runtime`을 맞춘다.
+
 ## model-runtime 고정 v0.11.0 [미출시]
 
 - 라이브러리 고정 v0.10.0 -> v0.11.0(계약 3.0.0 대응). 세션 API가 `extract(input, flow, fields)`로 바뀌어 `LocalModelSession`이 flow·fields를 넘긴다(서비스 안 가짜 백엔드도 서버와 같은 규칙 보증). 영역 시험 두 개는 서버가 거부하는 출력(흐름 규칙 위반)을 쓰고 있어 흐름은 맞고 서비스만 거부하는 출력으로 고쳤다.
