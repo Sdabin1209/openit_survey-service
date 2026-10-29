@@ -1,11 +1,11 @@
 # CR-018: 영역 경계를 넘는 형식의 스키마 초안 (지시서 1 B, 2026-10-28)
 
-상태: **초안 제출**. 코드는 바꾸지 않았다. 헤드가 계약(boundary-contracts)에 올린 뒤에 이 영역이 쓰도록 바꾼다(다음 단계). 근거 점검: `docs/audit/structure-rules-2026-10-28.md` E절(SV-14, SV-15, SV-16).
+상태: **해결됨(계약 승격, U49)**. 승격된 형식의 초안·사본은 지웠다(git 기록에 남는다; 분류표는 docs/CHANGELOG.md의 U49). 아래는 당시 요청이다. 원래 상태: 초안 제출. 코드는 바꾸지 않았다. 헤드가 계약(boundary-contracts)에 올린 뒤에 이 영역이 쓰도록 바꾼다(다음 단계). 근거 점검: `docs/audit/structure-rules-2026-10-28.md` E절(SV-14, SV-15, SV-16).
 
 초안은 `docs/change-requests/schemas/*.schema.json`(JSON Schema 2020-12), 예시는 `docs/change-requests/schemas/examples/`, 검증은 아래 명령이다.
 
 ```
-.venv/bin/python docs/change-requests/schemas/verify_boundary_schemas.py
+(지워짐, U49)
 ```
 
 ## 검증 출력 (이 PC, jsonschema `Draft202012Validator`, 실행: 위 명령)

@@ -1,4 +1,4 @@
-# survey-service 문진 스키마 중 영역 경계를 넘는 것 (계약 승격 검토용, 2026-10-29)
+# survey-service 문진 스키마 중 영역 경계를 넘는 것 (계약 승격 검토용, 2026-10-29. 위치를 변경 요청 폴더에서 docs/로 옮김, U49)
 
 헤드가 계약(boundary-contracts)으로 올릴지 정한다. 이 문서는 `schema/schemas/`(이 영역이 소유, D21)의 스키마 16개를 하나씩 보고 **다른 영역이 읽거나 쓰는가**를 적은 표다.
 
@@ -30,6 +30,6 @@
 3. **아직 상대가 없는 것**: `DispatchInput`/`DispatchOutput`(결과 전달 대상), `RiskSignal`의 생산자(외부 감지기).
 4. **정수 스키마 버전**: `CONTRACT_VERSION`은 1이다. 2.2.0 대응(`AlertKind` 이름 변경, `FrontendMessage`/`FrontendInput` 변경)은 추가형이 아닌 변경이 하나 있다(`AlertKind`). 버전 정책은 헤드가 정한다.
 
-## 3. 이 디렉터리의 승격 후보 4개(환경·출력·준비 상태·문항 세트 조회)
+## 3. 서비스 자체의 경계 형식 4개는 계약으로 승격됐다 (U49)
 
-문진 스키마가 아니라 서비스 자체의 경계 형식이다. 목록은 `MANIFEST.json`, 검증은 `verify_contract_ready.py`.
+환경 변수 집합(`SurveyServiceEnv`), 보존 정리 출력(`SurveyPurgeOutput`), `/readyz` 본문(`SurveyReadyz`), 문항 세트 조회(`SurveyQuestionBankRead`)는 계약 패키지(boundary-contracts)가 정본이다. 이 영역에 있던 초안·사본(`docs/change-requests/schemas/`, `contract-ready/`)은 지웠다(분류표는 `docs/CHANGELOG.md`의 U49). 이 영역의 코드는 `boundary_contracts.validator`로 읽는다(설정은 `settings.validate_env`, ADR-0038).

@@ -1,9 +1,0 @@
-{
-  "io.openit.contracts.boundary": "v2.1.1",
-  "io.openit.contracts.survey-schema": "1",
-  "io.openit.langgraph": "1.2.15",
-  "io.openit.model-runtime": "v0.7.6",
-  "io.openit.revision": "0de163b",
-  "io.openit.service": "survey-service",
-  "io.openit.turn-engine": "v0.4.2"
-}

@@ -1,5 +1,26 @@
 # 변경 이력
 
+## U49: 승격된 계약 스키마의 영역 사본 정리 [미출시]
+
+`docs/change-requests/` 아래 스키마 파일을 하나씩 분류했다. 정본은 계약 패키지(boundary-contracts)다. 이 사본을 읽는 시험·스크립트는 없었다(`verify_*.py` 둘은 사본을 검증하던 것이라 함께 지움).
+
+| 파일 | 분류 | 처리 | 근거 |
+|---|---|---|---|
+| `contract-ready/schemas/SurveyServiceEnv.schema.json` | (가) | 삭제 | 계약 `SurveyServiceEnv` |
+| `contract-ready/schemas/SurveyPurgeOutput.schema.json` | (가) | 삭제 | 계약 `SurveyPurgeOutput` |
+| `contract-ready/schemas/SurveyReadyz.schema.json` | (가) | 삭제 | 계약 `SurveyReadyz` |
+| `contract-ready/schemas/SurveyQuestionBankRead.schema.json` | (가) | 삭제 | 계약 `SurveyQuestionBankRead` |
+| `schemas/service-env.schema.json` | (가) | 삭제 | 위 `SurveyServiceEnv`의 초안 |
+| `schemas/purge-output.schema.json` | (가) | 삭제 | `SurveyPurgeOutput`의 초안 |
+| `schemas/readyz-body.schema.json` | (가) | 삭제 | `SurveyReadyz`의 초안(제목 SurveyReadyzBody) |
+| `schemas/question-bank-read.schema.json` | (가) | 삭제 | `SurveyQuestionBankRead`의 초안(제목 ReleaseQuestionBankRead) |
+| `schemas/image-labels.schema.json` | (가) | 삭제 | 계약 `ImageLabels`로 통합(MANIFEST의 not_promoted 사유) |
+| `schemas/question-flow-table-args.schema.json` | (나) 쓰지 않는 초안 | 삭제 | turn-engine에 넘기던 인자 형식이다. turn-engine 의존이 없어졌고(D109) 문항 순서표는 계약 `QuestionFlowTable`이다 |
+| 예시 `schemas/examples/*`(14), `contract-ready/examples/*`(14), `MANIFEST.json`, `verify_boundary_schemas.py`, `verify_contract_ready.py` | 사본의 부속 | 삭제 | 위 스키마를 검증하던 것 |
+| `contract-ready/SURVEY_BOUNDARY.md` | 스키마가 아니라 문서 | `docs/schema-boundaries.md`로 이동, 3절을 승격 안내로 고침 | 문진 스키마 16개의 경계 표는 이 영역 소유 설명이다 |
+
+지운 스키마 10개(+예시·스크립트·MANIFEST), 남긴 영역 소유 스키마 0개(변경 요청 폴더 안). 영역이 소유하는 형식(문진 스키마 `schema/`)은 변경 요청 폴더 밖이라 이번 대상이 아니다.
+
 ## U47(1): 노출 선언 라벨 io.openit.exposure [미출시] (ADR-0041)
 
 - `deploy-exposure.json`(노출 표 정본)을 이미지 라벨 `io.openit.exposure`로 단다(`build-image.sh`). 시험이 표와 코드 라우트의 일치를 본다.
