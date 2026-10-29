@@ -1,4 +1,4 @@
-# 서드파티 의존 고정(이미지 빌드용). 이웃 라이브러리와 문진 스키마는 scripts/build_wheels.sh가 만든 wheel로 설치한다.
+# 서드파티 의존 고정(이미지 빌드용). 이웃 라이브러리는 build-image.sh 요청의 소스 트리, 문진 스키마는 이 리포의 schema/로 Dockerfile이 설치한다.
 # langgraph(오케스트레이션, D62)와 그 의존을 정확한 버전으로 고정한다. langsmith는 langchain-core의 의존이라 들어오지만 추적은 이미지에서 끈다(Dockerfile).
 # pywebpush(직원 웹 푸시, D64)와 그 의존(cryptography, py-vapid, http-ece, aiohttp)도 정확한 버전으로 고정한다.
 aiohappyeyeballs==2.7.1

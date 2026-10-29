@@ -4,6 +4,7 @@
 **/*.egg-info
 tests
 docs
-schema
-survey_service
 *.db
+schema/build
+schema/*.egg-info
+build

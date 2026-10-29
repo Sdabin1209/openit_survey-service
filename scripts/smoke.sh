@@ -12,12 +12,14 @@ TESTS_DIR=$PWD/tests
 IMG=openit-survey-service:smoke-$$
 NAME=openit-survey-service-smoke-$$
 COMMIT=$(git rev-parse --short HEAD)      # 해시를 못 얻으면 실패한다(라벨 revision은 hex만 허용: ImageLabels)
-bash scripts/build_wheels.sh >/dev/null
-# shellcheck disable=SC1091
-source build/wheels/VERSIONS.env
-$DOCKER build -q -t "$IMG" --build-arg COMMIT="$COMMIT" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" \
-  --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
-  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" . >/dev/null
+WORK=$(mktemp -d)
+REQ=$(bash scripts/dev-request.sh "$WORK" "$IMG")      # requirements.txt의 태그로 이웃 소스를 받아 BuildImageRequest를 만든다(운영은 deploy가 만든다)
+RESULT=$(PYTHON=${PYTHON:-python3} bash scripts/build-image.sh "$REQ" | tail -1)    # 영역 빌드 진입점(계약 2.5.0). 마지막 줄 = BuildImageResult
+BOUNDARY_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["boundary"])' "$REQ")
+MODEL_RUNTIME_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["model_runtime"])' "$REQ")
+SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)
+LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
+echo "$RESULT" | python3 -c 'import json,sys;r=json.loads(sys.stdin.read());assert r["image_id"].startswith("sha256:") and r["labels"]["io.openit.service"]=="survey-service"' || { echo "SMOKE FAIL: 빌드 결과(BuildImageResult)가 올바르지 않다: $RESULT"; exit 1; }
 trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true' EXIT
 
 fail() { echo "SMOKE FAIL: $1"; $DOCKER logs "$NAME" 2>&1 | tail -20; exit 1; }

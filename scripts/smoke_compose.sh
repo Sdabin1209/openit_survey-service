@@ -13,12 +13,14 @@ export SERVICE_IMAGE=openit-survey-service:compose-$$
 export FAKE_IMAGE=openit-survey-service-fake:compose-$$
 COMPOSE="$DOCKER compose -p $PROJECT -f tests/compose/compose.smoke.yaml"
 COMMIT=$(git rev-parse --short HEAD)      # 해시를 못 얻으면 실패한다(ImageLabels: revision은 hex만)
-bash scripts/build_wheels.sh >/dev/null
-# shellcheck disable=SC1091
-source build/wheels/VERSIONS.env
-$DOCKER build -q -t "$SERVICE_IMAGE" --build-arg COMMIT="$COMMIT" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" \
-  --build-arg SCHEMA_CONTRACT_VERSION="$SCHEMA_CONTRACT_VERSION" \
-  --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_TAG" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" . >/dev/null
+WORK=$(mktemp -d)
+REQ=$(bash scripts/dev-request.sh "$WORK" "$SERVICE_IMAGE")      # requirements.txt의 태그로 이웃 소스를 받아 BuildImageRequest를 만든다(운영은 deploy가 만든다)
+RESULT=$(PYTHON=${PYTHON:-python3} bash scripts/build-image.sh "$REQ" | tail -1)    # 영역 빌드 진입점(계약 2.5.0). 마지막 줄 = BuildImageResult
+BOUNDARY_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["boundary"])' "$REQ")
+MODEL_RUNTIME_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["versions"]["model_runtime"])' "$REQ")
+SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)
+LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
+echo "$RESULT" | python3 -c 'import json,sys;r=json.loads(sys.stdin.read());assert r["image_id"].startswith("sha256:") and r["labels"]["io.openit.service"]=="survey-service"' || { echo "SMOKE FAIL: 빌드 결과(BuildImageResult)가 올바르지 않다: $RESULT"; exit 1; }
 rm -rf build/fake-ctx && mkdir -p build/fake-ctx
 cp -r build/wheels build/fake-ctx/wheels && cp requirements.lock build/fake-ctx/ && cp tests/compose/Dockerfile.fake build/fake-ctx/Dockerfile
 mkdir build/fake-ctx/tests && (cd tests && cp *.py build/../../build/fake-ctx/tests/ 2>/dev/null || cp *.py ../build/fake-ctx/tests/)

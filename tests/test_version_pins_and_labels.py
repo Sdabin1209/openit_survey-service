@@ -1,10 +1,10 @@
 """이웃 라이브러리 핀의 일관성과 이미지 라벨 규칙.
 
-핀: requirements.txt, scripts/build_wheels.sh의 기본 태그, 설치된 패키지의 버전이 같은 model-runtime을 가리킨다. 한 곳만 올리면 이미지(build_wheels)와
-개발 환경(requirements)이 다른 버전이 된다. 기대값의 출처는 설치된 패키지(`model_runtime.RUNTIME_VERSION`)다: 시험이 숫자를 따로 적지 않는다.
+핀: 이웃 라이브러리 태그는 requirements.txt 한 곳에만 있다(빌드 진입점 scripts/build-image.sh는 요청의 versions만 쓰고 기본 태그를 두지 않는다, 계약 2.5.0).
+model-runtime 핀은 설치된 패키지의 버전과 같다. 기대값의 출처는 설치된 패키지(`model_runtime.RUNTIME_VERSION`)다: 시험이 숫자를 따로 적지 않는다.
 
 라벨: deploy의 ImageLabels(`io.openit.contracts.survey-schema`는 `^([0-9]+|n/a)$`, `unknown`·`survey-schema-v1.0.0` 같은 문자열 불가)를
-이 영역의 이미지 라벨 입력(Dockerfile 기본값, build_wheels.sh가 내는 VERSIONS.env)이 지키는지 본다.
+이 영역의 이미지 라벨 입력(Dockerfile 기본값, build-image.sh가 읽는 schema/CONTRACT_VERSION)이 지키는지 본다.
 """
 import pathlib
 import re
@@ -21,26 +21,24 @@ def _req_tag(name):
     return m.group(1)
 
 
-def _script_tag(var):
-    return re.search(rf"^{var}=\$\{{{var}:-(v[0-9.]+)\}}", (ROOT / "scripts/build_wheels.sh").read_text(), re.M).group(1)
+def test_model_runtime_pin_agrees_with_the_installed_package():
+    assert _req_tag("model-runtime") == "v" + model_runtime.RUNTIME_VERSION
 
 
-def test_model_runtime_pins_agree_with_the_installed_package():
-    installed = "v" + model_runtime.RUNTIME_VERSION
-    assert _req_tag("model-runtime") == installed
-    assert _script_tag("MODEL_RUNTIME_TAG") == installed
-
-
-def test_other_library_pins_agree_between_requirements_and_build_script():
-    assert _req_tag("boundary-contracts") == _script_tag("BOUNDARY_TAG")
-    assert "turn-engine" not in (ROOT / "requirements.txt").read_text() and "TURN_ENGINE_TAG" not in (ROOT / "scripts/build_wheels.sh").read_text()   # D109: 코드 의존 없음
+def test_no_pins_outside_requirements_and_no_turn_engine():
+    """이웃 태그의 정본은 requirements.txt뿐이다. 진입점·Dockerfile에 기본 태그를 두면 기준표와 어긋난다."""
+    assert "turn-engine" not in (ROOT / "requirements.txt").read_text()
+    for f in ("scripts/build-image.sh", "Dockerfile"):
+        text = (ROOT / f).read_text()
+        assert not re.search(r"(BOUNDARY_TAG|MODEL_RUNTIME_TAG)=\$?\{?[^$\s]*v[0-9]+\.[0-9]+\.[0-9]+", text), f
+    assert not (ROOT / "scripts/build_wheels.sh").exists()
 
 
 def test_schema_label_input_is_an_integer_not_a_tag_string():
     ver = (ROOT / "schema/CONTRACT_VERSION").read_text().strip()
     assert SURVEY_SCHEMA_LABEL.match(ver)
-    script = (ROOT / "scripts/build_wheels.sh").read_text()
-    assert "SCHEMA_CONTRACT_VERSION=$SCHEMA_INT" in script and "SCHEMA_INT=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)" in script
+    script = (ROOT / "scripts/build-image.sh").read_text()
+    assert "SCHEMA_CONTRACT_VERSION=$(tr -d '[:space:]' < schema/CONTRACT_VERSION)" in script
 
 
 def test_dockerfile_does_not_default_labels_to_values_imagelabels_rejects():

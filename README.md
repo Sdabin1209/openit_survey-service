@@ -30,7 +30,7 @@
 | `survey_service/trace/` | TurnTrace 조립, outbox, 전송 스레드 |
 | `schema/` | 문진 스키마(이 영역이 소유, 정수 버전 1). 문항 흐름·표 찾기 표 데이터 포함 |
 | `tests/` | 시험과 이웃 대역(참조 서버, 가짜 입력원) |
-| `scripts/` | `smoke.sh`(이미지 스모크), `smoke_compose.sh`, `build_wheels.sh` |
+| `scripts/` | `build-image.sh`(영역 빌드 진입점, 계약 2.5.0), `dev-request.sh`(개발용 빌드 요청 만들기), `smoke.sh`(이미지 스모크), `smoke_compose.sh` |
 | `Dockerfile`, `requirements.txt`, `requirements.lock` | 이미지와 의존 고정 |
 
 한 턴의 흐름(docs/design.md §16):

@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U42: 영역 빌드 진입점 scripts/build-image.sh, 계약 핀 v2.5.1 [미출시] (ADR-0037)
+
+- `scripts/build-image.sh <요청 JSON>`(계약 BuildImageRequest/BuildImageResult). `scripts/build_wheels.sh`와 `build/wheels/VERSIONS.env`는 없어졌다: deploy가 새 진입점으로 바꿔야 한다. Dockerfile이 이름 있는 빌드 컨텍스트로 이웃 소스를 설치한다. 계약 핀 v2.5.1.
+
 ## 푸시 본문을 계약 StaffPushPayload의 키만으로 [미출시]
 
 - 직원 웹 푸시 본문에서 계약에 없는 `type` 키를 뺐다(session_id·kind·alert_id만, StaffPushPayload는 additionalProperties false). 직원 화면이 본문을 계약으로 검증해 어기면 일반 문구로 떨어지던 결함(세션·종류가 알림에 안 나옴). 시험은 계약 스키마로 검증한다. SSE 이벤트의 `type`은 푸시 본문이 아니므로 그대로다.

@@ -103,7 +103,7 @@
 
 - `/healthz`: 프로세스가 응답하면 200. `/readyz`: 세션 DB 열림, outbox DB 열림, 활성 릴리스 적재됨이면 200, 아니면 503과 사유. 수집(I6) 도달 여부는 준비 조건이 아니다(outbox가 분리하므로).
 - 로그는 표준 출력(JSON 한 줄). 발화·모델 출력 원문과 `TraceEnvelope` 내용을 로그에 남기지 않는다.
-- 이미지: `Dockerfile`, 비root(uid 10001), 라벨 `io.openit.contracts.boundary`, `io.openit.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`, 커밋. 의존은 `git archive <태그>`로 만든 wheel로 설치한다(`scripts/build_wheels.sh`).
+- 이미지: `Dockerfile`, 비root(uid 10001), 라벨 `io.openit.contracts.boundary`, `io.openit.survey-schema`, `io.openit.turn-engine`, `io.openit.model-runtime`, 커밋. 이웃 의존은 영역 빌드 진입점 `scripts/build-image.sh`가 요청의 소스 트리로 설치한다(ADR-0037).
 
 ## 9. 문진 스키마 패키지
 

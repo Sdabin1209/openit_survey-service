@@ -72,7 +72,7 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 
 ## 6. 이미지
 
-`bash scripts/build_wheels.sh`가 원격 태그를 얕게 `git clone --branch <태그>`해(이웃 폴더를 읽지 않는다) wheel을 만든다(`BOUNDARY_TAG`, `TURN_ENGINE_TAG`, `MODEL_RUNTIME_TAG`로 바꾼다). 이어서 `docker build --build-arg COMMIT=... BOUNDARY_TAG=... TURN_ENGINE_TAG=... MODEL_RUNTIME_TAG=... SCHEMA_CONTRACT_VERSION=...`(smoke.sh가 하는 그대로). CI는 digest를 게시하고 deploy에 제출한다(D24, 아직 CI는 없다).
+영역 빌드 진입점은 `bash scripts/build-image.sh <요청 JSON 파일>`(계약 boundary-contracts 2.5.0, BuildImageRequest/BuildImageResult, ADR-0037)이다. 요청의 `versions`(boundary, model_runtime)와 `dependency_sources`(boundary, model_runtime 소스 트리의 절대 경로)가 필수이고 기본값은 없다. 이웃 폴더나 빌드 중 네트워크(SSH)를 쓰지 않는다. 표준 출력 마지막 줄이 BuildImageResult(image, image_id, 이미지에 실제로 붙은 `io.openit.*` 라벨)다. 개발자가 직접 시험할 때는 `bash scripts/dev-request.sh <작업 폴더> <image_tag>`가 requirements.txt의 태그로 소스를 받아 요청을 만든다(운영은 deploy가 만든다). `PYTHON`(boundary-contracts가 설치된 파이썬, 요청 검증용)과 `DOCKER` 환경 변수만 있다. 이전 `scripts/build_wheels.sh`는 없어졌다(wheel은 Dockerfile이 이름 있는 빌드 컨텍스트에서 설치한다). 이미지 라벨은 공통 6개(`io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`(코드 의존이 없어 `n/a`), `io.openit.model-runtime`)에 `io.openit.langgraph`가 더해진다(CR-011). 이미지는 LangSmith 추적을 끈 채 나가야 한다(발화가 외부로 나간다).
 
 ## 6-1. 이미지 조합과 릴리스 정책 (D46)
 

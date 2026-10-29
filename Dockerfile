@@ -1,10 +1,15 @@
 # survey-service 이미지. turn-engine에는 코드 의존이 없다(D109): 라벨 io.openit.turn-engine은 n/a. 설정은 환경 변수로만 받고 비밀 값은 넣지 않는다. 로그는 표준 출력. 비root로 실행.
-# 빌드 전에 scripts/build_wheels.sh 로 build/wheels 를 만든다(이웃 라이브러리는 Git 태그 시점의 소스로 만든 wheel).
+# 이웃 라이브러리(boundary-contracts, model-runtime)는 이름 있는 빌드 컨텍스트(--build-context boundary_contracts=..., model_runtime=...)로 받는다:
+# 영역 빌드 진입점 scripts/build-image.sh가 요청의 dependency_sources(해당 버전 소스 트리)를 준다(계약 2.5.0). 이 Dockerfile은 네트워크로 이웃을 받지 않는다(서드파티는 잠금 파일에서 PyPI).
 FROM python:3.12-slim AS build
-COPY build/wheels /wheels
 COPY requirements.lock /requirements.lock
-RUN pip install --no-cache-dir --prefix=/install -r /requirements.lock \
- && pip install --no-cache-dir --prefix=/install --no-deps /wheels/*.whl
+RUN pip install --no-cache-dir --prefix=/install -r /requirements.lock
+COPY --from=boundary_contracts . /src/boundary-contracts
+COPY --from=model_runtime . /src/model-runtime
+COPY schema /src/schema
+COPY pyproject.toml /src/app/pyproject.toml
+COPY survey_service /src/app/survey_service
+RUN pip install --no-cache-dir --prefix=/install --no-deps /src/boundary-contracts /src/model-runtime /src/schema /src/app
 
 FROM python:3.12-slim
 ARG COMMIT
