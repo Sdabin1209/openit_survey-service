@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.request
 
+from boundary_contracts import validator
 import pytest
 
 from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, DeliveryFailed, WebPushSender
@@ -113,7 +114,8 @@ def test_push_accepted_makes_it_delivered_and_payload_is_minimal(tmp_path):
         assert r.risk()[1]["turn_failure_signal"] == {"session_id": "K1", "write_committed": "COMMITTED", "staff_alert": "DELIVERED", "pause_reason": "RISK"} and len(push.sent) == 1
         sub, payload = push.sent[0]
         body = json.loads(payload)
-        assert set(body) == {"type", "alert_id", "session_id", "kind"} and body["session_id"] == "K1" and body["kind"] == "RISK_STOP"
+        assert list(validator("StaffPushPayload").iter_errors(body)) == []         # 계약 StaffPushPayload(키 session_id·kind·alert_id, 그 밖의 키 없음)
+        assert body["session_id"] == "K1" and body["kind"] == "RISK_STOP" and body["alert_id"].startswith("al-") and "type" not in body
         assert SECRET_TEXT.encode() not in payload
     finally:
         r.store.close()
@@ -349,7 +351,7 @@ def test_webpush_sender_against_local_push_service(status, expected):
     ps = PushService(status)
     try:
         sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=3, allow_private_hosts=True)
-        payload = json.dumps({"type": "alert", "alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
+        payload = json.dumps({"alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
         assert sender.send({"endpoint": ps.url, "keys": _client_keys()}, payload) == expected
         hdr, body = ps.requests[0]
         hdr = {k.lower(): v for k, v in hdr.items()}

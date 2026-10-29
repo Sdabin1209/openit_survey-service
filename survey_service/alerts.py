@@ -538,7 +538,7 @@ class AlertService:
         if not subs:
             return 0
         a = event["alert"]
-        payload = json.dumps({"type": event["type"], "alert_id": a["alert_id"], "session_id": a["session_id"], "kind": a["kind"]},
+        payload = json.dumps({"alert_id": a["alert_id"], "session_id": a["session_id"], "kind": a["kind"]},        # 계약 StaffPushPayload의 키만(additionalProperties false). type은 알림 문구에 필요 없다
                              ensure_ascii=False).encode()
         results: list[str] = []
         lock = threading.Lock()

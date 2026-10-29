@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 푸시 본문을 계약 StaffPushPayload의 키만으로 [미출시]
+
+- 직원 웹 푸시 본문에서 계약에 없는 `type` 키를 뺐다(session_id·kind·alert_id만, StaffPushPayload는 additionalProperties false). 직원 화면이 본문을 계약으로 검증해 어기면 일반 문구로 떨어지던 결함(세션·종류가 알림에 안 나옴). 시험은 계약 스키마로 검증한다. SSE 이벤트의 `type`은 푸시 본문이 아니므로 그대로다.
+
 ## U35: 결과에 빈칸의 원인 코드 [미출시] (ADR-0036, 문진 스키마 1.3.0)
 
 - `SessionResult.skipped_details: [{item, slot?, reason}]` 추가(추가형, 선택 속성이지만 서비스는 항상 낸다). reason은 UNKNOWN·REJECTED·UNCLEAR. 환자 발화 원문 없음. 기존 `skipped`(문자열 목록)는 그대로다. **`skipped` 폐지는 2.0.0 후보**(병원 시스템이 `skipped_details`로 옮긴 뒤).
