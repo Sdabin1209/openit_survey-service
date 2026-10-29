@@ -19,7 +19,7 @@ from survey_service.store.memory import MemorySessionStore
 
 from .http_server_support import start_server, server_port, stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
-from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
+from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
 from .test_release_loader import INSTALLED
 
@@ -276,13 +276,16 @@ def test_over_http_with_app(tmp_path):
         stop_server(httpd); app.stop()
 
 
-def test_app_refuses_to_start_without_api_token(tmp_path, monkeypatch):
-    from survey_service.settings import ConfigError
+def test_app_starts_without_kiosk_token_because_device_auth_is_the_gateway_header(tmp_path, monkeypatch):
+    """ADR-0031: 기기 인증은 gateway mTLS가 넘기는 X-Openit-Device다. 키오스크 토큰은 2.x 호환이라 없어도 시작하고, 직원 토큰은 여전히 필요하다."""
     monkeypatch.delenv("SURVEY_API_TOKEN")
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"),
                  release_reader="x:y", trace_ingest="x:y", model_backend="fake")
-    with pytest.raises(ConfigError):
-        App(s, reader=object(), ingest=object())
+    app = App(s, reader=FakeReleaseReader(tmp_path / "gate"), ingest=FakeTraceIngest())
+    try:
+        assert app.api.token is None and app.api.handle("POST", "/v1/sessions", "", b"{}")[0] == 401
+    finally:
+        app.stop()
 
 
 # ---------------------------------------------------------------- 직원 개입 (PUBLIC_API.md 직원 콘솔)

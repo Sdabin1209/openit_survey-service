@@ -72,7 +72,7 @@ def test_unset_is_config_error_naming_file_and_env(tmp_path, monkeypatch):
     _clear(monkeypatch)
     with pytest.raises(ConfigError) as ei:
         _app(tmp_path)
-    assert "SURVEY_API_TOKEN_FILE" in str(ei.value)
+    assert "SURVEY_STAFF_API_TOKEN_FILE" in str(ei.value)       # 키오스크 토큰은 2.x 호환이라 없어도 된다(ADR-0031). 직원 토큰이 없을 때 이름을 알려 준다
 
 
 def test_same_tokens_still_rejected(tmp_path, monkeypatch):

@@ -66,6 +66,7 @@
   - **재질문 상한(U10, ADR-0014)**: 기본 3(끄려면 `SURVEY_MAX_CONSECUTIVE_REASK=0` 명시). 문항 세트의 `ask_limit`·`confirm_limit`·`unrecognized_streak_limit`가 있으면 최솟값(근사).
   - **보존(U4, ADR-0015)**: 세션 90일, 접근 기록 365일, 해결 알림 365일, DEAD outbox 30일, 알림 이벤트 1만 건. 무기한(null·0)은 시작 거부. 서비스가 주기 정리(`SURVEY_RETENTION_INTERVAL_SECONDS`)하고 `python -m survey_service purge [--session <id>]`도 같은 함수다. `/readyz`의 `retention`.
   - **접근 기록 개인 ID(U7)**: `staff_access_log.user_id`에 `X-Openit-User`(gateway가 인증해 붙인 값)를 기록한다. 헤더가 없거나 형식이 어긋나면 역할만 기록한다. **위조 방지는 gateway가 이 헤더를 지우고 자기 인증 결과로 덮어쓰는 것에 의존한다**(이 영역은 헤더를 그대로 믿는다). PUBLIC_API.md 75행 문구는 헤드가 고친다.
+  - **키오스크 기기 인증(D113, ADR-0031)**: gateway가 mTLS로 확인한 기기 ID를 `X-Openit-Device`로 넘기면 서비스가 믿고 세션을 만든 기기로 기록한다(다른 기기 404, 형식 위반 400, 헤더·토큰 둘 다 없으면 401). **이 헤더가 서비스에 오는 경로는 gateway뿐이라는 전제**다. 아래 기기 토큰은 2.x 호환이다.
   - **기기별 키오스크 토큰(U8, ADR-0016)**: `SURVEY_KIOSK_DEVICE_TOKENS`(`device_id=토큰` 줄, NAME_FILE 우선). 세션을 만든 기기 토큰만 그 세션에 접근한다(다른 기기·공유 토큰은 404). 공유 토큰 구성은 하위 호환이며 `/readyz`의 `kiosk_tokens.shared_kiosk_token=true`로 경고한다.
   - **값 검증(TE-1, ADR-0017)**: 추출 값이 현재 문항(또는 next_item과 같은 계열) 밖이거나(정정 제외), 형식·크기가 비합리적이거나, 선택지·예/아니오·단위 정의와 다르거나, 저장된 값과 종류가 다르면 저장하지 않고 NOT_COMMITTED. 한계: 칸 값 타입 필드가 없어 처음 쓰는 자유 칸은 검증하지 못한다(CR-017).
   - **웹 푸시 SSRF(B6, ADR-0018)**: 등록 때 https·포트 443·공개 호스트 이름만, 보낼 때 해석한 주소가 모두 공개 주소일 때만 보내고 리다이렉트를 따르지 않는다(`SURVEY_PUSH_ALLOW_PRIVATE_HOSTS`는 개발·시험 전용). 한계: DNS 재바인딩.

@@ -32,3 +32,4 @@
 - [ADR-0029](ADR-0029.md) HTTP 서버는 WSGI 앱 + waitress (ADR-0004 대체)
 - [ADR-0028](ADR-0028.md) LoRA-A 출력의 의미 규칙은 서버가 보증하고 서비스는 다시 검사하지 않는다, turn-engine 코드 의존 제거 (ADR-0017 2번 대체)
 - [ADR-0030](ADR-0030.md) 스키마는 yoyo-migrations의 번호 붙은 마이그레이션으로 만들고 바꾼다 (표준 점검 A05)
+- [ADR-0031](ADR-0031.md) 키오스크 기기 인증은 gateway가 넘기는 X-Openit-Device 헤더를 믿는다 (ADR-0016 인증 부분 대체)

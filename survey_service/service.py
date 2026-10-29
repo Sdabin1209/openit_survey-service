@@ -138,8 +138,6 @@ class App:
                                          turn_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
-        if not api_token and not device_tokens:
-            raise ConfigError(f"공개 API 토큰이 {settings.api_token_env}_FILE(파일) 또는 환경 변수 {settings.api_token_env}에 없다")
         staff_token = _secret(settings.staff_api_token_env, "직원 개입 토큰")
         if not staff_token:
             raise ConfigError(f"직원 개입 토큰이 {settings.staff_api_token_env}_FILE(파일) 또는 환경 변수 {settings.staff_api_token_env}에 없다")
@@ -151,7 +149,7 @@ class App:
         risk_token = _secret(settings.risk_source_token_env, "위험 신호 토큰") or None
         _check_token_length(result_token, "결과 조회 토큰")
         _check_token_length(risk_token, "위험 신호 토큰")
-        if result_token in (api_token, staff_token) or risk_token in (api_token, staff_token) or (result_token and result_token == risk_token) or \
+        if (result_token is not None and result_token in (api_token, staff_token)) or (risk_token is not None and risk_token in (api_token, staff_token)) or (result_token and result_token == risk_token) or \
                 len({staff_token, result_token, risk_token, *device_tokens.values()} - {None}) != len([x for x in (staff_token, result_token, risk_token, *device_tokens.values()) if x is not None]) or (api_token and api_token in device_tokens.values()):
             raise ConfigError("토큰은 역할마다 서로 달라야 한다")
         self.api = PublicApi(self.orchestrator, api_token or None, device_tokens=device_tokens, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
@@ -464,7 +462,8 @@ def make_wsgi(app: App):
                 return respond(400, {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "code": "INVALID_RECORD",
                                      "message": "Content-Length가 올바르지 않다", "retryable": False})
             raw = environ["wsgi.input"].read(n) if n > 0 else b""
-            code, body, hdr = app.api.handle(method, raw_path, hdr_in("Authorization"), raw, user=hdr_in("X-Openit-User").strip() or None)
+            code, body, hdr = app.api.handle(method, raw_path, hdr_in("Authorization"), raw, user=hdr_in("X-Openit-User").strip() or None,
+                                             device=environ.get("HTTP_X_OPENIT_DEVICE"))
             return respond(code, body, hdr)
         if method == "GET" and path == "/healthz":
             return respond(200, {"status": "ok"})

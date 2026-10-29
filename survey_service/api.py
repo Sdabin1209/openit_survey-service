@@ -52,6 +52,7 @@ TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")      # $가 아니
 MAX_BODY = 64 * 1024
 HTTP_CODE = {"INVALID_RECORD": 400, "PERMISSION_DENIED": 401, "NOT_FOUND": 404, "CONFLICT": 409, "UNAVAILABLE": 503}
 STAFF_ROUTES = {"intervention", "staff_session", "alerts", "push_add", "push_del", "push_unsub", "push_config"}
+DEVICE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")      # 계약 PUBLIC_API.md F절(2.3.0)의 X-Openit-Device 형식
 ROLE_OF_ROUTE = {"result": "result-reader", "results": "result-reader", "risk_signal": "risk-source"}     # 그 밖의 직원 경로는 staff, 나머지는 kiosk
 SUBJECT_REF = re.compile(r"^[A-Za-z0-9._:/#=+-]{1,128}\Z")
 STAFF_ID = re.compile(r"^[A-Za-z0-9._:@/#=+-]{1,128}\Z")
@@ -105,10 +106,8 @@ class PublicApi:
                  max_utterance_chars: int = 1000, alerts: Optional[AlertService] = None, max_subscriptions: int = 100,
                  retry_after_seconds: int = 1, push_allow_private: bool = False, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
                  risk_token: Optional[str] = None, require_subject_ref: bool = False, device_tokens: Optional[dict] = None) -> None:
-        self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
-        if not token and not self.device_tokens:
-            raise ValueError("공개 API 토큰이 비어 있다")
-        token = token or None
+        self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 2.x 호환. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
+        token = token or None                                  # 키오스크 토큰은 2.x 호환이다. 없어도 된다: 기기 인증은 게이트웨이 mTLS가 넘기는 X-Openit-Device다 (ADR-0031)
         if staff_token is not None and (not staff_token or (token is not None and hmac.compare_digest(staff_token.encode(), token.encode()))):
             raise ValueError("직원 토큰은 비어 있지 않고 키오스크 토큰과 달라야 한다")
         toks = [t for t in (token, staff_token, result_token, risk_token, *self.device_tokens.values()) if t is not None]
@@ -135,10 +134,12 @@ class PublicApi:
         self._report_req = jsonschema.Draft202012Validator(load_contract_schema("StaffCallReport"))
 
     # ------------------------------------------------------------------ 진입
-    def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None) -> tuple[int, dict, dict]:
+    def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None, device: Optional[str] = None) -> tuple[int, dict, dict]:
         """(상태 코드, 본문, 추가 헤더). /healthz, /readyz는 service.py가 처리한다. 429·503에는 Retry-After(초, 정수)를 붙인다.
-        user는 게이트웨이가 인증한 계정 ID(X-Openit-User 헤더 값). 직원 개입에서만 쓴다."""
+        user는 게이트웨이가 인증한 계정 ID(X-Openit-User 헤더 값). 직원 개입에서만 쓴다.
+        device는 게이트웨이가 mTLS로 확인한 키오스크 기기 ID(X-Openit-Device 헤더 값, 없으면 None). 키오스크 경로에서만 쓰며 토큰보다 우선한다 (ADR-0031)."""
         self._tl.t0 = time.monotonic()                      # 턴 총 마감은 요청을 받은 때부터 센다
+        self._tl.device, self._tl.device_header = None, device
         self._tl.user = user if isinstance(user, str) and USER_ID.match(user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
         status, body, headers = self._handle(method, path, auth, raw, user)
         self._record(method, path, status)
@@ -171,7 +172,13 @@ class PublicApi:
         want = ROLE_OF_ROUTE.get(route[0], "staff" if route[0] in STAFF_ROUTES else "kiosk")
         if (want == "result-reader" and self.result_token is None) or (want == "risk-source" and self.risk_token is None):
             return _err("NOT_FOUND", "경로가 없다")                  # 그 역할의 토큰을 설정하지 않았으면 기능이 꺼진 것이다
-        role = self._role(auth)
+        dev_hdr = getattr(self._tl, "device_header", None)
+        if dev_hdr is not None and want == "kiosk":                # 게이트웨이가 확인한 기기: 헤더가 토큰보다 우선한다. 직원 등 다른 역할 경로에는 아무 힘이 없다
+            if not DEVICE_ID.match(dev_hdr):
+                return _err("INVALID_RECORD", "X-Openit-Device 형식이 아니다")
+            role, self._tl.device = "kiosk", dev_hdr
+        else:
+            role = self._role(auth)
         if role is None:
             return _err("PERMISSION_DENIED", "토큰이 없거나 틀리다", 401, {"WWW-Authenticate": "Bearer"})
         if want != role:                                           # 역할마다 자기 경로만
@@ -235,14 +242,15 @@ class PublicApi:
         return found
 
     def _device_denied(self, sid: Optional[str], allow_new: bool = False):
-        """기기별 토큰(U8): 세션을 만든 기기 토큰으로만 접근한다. 다른 기기 토큰(또는 공유 토큰)이면 세션이 없는 것처럼 404. 세션에 기기가 기록돼 있지 않으면(공유 토큰으로 만든 세션) 막지 않는다."""
-        if self.alerts is None or not sid or not self.device_tokens:         # 기기별 토큰을 쓰지 않는 구성(공유 토큰만)은 확인하지 않는다(하위 호환)
+        """세션을 만든 기기(헤더의 기기 ID, 또는 2.x 호환 기기 토큰)로만 접근한다. 다른 기기(또는 기기 없는 공유 토큰)이면 세션이 없는 것처럼 404.
+        기기를 쓰지 않는 구성(공유 토큰만)은 확인하지 않는다(하위 호환)."""
+        dev = getattr(self._tl, "device", None)
+        if self.alerts is None or not sid or (dev is None and not self.device_tokens):
             return None
         try:
             owner = self.alerts.store.device_of(sid)
         except StoreError:
             return _err("UNAVAILABLE", "지금은 처리할 수 없다")
-        dev = getattr(self._tl, "device", None)
         if owner != dev and (owner is not None or dev is not None) and not (allow_new and owner is None):       # 기기 토큰은 기록된 소유가 없는 세션(공유 토큰이 만든 것, 메타 없음)에도 접근하지 못한다
             log.warning("다른 기기의 세션 접근을 거부했다 route_session=%s", "*")
             return _err("NOT_FOUND", "모르는 세션이다")

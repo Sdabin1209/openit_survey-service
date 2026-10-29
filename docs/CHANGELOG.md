@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 단위 4b: 키오스크 기기 인증을 X-Openit-Device로 [미출시] (D113, ADR-0031, 계약 v2.3.0)
+
+- 키오스크 경로가 gateway의 `X-Openit-Device`를 믿고 세션 소유 기기로 기록한다(다른 기기 404, 형식 위반 400, 헤더·토큰 모두 없음 401). 헤더가 토큰보다 우선. 키오스크 토큰·기기 토큰 표 없이도 시작한다(2.x 호환으로만 남음). 계약 핀 v2.3.0.
+- 고친 것: 결과·위험 토큰이 없을 때 공유 키오스크 토큰이 없으면 "토큰은 역할마다 서로 달라야 한다"로 시작이 거부되던 비교(None끼리 같음)를 바로잡음.
+
 ## 단위 4a-B: 스키마를 yoyo-migrations로 [미출시] (D111, ADR-0030)
 
 - 시작 때 `CREATE IF NOT EXISTS`/`ALTER`/advisory lock 대신 `survey_service/migrations/<sqlite|postgresql>/`의 번호 파일을 yoyo가 적용한다. 지운 것: `_SCHEMA`, `_NEW_COLUMNS`, `pg_ddl`, `PgConn.script`. 기존 데이터베이스는 그대로 받아들인다(시험).
