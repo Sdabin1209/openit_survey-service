@@ -42,6 +42,7 @@ from boundary_contracts import PIPELINE_SCHEMA_VERSION, load_schema as load_cont
 from .alerts import AlertService, StaffCallRejected
 from .store.effects import model_key
 from . import netguard
+from .blanks import blank_details
 from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
 from .orchestrator import Orchestrator
 
@@ -657,7 +658,8 @@ class PublicApi:
                 "ended_at": (times.get(len(log_) - 1) or {}).get("at") if ended and log_ else None,
                 "release_id": self.orch.store.release_id_of(sid),
                 "question_bank_version": str(doc["session_info"]["question_bank_version"]),
-                "answers": self._values(doc), "skipped": [e["question_id"] for e in prog["skipped"]]}
+                "answers": self._values(doc), "skipped": [e["question_id"] for e in prog["skipped"]],
+                "skipped_details": blank_details(doc)}
 
     def _result(self, sid: str, role: str):
         """SessionResult(발화·대화 로그 없음, 부분 결과도 상태와 함께). 접근 기록 fail-closed."""

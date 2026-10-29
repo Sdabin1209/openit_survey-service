@@ -1,5 +1,9 @@
 # 변경 이력
 
+## U35: 결과에 빈칸의 원인 코드 [미출시] (ADR-0036, 문진 스키마 1.3.0)
+
+- `SessionResult.skipped_details: [{item, slot?, reason}]` 추가(추가형, 선택 속성이지만 서비스는 항상 낸다). reason은 UNKNOWN·REJECTED·UNCLEAR. 환자 발화 원문 없음. 기존 `skipped`(문자열 목록)는 그대로다. **`skipped` 폐지는 2.0.0 후보**(병원 시스템이 `skipped_details`로 옮긴 뒤).
+
 ## U24: 서버가 fields로 보증하는 값 검사 삭제 [미출시, 서버 model-runtime 새 태그 뒤] (ADR-0035)
 
 - 칸 규격(`data_type`)이 있는 칸의 VALUE_INVALID·VALUE_TYPE_MISMATCH 검사와 그 재호출을 지웠다. UNKNOWN_SLOT·OUT_OF_CURRENT_ITEM(서버가 못 보는 것)과 규격이 없는 문항 은행·칸의 값 검사는 남았다. model-runtime 핀을 v0.10.0(fields로 값 규칙 보증)으로 올렸다. 서버 이미지가 v0.10.0 이상일 때만 배포한다.
