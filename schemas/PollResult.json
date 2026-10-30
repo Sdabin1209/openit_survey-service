@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PollResult",
+  "description": "릴리스 로더가 포인터를 한 번 본 결과. REJECTED는 이전 릴리스를 유지하고 그 포인터를 영구 거부로 확정한 것, RETRY_LATER·WAITING은 일시적이라 같은 포인터를 나중에 다시 시도하는 것이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action",
+    "release_id",
+    "code"
+  ],
+  "properties": {
+    "action": {
+      "enum": [
+        "NO_POINTER",
+        "UNCHANGED",
+        "LOADED",
+        "ACTIVATED",
+        "REJECTED",
+        "RETRY_LATER",
+        "WAITING"
+      ]
+    },
+    "release_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+          "description": "사유 코드. 적재 거부: INVALID_RECORD, UNSUPPORTED_VERSION, INTEGRITY_ERROR, NO_APPROVAL, INVALID_FIELD_SPEC, VERSION_MISMATCH, RETRY_EXHAUSTED, STORAGE_UNAVAILABLE, 추론 서버 적재 거부(REMOTE_*, UNKNOWN_BACKEND, model-runtime 오류 이름), 경계 호출 오류 코드(BoundaryError.code)"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "NO_POINTER"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "release_id": {
+            "type": "null"
+          },
+          "code": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "UNCHANGED",
+              "LOADED",
+              "ACTIVATED"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "release_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+          },
+          "code": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "REJECTED",
+              "WAITING"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "release_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "description": "사유 코드. 적재 거부: INVALID_RECORD, UNSUPPORTED_VERSION, INTEGRITY_ERROR, NO_APPROVAL, INVALID_FIELD_SPEC, VERSION_MISMATCH, RETRY_EXHAUSTED, STORAGE_UNAVAILABLE, 추론 서버 적재 거부(REMOTE_*, UNKNOWN_BACKEND, model-runtime 오류 이름), 경계 호출 오류 코드(BoundaryError.code)"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "RETRY_LATER"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "description": "사유 코드. 적재 거부: INVALID_RECORD, UNSUPPORTED_VERSION, INTEGRITY_ERROR, NO_APPROVAL, INVALID_FIELD_SPEC, VERSION_MISMATCH, RETRY_EXHAUSTED, STORAGE_UNAVAILABLE, 추론 서버 적재 거부(REMOTE_*, UNKNOWN_BACKEND, model-runtime 오류 이름), 경계 호출 오류 코드(BoundaryError.code)"
+          }
+        },
+        "description": "release_id는 활성 포인터를 읽지 못했을 때만 null"
+      }
+    }
+  ]
+}

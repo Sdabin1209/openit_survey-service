@@ -1,0 +1,10 @@
+{
+  "status": 401,
+  "headers": {},
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "PERMISSION_DENIED",
+    "message": "토큰이 없거나 틀리다",
+    "retryable": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtractInput",
+  "description": "모델 추출 입력(extract_request 출력). 계약 ActionExtractionInput 그대로이며 정본 검증은 검증기가 맡는다.",
+  "type": "object",
+  "x-contract": "ActionExtractionInput"
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ActivePointer",
+  "description": "릴리스 로더가 받는 활성 포인터. 영역 사이 타입(boundary-contracts)이라 복사하지 않고 정본 검증기에 맡긴다.",
+  "type": "object",
+  "x-contract": "ActivePointer"
+}

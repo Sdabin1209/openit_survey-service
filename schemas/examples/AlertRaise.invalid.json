@@ -1,0 +1,5 @@
+{
+  "op": "retry_staff_call",
+  "session_id": "kiosk-s1",
+  "turn_id": "idle-expire"
+}

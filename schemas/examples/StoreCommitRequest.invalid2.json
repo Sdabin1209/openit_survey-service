@@ -1,0 +1,21 @@
+{
+  "session_id": "s-1",
+  "expected_revision": -1,
+  "writes": {
+    "answer_updates": [
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "action": "FIRST_WRITE",
+        "value": true,
+        "precision": "exact"
+      }
+    ],
+    "progress_record_update": null
+  },
+  "turn_id": "t-1",
+  "input_hash": "h"
+}

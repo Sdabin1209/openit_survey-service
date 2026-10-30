@@ -1,0 +1,14 @@
+{
+  "subscription": {
+    "endpoint": "https://localhost/x",
+    "keys": {
+      "p256dh": "k",
+      "auth": "a"
+    }
+  },
+  "payload": {
+    "session_id": "s-1",
+    "kind": "RISK_STOP",
+    "alert_id": "a1"
+  }
+}

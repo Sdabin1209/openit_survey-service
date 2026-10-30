@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoreCommitResult",
+  "description": "세션 쓰기 확정 결과. OK는 APPLIED이고 새 revision을 준다. REVISION_CONFLICT는 NOT_APPLIED이고 저장된 현재 revision을 준다. DB_ERROR는 revision이 null이고 detail에 이유(반영할 수 없는 쓰기, 세션 없음, DB 오류)를 적으며 write_outcome은 NOT_APPLIED 또는 UNKNOWN(COMMIT 자체가 실패해 반영 여부를 모름)이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "status",
+    "write_outcome",
+    "revision",
+    "detail"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "OK",
+        "REVISION_CONFLICT",
+        "DB_ERROR"
+      ]
+    },
+    "write_outcome": {
+      "enum": [
+        "APPLIED",
+        "NOT_APPLIED",
+        "UNKNOWN"
+      ]
+    },
+    "revision": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "detail": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "OK"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "write_outcome": {
+            "const": "APPLIED"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "detail": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "REVISION_CONFLICT"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "write_outcome": {
+            "const": "NOT_APPLIED"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "detail": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "DB_ERROR"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "write_outcome": {
+            "enum": [
+              "NOT_APPLIED",
+              "UNKNOWN"
+            ]
+          },
+          "revision": {
+            "type": "null"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

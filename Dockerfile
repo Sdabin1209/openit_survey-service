@@ -6,10 +6,11 @@ COPY requirements.lock /requirements.lock
 RUN pip install --no-cache-dir --prefix=/install -r /requirements.lock
 COPY --from=boundary_contracts . /src/boundary-contracts
 COPY --from=model_runtime . /src/model-runtime
+COPY --from=openit_link . /src/link
 COPY schema /src/schema
 COPY pyproject.toml /src/app/pyproject.toml
 COPY survey_service /src/app/survey_service
-RUN pip install --no-cache-dir --prefix=/install --no-deps /src/boundary-contracts /src/model-runtime /src/schema /src/app
+RUN pip install --no-cache-dir --prefix=/install --no-deps /src/boundary-contracts /src/model-runtime /src/link /src/schema /src/app
 
 FROM python:3.12-slim
 ARG COMMIT

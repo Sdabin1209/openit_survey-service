@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from boundary_contracts import validator
 
-from survey_service.risk_rules import parse_rules
+from survey_service.components.risk_screen import parse_rules
 from survey_service.settings import ConfigError
 
 GOOD = {"version": "v1", "rules": [{"id": "r1", "description": "d", "match": {"any_of": [{"contains": "abc"}, {"regex": "a+b"}]}}]}

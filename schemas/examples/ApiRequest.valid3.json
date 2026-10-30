@@ -1,0 +1,13 @@
+{
+  "method": "POST",
+  "path": "/v1/sessions/K1/intervention",
+  "headers": {
+    "authorization": "Bearer dev-staff-token",
+    "x-openit-user": "nurse01"
+  },
+  "body": {
+    "session_id": "K1",
+    "decision": "RESUME",
+    "turn_id": "i1"
+  }
+}

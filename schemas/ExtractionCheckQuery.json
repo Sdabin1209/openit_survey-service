@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtractionCheckQuery",
+  "description": "추출 결과 검사 질의(extraction_check 입력). 서버가 보증하지 못하는 두 가지(저장하려는 칸이 세션의 칸 목록에 있는가, 현재 문항 근처인가)만 본다. flow가 없으면 문항 간 구간(span) 허용은 쓰지 않는다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "output",
+    "session"
+  ],
+  "properties": {
+    "output": {
+      "type": "object",
+      "x-contract": "ActionExtraction",
+      "description": "모델 추출 결과(계약). values[].save, key, status, action, next_item을 읽는다.",
+      "required": [
+        "values",
+        "action",
+        "next_item"
+      ]
+    },
+    "session": {
+      "type": "object",
+      "x-survey-schema": "SessionStore",
+      "description": "세션 문서(answer_records의 칸 목록, progress_record.current_question_id)."
+    },
+    "flow": {
+      "type": "object",
+      "x-survey-schema": "QuestionFlow",
+      "description": "문항 흐름(선택). 현재 문항에서 next_item까지의 구간을 정상으로 본다."
+    }
+  }
+}

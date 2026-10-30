@@ -1,0 +1,4 @@
+{
+  "SURVEY_TRACE_INGEST_URL": "https://gate.example.com",
+  "SURVEY_TRACE_INGEST_TOKEN_ENV": "MY_TOKEN"
+}

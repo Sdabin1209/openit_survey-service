@@ -1,0 +1,12 @@
+{
+  "op": "extract",
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "UNAVAILABLE",
+    "message": "추론 서버를 부를 수 없다",
+    "retryable": true,
+    "details": {
+      "reason": "OUTPUT_INVALID"
+    }
+  }
+}

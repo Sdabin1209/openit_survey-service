@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReleaseEntry",
+  "description": "릴리스 레지스트리 작업 하나의 입력: 적재(register), 활성 지정(activate), 활성 조회(active, active_id), 적재된 ID 목록(loaded_ids), 조회(get), 정리(gc).",
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+    },
+    "LoadedRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "manifest",
+        "bank"
+      ],
+      "properties": {
+        "release_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "manifest": {
+          "type": "object",
+          "x-contract": "ReleaseManifest"
+        },
+        "bank": {
+          "type": "object",
+          "x-survey-schema": "QuestionBank"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "적재된 릴리스 한 건의 자료. 모델 세션(session)은 살아 있는 객체라 스키마 밖이다"
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "release"
+      ],
+      "properties": {
+        "op": {
+          "const": "register"
+        },
+        "release": {
+          "$ref": "#/$defs/LoadedRelease"
+        },
+        "activate": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "release_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "activate"
+        },
+        "release_id": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "active"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "active_id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "loaded_ids"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "release_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "get"
+        },
+        "release_id": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "in_use",
+        "keep"
+      ],
+      "properties": {
+        "op": {
+          "const": "gc"
+        },
+        "in_use": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "uniqueItems": true
+        },
+        "keep": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "활성도 열린 세션도 쓰지 않는 릴리스 중 남길 개수"
+        }
+      }
+    }
+  ]
+}

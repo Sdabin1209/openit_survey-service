@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from survey_service.risk_rules import RuleRiskSource
+from survey_service.components.risk_screen import RuleRiskSource
 
 NEGATIVE = [
     "자살 생각은 없어요", "가슴이 아프지 않아요", "기절한 적 없어요", "마비는 없어요", "응급실에 간 적 없어요", "혈압이 119에 80이에요", "당뇨약 메트포르민 1190mg 먹어요",
@@ -63,7 +63,7 @@ def test_phrases_do_not_merge_across_words():
 
 def test_provisional_structure_is_stable_for_the_e2e_ast_reader():
     """deploy E2E(5k·5m)가 ast로 읽는다: `_PROVISIONAL` = {규칙 키: 문자열 튜플} 리터럴, "chest-pain"의 첫 구절이 그대로 적중한다."""
-    tree = ast.parse(Path(__file__).resolve().parent.parent.joinpath("survey_service/risk_rules.py").read_text(encoding="utf-8"))
+    tree = ast.parse(Path(__file__).resolve().parent.parent.joinpath("survey_service/components/risk_screen.py").read_text(encoding="utf-8"))
     d = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "_PROVISIONAL")
     assert all(isinstance(v, tuple) and v and all(isinstance(x, str) for x in v) for v in d.values()) and "chest-pain" in d
     assert RuleRiskSource.provisional_default().match(d["chest-pain"][0]) is not None

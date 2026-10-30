@@ -1,0 +1,12 @@
+{
+  "frontend_input": {
+    "session_id": "S1",
+    "kind": "UTTERANCE",
+    "utterance": "안 피움"
+  },
+  "intervention_decision": null,
+  "session_found": true,
+  "session_question_bank_version": 1,
+  "session_status": "IN_PROGRESS",
+  "latest_question_bank_version": 1
+}

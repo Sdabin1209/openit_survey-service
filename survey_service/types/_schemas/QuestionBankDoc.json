@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QuestionBankDoc",
+  "description": "문항 세트 문서(question_bank_view·field_specs 입력). 문진 스키마 QuestionBank 그대로이며 정본 검증은 검증기가 맡는다.",
+  "type": "object",
+  "x-survey-schema": "QuestionBank"
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FlowView",
+  "description": "문항 순서·건너뛰기 표와 보조 표(flow_table 출력). table은 계약 QuestionFlowTable(추론 서버 extract 요청의 flow)이다. 건너뛴 문항·직전 문항·칸 순서를 묻는 질의는 이 표를 읽는 함수이며 표 자체가 출력 문서다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "flow_id",
+    "table",
+    "reference_sources",
+    "slot_order"
+  ],
+  "properties": {
+    "flow_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "table": {
+      "type": "object",
+      "x-contract": "QuestionFlowTable",
+      "description": "문항 순서와 건너뛰기 조건(계약)."
+    },
+    "reference_sources": {
+      "type": "object",
+      "description": "문항 -> 추출 입력 state에 함께 싣는 참조 원천 문항들.",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "slot_order": {
+      "type": "object",
+      "description": "문항 -> 그 문항 안의 칸 순서(없는 문항은 칸 이름 정렬).",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

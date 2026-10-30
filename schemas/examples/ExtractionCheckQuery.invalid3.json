@@ -1,0 +1,193 @@
+{
+  "output": {
+    "action": "NEXT",
+    "next_item": "Q5",
+    "values": [
+      {
+        "key": "Q4_1.daily_count",
+        "value": 10,
+        "precision": "exact",
+        "status": "ANSWERED",
+        "save": true
+      }
+    ]
+  },
+  "session": {
+    "session_info": {
+      "session_id": "S-0001",
+      "question_bank_version": 1
+    },
+    "answer_records": [
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": {
+          "answer": true
+        },
+        "risk_mark": null,
+        "history": [],
+        "precision": "exact"
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      }
+    ],
+    "progress_record": {
+      "current_question_id": "Q4_1",
+      "open_slots": [
+        {
+          "key": "Q4_1.daily_count",
+          "status": "MISSING"
+        }
+      ],
+      "skipped": [],
+      "session_status": "IN_PROGRESS",
+      "pause_history": []
+    },
+    "dialogue_log": [],
+    "dispatch_log": []
+  },
+  "flow": {
+    "order": []
+  }
+}

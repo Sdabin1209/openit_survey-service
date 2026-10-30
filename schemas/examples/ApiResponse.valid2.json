@@ -1,0 +1,10 @@
+{
+  "status": 404,
+  "headers": {},
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "NOT_FOUND",
+    "message": "모르는 세션이다",
+    "retryable": false
+  }
+}

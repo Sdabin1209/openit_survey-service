@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PurgeReport",
+  "description": "보존 기간 정리 결과(지운 개수). 영역 밖으로 나갈 때 wiring가 event를 붙여 계약 SurveyPurgeOutput 한 줄이 된다. configured가 false면 기간이 설정되지 않아 세션을 지우지 않은 것이다. retention_days·purged_access_log 등은 해당 기간을 받았을 때만 있다(입력과 출력 사이 관계라 스키마로 쓰지 못한다).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "purged_sessions"
+  ],
+  "properties": {
+    "configured": {
+      "type": "boolean"
+    },
+    "retention_days": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "purged_sessions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "purged_access_log": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "purged_alerts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "purged_dead_outbox": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "configured": {
+            "const": false
+          }
+        },
+        "required": [
+          "configured"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retention_days": false,
+          "purged_sessions": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "configured": {
+            "const": true
+          }
+        },
+        "required": [
+          "configured"
+        ]
+      },
+      "then": {
+        "required": [
+          "retention_days"
+        ]
+      }
+    }
+  ]
+}

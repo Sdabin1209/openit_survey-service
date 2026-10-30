@@ -19,11 +19,11 @@ import sys
 import survey_schema
 from model_runtime import prompts
 
-from survey_service import extraction
-from survey_service.assembly import Bank
-from survey_service.flow import load_flow
-from survey_service.response_tables import ResponseTables
-from survey_service.store import effects
+from survey_service.components import extraction_check as extraction
+from survey_service.components.question_bank_view import Bank
+from survey_service.components.flow_table import load_flow
+from survey_service.components.response_request import ResponseTables
+from survey_service.components import session_store as effects
 from tests.sample_bank import sample_bank
 
 FLOW, TABLES, BANK = load_flow(), ResponseTables(survey_schema.load_data("response_tables")), Bank(sample_bank())

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RiskScreenQuery",
+  "description": "위험 문구 가려내기 입력. rules는 이미 읽어 JSON으로 파싱한 위험 규칙 파일이며 형식의 정본은 계약 SurveyRiskRulesFile이다. rules가 없으면 임상 검토 전 임시 기본 목록을 쓴다. 파일 바이트 단계 거부(UTF-8 JSON 아님, 1MB 초과), 규칙 id 중복, 잘못된 정규식은 스키마로 쓰지 못한다(schemas/README.md). extra_phrases는 문항 세트에 저작된 risk_phrases이며 공백뿐인 항목은 무시한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "utterance"
+  ],
+  "properties": {
+    "rules": {
+      "type": "object",
+      "x-contract": "SurveyRiskRulesFile",
+      "description": "위험 규칙 파일(파싱된 JSON)"
+    },
+    "utterance": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "환자 발화 원문. null이면 빈 문자열로 본다"
+    },
+    "extra_phrases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "문항 세트의 risk_phrases"
+    }
+  }
+}

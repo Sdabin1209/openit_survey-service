@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutboxEnvelope",
+  "description": "Trace 버퍼에 넣을 봉투. 형식은 계약 TraceEnvelope가 정본이다(복사하지 않는다). (session_id, turn_id)가 버퍼 안에서 유일 키다.",
+  "type": "object",
+  "x-contract": "TraceEnvelope"
+}

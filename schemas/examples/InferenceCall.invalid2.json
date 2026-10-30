@@ -1,0 +1,19 @@
+{
+  "op": "respond",
+  "release_id": "rel-0001",
+  "extract_input": {
+    "current_question": "다음은 고혈압입니다. 진단받은 적이 있으신지, 지금 약을 드시는지 알려 주세요.",
+    "question_id": "Q1.D03",
+    "state": {
+      "Q1.D02.diagnosed": {
+        "value": false,
+        "status": "ANSWERED"
+      },
+      "Q1.D02.on_medication": {
+        "value": false,
+        "status": "ANSWERED"
+      }
+    },
+    "user_utterance": "십 년 전에 고혈압 진단을 받았어요."
+  }
+}

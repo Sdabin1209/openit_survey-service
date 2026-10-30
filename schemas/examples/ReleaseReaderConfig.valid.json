@@ -1,0 +1,5 @@
+{
+  "SURVEY_RELEASE_READER_URL": "http://release-gate:8080",
+  "SURVEY_RELEASE_READER_TOKEN_FILE": "/run/secrets/token",
+  "SURVEY_HTTP_TIMEOUT_SECONDS": "10"
+}

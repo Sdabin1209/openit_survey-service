@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PurgeQuery",
+  "description": "보존 기간 정리 입력. mode PERIOD는 기간이 지난 것을 지우고, SESSION은 세션 한 건을 지운다(끝난 세션이 아니어도). 기간은 일 단위 1 이상이며 무기한(0, 음수)은 거부한다(D88 U4, ADR-0015). 기간을 주지 않은 항목은 지우지 않는다. dead_outbox_days는 Trace 버퍼 자원이 있을 때만 적용된다(자원 유무라 스키마로 쓰지 못한다).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mode"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "PERIOD",
+        "SESSION"
+      ]
+    },
+    "now": {
+      "type": "number",
+      "description": "기준 시각(epoch 초). 없으면 호출 시각"
+    },
+    "retention_days": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "끝난 세션 보존(일)"
+    },
+    "access_log_days": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "직원 접근 기록 보존(일)"
+    },
+    "alert_days": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "해결된 알림 보존(일)"
+    },
+    "dead_outbox_days": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "DEAD로 끝난 Trace 행 보존(일)"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "SESSION: 지울 세션 ID"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "SESSION"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "session_id"
+        ],
+        "properties": {
+          "now": false,
+          "retention_days": false,
+          "access_log_days": false,
+          "alert_days": false,
+          "dead_outbox_days": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "PERIOD"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "session_id": false
+        }
+      }
+    }
+  ]
+}

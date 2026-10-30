@@ -17,7 +17,7 @@ import json
 import sys
 
 import survey_schema
-from survey_service.response_tables import ResponseTables
+from survey_service.components.response_request import ResponseTables
 
 FIELDS = ("action", "reason", "topic", "user_utterance", "known", "ask", "previous", "current", "hold", "note")
 

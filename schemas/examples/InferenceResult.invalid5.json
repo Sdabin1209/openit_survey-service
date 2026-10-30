@@ -1,0 +1,8 @@
+{
+  "op": "respond",
+  "output": "x",
+  "outcome": "ok",
+  "attempts": 1,
+  "protections": {},
+  "error": {}
+}

@@ -1,0 +1,7 @@
+{
+  "endpoint": "https://localhost/x",
+  "keys": {
+    "p256dh": "k",
+    "auth": "a"
+  }
+}

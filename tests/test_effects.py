@@ -6,8 +6,8 @@ import pytest
 
 import survey_schema
 
-from survey_service.errors import StoreEffectError
-from survey_service.store import effects
+from survey_service.wiring.errors import StoreEffectError
+from survey_service.components import session_store as effects
 
 from .sample_bank import sample_bank
 

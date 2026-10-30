@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "path": "/v1/sessions",
+  "headers": {
+    "authorization": "Basic abc"
+  },
+  "body": {
+    "kind": "SESSION_START"
+  }
+}

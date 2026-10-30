@@ -1,0 +1,48 @@
+{
+  "session_id": "K1",
+  "subject_ref": "PT-ref#001",
+  "status": "ENDED_LEFT",
+  "release_id": "rel-e2e-1",
+  "created_at": "2026-10-30T07:09:28Z",
+  "turns": [
+    {
+      "turn_index": 0,
+      "turn_id": "start",
+      "at": "2026-10-30T07:09:28Z",
+      "utterance": null,
+      "response_text": "응답입니다.",
+      "action": null
+    },
+    {
+      "turn_index": 1,
+      "turn_id": "t-1",
+      "at": "2026-10-30T07:09:28Z",
+      "utterance": "아니요 없어요",
+      "response_text": "응답입니다.",
+      "action": "NEXT"
+    },
+    {
+      "turn_index": 2,
+      "turn_id": "end",
+      "at": "2026-10-30T07:09:28Z",
+      "utterance": null,
+      "response_text": null,
+      "action": null
+    }
+  ],
+  "values": [
+    {
+      "key": "Q1.D01.diagnosed",
+      "value": false,
+      "status": "ANSWERED",
+      "precision": "exact"
+    },
+    {
+      "key": "Q1.D01.on_medication",
+      "value": false,
+      "status": "ANSWERED",
+      "precision": "exact"
+    }
+  ],
+  "alerts": []
+}

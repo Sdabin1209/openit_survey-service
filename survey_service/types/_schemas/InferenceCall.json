@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InferenceCall",
+  "description": "추론 서버(I9) 호출 하나. extract는 모델 추출 입력과 문항 흐름·칸 규격(flow·fields 필수, 계약 3.0.0 ExtractRequest)을, respond는 응답 입력을 받는다. deadline은 턴 마감(time.monotonic 기준 절대 시각)이고 없으면 재시도는 횟수 제한만 본다.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "release_id",
+        "extract_input",
+        "flow",
+        "fields"
+      ],
+      "properties": {
+        "op": {
+          "const": "extract"
+        },
+        "release_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+        },
+        "extract_input": {
+          "type": "object",
+          "x-contract": "ActionExtractionInput"
+        },
+        "flow": {
+          "type": "object",
+          "x-contract": "QuestionFlowTable"
+        },
+        "fields": {
+          "x-contract": "QuestionFieldSpec"
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "release_id",
+        "respond_input"
+      ],
+      "properties": {
+        "op": {
+          "const": "respond"
+        },
+        "release_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+        },
+        "respond_input": {
+          "type": "object",
+          "x-contract": "ResponseRequest"
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

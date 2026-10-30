@@ -1,0 +1,6 @@
+{
+  "max_consecutive": 3,
+  "session_settings": {
+    "ask_limit": 0
+  }
+}

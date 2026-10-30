@@ -1,0 +1,7 @@
+{
+  "signal_id": "sig-0001",
+  "source": "rule-engine",
+  "code": "chest-pain",
+  "severity": "LOW",
+  "occurred_at": "2026-01-15T09:30:00Z"
+}

@@ -32,7 +32,7 @@ def test_checks_the_server_cannot_do_remain_for_a_typed_bank():
     rig.start()
     o = rig.say("말", out=ext("NEXT", "Q1.D02", val("Q1.D01.shoe_size", 270)), times=2)             # 문항 은행에 없는 칸: 서버는 fields에 없는 칸을 건너뛴다
     assert [v["code"] for v in o.trace["validation_violations"]] == ["UNKNOWN_SLOT"]
-    from survey_service.store import effects
+    from survey_service.components import session_store as effects
     rig2 = Rig(bank=_fresh(sample_bank()))
     rig2.store.create("S1", "rel-e2e-1", effects.initial_state("S1", rig2.bank, "Q8_1"))          # 현재 문항 Q8_1
     o = rig2.say("아무 말", out=ext("NEXT", "Q8_2", val("Q8_1.days", 3), val("Q1.D01.diagnosed", True)), times=2)      # 흐름은 맞고(서버 통과) 앞 문항 칸 저장

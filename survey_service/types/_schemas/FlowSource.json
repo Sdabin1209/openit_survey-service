@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FlowSource",
+  "description": "문항 흐름표의 원천(flow_table 입력). 문진 스키마 QuestionFlow 그대로이며 정본 검증은 검증기가 맡는다.",
+  "type": "object",
+  "x-survey-schema": "QuestionFlow"
+}

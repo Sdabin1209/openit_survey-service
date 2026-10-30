@@ -1,0 +1,1525 @@
+{
+  "kind": "START",
+  "bank": {
+    "version": 1,
+    "questions": [
+      {
+        "question_id": "Q1.D01",
+        "name": "Q1.D01",
+        "order": 1,
+        "prerequisite": null,
+        "question_sentence": "혹시 뇌졸중으로 진단받으셨거나 현재 약물 치료 중이신가요?",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D02",
+        "name": "Q1.D02",
+        "order": 2,
+        "prerequisite": null,
+        "question_sentence": "혹시 심근경색이나 협심증으로 진단받으셨거나 현재 약물 치료 중이신가요?",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D03",
+        "name": "Q1.D03",
+        "order": 3,
+        "prerequisite": null,
+        "question_sentence": "다음은 고혈압입니다. 진단받은 적이 있으신지, 지금 약을 드시는지 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D04",
+        "name": "Q1.D04",
+        "order": 4,
+        "prerequisite": null,
+        "question_sentence": "Q1.D04 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D05",
+        "name": "Q1.D05",
+        "order": 5,
+        "prerequisite": null,
+        "question_sentence": "Q1.D05 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D06",
+        "name": "Q1.D06",
+        "order": 6,
+        "prerequisite": null,
+        "question_sentence": "Q1.D06 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D07",
+        "name": "Q1.D07",
+        "order": 7,
+        "prerequisite": null,
+        "question_sentence": "Q1.D07 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D08",
+        "name": "Q1.D08",
+        "order": 8,
+        "prerequisite": null,
+        "question_sentence": "Q1.D08 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D09",
+        "name": "Q1.D09",
+        "order": 9,
+        "prerequisite": null,
+        "question_sentence": "Q1.D09 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D10",
+        "name": "Q1.D10",
+        "order": 10,
+        "prerequisite": null,
+        "question_sentence": "Q1.D10 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q1.D11",
+        "name": "Q1.D11",
+        "order": 11,
+        "prerequisite": null,
+        "question_sentence": "Q1.D11 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "diagnosed",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "diagnosed을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "on_medication",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "on_medication을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q2.D01",
+        "name": "Q2.D01",
+        "order": 12,
+        "prerequisite": null,
+        "question_sentence": "Q2.D01 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "family_history",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "family_history을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q2.D02",
+        "name": "Q2.D02",
+        "order": 13,
+        "prerequisite": null,
+        "question_sentence": "Q2.D02 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "family_history",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "family_history을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q2.D03",
+        "name": "Q2.D03",
+        "order": 14,
+        "prerequisite": null,
+        "question_sentence": "Q2.D03 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "family_history",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "family_history을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q2.D04",
+        "name": "Q2.D04",
+        "order": 15,
+        "prerequisite": null,
+        "question_sentence": "Q2.D04 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "family_history",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "family_history을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q2.D05",
+        "name": "Q2.D05",
+        "order": 16,
+        "prerequisite": null,
+        "question_sentence": "Q2.D05 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "family_history",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "family_history을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q3",
+        "name": "Q3",
+        "order": 17,
+        "prerequisite": null,
+        "question_sentence": "Q3 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "answer",
+            "units": [],
+            "choices": [
+              "no",
+              "unknown",
+              "yes"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "answer을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          }
+        ]
+      },
+      {
+        "question_id": "Q4",
+        "name": "Q4",
+        "order": 18,
+        "prerequisite": null,
+        "question_sentence": "일반담배를 평생 5갑(100개비) 이상 피운 적이 있으신가요?",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "answer",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "answer을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q4_1",
+        "name": "Q4_1",
+        "order": 19,
+        "prerequisite": null,
+        "question_sentence": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "status",
+            "units": [],
+            "choices": [
+              "current",
+              "former"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "status을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          },
+          {
+            "slot_id": "total_years",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "total_years을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "년",
+            "minimum": 0
+          },
+          {
+            "slot_id": "daily_count",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "daily_count을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "unit": "개비",
+            "minimum": 0
+          },
+          {
+            "slot_id": "years_since_quit",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "years_since_quit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "unit": "년",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "question_id": "Q5",
+        "name": "Q5",
+        "order": 20,
+        "prerequisite": null,
+        "question_sentence": "Q5 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "answer",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "answer을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q5_1",
+        "name": "Q5_1",
+        "order": 21,
+        "prerequisite": null,
+        "question_sentence": "Q5_1 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "status",
+            "units": [],
+            "choices": [
+              "current",
+              "former"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "status을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          },
+          {
+            "slot_id": "total_years",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "total_years을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "년",
+            "minimum": 0
+          },
+          {
+            "slot_id": "daily_count",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "daily_count을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "unit": "개비",
+            "minimum": 0
+          },
+          {
+            "slot_id": "years_since_quit",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "years_since_quit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "unit": "년",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "question_id": "Q6",
+        "name": "Q6",
+        "order": 22,
+        "prerequisite": null,
+        "question_sentence": "Q6 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "answer",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "answer을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q6_1",
+        "name": "Q6_1",
+        "order": 23,
+        "prerequisite": null,
+        "question_sentence": "Q6_1 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "use_pattern",
+            "units": [],
+            "choices": [
+              "daily",
+              "days_10_29",
+              "days_1_2",
+              "days_3_9",
+              "no"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "use_pattern을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          }
+        ]
+      },
+      {
+        "question_id": "Q7",
+        "name": "Q7",
+        "order": 24,
+        "prerequisite": null,
+        "question_sentence": "Q7 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "does_not_drink",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "does_not_drink을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          },
+          {
+            "slot_id": "frequency",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "frequency을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "exclusive_minimum": 0
+          },
+          {
+            "slot_id": "unit",
+            "units": [],
+            "choices": [
+              "month",
+              "week",
+              "year"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "unit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          }
+        ]
+      },
+      {
+        "question_id": "Q7_1",
+        "name": "Q7_1",
+        "order": 25,
+        "prerequisite": null,
+        "question_sentence": "Q7_1 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [
+          "soju",
+          "beer",
+          "spirits",
+          "makgeolli",
+          "wine"
+        ],
+        "slots": [
+          {
+            "slot_id": "amount",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "amount을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "minimum": 0
+          },
+          {
+            "slot_id": "unit",
+            "units": [],
+            "choices": [
+              "bottle",
+              "can",
+              "cc",
+              "glass"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "unit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          }
+        ]
+      },
+      {
+        "question_id": "Q7_2",
+        "name": "Q7_2",
+        "order": 26,
+        "prerequisite": null,
+        "question_sentence": "최근 1년 동안 하루 동안 가장 많이 마신 음주는 어느 정도였나요?",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [
+          "soju",
+          "beer",
+          "spirits",
+          "makgeolli",
+          "wine"
+        ],
+        "slots": [
+          {
+            "slot_id": "amount",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "amount을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "minimum": 0
+          },
+          {
+            "slot_id": "unit",
+            "units": [],
+            "choices": [
+              "bottle",
+              "can",
+              "cc",
+              "glass"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "unit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          }
+        ]
+      },
+      {
+        "question_id": "Q8_1",
+        "name": "Q8_1",
+        "order": 27,
+        "prerequisite": null,
+        "question_sentence": "Q8_1 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "days",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "days을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "day/week",
+            "minimum": 0,
+            "maximum": 7
+          }
+        ]
+      },
+      {
+        "question_id": "Q8_2",
+        "name": "Q8_2",
+        "order": 28,
+        "prerequisite": null,
+        "question_sentence": "Q8_2 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "duration_minutes",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "duration_minutes을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "minute",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "question_id": "Q9_1",
+        "name": "Q9_1",
+        "order": 29,
+        "prerequisite": null,
+        "question_sentence": "Q9_1 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "days",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "days을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "day/week",
+            "minimum": 0,
+            "maximum": 7
+          }
+        ]
+      },
+      {
+        "question_id": "Q9_2",
+        "name": "Q9_2",
+        "order": 30,
+        "prerequisite": null,
+        "question_sentence": "Q9_2 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "duration_minutes",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "duration_minutes을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "minute",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "question_id": "Q10",
+        "name": "Q10",
+        "order": 31,
+        "prerequisite": null,
+        "question_sentence": "최근 1주일 동안 팔굽혀펴기, 윗몸일으키기, 아령 같은 근력 운동을 한 날은 며칠인가요?",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "days",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "days을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "day/week",
+            "minimum": 0,
+            "maximum": 7
+          }
+        ]
+      }
+    ],
+    "session_settings": {
+      "risk_phrases": [],
+      "confirm_limit": 2,
+      "unrecognized_streak_limit": 2,
+      "ask_limit": 3,
+      "fixed_sentences": [
+        {
+          "key": "ASK_REPEAT",
+          "sentence": "다시 한 번 말씀해 주세요."
+        },
+        {
+          "key": "OOS_NOTICE",
+          "sentence": "문진과 관계없는 말씀은 도와드리기 어렵습니다."
+        },
+        {
+          "key": "CALL_STAFF",
+          "sentence": "직원을 불러 드리겠습니다. 잠시만 기다려 주세요."
+        },
+        {
+          "key": "FAREWELL",
+          "sentence": "문진이 끝났습니다. 수고하셨습니다."
+        },
+        {
+          "key": "ASK_CONFIRM",
+          "sentence": "어느 쪽이 맞는지 말씀해 주세요."
+        },
+        {
+          "key": "ASK_CORRECTION_TARGET",
+          "sentence": "어느 항목을 고칠까요?"
+        },
+        {
+          "key": "ASK_FINISH",
+          "sentence": "다 여쭤봤습니다. 이대로 마칠까요?"
+        },
+        {
+          "key": "RISK_NOTICE",
+          "sentence": "바로 직원을 불렀습니다. 그 자리에 계셔 주세요."
+        },
+        {
+          "key": "RESUME",
+          "sentence": "다시 이어서 여쭙겠습니다."
+        },
+        {
+          "key": "SURVEY_STOPPED",
+          "sentence": "문진을 여기서 마치겠습니다."
+        },
+        {
+          "key": "WAIT_NOTICE",
+          "sentence": "잠시만 기다려 주세요."
+        },
+        {
+          "key": "ASK_STOP",
+          "sentence": "그만하시겠어요?"
+        },
+        {
+          "key": "STAFF_NOTICE",
+          "sentence": "직원을 불러 드렸습니다. 문진은 이어서 하겠습니다."
+        },
+        {
+          "key": "DEFERRED",
+          "sentence": "나중에 다시 여쭙겠습니다."
+        }
+      ],
+      "guide_list": []
+    }
+  },
+  "tables": {
+    "table_status": "DATASET_RULES_UNCONFIRMED",
+    "note": "데이터셋 담당의 규칙을 옮긴 표다. 출처: 학습 서버 ~/WS/dataset/scripts/labels.py(2026-10-14; topic, short_topic, value_text, ask_text, known, hold, previous, current와 그 어휘표)와 같은 서버의 docs/LABEL_TABLES.md. 서비스가 따르는 기준은 학습 데이터가 이 규칙으로 만들어졌다는 점이다. 데이터셋 담당의 확인 대기: 표 승인 기록은 찾지 못했다(IO_SPEC 7장 2번은 미정). 조합 로직(그룹핑, 조사, 시간·년 표기, 술 단위, previous/current)은 survey_service/response_tables.py에 있다. `remaining`(57행 문제의 남은 칸 문장)만 원본에 없는 서비스 쪽 판단이며 학습 분포 밖이다.",
+    "source": {
+      "file": "학습 서버 ~/WS/dataset/scripts/labels.py",
+      "date": "2026-10-14",
+      "owner": "데이터셋 담당",
+      "approval": "승인 기록 미확인"
+    },
+    "diseases": {
+      "Q1.D01": "뇌졸중(중풍)",
+      "Q1.D02": "심근경색이나 협심증",
+      "Q1.D03": "고혈압",
+      "Q1.D04": "당뇨병",
+      "Q1.D05": "이상지질혈증",
+      "Q1.D06": "폐결핵",
+      "Q1.D07": "우울증",
+      "Q1.D08": "조기정신증",
+      "Q1.D09": "C형간염",
+      "Q1.D10": "만성폐쇄성폐질환",
+      "Q1.D11": "암이나 그 밖의 병",
+      "Q2.D01": "뇌졸중(중풍)",
+      "Q2.D02": "심근경색이나 협심증",
+      "Q2.D03": "고혈압",
+      "Q2.D04": "당뇨병",
+      "Q2.D05": "암이나 그 밖의 병"
+    },
+    "topic_templates": {
+      "Q1.": "{disease} 진단을 받았는지와 지금 약을 먹는지",
+      "Q2.": "부모·형제자매 중 {disease:을/를} 앓았거나 그 병으로 돌아가신 분이 있는지"
+    },
+    "short_topic_templates": {
+      "Q1.": "{disease}",
+      "Q2.": "가족 중 {disease}"
+    },
+    "topics": {
+      "Q3": "B형간염 바이러스 보유자인지",
+      "Q4": "일반담배를 평생 5갑(100개비) 이상 피운 적이 있는지",
+      "Q4_1": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지",
+      "Q5": "가열담배(아이코스·글로 등)를 써 본 적이 있는지",
+      "Q5_1": "가열담배를 지금 쓰는지, 쓴 기간, 하루 개비 수, 끊은 지 얼마나 됐는지",
+      "Q6": "액상형 전자담배를 써 본 적이 있는지",
+      "Q6_1": "최근 한 달 동안 액상형 전자담배를 쓴 날 수",
+      "Q7": "지난 1년 동안 술을 얼마나 자주 마시는지(일주일·한 달·1년에 몇 번)",
+      "Q7_1": "술 마시는 날 평소에 마시는 양",
+      "Q7_2": "지난 1년 중 가장 많이 마신 날 하루에 마신 양",
+      "Q8_1": "숨이 많이 찰 정도로 힘든 운동을 일주일에 며칠 하는지",
+      "Q8_2": "숨이 많이 찰 정도로 힘든 운동을 하는 날 하루에 얼마나 하는지",
+      "Q9_1": "숨이 약간 찰 정도의 운동을 일주일에 며칠 하는지",
+      "Q9_2": "숨이 약간 찰 정도의 운동을 하는 날 하루에 얼마나 하는지",
+      "Q10": "최근 1주일 동안 근력 운동을 한 날 수"
+    },
+    "short_topics": {
+      "Q3": "B형간염 보유 여부",
+      "Q4": "흡연 경험",
+      "Q4_1": "일반담배",
+      "Q5": "가열담배 경험",
+      "Q5_1": "가열담배",
+      "Q6": "액상형 전자담배 경험",
+      "Q6_1": "액상형 전자담배 쓴 날 수",
+      "Q7": "술 마시는 횟수",
+      "Q7_1": "평소 마시는 양",
+      "Q7_2": "가장 많이 마신 날의 양",
+      "Q8_1": "힘든 운동 하는 날 수",
+      "Q8_2": "힘든 운동 하는 시간",
+      "Q9_1": "숨이 약간 차는 운동 하는 날 수",
+      "Q9_2": "숨이 약간 차는 운동 시간",
+      "Q10": "근력 운동 한 날 수"
+    },
+    "field_short": {
+      "diagnosed": "진단 여부",
+      "on_medication": "약 복용 여부",
+      "family_history": "가족력",
+      "status": "지금 피우는지",
+      "total_years": "피운 기간",
+      "daily_count": "하루 개비 수",
+      "years_since_quit": "끊은 지 기간",
+      "use_pattern": "쓴 날 수",
+      "does_not_drink": "술을 마시는지",
+      "frequency": "마시는 횟수",
+      "unit": "단위",
+      "amount": "양",
+      "days": "날 수",
+      "duration_minutes": "하루 시간"
+    },
+    "beverages": {
+      "soju": "소주",
+      "beer": "맥주",
+      "spirits": "양주(위스키 등)",
+      "makgeolli": "막걸리",
+      "wine": "와인"
+    },
+    "drink_units": {
+      "bottle": "병",
+      "can": "캔",
+      "cc": "cc",
+      "glass": "잔"
+    },
+    "periods": {
+      "week": "일주일에",
+      "month": "한 달에",
+      "year": "1년에"
+    },
+    "use_pattern": {
+      "daily": "매일",
+      "days_10_29": "한 달에 10~29일",
+      "days_3_9": "한 달에 3~9일",
+      "days_1_2": "한 달에 1~2일",
+      "no": "안 씀"
+    },
+    "approx_suffix": "쯤",
+    "texts": {
+      "diagnosed": {
+        "true": "진단 받음",
+        "false": "진단 안 받음"
+      },
+      "on_medication": {
+        "true": "지금 약 먹음",
+        "false": "지금 약 안 먹음"
+      },
+      "family_history": {
+        "true": "앓은 분 있음",
+        "false": "앓은 분 없음"
+      },
+      "q3": {
+        "yes": "보유자임",
+        "no": "보유자 아님",
+        "unknown": "보유 여부 모름"
+      },
+      "q4_answer": {
+        "true": "5갑 넘게 피운 적 있음",
+        "false": "피운 적 없음"
+      },
+      "tried_answer": {
+        "true": "써 본 적 있음",
+        "false": "써 본 적 없음"
+      },
+      "status_now": {
+        "default": "지금 피움",
+        "Q5_1": "지금 씀"
+      },
+      "status_former": "끊음",
+      "smoke_verb": {
+        "default": "피운",
+        "Q5_1": "쓴"
+      },
+      "total_years": "{verb} 기간 {years}{approx}",
+      "daily_count": "하루 {n}개비{approx}",
+      "years_since_quit": "끊은 지 {years}{approx}",
+      "half_year": "반년",
+      "use_pattern": {
+        "no": "최근 한 달 안 씀",
+        "daily": "최근 한 달 매일 씀",
+        "other": "최근 한 달 {days} 씀",
+        "strip_prefix": "한 달에 "
+      },
+      "does_not_drink": {
+        "true": "지난 1년 술 안 마심",
+        "false": "술 마심"
+      },
+      "q7_frequency": "{n}번{approx}",
+      "q7_unit": "{period} 기준",
+      "days": {
+        "default": "일주일에",
+        "Q10": "최근 일주일",
+        "template": "{week} {n}일{approx}"
+      },
+      "duration": "하루 {d}{approx}",
+      "minutes": {
+        "hours_minutes": "{h}시간 {m}분",
+        "hours": "{h}시간",
+        "minutes": "{m}분"
+      },
+      "other_value": "{field}: {value}",
+      "q7_group": "{period} {freq}",
+      "q7_group_no_unit": "{freq} (기준 기간은 아직 모름)",
+      "drink_group": "{name} {amount}{unit}{approx}",
+      "drink_unit_only": "{name}, 단위 {unit} (양은 아직 모름)",
+      "drink_amount_only": "{name} {amount} (단위는 아직 모름)",
+      "known_other_item": "{short}: {texts}",
+      "hold_field": "{short} 중 {field}",
+      "hold_status_q5": "지금 쓰는지",
+      "ask_missing": {
+        "diagnosed": "{disease} 진단을 받은 적이 있는지",
+        "on_medication": "지금 {disease} 약을 먹는지",
+        "status": {
+          "default": "지금도 피우는지 끊었는지",
+          "Q5_1": "지금도 쓰는지 끊었는지"
+        },
+        "total_years": {
+          "default": "모두 몇 년 피웠는지",
+          "Q5_1": "모두 몇 년 썼는지"
+        },
+        "daily_count": {
+          "default": "하루에 몇 개비 피우는지(피웠는지)",
+          "Q5_1": "하루에 몇 개비 쓰는지(썼는지)"
+        },
+        "years_since_quit": "끊은 지 몇 년 됐는지",
+        "q7_unit": "{n}일주일에·한 달에·1년에 중 어느 기준인지",
+        "q7_unit_n": "{n}번이 ",
+        "q7_frequency": "{period} 몇 번 마시는지",
+        "q7_frequency_default_period": "일주일이나 한 달에",
+        "drink_when": {
+          "Q7_1": "술 마시는 날 평소에",
+          "Q7_2": "가장 많이 마신 날"
+        },
+        "drink_amount": "{when} {name:을/를} 몇 {unit} 마시는지",
+        "drink_amount_no_unit": "{when} {name:을/를} 얼마나 마시는지",
+        "drink_unit": "{name} {amount:이/가} 병·잔·캔 중 어느 단위인지",
+        "drink_unit_no_amount": "{name}의 단위가 병·잔·캔 중 무엇인지"
+      },
+      "ask_out_of_range": {
+        "days": "일주일은 7일이니 일주일 중 며칠인지 다시",
+        "duration_minutes": "하루는 24시간이니 하루에 몇 시간·몇 분인지 다시",
+        "use_pattern": "한 달은 길어야 31일이니 최근 한 달 중 며칠인지 다시",
+        "frequency": "그 기간 안에서 몇 번인지 다시"
+      },
+      "ask_field_again": "{field:을/를} 다시",
+      "ask_count_exceeds_days": "술을 마신 날을 기준으로 그 기간에 며칠(몇 번) 마시는지",
+      "ask_range_spans": {
+        "use_pattern": "최근 한 달 동안 며칠 썼는지 하나의 숫자로",
+        "frequency": "평소 몇 번인지 하나의 숫자로",
+        "default": "하나의 값으로"
+      },
+      "ask_unknown_unit": "{name:을/를} 병·잔·캔 같은 단위로 치면 얼마나인지",
+      "ask_other_beverage": "그 술이 소주·맥주·막걸리·와인·양주 중 어떤 술과 비슷한지(도수를 알면 도수)",
+      "ask_beverage_missing": "어떤 술이었는지",
+      "ask_conflict_with_previous": "이번에 말한 값(current)이 맞는지, 아까 말한 값(previous)이 맞는지",
+      "ask_conflict_max_below_usual": "가장 많이 마신 날의 양이 맞는지(평소보다 적게 나옴)",
+      "ask_conflict_does_not_drink": "지난 1년 동안 술을 마신 적이 있는지",
+      "ask_option": {
+        "q3": "B형간염 보유자라고 들은 적이 있는지, 아닌지, 검사를 안 해 봐서 모르는지",
+        "use_pattern": "최근 한 달 동안 며칠 썼는지",
+        "default": "{field:을/를} 문진표 선택지 중에서 다시",
+        "default_field": "답"
+      },
+      "ask_number": {
+        "days": "일주일에 며칠인지 숫자로",
+        "days_Q10": "최근 일주일 중 며칠인지 숫자로",
+        "duration_minutes": "하루에 몇 분(몇 시간)인지 숫자로",
+        "frequency": "일주일이나 한 달에 몇 번인지 숫자로",
+        "daily_count": "하루에 몇 개비인지 숫자로",
+        "use_pattern": "최근 한 달 동안 며칠인지 숫자로",
+        "amount": "{name:을/를} 몇 {unit} 마시는지 숫자로",
+        "amount_no_unit": "{name:을/를} 얼마나 마시는지 숫자로",
+        "default": "{field:을/를} 숫자로"
+      },
+      "drink_default_name": "술",
+      "previous_does_not_drink": "지난 1년 술 안 마심",
+      "previous_usual": "평소 {text}"
+    },
+    "remaining": {
+      "Q4_1": {
+        "lead": "일반담배는",
+        "slots": [
+          {
+            "slot": "Q4_1.status",
+            "desc": "지금 피우는지"
+          },
+          {
+            "slot": "Q4_1.total_years",
+            "desc": "피운 기간"
+          },
+          {
+            "slot": "Q4_1.daily_count",
+            "desc": "하루 개비 수"
+          },
+          {
+            "slot": "Q4_1.years_since_quit",
+            "desc": "끊은 지 얼마나 됐는지",
+            "only_if": {
+              "slot": "Q4_1.status",
+              "value": "former"
+            }
+          }
+        ]
+      },
+      "Q5_1": {
+        "lead": "가열담배는",
+        "slots": [
+          {
+            "slot": "Q5_1.status",
+            "desc": "지금 쓰는지"
+          },
+          {
+            "slot": "Q5_1.total_years",
+            "desc": "쓴 기간"
+          },
+          {
+            "slot": "Q5_1.daily_count",
+            "desc": "하루 개비 수"
+          },
+          {
+            "slot": "Q5_1.years_since_quit",
+            "desc": "끊은 지 얼마나 됐는지",
+            "only_if": {
+              "slot": "Q5_1.status",
+              "value": "former"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

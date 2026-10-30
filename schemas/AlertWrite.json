@@ -1,0 +1,972 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AlertWrite",
+  "description": "알림 저장소(AlertStore) 작업 하나의 입력. op가 작업 이름이고 나머지는 그 작업의 매개변수다(읽기 작업도 같은 모양으로 받는다). 작업마다 필수 매개변수와 형식이 다르다.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "kind"
+      ],
+      "properties": {
+        "op": {
+          "const": "create"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rule_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pause_reason": {
+          "enum": [
+            "RISK",
+            "REASK_LIMIT",
+            "OTHER",
+            null
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "decision"
+      ],
+      "properties": {
+        "op": {
+          "const": "resolve"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "decision": {
+          "enum": [
+            "RESUME",
+            "END",
+            null
+          ]
+        },
+        "staff_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:@/#=+-]{1,128}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "turn_id",
+        "kind"
+      ],
+      "properties": {
+        "op": {
+          "const": "mark_delivered"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "alert_n",
+        "status"
+      ],
+      "properties": {
+        "op": {
+          "const": "record_delivery"
+        },
+        "alert_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "알림 번호 n. alert_id는 'al-<n>'"
+        },
+        "status": {
+          "enum": [
+            "DELIVERED",
+            "DELIVERY_FAILED"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "alert_n",
+        "turn_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "begin_retry"
+        },
+        "alert_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "알림 번호 n. alert_id는 'al-<n>'"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+          "not": {
+            "enum": [
+              "start",
+              "end",
+              "idle-expire"
+            ]
+          }
+        },
+        "count_attempt": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "alert_n",
+        "turn_id",
+        "status",
+        "response"
+      ],
+      "properties": {
+        "op": {
+          "const": "finish_retry"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "alert_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "알림 번호 n. alert_id는 'al-<n>'"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+          "not": {
+            "enum": [
+              "start",
+              "end",
+              "idle-expire"
+            ]
+          }
+        },
+        "status": {
+          "enum": [
+            "DELIVERED",
+            "DELIVERY_FAILED"
+          ]
+        },
+        "response": {
+          "type": "string",
+          "minLength": 2,
+          "description": "멱등 재생용 응답 JSON 문자열(StaffCallRetryResult)"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "alert_n",
+        "turn_id",
+        "outcome",
+        "role"
+      ],
+      "properties": {
+        "op": {
+          "const": "record_report"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "alert_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "알림 번호 n. alert_id는 'al-<n>'"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+          "not": {
+            "enum": [
+              "start",
+              "end",
+              "idle-expire"
+            ]
+          }
+        },
+        "outcome": {
+          "enum": [
+            "STAFF_NOTIFIED_MANUALLY",
+            "NOT_NOTIFIED"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "turn_index"
+      ],
+      "properties": {
+        "op": {
+          "const": "record_timeline"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "turn_index": {
+          "type": "integer",
+          "minimum": -1,
+          "description": "-1은 세션 생성, 0 이상은 대화 로그 항목의 위치"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "role",
+        "session_ids",
+        "outcome"
+      ],
+      "properties": {
+        "op": {
+          "const": "log_access"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "description": "조회한 세션. 목록 조회에서 돌려준 세션이 없으면 [\"*\"]"
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "subject_ref"
+      ],
+      "properties": {
+        "op": {
+          "const": "set_subject"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "subject_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "device_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "signal",
+        "alert_n",
+        "session_status"
+      ],
+      "properties": {
+        "op": {
+          "const": "record_signal"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "signal": {
+          "type": "object",
+          "x-survey-schema": "RiskSignal"
+        },
+        "alert_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "알림 번호 n. alert_id는 'al-<n>'"
+        },
+        "session_status": {
+          "enum": [
+            "IN_PROGRESS",
+            "PAUSED_RISK",
+            "ENDED_COMPLETE",
+            "ENDED_STAFF",
+            "ENDED_LEFT",
+            "ENDED_USER_STOP"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_ids"
+      ],
+      "properties": {
+        "op": {
+          "const": "purge_sessions"
+        },
+        "session_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "older_than_ts"
+      ],
+      "properties": {
+        "op": {
+          "const": "purge_access_log"
+        },
+        "older_than_ts": {
+          "type": "number",
+          "minimum": 0,
+          "description": "UNIX 초"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "older_than_ts"
+      ],
+      "properties": {
+        "op": {
+          "const": "purge_resolved_alerts"
+        },
+        "older_than_ts": {
+          "type": "number",
+          "minimum": 0,
+          "description": "UNIX 초"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "trim_events"
+        },
+        "keep": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10000
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "subscription"
+      ],
+      "properties": {
+        "op": {
+          "const": "upsert_subscription"
+        },
+        "subscription": {
+          "type": "object",
+          "required": [
+            "endpoint",
+            "keys"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "maxLength": 2048,
+              "pattern": "^https://[^/?#@:\\s]+\\.[^/?#@:\\s]+(:443)?([/?#]\\S*)?$(?![\\s\\S])",
+              "allOf": [
+                {
+                  "not": {
+                    "pattern": "^https://[lL][oO][cC][aA][lL][hH][oO][sS][tT]\\.?(:443)?([/?#]|$)"
+                  }
+                },
+                {
+                  "not": {
+                    "pattern": "^https://[^/?#@:\\s]*\\.([lL][oO][cC][aA][lL]|[lL][oO][cC][aA][lL][dD][oO][mM][aA][iI][nN]|[iI][nN][tT][eE][rR][nN][aA][lL]|[lL][aA][nN]|[hH][oO][mM][eE]|[cC][oO][rR][pP]|[iI][nN][tT][rR][aA][nN][eE][tT])\\.?(:443)?([/?#]|$)"
+                  }
+                }
+              ],
+              "description": "웹 푸시 endpoint"
+            },
+            "keys": {
+              "type": "object",
+              "required": [
+                "p256dh",
+                "auth"
+              ],
+              "properties": {
+                "p256dh": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "auth": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "expirationTime": {}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "endpoint"
+      ],
+      "properties": {
+        "op": {
+          "const": "remove_subscription"
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "turn_id",
+        "kind"
+      ],
+      "properties": {
+        "op": {
+          "const": "find_by_turn"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "limit"
+      ],
+      "properties": {
+        "op": {
+          "const": "list"
+        },
+        "status": {
+          "enum": [
+            "OPEN",
+            "RESOLVED",
+            null
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "last_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "events_after"
+        },
+        "last_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "oldest_event_id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "latest_event_id"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "count_subscriptions"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "subscriptions"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "alerts_of_session"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "open_only"
+      ],
+      "properties": {
+        "op": {
+          "const": "latest_alert"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "open_only": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "turn_id",
+        "action"
+      ],
+      "properties": {
+        "op": {
+          "const": "get_action"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+        },
+        "action": {
+          "enum": [
+            "retry",
+            "report"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "action"
+      ],
+      "properties": {
+        "op": {
+          "const": "count_actions"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "action": {
+          "enum": [
+            "retry",
+            "report"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "timeline"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "const": "access_log"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "device_of"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "subject_of"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_ids"
+      ],
+      "properties": {
+        "op": {
+          "const": "subjects_of"
+        },
+        "session_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "subject_ref"
+      ],
+      "properties": {
+        "op": {
+          "const": "sessions_of_subject"
+        },
+        "subject_ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "signal_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "get_signal"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "signal_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,64}$(?![\\s\\S])"
+        }
+      }
+    }
+  ]
+}

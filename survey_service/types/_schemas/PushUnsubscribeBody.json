@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PushUnsubscribeBody",
+  "description": "POST /v1/staff/push-subscriptions/unsubscribe 본문. 푸시 endpoint URL은 그 자체가 권한을 주는 값이라 URL 경로에 싣지 않고 본문으로 받는다. 없는 endpoint도 204(멱등).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "endpoint"
+  ],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    }
+  }
+}

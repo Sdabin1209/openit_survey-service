@@ -16,11 +16,11 @@ import uuid
 import model_runtime
 import survey_schema
 
-from .orchestrator import Orchestrator
-from .inference import LocalModelSession
-from .ports import LoadedRelease
-from .release.registry import ReleaseRegistry
-from .store.sqlite import SqliteSessionStore
+from .wiring.orchestrator import Orchestrator
+from .components.link_inference import LocalModelSession
+from .wiring.ports import LoadedRelease
+from .components.release_registry import ReleaseRegistry
+from .components.session_store import SqliteSessionStore
 
 
 class _Console:

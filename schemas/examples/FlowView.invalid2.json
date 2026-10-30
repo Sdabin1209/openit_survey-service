@@ -1,0 +1,13 @@
+{
+  "flow_id": "f",
+  "table": {
+    "order": [
+      "Q4"
+    ],
+    "skips": []
+  },
+  "reference_sources": {
+    "Q4": "Q3"
+  },
+  "slot_order": {}
+}

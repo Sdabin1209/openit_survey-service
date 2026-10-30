@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InferenceResult",
+  "description": "추론 서버 호출 하나의 결과(RuntimeResult 또는 BoundaryError). extract의 output은 ActionExtraction 객체이고 outcome은 항상 ok, respond의 output은 응답 문장(문자열)이며 outcome이 fallback이면 서버가 대체 문장을 냈다. 실패는 error(BoundaryError)로 낸다. 모델 출력이 끝내 형식을 못 지키면 UNAVAILABLE이고 details.reason이 OUTPUT_INVALID다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "op"
+  ],
+  "properties": {
+    "op": {
+      "enum": [
+        "extract",
+        "respond"
+      ]
+    },
+    "output": {
+      "type": [
+        "object",
+        "string"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "ok",
+        "fallback"
+      ]
+    },
+    "attempts": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "protections": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_.-]{1,32}$"
+      },
+      "description": "출력 보호 규칙 코드별 건수(X-Openit-Protections). 원문 없음"
+    },
+    "error": {
+      "type": "object",
+      "x-contract": "BoundaryError"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "output",
+        "outcome",
+        "attempts",
+        "protections"
+      ],
+      "not": {
+        "required": [
+          "error"
+        ]
+      }
+    },
+    {
+      "required": [
+        "error"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "output"
+            ]
+          },
+          {
+            "required": [
+              "outcome"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "op": {
+            "const": "extract"
+          },
+          "output": {}
+        },
+        "required": [
+          "op",
+          "output"
+        ]
+      },
+      "then": {
+        "properties": {
+          "output": {
+            "type": "object",
+            "x-contract": "ActionExtraction"
+          },
+          "outcome": {
+            "const": "ok"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "op": {
+            "const": "respond"
+          },
+          "output": {}
+        },
+        "required": [
+          "op",
+          "output"
+        ]
+      },
+      "then": {
+        "properties": {
+          "output": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

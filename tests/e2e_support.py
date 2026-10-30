@@ -12,11 +12,11 @@ from typing import Optional
 import survey_schema
 from model_runtime import FakeBackend, FakeModelSession, fake_serving_config, serving_config_hash
 
-from survey_service.inference import LocalModelSession
-from survey_service.orchestrator import Orchestrator
-from survey_service.ports import LoadedRelease
-from survey_service.release.registry import ReleaseRegistry
-from survey_service.store.memory import MemorySessionStore
+from survey_service.components.link_inference import LocalModelSession
+from survey_service.wiring.orchestrator import Orchestrator
+from survey_service.wiring.ports import LoadedRelease
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.components.session_store import MemorySessionStore
 
 from .fakes import RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank

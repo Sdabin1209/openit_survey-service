@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReleaseLookup",
+  "description": "릴리스 레지스트리 작업 하나의 출력. 쓸 수 없는 릴리스는 UNAVAILABLE(ReleaseUnavailable).",
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+    },
+    "LoadedRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "manifest",
+        "bank"
+      ],
+      "properties": {
+        "release_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "manifest": {
+          "type": "object",
+          "x-contract": "ReleaseManifest"
+        },
+        "bank": {
+          "type": "object",
+          "x-survey-schema": "QuestionBank"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "적재된 릴리스 한 건의 자료. 모델 세션(session)은 살아 있는 객체라 스키마 밖이다"
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "register",
+            "activate"
+          ]
+        },
+        "result": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "active"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoadedRelease"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "get"
+        },
+        "result": {
+          "$ref": "#/$defs/LoadedRelease"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "active_id"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "loaded_ids",
+            "gc"
+          ]
+        },
+        "result": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          },
+          "uniqueItems": true,
+          "description": "loaded_ids는 적재된 ID, gc는 내린 ID"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "unavailable"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "activate",
+            "get"
+          ]
+        },
+        "unavailable": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason"
+          ],
+          "properties": {
+            "reason": {
+              "enum": [
+                "NOT_LOADED"
+              ]
+            }
+          }
+        }
+      },
+      "description": "적재되지 않은 릴리스(ReleaseUnavailable)"
+    }
+  ]
+}

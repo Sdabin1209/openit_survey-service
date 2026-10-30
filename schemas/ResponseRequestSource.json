@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResponseRequestSource",
+  "description": "표 찾기 입력. 세션 시작(START)과 일반 턴(TURN) 두 종류. START는 A(추출)를 거치지 않으므로 첫 문항만 받고, TURN은 A 입력·A 출력과 쓰기 뒤 세션 문서를 받는다. 문항 세트와 표(ResponseTables)는 문진 스키마가 정본이다. 문항 세트에 first_item/next_item 문항과 질문 문장이 있는지, 표에 문항이 있는지는 두 입력 사이의 관계라 스키마로 쓰지 못한다(schemas/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "bank",
+    "tables"
+  ],
+  "properties": {
+    "kind": {
+      "enum": [
+        "START",
+        "TURN"
+      ],
+      "description": "START: 세션 시작, TURN: 일반 턴"
+    },
+    "bank": {
+      "type": "object",
+      "x-survey-schema": "QuestionBank",
+      "description": "문항 세트(질문 문장을 찾는 데 쓴다)"
+    },
+    "tables": {
+      "type": "object",
+      "x-survey-schema": "ResponseTables",
+      "description": "표 찾기 표(어휘·고정 문장)"
+    },
+    "first_item": {
+      "type": "string",
+      "pattern": "^Q[0-9]+(\\.D[0-9]{2})?(_[0-9]+)?$",
+      "description": "START: 첫 문항 ID. 출력 ResponseRequest.next.question_id의 형식과 같다"
+    },
+    "extract_input": {
+      "type": "object",
+      "x-contract": "ActionExtractionInput",
+      "description": "TURN: A 입력(question_id, user_utterance, state를 읽는다)"
+    },
+    "extract_output": {
+      "type": "object",
+      "x-contract": "ActionExtraction",
+      "description": "TURN: A 출력(action, reason, values, targets, note, next_item을 읽는다)"
+    },
+    "session_doc": {
+      "type": "object",
+      "x-survey-schema": "SessionStore",
+      "description": "TURN: 이번 턴 쓰기가 반영된 세션 문서(answer_records에서 이미 저장된 칸을 읽는다)"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "START"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "first_item"
+        ],
+        "properties": {
+          "extract_input": false,
+          "extract_output": false,
+          "session_doc": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "TURN"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "extract_input",
+          "extract_output",
+          "session_doc"
+        ],
+        "properties": {
+          "first_item": false
+        }
+      }
+    }
+  ]
+}

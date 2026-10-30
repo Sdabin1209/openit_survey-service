@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "version": "v1",
+    "rules": [
+      {
+        "id": "r1",
+        "description": "d",
+        "match": {
+          "any_of": [
+            {
+              "contains": "a",
+              "regex": "b"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "utterance": "x"
+}

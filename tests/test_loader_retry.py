@@ -12,9 +12,11 @@ import urllib.request
 import pytest
 from boundary_contracts import BoundaryError
 
-from survey_service.release import ReleaseLoader, ReleaseRegistry
-from survey_service.remote import RemoteInference
-from survey_service.service import App, serve
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.components.link_inference import RemoteInference
+from survey_service.wiring.app import App
+from survey_service.server import serve
 from survey_service.settings import Settings
 
 from .http_server_support import start_server, server_port, stop_server

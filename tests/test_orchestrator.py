@@ -7,11 +7,11 @@ import pytest
 
 import survey_schema
 
-from survey_service.errors import TurnIdConflict
-from survey_service.orchestrator import Orchestrator, route
-from survey_service.ports import LoadedRelease
-from survey_service.store.memory import MemorySessionStore
-from survey_service.store.sqlite import SqliteSessionStore
+from survey_service.wiring.errors import TurnIdConflict
+from survey_service.wiring.orchestrator import Orchestrator, route
+from survey_service.wiring.ports import LoadedRelease
+from survey_service.components.session_store import MemorySessionStore
+from survey_service.components.session_store import SqliteSessionStore
 
 from .e2e_support import Rig, ScriptedModel, ScriptedRisk, ext, make_session, val
 from .fakes import FaultyStore, RecordingSink
@@ -420,14 +420,14 @@ def test_write_that_cannot_be_applied_changes_nothing():
     rig = Rig()
     rig.start()
     snap = rig.doc()["answer_records"]
-    real = __import__("survey_service.extraction", fromlist=["plan_writes"]).plan_writes
+    real = __import__("survey_service.components.write_plan", fromlist=["plan_writes"]).plan_writes
 
     def bad(doc, out):
         w = real(doc, out)
         w["answer_updates"].append({"slot": w["answer_updates"][0]["slot"], "action": "NEW_REVISION", "value": 1, "precision": "exact"})
         w["answer_updates"].append({"slot": {"question_id": "Q1.D01", "repeat_key": "", "slot_id": "nope"}, "action": "FIRST_WRITE", "value": 1, "precision": "exact"})
         return w
-    import survey_service.extraction as ex
+    import survey_service.components.write_plan as ex
     orig, ex.plan_writes = ex.plan_writes, bad
     try:
         o = rig.say("안 먹어요", out=HEALTH)
@@ -473,7 +473,7 @@ def test_committed_but_no_result_recovers_without_rewriting():
     from boundary_contracts import canonical
     h = canonical.sha256_hash({"m": msg, "d": None})
     st = rig.doc()
-    rig.store._turns[("S1", "T-R")] = __import__("survey_service.store.base", fromlist=["TurnRecord"]).TurnRecord(h, True, None)
+    rig.store._turns[("S1", "T-R")] = __import__("survey_service.components.session_store", fromlist=["TurnRecord"]).TurnRecord(h, True, None)
     o = rig.orch.handle_turn(turn_id="T-R", frontend_message=msg)
     assert o.replayed and o.orchestrator_output["turn_failure_signal"]["write_committed"] == "COMMITTED"
     assert rig.doc() == st

@@ -1,0 +1,3 @@
+{
+  "SURVEY_RELEASE_READER_TOKEN_FILE": "/run/secrets/token"
+}

@@ -1,0 +1,18 @@
+{
+  "staff_alert": {
+    "session_id": "S1",
+    "staff_alert": {
+      "kind": "RISK",
+      "reasons": [
+        {
+          "kind": "RISK_SIGNAL",
+          "evidence": [
+            "숨이 안 쉬어져요"
+          ]
+        }
+      ]
+    }
+  },
+  "turn_failure_signal": null,
+  "intervention_result": null
+}

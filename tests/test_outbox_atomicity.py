@@ -9,9 +9,11 @@
 """
 import pytest
 
-from survey_service.db import open_stores
+from survey_service.wiring.db import open_stores
 from survey_service.settings import Settings
-from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter
+from survey_service.components.trace_outbox import Outbox
+from survey_service.components.trace_envelope import OutboxTraceSink
+from survey_service.components.link_trace_export import TraceExporter
 
 from .e2e_support import ANSWER_OUT, Rig
 from .fakes import FakeTraceIngest

@@ -1,0 +1,4 @@
+{
+  "SURVEY_RELEASE_READER_URL": "ftp://x",
+  "SURVEY_RELEASE_READER_TOKEN_FILE": "/run/secrets/token"
+}

@@ -1,0 +1,7 @@
+{
+  "endpoint": "http://push.example.com/x",
+  "keys": {
+    "p256dh": "k",
+    "auth": "a"
+  }
+}

@@ -7,7 +7,7 @@ import time
 import pytest
 from boundary_contracts import validator
 
-from survey_service.api import PublicApi
+from survey_service.components.link_public_api import PublicApi
 from survey_service.settings import Settings
 
 from .http_server_support import stop_server
@@ -152,9 +152,9 @@ def test_inflight_overflow_is_429_unavailable_with_retry_after():
 
 
 def test_503_without_release_has_retry_after():
-    from survey_service.orchestrator import Orchestrator
-    from survey_service.release import ReleaseRegistry
-    from survey_service.store.memory import MemorySessionStore
+    from survey_service.wiring.orchestrator import Orchestrator
+    from survey_service.components.release_registry import ReleaseRegistry
+    from survey_service.components.session_store import MemorySessionStore
     from .fakes import RecordingConsole
     api_ = PublicApi(Orchestrator(MemorySessionStore(), ReleaseRegistry(), staff_console=RecordingConsole()), "tok")
     s, b, h = api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())

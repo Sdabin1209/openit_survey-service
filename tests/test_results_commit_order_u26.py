@@ -6,9 +6,9 @@ import time
 
 import pytest
 
-from survey_service.store import effects
-from survey_service.store.postgres import PgSessionStore
-from survey_service.store.sqlite import SqliteSessionStore
+from survey_service.components import session_store as effects
+from survey_service.components.session_store import PgSessionStore
+from survey_service.components.session_store import SqliteSessionStore
 
 from .pg_support import pg_url
 from .sample_bank import sample_bank

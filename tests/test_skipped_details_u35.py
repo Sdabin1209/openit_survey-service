@@ -74,7 +74,7 @@ def test_details_hold_no_utterance_text_and_only_the_documented_keys(env):
 
 def test_a_skipped_item_without_slot_information_is_still_explained(env):
     """옛 세션처럼 대화 로그에서 칸을 찾을 수 없는 건너뛴 문항은 문항만 적고 칸은 생략한다."""
-    from survey_service.blanks import blank_details
+    from survey_service.components.blank_details import blank_details
     doc = {"progress_record": {"skipped": [{"question_id": "Q2.D01", "reason": "UNCERTAIN"}, {"question_id": "Q2.D02", "reason": "REFUSED"},
                                            {"question_id": "Q2.D03", "reason": "REQUEST_SKIP"}]}, "dialogue_log": [], "answer_records": []}
     assert blank_details(doc) == [{"item": "Q2.D01", "reason": "UNKNOWN"}, {"item": "Q2.D02", "reason": "REJECTED"}, {"item": "Q2.D03", "reason": "REJECTED"}]

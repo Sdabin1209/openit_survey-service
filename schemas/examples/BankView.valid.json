@@ -1,0 +1,79 @@
+{
+  "questions": [
+    {
+      "question_id": "Q4",
+      "order": 18,
+      "question_sentence": "일반담배를 평생 5갑(100개비) 이상 피운 적이 있으신가요?"
+    },
+    {
+      "question_id": "Q4_1",
+      "order": 19,
+      "question_sentence": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 알려 주세요."
+    },
+    {
+      "question_id": "Q7_1",
+      "order": 25,
+      "question_sentence": "Q7_1 문항입니다. 알려 주세요."
+    }
+  ],
+  "session_settings": {
+    "fixed_sentences": [
+      {
+        "key": "ASK_REPEAT",
+        "sentence": "다시 한 번 말씀해 주세요."
+      },
+      {
+        "key": "OOS_NOTICE",
+        "sentence": "문진과 관계없는 말씀은 도와드리기 어렵습니다."
+      },
+      {
+        "key": "CALL_STAFF",
+        "sentence": "직원을 불러 드리겠습니다. 잠시만 기다려 주세요."
+      },
+      {
+        "key": "FAREWELL",
+        "sentence": "문진이 끝났습니다. 수고하셨습니다."
+      },
+      {
+        "key": "ASK_CONFIRM",
+        "sentence": "어느 쪽이 맞는지 말씀해 주세요."
+      },
+      {
+        "key": "ASK_CORRECTION_TARGET",
+        "sentence": "어느 항목을 고칠까요?"
+      },
+      {
+        "key": "ASK_FINISH",
+        "sentence": "다 여쭤봤습니다. 이대로 마칠까요?"
+      },
+      {
+        "key": "RISK_NOTICE",
+        "sentence": "바로 직원을 불렀습니다. 그 자리에 계셔 주세요."
+      },
+      {
+        "key": "RESUME",
+        "sentence": "다시 이어서 여쭙겠습니다."
+      },
+      {
+        "key": "SURVEY_STOPPED",
+        "sentence": "문진을 여기서 마치겠습니다."
+      },
+      {
+        "key": "WAIT_NOTICE",
+        "sentence": "잠시만 기다려 주세요."
+      },
+      {
+        "key": "ASK_STOP",
+        "sentence": "그만하시겠어요?"
+      },
+      {
+        "key": "STAFF_NOTICE",
+        "sentence": "직원을 불러 드렸습니다. 문진은 이어서 하겠습니다."
+      },
+      {
+        "key": "DEFERRED",
+        "sentence": "나중에 다시 여쭙겠습니다."
+      }
+    ]
+  }
+}

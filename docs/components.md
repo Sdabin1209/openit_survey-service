@@ -20,7 +20,7 @@
 7. **응답 입력을 만든다**: 표 찾기 (`response_request`) -> 모델 호출.
 8. **결과를 정리한다**: 빈칸 원인 (`blank_details`), 결과 전달 입력 (`dispatch_input`).
 9. **Trace를 봉투에 담아 보관하고 보낸다** (`trace_envelope`, `trace_outbox`, `link_trace_export`).
-10. **릴리스를 읽어 적재한다** (`link_release_reader`, `release_loader`, `release_registry`), 문항 세트·문항 흐름의 보조 계산 (`question_bank_view`, `flow_table`, `field_specs`).
+10. **릴리스를 읽어 적재한다** (`link_boundary_clients`, `release_loader`, `release_registry`), 문항 세트·문항 흐름의 보조 계산 (`question_bank_view`, `flow_table`, `field_specs`).
 11. **보존 기간이 지난 것을 지운다** (`retention_purge`).
 
 단계 사이를 잇는 일(어느 컴포넌트의 출력을 어느 입력에 넘길지, 한 턴의 순서, 자원 주입)은 컴포넌트가 아니라 `wiring/`의 몫이다(규칙 5).
@@ -44,9 +44,9 @@
 | response_request | `components/response_request.py` | ResponseRequestSource | ResponseInput(계약: ResponseRequest) | 표 찾기로 응답 입력(topic, known, ask, next)을 조립한다. 세션 시작과 일반 턴 |
 | blank_details | `components/blank_details.py` | SessionDocument(문진: SessionStore) | BlankDetails | 값이 저장되지 않은 칸과 원인 코드(모름·거절·불분명)를 대화 로그에서 뽑는다 |
 | dispatch_input | `components/dispatch_input.py` | SessionDocument | DispatchInput(문진: DispatchInput) | 세션 문서에서 결과 전달 입력을 고른다 |
-| risk_screen | `components/risk_screen.py` | RiskScreenQuery | RiskScreenResult(계약: StaffAlert 또는 null) | 위험 규칙 파일을 읽고(`SurveyRiskRulesFile`) 발화 원문에서 규칙·문구 매치와 부정문 처리로 직원 알림을 만든다 |
+| risk_screen | `components/risk_screen.py` | RiskScreenQuery | RiskScreenResult(문진 스키마 모양의 StaffAlert 또는 null) | 위험 규칙 파일을 읽고(`SurveyRiskRulesFile`) 발화 원문에서 규칙·문구 매치와 부정문 처리로 직원 알림을 만든다 |
 | trace_envelope | `components/trace_envelope.py` | TraceEnvelopeSource | TraceEnvelopeOut(계약: TraceEnvelope) | TurnTrace를 봉투에 담고 바깥 ID를 `Id` 형식으로 바꾼다 |
-| retention_purge | `components/retention_purge.py` | PurgeQuery | PurgeReport(계약: SurveyPurgeOutput에 쓰이는 개수) | 보존 기간이 지난 세션·알림·접근 기록을 지운다 |
+| retention_purge | `components/retention_purge.py` | PurgeQuery | PurgeReport(SurveyPurgeOutput에서 event를 뺀 개수) | 보존 기간이 지난 세션·알림·접근 기록을 지운다 |
 
 ### 2.2 상태·바깥 자원 컴포넌트 (작업 하나 = 입력 -> 출력 함수 모양으로만 드러낸다)
 
@@ -64,8 +64,8 @@
 | 컴포넌트 | 파일 | 입력 타입 | 출력 타입 | 하는 일 |
 |---|---|---|---|---|
 | link_public_api | `components/link_public_api.py` | ApiRequest | ApiResponse | **받는 쪽.** 공개 API(I10)와 직원 면의 요청을 계약(`FrontendMessage`, `InterventionDecision`, `StaffAlertPage` 등)으로 검증하고 계약 타입 <-> 내부 타입으로 바꾼다. 인증 401, 권한 403, 오류는 `BoundaryError` 본문 |
-| link_release_reader | `components/link_release_reader.py` | ReleaseReaderConfig | (계약 클라이언트 `HttpReleaseReader`) | **보내는 쪽.** 릴리스 읽기 SDK(I4) 클라이언트를 만든다 |
-| link_trace_ingest | `components/link_trace_ingest.py` | TraceIngestConfig | (계약 클라이언트 `HttpTraceIngest`) | **보내는 쪽.** 수집 SDK(I6) 클라이언트를 만든다 |
+| link_boundary_clients | `components/link_boundary_clients.py` | ReleaseReaderConfig | (계약 클라이언트 `HttpReleaseReader`) | **보내는 쪽.** 릴리스 읽기 SDK(I4) 클라이언트를 만든다 |
+| link_boundary_clients | `components/link_boundary_clients.py` | TraceIngestConfig | (계약 클라이언트 `HttpTraceIngest`) | **보내는 쪽.** 수집 SDK(I6) 클라이언트를 만든다 |
 | link_trace_export | `components/link_trace_export.py` | OutboxEnvelope | FlushResult | **보내는 쪽.** 버퍼의 봉투를 I6으로 보내고 최소 1회 전달, 재시도, DEAD 분류를 한다 |
 | link_inference | `components/link_inference.py` | InferenceCall | InferenceResult(계약: RuntimeResult) | **보내는 쪽.** 추론 서버(I9)에 릴리스를 적재하고 extract·respond를 부른다. 재시도·마감·보호 건수 |
 | link_push | `components/link_push.py` | PushDelivery(계약: StaffPushPayload) | PushOutcome | **보내는 쪽.** 직원 기기에 웹 푸시를 보낸다(SSRF 검사 포함) |
@@ -88,3 +88,6 @@
 | L1 | 공용 기반 4개(`wiring/errors.py`, `ports.py`, `pg.py`, `netguard.py`)를 컴포넌트가 import한다 | 예외 종류와 DB 연결 어댑터를 컴포넌트마다 복제하면 `except StoreError`가 갈라진다. 컴포넌트끼리 import는 아니라 구조 검사 2번은 통과하지만 규칙 4(컴포넌트는 자기 스키마밖에 모른다)에는 못 미친다 | 예외를 각 컴포넌트 출력 스키마의 오류 종류로 바꾸는 일은 별도 작업 |
 | L2 | 컴포넌트 사이에 같은 3~10줄 보조 함수(`model_key`, `item_of`, `slot_ref`)가 복제돼 있다 | import 금지(DESIGN 2절)와 코드 재사용이 부딪힌다. 표기 규칙(`Q7_1[soju].amount`)은 문진 스키마의 값 모양이라 각 컴포넌트가 입력 스키마에서 읽는다 | 문진 스키마가 키 구조를 필드로 내면 복제가 없어진다(문진 스키마 와이어 변경이라 오늘 하지 않는다) |
 | L3 | 자세한 스키마 밖 조건은 `schemas/README.md` | | |
+
+| L4 | `link_public_api`가 `openit_link.App` 위로 옮겨지지 않았다 | link v0.1.0에 기기별 토큰·상태 기반 인가, 스트리밍(SSE) 응답, 쿼리 스키마가 없다 | [CR-link-001](change-requests/CR-link-001.md) |
+| L5 | 입력 검사를 스키마 검증으로 바꾼 곳은 `wiring/orchestrator.py` 진입(`TurnRequest`)뿐이다. 나머지 컴포넌트의 손 검사는 코드에 남아 있다 | 오늘 안에 바꾼 범위가 거기까지다. 스키마는 모두 작성돼 있고 `types.validate`로 바로 걸 수 있다 | 컴포넌트별로 바꾸되 동작(오류 메시지)을 보존하는 시험을 함께 |

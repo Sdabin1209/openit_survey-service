@@ -5,9 +5,10 @@ import json
 import pytest
 from boundary_contracts import validator
 
-from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, PgAlertStore
-from survey_service.api import PublicApi
-from survey_service.errors import StoreError
+from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+from survey_service.components.alert_book import AlertStore, PgAlertStore
+from survey_service.components.link_public_api import PublicApi
+from survey_service.wiring.errors import StoreError
 
 from .e2e_support import RISK_OUT, Rig, ScriptedRisk, ext, val
 from .pg_support import pg_url
@@ -165,7 +166,7 @@ def test_resolve_and_retry_never_emit_an_open_alert_event_after_resolved(mk):
     r = mk()
     failed_risk(r)
     r.store.resolve("K1", "RESUME", "s1")                # 서비스 잠금을 거치지 않은 해결 -> 1단계의 원자 조건이 막는다
-    from survey_service.alerts import StaffCallRejected
+    from survey_service.wiring.errors import StaffCallRejected
     with pytest.raises(StaffCallRejected) as e:
         r.store.begin_retry(1, "rt-x")
     assert e.value.kind == "NO_OPEN_ALERT"

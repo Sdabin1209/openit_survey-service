@@ -1,5 +1,5 @@
 import sys
 
-from .service import main
+from .server import main
 
 sys.exit(main())

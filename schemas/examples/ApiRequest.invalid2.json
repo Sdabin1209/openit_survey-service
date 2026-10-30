@@ -1,0 +1,11 @@
+{
+  "method": "GET",
+  "path": "/v1/staff/alerts",
+  "query": {
+    "limit": "500"
+  },
+  "headers": {
+    "authorization": "Bearer t"
+  },
+  "body": null
+}

@@ -1,6 +1,7 @@
 """G01: 직원 알림 입력원은 포트(RiskSource)로 분리되어 있고 SURVEY_RISK_SOURCE로 구현을 고른다. 기본은 비활성. 입력원은 정해지지 않았다."""
-from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore
-from survey_service.service import App
+from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+from survey_service.components.alert_book import AlertStore
+from survey_service.wiring.app import App
 from survey_service.settings import Settings, load_factory
 
 from .e2e_support import Rig, ext

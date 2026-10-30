@@ -1,0 +1,7 @@
+{
+  "session_id": "s-1",
+  "status": "DB_ERROR",
+  "write_outcome": "NOT_APPLIED",
+  "revision": null,
+  "detail": "반영할 수 없는 쓰기: 저장할 슬롯이 응답 기록에 없다"
+}

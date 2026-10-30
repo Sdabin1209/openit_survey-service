@@ -9,10 +9,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from boundary_contracts.clients import HttpTraceIngest
 
-from survey_service.errors import StoreError
-from survey_service.inference import InferenceServer
-from survey_service.release import ReleaseLoader, ReleaseRegistry
-from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter
+from survey_service.wiring.errors import StoreError
+from survey_service.components.link_inference import InferenceServer
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.components.trace_outbox import Outbox
+from survey_service.components.trace_envelope import OutboxTraceSink
+from survey_service.components.link_trace_export import TraceExporter
 
 from .http_server_support import server_port, stop_server
 from .fakes import FakeReleaseReader

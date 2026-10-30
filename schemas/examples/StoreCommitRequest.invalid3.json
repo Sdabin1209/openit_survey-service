@@ -1,0 +1,9 @@
+{
+  "session_id": "s-1",
+  "expected_revision": 1,
+  "writes": {
+    "answer_updates": []
+  },
+  "turn_id": "t-1",
+  "input_hash": "h"
+}

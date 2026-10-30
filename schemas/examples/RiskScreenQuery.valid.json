@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "version": "e2e-1",
+    "rules": [
+      {
+        "id": "e2e.chest-pain",
+        "description": "E2E 시험용 규칙(임상 목록 아님)",
+        "match": {
+          "any_of": [
+            {
+              "contains": "가슴이 찢어질 것 같아요"
+            },
+            {
+              "regex": "숨(이|을)\\s*못\\s*쉬"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "utterance": "가슴이 너무 아파요"
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TurnRoute",
+  "description": "처리 표 9-1의 한 칸(turn_route 출력). turn_kind가 null이면 처리하지 않는다(그때 keep_log가 대화 로그를 남길지 정한다).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "turn_kind",
+    "create",
+    "full",
+    "keep_log"
+  ],
+  "properties": {
+    "turn_kind": {
+      "enum": [
+        "SESSION_START",
+        "UTTERANCE",
+        "RESUME",
+        "INTERVENTION_END",
+        "END_LEFT",
+        null
+      ],
+      "description": "이 턴의 종류. null이면 처리 안 함."
+    },
+    "create": {
+      "type": "boolean",
+      "description": "세션 정보를 새로 만드는가."
+    },
+    "full": {
+      "type": "boolean",
+      "description": "추출부터 저장 판단까지 거치는 전체 흐름인가."
+    },
+    "keep_log": {
+      "type": "boolean",
+      "description": "처리 안 함일 때 대화 로그를 남기는가. 처리하는 칸에서는 항상 true."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "turn_kind": {
+            "const": null
+          }
+        },
+        "required": [
+          "turn_kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "create": {
+            "const": false
+          },
+          "full": {
+            "const": false
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "keep_log": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "full": {
+            "const": true
+          }
+        },
+        "required": [
+          "full"
+        ]
+      },
+      "then": {
+        "properties": {
+          "turn_kind": {
+            "const": "UTTERANCE"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "create": {
+            "const": true
+          }
+        },
+        "required": [
+          "create"
+        ]
+      },
+      "then": {
+        "properties": {
+          "turn_kind": {
+            "enum": [
+              "SESSION_START",
+              "UTTERANCE"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

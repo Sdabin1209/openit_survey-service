@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResponseInput",
+  "description": "표 찾기 출력. 형식은 계약 ResponseRequest(LoRA-B 입력)가 정본이다(복사하지 않는다).",
+  "type": "object",
+  "x-contract": "ResponseRequest"
+}

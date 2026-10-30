@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "path": "/v1/sessions",
+  "headers": {
+    "authorization": "Bearer t"
+  },
+  "body": null
+}

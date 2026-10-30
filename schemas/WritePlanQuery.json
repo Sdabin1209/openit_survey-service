@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WritePlanQuery",
+  "description": "저장·진행 계획 질의(write_plan 입력). 세션 문서와 모델 추출 결과(save=true인 값을 저장 대상으로 본다). action이 SKIP이면 reason이 건너뜀 사유가 되므로 REQUEST_SKIP 또는 REFUSED여야 한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session",
+    "output"
+  ],
+  "properties": {
+    "session": {
+      "type": "object",
+      "x-survey-schema": "SessionStore",
+      "description": "세션 문서(answer_records, progress_record)."
+    },
+    "output": {
+      "type": "object",
+      "x-contract": "ActionExtraction",
+      "required": [
+        "values",
+        "action",
+        "next_item"
+      ],
+      "description": "모델 추출 결과(계약).",
+      "if": {
+        "properties": {
+          "action": {
+            "const": "SKIP"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "enum": [
+              "REQUEST_SKIP",
+              "REFUSED"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

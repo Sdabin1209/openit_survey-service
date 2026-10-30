@@ -1,0 +1,14 @@
+{
+  "op": "respond",
+  "release_id": "rel-0001",
+  "respond_input": {
+    "action": "START",
+    "next": {
+      "question_id": "Q1.D01",
+      "text": "혹시 뇌졸중으로 진단받으셨거나 현재 약물 치료 중이신가요?",
+      "type": "NEXT"
+    },
+    "topic": "뇌졸중(중풍) 진단을 받았는지와 지금 약을 먹는지"
+  },
+  "deadline": 12345.5
+}

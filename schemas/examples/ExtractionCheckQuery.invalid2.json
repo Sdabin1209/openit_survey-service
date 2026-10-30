@@ -1,0 +1,15 @@
+{
+  "output": {
+    "action": "NEXT",
+    "next_item": "Q5",
+    "values": [
+      {
+        "key": "Q4_1.daily_count",
+        "value": 10,
+        "precision": "exact",
+        "status": "ANSWERED",
+        "save": true
+      }
+    ]
+  }
+}

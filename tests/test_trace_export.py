@@ -6,7 +6,9 @@ import pytest
 from boundary_contracts import PIPELINE_SCHEMA_VERSION
 from boundary_contracts import BoundaryError
 
-from survey_service.trace import Outbox, OutboxTraceSink, TraceExporter
+from survey_service.components.trace_outbox import Outbox
+from survey_service.components.trace_envelope import OutboxTraceSink
+from survey_service.components.link_trace_export import TraceExporter
 
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeTraceIngest
@@ -220,7 +222,7 @@ def test_stats(parts):
 import hashlib
 import re
 
-from survey_service.trace import envelope_id
+from survey_service.components.trace_envelope import envelope_id
 
 
 def test_envelope_id_keeps_valid_ids_and_hashes_others():

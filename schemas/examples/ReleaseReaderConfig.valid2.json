@@ -1,0 +1,4 @@
+{
+  "SURVEY_RELEASE_READER_URL": "https://gate.example.com",
+  "SURVEY_RELEASE_READER_TOKEN_ENV": "MY_TOKEN"
+}

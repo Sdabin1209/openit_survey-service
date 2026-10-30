@@ -18,19 +18,18 @@
 
 ## 구조
 
+구조 규칙은 head/docs/DESIGN.md(D117). 컴포넌트 표는 [docs/components.md](docs/components.md), 내부 타입은 `schemas/`([스키마 밖 조건](schemas/README.md)).
+
 | 경로 | 역할 |
 |---|---|
-| `survey_service/orchestrator.py`, `graph.py` | 한 턴의 순서(LangGraph 노드), 처리 표, 쓰기 확정, 실패 신호 |
-| `survey_service/api.py`, `service.py`, `settings.py` | 공개 API 라우팅, 조립·`/healthz` `/readyz`, 환경 변수 설정 |
-| `survey_service/store/` | Session Store(SQLite·메모리), 저장 효과(순수 함수) |
-| `survey_service/release/` | 릴리스 로더(승인·해시·버전 검사, 거부 시 이전 유지) |
-| `survey_service/extraction.py`, `flow.py`, `response_tables.py`, `assembly.py` | A 입력 조립, 문항 순서·건너뛰기 표, 표 찾기(B 입력) |
-| `survey_service/inference.py`, `remote.py`, `clients.py` | 추론 서버 HTTP 호출, 이웃 HTTP 클라이언트 |
-| `survey_service/alerts.py`, `ports.py` | 직원 알림 저장·전달, 바깥 접점 포트(`RiskSource` 등) |
-| `survey_service/trace/` | TurnTrace 조립, outbox, 전송 스레드 |
+| `survey_service/components/` | 컴포넌트(파일 하나 = 업무 하나). `link_*`는 이웃 통신(받는 쪽 `link_public_api`, 보내는 쪽 `link_inference` `link_push` `link_trace_export` `link_boundary_clients`) |
+| `survey_service/wiring/` | 한 턴의 순서(`turn_graph.py` LangGraph 노드), `orchestrator.py`, 조립 `app.py`, 저장소 선택 `db.py`, 공용 기반(`errors` `ports` `pg` `netguard`) |
+| `survey_service/types/` | `schemas/`에서 생성한 타입과 스키마 검증(손으로 고치지 않는다, 4절) |
+| `survey_service/server.py`, `settings.py`, `cli.py`, `migrate.py`, `migrations/` | 진입점, 환경 변수 설정, 마이그레이션(업무 규칙 없음) |
+| `schemas/` | 영역 내부 타입의 JSON Schema와 통과·거부 예시 |
 | `schema/` | 문진 스키마(이 영역이 소유, 정수 버전 1). 문항 흐름·표 찾기 표 데이터 포함 |
-| `tests/` | 시험과 이웃 대역(참조 서버, 가짜 입력원) |
-| `scripts/` | `build-image.sh`(영역 빌드 진입점, 계약 2.5.0), `dev-request.sh`(개발용 빌드 요청 만들기), `smoke.sh`(이미지 스모크), `smoke_compose.sh` |
+| `tests/` | 시험(`test_structure.py`가 구조 검사)과 이웃 대역 |
+| `scripts/` | `build-image.sh`, `smoke.sh`, `gen-types.sh`, `check_schemas.py` |
 | `Dockerfile`, `requirements.txt`, `requirements.lock` | 이미지와 의존 고정 |
 
 한 턴의 흐름(docs/design.md §16):
@@ -67,6 +66,17 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 비밀(API 토큰, VAPID 키 등)은 값을 환경 변수에 직접 넣지 않고 `NAME_FILE`(파일 경로)로 받는다(D84, docs/runbook.md §1). 이름 목록과 나머지 설정은 runbook §1. 실제 운영 실행에는 release-gate·ops-feedback·추론 서버 URL과 토큰 파일이 더 필요하다(설정 전체는 runbook 참조, 이 문서는 개발용 최소만 적었다).
 
 시험 개수와 통과 결과는 아래 '현재 상태'에만 적는다. 변경 때마다 `pytest` 실제 출력(위 2)의 명령)으로 다시 확인한다. 명령은 문서(runbook, scripts)에서 옮겼다.
+
+## 4. 타입 생성 (schemas/ -> types/)
+
+`survey_service/types/`는 `schemas/*.json`에서만 만든다. 손으로 고치지 않는다. 도구(datamodel-code-generator 0.87.0, `requirements-tools.txt`에 고정)는 런타임 의존이 아니라 별도 가상환경에 설치된다.
+
+```bash
+bash scripts/gen-types.sh                       # .venv-tools를 만들고 types/ 를 다시 생성한다
+.venv/bin/python scripts/check_schemas.py       # 모든 스키마의 통과·거부 예시를 확인한다
+```
+
+`tests/test_structure.py` 5번이 임시 폴더에 다시 생성해 `types/`와 같은지 본다.
 
 ## 현재 상태
 

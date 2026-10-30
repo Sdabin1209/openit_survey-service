@@ -1,0 +1,9 @@
+{
+  "op": "retry_staff_call",
+  "result": {
+    "alert_id": "al-1",
+    "staff_alert": "DELIVERED",
+    "delivery_attempts": 2,
+    "retry_after_s": 30
+  }
+}

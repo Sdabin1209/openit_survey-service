@@ -71,7 +71,7 @@ def test_invalid_client_supplied_id_is_still_rejected(ar):
 
 
 def test_issued_session_is_bound_to_the_creating_device(tmp_path):
-    from survey_service.api import PublicApi
+    from survey_service.components.link_public_api import PublicApi
     import json
     r = AlertRig(tmp_path)
     try:

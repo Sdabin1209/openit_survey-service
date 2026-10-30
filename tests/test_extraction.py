@@ -12,11 +12,11 @@ from boundary_contracts.action_rules import check_action_extraction
 
 import survey_schema
 
-from survey_service import extraction
-from survey_service.assembly import Bank
-from survey_service.flow import build_flow, load_flow
-from survey_service.response_tables import ResponseTables, josa
-from survey_service.store import effects
+from survey_service.components import extract_request, write_plan, response_request
+from survey_service.components.question_bank_view import Bank
+from survey_service.components.flow_table import build_flow, load_flow
+from survey_service.components.response_request import ResponseTables, josa
+from survey_service.components import session_store as effects
 
 from .sample_bank import sample_bank
 
@@ -81,7 +81,7 @@ def doc_for(a_input: dict) -> dict:
 @pytest.mark.parametrize("fx", FIX, ids=[f"{f['a_output']['action']}-{i}" for i, f in enumerate(FIX)])
 def test_extract_input_equals_training_data_character_for_character(fx):
     ai = fx["a_input"]
-    got = extraction.build_extract_input(doc_for(ai), BANK, FLOW, ai["user_utterance"])
+    got = extract_request.build_extract_input(doc_for(ai), BANK, FLOW, ai["user_utterance"])
     assert json.dumps(got, ensure_ascii=False) == json.dumps(ai, ensure_ascii=False)      # 최상위 키 알파벳 순, state는 삽입 순서
 
 
@@ -92,7 +92,7 @@ def test_state_order_is_current_saved_then_previous_and_reference_then_unsaved()
     for k, v in [("Q8_1.days", 3), ("Q8_2.duration_minutes", 30), ("Q9_1.days", 2)]:
         put(k, v)
     doc["progress_record"]["open_slots"] = [{"key": "Q9_2.duration_minutes", "status": "UNCLEAR"}]
-    st = extraction.build_state(doc, FLOW)
+    st = extract_request.build_state(doc, FLOW)
     # Q9_2: 직전 문항 Q9_1, 참조 원천 Q8_2, 그 뒤 지금 문항의 미저장 칸
     assert list(st) == ["Q9_1.days", "Q8_2.duration_minutes", "Q9_2.duration_minutes"]
     assert list(st["Q9_1.days"]) == ["value", "status"] and st["Q9_2.duration_minutes"] == {"value": None, "status": "UNCLEAR"}
@@ -103,19 +103,19 @@ def test_state_slot_order_inside_a_question_follows_the_survey_schema():
     ups = [{"slot": effects.slot_ref(f"Q4_1.{s}"), "action": "FIRST_WRITE", "value": v, "precision": "exact"}
            for s, v in [("daily_count", 5), ("total_years", 20), ("status", "former"), ("years_since_quit", 2)]]
     doc["answer_records"] = effects.apply_answer_updates(doc["answer_records"], ups)
-    assert list(extraction.build_state(doc, FLOW)) == ["Q4_1.status", "Q4_1.total_years", "Q4_1.daily_count", "Q4_1.years_since_quit"]
+    assert list(extract_request.build_state(doc, FLOW)) == ["Q4_1.status", "Q4_1.total_years", "Q4_1.daily_count", "Q4_1.years_since_quit"]
 
 
 def test_previous_question_is_skipped_over_when_its_skip_rule_holds():
     doc = effects.initial_state("S", sample_bank(), "Q8_1")
     doc["answer_records"] = effects.apply_answer_updates(doc["answer_records"], [
         {"slot": effects.slot_ref("Q7.does_not_drink"), "action": "FIRST_WRITE", "value": True, "precision": "exact"}])
-    assert list(extraction.build_state(doc, FLOW)) == ["Q7.does_not_drink"]
+    assert list(extract_request.build_state(doc, FLOW)) == ["Q7.does_not_drink"]
 
 
 def test_extract_input_uses_question_sentence_when_there_is_no_previous_response():
     doc = effects.initial_state("S", sample_bank(), "Q1.D01")
-    got = extraction.build_extract_input(doc, BANK, FLOW, "네")
+    got = extract_request.build_extract_input(doc, BANK, FLOW, "네")
     assert got["current_question"] == BANK.sentence("Q1.D01") and list(got) == ["current_question", "question_id", "state", "user_utterance"]
     assert validator("ActionExtractionInput").is_valid(got)
 
@@ -130,7 +130,7 @@ def test_sample_outputs_pass_the_contract_checker_with_the_schema_flow(fx):
 def test_plan_writes_saves_only_save_true_values(fx):
     doc = doc_for(fx["a_input"])
     out = fx["a_output"]
-    w = extraction.plan_writes(doc, out)
+    w = write_plan.plan_writes(doc, out)
     saved_keys = {v["key"] for v in out["values"] if v["save"]}
     unsaved_keys = {v["key"] for v in out["values"] if not v["save"]}
     written = {effects.model_key(u["slot"]) for u in w["answer_updates"]}
@@ -145,8 +145,8 @@ def test_plan_writes_saves_only_save_true_values(fx):
 def test_response_request_matches_training_data_fields(fx):
     ai, out, bi = fx["a_input"], fx["a_output"], fx["b_input"]
     doc = doc_for(ai)
-    after = effects.apply_writes(doc, extraction.plan_writes(doc, out))
-    got = extraction.build_response_request(out, ai, after, BANK, TABLES)
+    after = effects.apply_writes(doc, write_plan.plan_writes(doc, out))
+    got = response_request.build_response_request(out, ai, after, BANK, TABLES)
     assert validator("ResponseRequest").is_valid(got)
     for k in ("action", "reason", "topic", "user_utterance", "known", "ask", "previous", "current", "hold", "note"):
         assert got.get(k) == bi.get(k), k
@@ -161,7 +161,7 @@ def test_next_text_is_the_question_bank_sentence_not_the_training_paraphrase():
         {"key": "Q1.D02.diagnosed", "value": False, "precision": "exact", "status": "ANSWERED", "save": True}]}
     ai = {"current_question": "x", "question_id": "Q1.D02", "state": {}, "user_utterance": "아니요"}
     doc = effects.initial_state("S", sample_bank(), "Q1.D02")
-    got = extraction.build_response_request(out, ai, doc, BANK, TABLES)
+    got = response_request.build_response_request(out, ai, doc, BANK, TABLES)
     assert got["next"] == {"question_id": "Q1.D03", "text": BANK.sentence("Q1.D03"), "type": "NEXT"}
 
 
@@ -172,8 +172,8 @@ def test_partial_prefilled_next_text_asks_only_remaining_slots():
         {"key": "Q4_1.status", "value": "former", "precision": "exact", "status": "ANSWERED", "save": True}]}
     ai = {"current_question": "x", "question_id": "Q4", "state": {}, "user_utterance": "예전에 피웠고 끊었어요"}
     doc = effects.initial_state("S", sample_bank(), "Q4")
-    after = effects.apply_writes(doc, extraction.plan_writes(doc, out))
-    got = extraction.build_response_request(out, ai, after, BANK, TABLES)
+    after = effects.apply_writes(doc, write_plan.plan_writes(doc, out))
+    got = response_request.build_response_request(out, ai, after, BANK, TABLES)
     assert got["next"]["text"] == "일반담배는 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 말씀해 주세요."
     assert "지금 피우는지" not in got["next"]["text"]                         # 이미 정해진 칸은 묻지 않는다
     # 현재 흡연자라면 끊은 지 얼마나 됐는지는 묻지 않는다(only_if)
@@ -184,7 +184,7 @@ def test_partial_prefilled_next_text_asks_only_remaining_slots():
 
 
 def test_start_request_is_valid_and_has_no_user_fields():
-    req = extraction.build_start_request(BANK, TABLES, "Q1.D01")
+    req = response_request.build_start_request(BANK, TABLES, "Q1.D01")
     assert validator("ResponseRequest").is_valid(req) and set(req) == {"action", "next", "topic"}
     assert req["next"] == {"question_id": "Q1.D01", "text": BANK.sentence("Q1.D01"), "type": "NEXT"}
 

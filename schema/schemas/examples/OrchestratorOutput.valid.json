@@ -1,0 +1,45 @@
+{
+  "turn_kind": "UTTERANCE",
+  "session_info_created": null,
+  "log_entry": {
+    "input": {
+      "kind": "UTTERANCE",
+      "utterance": "안 피움",
+      "intervention_decision": null
+    },
+    "handling": {
+      "handled": "UTTERANCE"
+    },
+    "question_bank_version": 1,
+    "turn_result": "COMMITTED",
+    "extract_output": {
+      "action": "NEXT",
+      "next_item": "Q1.D02",
+      "values": [
+        {
+          "key": "Q1.D01.diagnosed",
+          "value": false,
+          "precision": "exact",
+          "status": "ANSWERED",
+          "save": true
+        },
+        {
+          "key": "Q1.D01.on_medication",
+          "value": false,
+          "precision": "exact",
+          "status": "ANSWERED",
+          "save": true
+        }
+      ]
+    },
+    "validation_violations": [],
+    "staff_alert": null,
+    "response_text": "응답입니다.",
+    "staff_alert_delivery": "NOT_APPLICABLE",
+    "turn_failure_signal": null,
+    "intervention_result": null
+  },
+  "turn_failure_signal": null,
+  "intervention_result": null,
+  "dispatch_called": false
+}

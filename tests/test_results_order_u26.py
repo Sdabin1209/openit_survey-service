@@ -57,7 +57,7 @@ def test_malformed_cursor_is_400(env):
 
 
 def test_pre_u26_sqlite_file_is_backfilled_in_the_old_order(tmp_path):
-    from survey_service.store.sqlite import SqliteSessionStore
+    from survey_service.components.session_store import SqliteSessionStore
     p = str(tmp_path / "old.db")
     with sqlite3.connect(p) as db:
         db.executescript("""

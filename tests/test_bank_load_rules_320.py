@@ -5,9 +5,11 @@ import jsonschema
 import pytest
 import survey_schema
 
-from survey_service.fields import build_field_specs
-from survey_service.inference import InferenceServer
-from survey_service.release import ReleaseLoader, ReleaseRegistry
+from survey_service.components.field_specs import invalid_field_specs
+from survey_service.components.field_specs import build_field_specs
+from survey_service.components.link_inference import InferenceServer
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
 
 from .fakes import FakeReleaseReader
 from .sample_bank import sample_bank
@@ -36,7 +38,7 @@ def _poll(tmp_path, bank):
     reader.add_release("rel-1", bank, **INSTALLED)
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
+    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, field_check=invalid_field_specs)
     return reg, loader, loader.poll_once()
 
 

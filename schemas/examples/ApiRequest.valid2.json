@@ -1,0 +1,12 @@
+{
+  "method": "GET",
+  "path": "/v1/staff/alerts",
+  "query": {
+    "status": "OPEN",
+    "limit": "50"
+  },
+  "headers": {
+    "authorization": "Bearer dev-staff-token"
+  },
+  "body": null
+}

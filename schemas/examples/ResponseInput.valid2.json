@@ -1,0 +1,13 @@
+{
+  "action": "REASK",
+  "ask": "지금 고혈압 약을 먹는지",
+  "known": "진단 받음",
+  "next": {
+    "question_id": "Q1.D03",
+    "text": "다음은 고혈압입니다. 진단받은 적이 있으신지, 지금 약을 드시는지 알려 주세요.",
+    "type": "SAME"
+  },
+  "reason": "MISSING",
+  "topic": "고혈압 진단을 받았는지와 지금 약을 먹는지",
+  "user_utterance": "십 년 전에 고혈압 진단을 받았어요."
+}

@@ -1,0 +1,7 @@
+{
+  "op": "list",
+  "result": {
+    "items": [],
+    "next_cursor": 5
+  }
+}

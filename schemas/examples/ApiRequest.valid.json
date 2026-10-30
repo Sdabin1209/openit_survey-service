@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/v1/sessions",
+  "headers": {
+    "authorization": "Bearer dev-token-redacted"
+  },
+  "body": {
+    "kind": "SESSION_START"
+  },
+  "body_bytes": 24
+}

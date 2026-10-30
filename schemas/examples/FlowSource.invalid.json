@@ -1,0 +1,83 @@
+{
+  "flow_id": "dataset_v2",
+  "description": "학습 데이터셋 v2(IO_SPEC v2)의 문항 순서·건너뛰기 규칙과 A 입력 state의 참조 원천 문항. 조건 칸의 값이 같으면 skip_item은 묻지 않는다(D76: 소유는 survey-service, 이 표를 추론 서버 extract 요청의 flow로 보낸다).",
+  "order": [],
+  "skips": [
+    {
+      "slot": "Q4.answer",
+      "op": "==",
+      "value": false,
+      "skip_item": "Q4_1"
+    },
+    {
+      "slot": "Q5.answer",
+      "op": "==",
+      "value": false,
+      "skip_item": "Q5_1"
+    },
+    {
+      "slot": "Q6.answer",
+      "op": "==",
+      "value": false,
+      "skip_item": "Q6_1"
+    },
+    {
+      "slot": "Q7.does_not_drink",
+      "op": "==",
+      "value": true,
+      "skip_item": "Q7_1"
+    },
+    {
+      "slot": "Q7.does_not_drink",
+      "op": "==",
+      "value": true,
+      "skip_item": "Q7_2"
+    },
+    {
+      "slot": "Q8_1.days",
+      "op": "==",
+      "value": 0,
+      "skip_item": "Q8_2"
+    },
+    {
+      "slot": "Q9_1.days",
+      "op": "==",
+      "value": 0,
+      "skip_item": "Q9_2"
+    }
+  ],
+  "reference_sources": {
+    "Q5": [
+      "Q4"
+    ],
+    "Q5_1": [
+      "Q4_1"
+    ],
+    "Q6": [
+      "Q5"
+    ],
+    "Q9_1": [
+      "Q8_1"
+    ],
+    "Q9_2": [
+      "Q8_2"
+    ],
+    "Q10": [
+      "Q9_1"
+    ]
+  },
+  "slot_order": {
+    "Q4_1": [
+      "status",
+      "total_years",
+      "daily_count",
+      "years_since_quit"
+    ],
+    "Q5_1": [
+      "status",
+      "total_years",
+      "daily_count",
+      "years_since_quit"
+    ]
+  }
+}

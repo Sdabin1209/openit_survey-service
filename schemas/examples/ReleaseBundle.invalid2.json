@@ -1,0 +1,74 @@
+{
+  "release_id": "rel-0001",
+  "manifest": {
+    "pipeline_schema_version": "3.0",
+    "release_id": "rel-0001",
+    "created_at": "2026-10-14T00:00:00Z",
+    "gate_decision_id": "gd-0001",
+    "question_set": {
+      "id": "qs-main",
+      "version": "3",
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "lora_a": {
+      "id": "lora-a",
+      "version": "1.2.0",
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "lora_b": {
+      "id": "lora-b",
+      "version": "1.0.1",
+      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "runtime_contract_version": 1,
+    "action_rules_version": "2",
+    "model_runtime_version": "0.1.0",
+    "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "adapters": {
+      "LORA_A": {
+        "adapter_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "serving_config": {
+          "protection_policy_version": "protect-1"
+        },
+        "serving_config_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "system_prompt": {
+          "path": "system_prompt.txt",
+          "sha256": "sha256:3def1bd06bba07ed86b77771064fc0dc969cc80f2997f159ee80b3de5b228b93"
+        }
+      },
+      "LORA_B": {
+        "adapter_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "serving_config": {
+          "protection_policy_version": "protect-1"
+        },
+        "serving_config_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "system_prompt": {
+          "path": "system_prompt.txt",
+          "sha256": "sha256:3def1bd06bba07ed86b77771064fc0dc969cc80f2997f159ee80b3de5b228b93"
+        }
+      }
+    }
+  },
+  "decision": {
+    "result": "PASS",
+    "subject": {
+      "question_set": {
+        "id": "qs-main",
+        "version": "3",
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "lora_a": {
+        "id": "lora-a",
+        "version": "1.2.0",
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "lora_b": {
+        "id": "lora-b",
+        "version": "1.0.1",
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "runtime_contract_version": 1
+  },
+  "question_bank": {}
+}

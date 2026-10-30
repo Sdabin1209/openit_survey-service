@@ -12,10 +12,14 @@ import urllib.request
 from boundary_contracts import validator
 import pytest
 
-from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, DeliveryFailed, WebPushSender
-from survey_service.api import PublicApi
-from survey_service.errors import StoreError
-from survey_service.service import App, serve
+from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+from survey_service.components.alert_book import AlertStore
+from survey_service.wiring.errors import DeliveryFailed
+from survey_service.components.link_push import WebPushSender
+from survey_service.components.link_public_api import PublicApi
+from survey_service.wiring.errors import StoreError
+from survey_service.wiring.app import App
+from survey_service.server import serve
 from survey_service.settings import ConfigError, Settings
 
 from .http_server_support import start_server, server_port, stop_server

@@ -10,10 +10,10 @@ import pytest
 import survey_schema
 from boundary_contracts import validator
 
-from survey_service.fields import build_field_specs
-from survey_service.flow import load_flow
-from survey_service.remote import RemoteModelSession
-from survey_service.store import effects
+from survey_service.components.field_specs import build_field_specs
+from survey_service.components.flow_table import load_flow
+from survey_service.components.link_inference import RemoteModelSession
+from survey_service.components import session_store as effects
 
 from .e2e_support import Rig, ext, val
 from .sample_bank import sample_bank
@@ -67,8 +67,9 @@ def test_graph_always_sends_flow_and_the_fields_built_from_the_bank():
 def test_a_bank_with_a_slot_lacking_its_field_spec_is_rejected_at_load(tmp_path):
     """계약 3.0.0: extract는 항상 fields와 함께 부른다. 칸 규격이 없는 문항 은행은 서버가 값 규칙을 보증하지 못하므로 적재를 거부한다(ADR-0043).
     wo-320(ADR-0045)부터 거부 조건(자료형 필수, option의 선택지 필수)은 문진 스키마 QuestionBank가 표현하고 적재는 INVALID_RECORD로 거부한다."""
-    from survey_service.inference import InferenceServer
-    from survey_service.release import ReleaseLoader, ReleaseRegistry
+    from survey_service.components.link_inference import InferenceServer
+    from survey_service.components.release_loader import ReleaseLoader
+    from survey_service.components.release_registry import ReleaseRegistry
 
     from .fakes import FakeReleaseReader
     from .test_release_loader import INSTALLED

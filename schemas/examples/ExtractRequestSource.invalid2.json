@@ -1,0 +1,393 @@
+{
+  "session": {
+    "session_info": {
+      "session_id": "S-0001",
+      "question_bank_version": 1
+    },
+    "answer_records": [
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": {
+          "answer": true
+        },
+        "risk_mark": null,
+        "history": [],
+        "precision": "exact"
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      }
+    ],
+    "progress_record": {
+      "current_question_id": "Q4_1",
+      "open_slots": [
+        {
+          "key": "Q4_1.daily_count",
+          "status": "MISSING"
+        }
+      ],
+      "skipped": [],
+      "session_status": "IN_PROGRESS",
+      "pause_history": []
+    },
+    "dialogue_log": [],
+    "dispatch_log": []
+  },
+  "bank": {
+    "version": 1,
+    "questions": [
+      {
+        "question_id": "Q4",
+        "name": "Q4",
+        "order": 18,
+        "prerequisite": null,
+        "question_sentence": "일반담배를 평생 5갑(100개비) 이상 피운 적이 있으신가요?",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "answer",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "answer을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "boolean"
+          }
+        ]
+      },
+      {
+        "question_id": "Q4_1",
+        "name": "Q4_1",
+        "order": 19,
+        "prerequisite": null,
+        "question_sentence": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [],
+        "slots": [
+          {
+            "slot_id": "status",
+            "units": [],
+            "choices": [
+              "current",
+              "former"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "status을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          },
+          {
+            "slot_id": "total_years",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "total_years을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "integer",
+            "unit": "년",
+            "minimum": 0
+          },
+          {
+            "slot_id": "daily_count",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "daily_count을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "unit": "개비",
+            "minimum": 0
+          },
+          {
+            "slot_id": "years_since_quit",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "years_since_quit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "unit": "년",
+            "minimum": 0
+          }
+        ]
+      },
+      {
+        "question_id": "Q7_1",
+        "name": "Q7_1",
+        "order": 25,
+        "prerequisite": null,
+        "question_sentence": "Q7_1 문항입니다. 알려 주세요.",
+        "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+        "guide_sentences": [],
+        "affected_followups": [],
+        "policy": {
+          "question_limit": 3,
+          "unknown_accept_after": 2,
+          "refusal_accept_after": 2
+        },
+        "repeat_keys": [
+          "soju",
+          "beer",
+          "spirits",
+          "makgeolli",
+          "wine"
+        ],
+        "slots": [
+          {
+            "slot_id": "amount",
+            "units": [],
+            "choices": [],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "amount을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "number",
+            "minimum": 0
+          },
+          {
+            "slot_id": "unit",
+            "units": [],
+            "choices": [
+              "bottle",
+              "can",
+              "cc",
+              "glass"
+            ],
+            "yes_no_map": null,
+            "required": true,
+            "reask_sentence": "unit을(를) 다시 말씀해 주세요.",
+            "risk_rule": null,
+            "data_type": "option"
+          }
+        ]
+      }
+    ],
+    "session_settings": {
+      "risk_phrases": [],
+      "confirm_limit": 2,
+      "unrecognized_streak_limit": 2,
+      "ask_limit": 3,
+      "fixed_sentences": [
+        {
+          "key": "ASK_REPEAT",
+          "sentence": "다시 한 번 말씀해 주세요."
+        },
+        {
+          "key": "OOS_NOTICE",
+          "sentence": "문진과 관계없는 말씀은 도와드리기 어렵습니다."
+        },
+        {
+          "key": "CALL_STAFF",
+          "sentence": "직원을 불러 드리겠습니다. 잠시만 기다려 주세요."
+        },
+        {
+          "key": "FAREWELL",
+          "sentence": "문진이 끝났습니다. 수고하셨습니다."
+        },
+        {
+          "key": "ASK_CONFIRM",
+          "sentence": "어느 쪽이 맞는지 말씀해 주세요."
+        },
+        {
+          "key": "ASK_CORRECTION_TARGET",
+          "sentence": "어느 항목을 고칠까요?"
+        },
+        {
+          "key": "ASK_FINISH",
+          "sentence": "다 여쭤봤습니다. 이대로 마칠까요?"
+        },
+        {
+          "key": "RISK_NOTICE",
+          "sentence": "바로 직원을 불렀습니다. 그 자리에 계셔 주세요."
+        },
+        {
+          "key": "RESUME",
+          "sentence": "다시 이어서 여쭙겠습니다."
+        },
+        {
+          "key": "SURVEY_STOPPED",
+          "sentence": "문진을 여기서 마치겠습니다."
+        },
+        {
+          "key": "WAIT_NOTICE",
+          "sentence": "잠시만 기다려 주세요."
+        },
+        {
+          "key": "ASK_STOP",
+          "sentence": "그만하시겠어요?"
+        },
+        {
+          "key": "STAFF_NOTICE",
+          "sentence": "직원을 불러 드렸습니다. 문진은 이어서 하겠습니다."
+        },
+        {
+          "key": "DEFERRED",
+          "sentence": "나중에 다시 여쭙겠습니다."
+        }
+      ],
+      "guide_list": []
+    }
+  },
+  "utterance": "네"
+}

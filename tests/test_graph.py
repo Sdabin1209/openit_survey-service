@@ -5,8 +5,9 @@ import time
 
 import pytest
 
-from survey_service import graph as G
-from survey_service.graph import COLUMNS, TurnCtx, initial_state, route
+from survey_service.components import turn_route as G
+from survey_service.components.turn_route import COLUMNS, route
+from survey_service.wiring.turn_graph import TurnCtx, initial_state
 
 from .e2e_support import Rig, ScriptedRisk, ext, val
 

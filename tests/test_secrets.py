@@ -4,8 +4,8 @@ import logging
 
 import pytest
 
-from survey_service.clients import http_release_reader, http_trace_ingest
-from survey_service.service import App
+from survey_service.components.link_boundary_clients import http_release_reader, http_trace_ingest
+from survey_service.wiring.app import App
 from survey_service.settings import ConfigError, Settings
 
 API, STAFF = "api-secret-AAA111", "staff-secret-BBB222"

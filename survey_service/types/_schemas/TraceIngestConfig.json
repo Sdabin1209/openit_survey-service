@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TraceIngestConfig",
+  "description": "Trace 수집 SDK(I6, HttpTraceIngest) 클라이언트를 만드는 설정(환경 변수 이름 -> 값). 이 모듈은 서비스 진입점 쪽이라 환경을 읽는다. 토큰 '값'은 담지 않는다: 토큰은 <TOKEN_ENV>_FILE(파일 경로, 운영) 또는 개발용 환경 변수 <TOKEN_ENV>로 받는다(D84). 모르는 키(다른 설정)는 허용한다.",
+  "type": "object",
+  "required": [
+    "SURVEY_TRACE_INGEST_URL"
+  ],
+  "properties": {
+    "SURVEY_TRACE_INGEST_URL": {
+      "type": "string",
+      "pattern": "^https?://\\S+$(?![\\s\\S])",
+      "description": "base URL. http:// 또는 https://로 시작해야 한다(클라이언트가 거부)"
+    },
+    "SURVEY_TRACE_INGEST_TOKEN_ENV": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$(?![\\s\\S])",
+      "description": "토큰을 담은 환경 변수의 '이름'. 기본 SURVEY_TRACE_INGEST_TOKEN"
+    },
+    "SURVEY_TRACE_INGEST_TOKEN_FILE": {
+      "type": "string",
+      "minLength": 1,
+      "description": "토큰 파일 경로"
+    },
+    "SURVEY_TRACE_INGEST_TOKEN": {
+      "type": "string",
+      "minLength": 1,
+      "description": "개발·시험용 호환. 운영은 _FILE"
+    },
+    "SURVEY_HTTP_TIMEOUT_SECONDS": {
+      "type": "string",
+      "pattern": "^(?!0+(\\.0+)?$)[0-9]+(\\.[0-9]+)?$(?![\\s\\S])",
+      "description": "초. 양의 소수 문자열. 기본 10 (settings.http_timeout_seconds). 0 이하는 urllib에서 비차단·오류가 되어 막는다"
+    }
+  },
+  "if": {
+    "not": {
+      "required": [
+        "SURVEY_TRACE_INGEST_TOKEN_ENV"
+      ]
+    }
+  },
+  "then": {
+    "anyOf": [
+      {
+        "required": [
+          "SURVEY_TRACE_INGEST_TOKEN_FILE"
+        ]
+      },
+      {
+        "required": [
+          "SURVEY_TRACE_INGEST_TOKEN"
+        ]
+      }
+    ]
+  }
+}

@@ -51,7 +51,7 @@ def test_dockerfile_does_not_default_labels_to_values_imagelabels_rejects():
 
 def test_smoke_scripts_use_tokens_that_pass_the_minimum_length_rule():
     """smoke.sh가 주는 토큰이 시작 검사(service.MIN_TOKEN_CHARS, ADR-0024)를 통과한다. 이전에는 15자 토큰이라 이미지가 시작하지 못했다."""
-    from survey_service.service import MIN_TOKEN_CHARS
+    from survey_service.wiring.app import MIN_TOKEN_CHARS
     text = (ROOT / "scripts/smoke.sh").read_text()
     literals = set(re.findall(r"SURVEY_[A-Z_]*TOKEN=([A-Za-z0-9._-]+)", text))
     literals |= set(re.findall(r"printf '([A-Za-z0-9._-]+)\\n' > \"\$SECRET_DIR/\w*token\"", text))

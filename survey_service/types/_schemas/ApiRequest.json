@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApiRequest",
+  "description": "공개 API(I10)와 직원 면의 요청 하나(handle의 인자를 구조로 푼 것). 경로·메서드는 알려진 경로여야 하고(아니면 404), 헤더·쿼리·본문의 형식 조건은 경로별로 아래에 적었다. 본문의 종류별 조건은 엔드포인트별 본문 타입(SessionStartBody, UtteranceBody, SessionEndBody, InterventionBody, PushSubscribeBody, PushUnsubscribeBody, StaffCallRetryBody, StaffCallReportBody, RiskSignalBody)이 정한다. query 값은 같은 키가 여러 번이면 첫 값만 쓴다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "method",
+    "path",
+    "headers"
+  ],
+  "properties": {
+    "method": {
+      "enum": [
+        "GET",
+        "POST",
+        "DELETE"
+      ]
+    },
+    "path": {
+      "type": "string",
+      "description": "쿼리 문자열을 뗀 경로"
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization"
+      ],
+      "properties": {
+        "authorization": {
+          "type": "string",
+          "pattern": "^Bearer .+",
+          "description": "토큰 값은 스키마가 보지 않는다(비교는 스키마 밖)"
+        },
+        "x-openit-user": {
+          "type": "string",
+          "description": "게이트웨이가 인증한 직원 계정 ID. 직원 개입에서만 필수"
+        },
+        "x-openit-device": {
+          "type": "string",
+          "description": "게이트웨이가 mTLS로 확인한 키오스크 기기 ID. 키오스크 경로에서만 형식을 본다"
+        }
+      }
+    },
+    "body": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "파싱한 JSON 객체. POST만 가진다"
+    },
+    "body_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65536,
+      "description": "원문 본문의 바이트 수. 상한 64 KiB(MAX_BODY)"
+    }
+  },
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "properties": {
+            "method": {
+              "const": "GET"
+            },
+            "path": {
+              "pattern": "^/v1/staff/alerts$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "GET"
+            },
+            "path": {
+              "pattern": "^/v1/results/[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "GET"
+            },
+            "path": {
+              "pattern": "^/v1/results$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/risk-signals$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "GET"
+            },
+            "path": {
+              "pattern": "^/v1/staff/sessions/[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "GET"
+            },
+            "path": {
+              "pattern": "^/v1/staff/push-config$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "pattern": "^/v1/staff/push-subscriptions$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "pattern": "^/v1/staff/push-subscriptions/unsubscribe$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "DELETE"
+            },
+            "path": {
+              "pattern": "^/v1/staff/push-subscriptions$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "pattern": "^/v1/sessions$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/staff-call/(retry|report)$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "POST"
+            },
+            "path": {
+              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/(turns|end|intervention)$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "GET"
+            },
+            "path": {
+              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/state$(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ]
+        }
+      ]
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "POST"
+          }
+        },
+        "required": [
+          "method"
+        ]
+      },
+      "then": {
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "body": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "path": {
+            "pattern": "^/v1/sessions(/[A-Za-z0-9_-]{1,64}/(turns|end|state|staff-call/(retry|report)))?$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "then": {
+        "properties": {
+          "headers": {
+            "properties": {
+              "x-openit-device": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "POST"
+          },
+          "path": {
+            "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/intervention$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ]
+      },
+      "then": {
+        "properties": {
+          "headers": {
+            "required": [
+              "x-openit-user"
+            ],
+            "properties": {
+              "x-openit-user": {
+                "pattern": "^[A-Za-z0-9._:@/#=+-]{1,128}$(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "GET"
+          },
+          "path": {
+            "pattern": "^/v1/staff/alerts$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ]
+      },
+      "then": {
+        "properties": {
+          "query": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "OPEN",
+                  "RESOLVED"
+                ]
+              },
+              "limit": {
+                "pattern": "^0*([1-9]|[1-9][0-9]|1[0-9]{2}|200)$(?![\\s\\S])"
+              },
+              "cursor": {
+                "pattern": "^[0-9]+$(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "GET"
+          },
+          "path": {
+            "pattern": "^/v1/results$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ]
+      },
+      "then": {
+        "properties": {
+          "query": {
+            "type": "object",
+            "properties": {
+              "subject_ref": {
+                "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])"
+              },
+              "status": {
+                "enum": [
+                  "IN_PROGRESS",
+                  "PAUSED_RISK",
+                  "ENDED_COMPLETE",
+                  "ENDED_STAFF",
+                  "ENDED_LEFT",
+                  "ENDED_USER_STOP"
+                ]
+              },
+              "limit": {
+                "pattern": "^0*([1-9]|[1-9][0-9]|1[0-9]{2}|200)$(?![\\s\\S])"
+              },
+              "updated_after": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$(?![\\s\\S])",
+                "description": "ISO 8601"
+              },
+              "cursor": {
+                "pattern": "^[0-9]{1,18}$(?![\\s\\S])"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "method": {
+            "const": "DELETE"
+          },
+          "path": {
+            "pattern": "^/v1/staff/push-subscriptions$(?![\\s\\S])"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ]
+      },
+      "then": {
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "object",
+            "required": [
+              "endpoint"
+            ],
+            "properties": {
+              "endpoint": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

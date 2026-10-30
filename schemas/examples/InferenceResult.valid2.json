@@ -1,0 +1,9 @@
+{
+  "op": "respond",
+  "output": "네, 알겠습니다.",
+  "outcome": "fallback",
+  "attempts": 2,
+  "protections": {
+    "G0": 1
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FieldSpecIssues",
+  "description": "계약 QuestionFieldSpec을 어기는 칸의 목록(field_specs 출력). 항목은 '문항.칸: 이유'이고, 자료형이 적힌 칸이 하나도 없으면 '(자료형이 적힌 칸이 하나도 없다)' 한 줄이다. 빈 배열이면 문제 없음.",
+  "type": "array",
+  "items": {
+    "type": "string",
+    "minLength": 1
+  }
+}

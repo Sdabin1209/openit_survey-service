@@ -8,11 +8,12 @@ import pytest
 from boundary_contracts import BoundaryError
 
 import survey_schema
-from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore
-from survey_service.api import PublicApi
-from survey_service.remote import _timed_out
-from survey_service.risk_rules import RuleRiskSource, parse_rules
-from survey_service.service import App
+from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+from survey_service.components.alert_book import AlertStore
+from survey_service.components.link_public_api import PublicApi
+from survey_service.components.link_inference import _timed_out
+from survey_service.components.risk_screen import RuleRiskSource, parse_rules
+from survey_service.wiring.app import App
 from survey_service.settings import ConfigError, Settings
 
 from .e2e_support import ANSWER_OUT, Rig, ext, val
@@ -119,7 +120,7 @@ def test_read_is_refused_when_access_cannot_be_logged(vr):
     converse(vr)
 
     def boom(*a, **k):
-        from survey_service.errors import StoreError
+        from survey_service.wiring.errors import StoreError
         raise StoreError("x")
     vr.store.log_access_many = boom
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")
@@ -311,7 +312,7 @@ def test_timeout_classification():
 # ---------------------------------------------------------------- 결과 전달 대상 없음
 def test_unattached_dispatcher_is_a_status_not_an_error(caplog):
     rig = Rig()
-    from survey_service.ports import UnattachedDispatcher
+    from survey_service.wiring.ports import UnattachedDispatcher
     rig.orch.dispatcher = UnattachedDispatcher()
     rig.start()
     with caplog.at_level(logging.INFO, logger="survey_service"):

@@ -10,8 +10,8 @@ import time
 import pytest
 from boundary_contracts import BoundaryError
 
-from survey_service.orchestrator import Orchestrator
-from survey_service.remote import RemoteInference
+from survey_service.wiring.orchestrator import Orchestrator
+from survey_service.components.link_inference import RemoteInference
 from survey_service.settings import Settings
 
 from .fakes import RecordingConsole, RecordingDispatcher

@@ -2,7 +2,7 @@
 import copy
 import time
 
-from survey_service.graph import effective_reask_cap
+from survey_service.components.reask_cap import effective_reask_cap
 from tests.sample_bank import sample_bank
 
 from .test_service import get, running  # noqa: F401  (픽스처 running)

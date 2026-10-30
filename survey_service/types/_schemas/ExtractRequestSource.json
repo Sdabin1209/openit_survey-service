@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtractRequestSource",
+  "description": "모델 추출 입력의 원천(extract_request 입력). 세션 문서·문항 세트·문항 흐름·환자 발화. 건너뛴 문항과 직전 문항, 참조 원천 문항, 칸 순서는 이 컴포넌트가 flow 문서에서 스스로 계산한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session",
+    "bank",
+    "flow",
+    "utterance"
+  ],
+  "properties": {
+    "session": {
+      "type": "object",
+      "x-survey-schema": "SessionStore",
+      "description": "세션 문서(progress_record.current_question_id, answer_records, open_slots, dialogue_log를 읽는다)."
+    },
+    "bank": {
+      "type": "object",
+      "x-survey-schema": "QuestionBank",
+      "description": "문항 세트(직전 응답이 없을 때 현재 문항의 질문 문장을 찾는다)."
+    },
+    "flow": {
+      "type": "object",
+      "x-survey-schema": "QuestionFlow",
+      "description": "문항 흐름."
+    },
+    "utterance": {
+      "type": "string",
+      "minLength": 1,
+      "description": "환자 발화 1턴(ActionExtractionInput.user_utterance와 같은 조건)."
+    }
+  }
+}

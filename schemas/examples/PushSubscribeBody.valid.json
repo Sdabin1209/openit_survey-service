@@ -1,0 +1,7 @@
+{
+  "endpoint": "https://push.example.com/send/abc123",
+  "keys": {
+    "p256dh": "BNc-test-key",
+    "auth": "authsecret"
+  }
+}

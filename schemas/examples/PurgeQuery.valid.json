@@ -1,0 +1,8 @@
+{
+  "mode": "PERIOD",
+  "now": 1760400000,
+  "retention_days": 90,
+  "access_log_days": 365,
+  "alert_days": 365,
+  "dead_outbox_days": 30
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RiskScreenResult",
+  "description": "위험 문구 가려내기 출력. 걸리지 않으면 null, 걸리면 직원 알림 하나(문진 스키마의 StaffAlert 모양: kind RISK, 이유 하나 RISK_SIGNAL). 이유의 evidence에는 발화 원문이 아니라 signal:internal:<규칙 id>만 넣는다. 계약 StaffAlert(alert_id 등을 가진 저장된 알림)와 다른 타입이다.",
+  "oneOf": [
+    {
+      "type": "null"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "reasons"
+      ],
+      "properties": {
+        "kind": {
+          "const": "RISK"
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "evidence"
+            ],
+            "properties": {
+              "kind": {
+                "const": "RISK_SIGNAL"
+              },
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^signal:internal:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

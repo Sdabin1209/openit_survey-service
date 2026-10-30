@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StaffCallRetryBody",
+  "description": "POST /v1/sessions/{id}/staff-call/retry 본문. 계약 StaffCallRetryRequest에 서비스의 turn_id 형식(영문·숫자로 시작, 128자 이내, 예약 값 불가)을 더했다.",
+  "type": "object",
+  "x-contract": "StaffCallRetryRequest",
+  "additionalProperties": false,
+  "required": [
+    "turn_id"
+  ],
+  "properties": {
+    "turn_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "not": {
+        "enum": [
+          "start",
+          "end",
+          "idle-expire"
+        ]
+      }
+    }
+  }
+}

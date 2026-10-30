@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from survey_service.service import main
+from survey_service.server import main
 from survey_service.settings import ConfigError, Settings
 
 BASE = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}

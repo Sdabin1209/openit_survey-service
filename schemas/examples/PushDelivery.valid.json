@@ -1,0 +1,14 @@
+{
+  "subscription": {
+    "endpoint": "https://push.example.com/send/abc123",
+    "keys": {
+      "p256dh": "BNc-test-key",
+      "auth": "authsecret"
+    }
+  },
+  "payload": {
+    "session_id": "s-1",
+    "kind": "RISK_STOP",
+    "alert_id": "a1"
+  }
+}

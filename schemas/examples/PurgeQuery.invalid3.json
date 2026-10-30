@@ -1,0 +1,5 @@
+{
+  "mode": "PERIOD",
+  "retention_days": 90,
+  "session_id": "s-1"
+}

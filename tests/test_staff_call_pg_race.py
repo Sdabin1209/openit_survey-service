@@ -4,7 +4,8 @@ import threading
 
 import pytest
 
-from survey_service.alerts import PgAlertStore, StaffCallRejected
+from survey_service.components.alert_book import PgAlertStore
+from survey_service.wiring.errors import StaffCallRejected
 
 from . import pg_container
 

@@ -4,12 +4,12 @@ import logging
 
 import pytest
 
-from survey_service.alerts import AlertStore, PgAlertStore
-from survey_service.errors import StoreError
-from survey_service.pg import translate
-from survey_service.store.postgres import PgSessionStore
-from survey_service.trace.outbox import Outbox
-from survey_service.trace.pg_outbox import PgOutbox
+from survey_service.components.alert_book import AlertStore, PgAlertStore
+from survey_service.wiring.errors import StoreError
+from survey_service.wiring.pg import translate
+from survey_service.components.session_store import PgSessionStore
+from survey_service.components.trace_outbox import Outbox
+from survey_service.components.trace_outbox import PgOutbox
 
 from .pg_support import kill_connection, pg_url
 
@@ -165,7 +165,7 @@ def test_bad_url_is_store_error_without_secret():
 
 
 def test_app_with_database_url_reports_kind_and_never_exposes_url(request, tmp_path, monkeypatch):
-    from survey_service.service import App
+    from survey_service.wiring.app import App
     from survey_service.settings import Settings
     from .fakes import FakeReleaseReader, FakeTraceIngest
     from .sample_bank import sample_bank
@@ -196,7 +196,7 @@ def test_app_with_database_url_reports_kind_and_never_exposes_url(request, tmp_p
 
 
 def test_app_default_is_sqlite_kind(tmp_path):
-    from survey_service.service import App
+    from survey_service.wiring.app import App
     from survey_service.settings import Settings
     from .fakes import FakeReleaseReader, FakeTraceIngest
     env = {"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),

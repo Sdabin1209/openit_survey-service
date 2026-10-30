@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/v1/sessions",
+  "headers": {
+    "authorization": "Bearer t"
+  },
+  "body": {
+    "kind": "SESSION_START"
+  },
+  "body_bytes": 70000
+}

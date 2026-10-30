@@ -7,10 +7,11 @@ import time
 import pytest
 from boundary_contracts import BoundaryError
 
-from survey_service.orchestrator import Orchestrator
-from survey_service.release import ReleaseLoader, ReleaseRegistry
-from survey_service.remote import RemoteInference, Stats
-from survey_service.store.memory import MemorySessionStore
+from survey_service.wiring.orchestrator import Orchestrator
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.components.link_inference import RemoteInference, Stats
+from survey_service.components.session_store import MemorySessionStore
 
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .runtime_support import FlakyRuntime, raw_response, redirect_extraction
@@ -99,7 +100,7 @@ def test_slow_respond_fails_after_commit_state_is_kept(env):
         env.srv.delay = 2.0
         return real(req)
     env.registry.active().session.respond = slow_respond
-    from survey_service.store.effects import answers_by_key
+    from survey_service.components.session_store import answers_by_key
     env.srv.extract_fn = lambda req: {"action": "NEXT", "next_item": "Q1.D02", "values": [
         {"key": "Q1.D01.diagnosed", "value": True, "precision": "exact", "status": "ANSWERED", "save": True}]}
     o = env.turn()

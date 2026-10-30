@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoreLoadResult",
+  "description": "세션 조회 결과. OK면 revision(1 이상 정수)과 state(문진 스키마 SessionStore 모양의 세션 문서)가 있고, NOT_FOUND·DB_ERROR면 둘 다 null이다(DB 오류는 예외가 아니라 값으로 낸다). state는 null을 허용하는 자리라 x-survey-schema 위임을 못 쓰고 object로만 적는다(schemas/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "status",
+    "revision",
+    "state"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "OK",
+        "NOT_FOUND",
+        "DB_ERROR"
+      ]
+    },
+    "revision": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "state": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "OK"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "revision": {
+            "type": "null"
+          },
+          "state": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "configured": true,
+  "retention_days": 90,
+  "purged_sessions": 2,
+  "purged_access_log": 0
+}

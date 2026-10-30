@@ -64,12 +64,21 @@ LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
 # 노출 선언(계약 Exposure): 정본은 리포 안 deploy-exposure.json. 이미지 라벨 io.openit.exposure(JSON 한 줄 문자열)로 단다(ADR-0041)
 EXPOSURE=$("$PYTHON" -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1],encoding="utf-8")),ensure_ascii=False,separators=(",",":")))' deploy-exposure.json) || die "deploy-exposure.json을 읽지 못했다"
 
+# 2-1) 통신 기반 라이브러리 link(D118)의 소스: BuildImageRequest(계약 3.1.1)의 dependency_sources에는 link 키가 없다(변경 요청 CR-link-001 말미).
+#      그래서 requirements.txt가 고정한 태그를 빌드 호스트에서 한 번 받아 이름 있는 빌드 컨텍스트로 준다(Dockerfile 안에서는 네트워크를 쓰지 않는다).
+LINK_LINE=$(sed -n 's/^openit-link @ git+\(ssh:\/\/.*\)\.git@\(v[0-9.]*\)$/\1 \2/p' requirements.txt | head -1)
+[ -n "$LINK_LINE" ] || die "requirements.txt에서 openit-link 고정 줄을 읽지 못했다"
+LINK_TMP=$(mktemp -d); trap 'rm -rf "$LINK_TMP"' EXIT
+git clone -q --depth 1 --branch "${LINK_LINE#* }" "${LINK_LINE% *}.git" "$LINK_TMP/link" >&2 || die "link ${LINK_LINE#* }을 받지 못했다(GitHub ssh 접근 확인)"
+LINK_ACTUAL=$(pkg_version "$LINK_TMP/link" openit-link) || exit 1
+[ "$LINK_ACTUAL" = "${LINK_LINE#* }" ] || die "받은 link의 실제 버전($LINK_ACTUAL)이 requirements.txt 고정(${LINK_LINE#* })과 다르다"
+
 # 3) 빌드: 이웃 소스는 이름 있는 빌드 컨텍스트로 준다(Dockerfile이 pip로 설치). 빌드 출력은 표준 오류로 보낸다.
 echo "build-image: $IMAGE_TAG (revision $REVISION, boundary $BOUNDARY_ACTUAL, model-runtime $MODEL_RUNTIME_ACTUAL)" >&2
 "$DOCKER" build -t "$IMAGE_TAG" \
   --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_ACTUAL" --build-arg SURVEY_SCHEMA_MAJOR="$SURVEY_SCHEMA_MAJOR" \
   --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_ACTUAL" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" \
-  --label "io.openit.exposure=$EXPOSURE" --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" . >&2
+  --label "io.openit.exposure=$EXPOSURE" --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" --build-context "openit_link=$LINK_TMP/link" . >&2
 
 # 3-1) 이미지에 실제로 설치된 버전이 라벨과 같은지 확인한다(U50). 다르면 이미지를 지우고 실패한다.
 INSTALLED=$("$DOCKER" run --rm --entrypoint python "$IMAGE_TAG" -c "import importlib.metadata as m; print(m.version('boundary-contracts')); print(m.version('model-runtime')); print(m.version('openit-survey-schema'))") || die "이미지에서 설치된 버전을 읽지 못했다"

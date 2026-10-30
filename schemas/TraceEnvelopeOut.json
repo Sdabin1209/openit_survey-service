@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TraceEnvelopeOut",
+  "description": "Trace 봉투. 형식은 계약 TraceEnvelope가 정본이다(복사하지 않는다).",
+  "type": "object",
+  "x-contract": "TraceEnvelope"
+}

@@ -7,10 +7,10 @@ name = "openit-survey-service"
 version = "0.2.0"
 description = "openit 문진 서비스: Orchestrator, Session Store, 릴리스 로더, Trace 내보내기."
 requires-python = ">=3.10"
-dependencies = ["langgraph>=1.2,<1.3", "pywebpush>=2.5,<3", "jsonschema>=4.10", "boundary-contracts", "model-runtime", "openit-survey-schema", "psycopg[binary]==3.3.6", "waitress==3.0.2", "yoyo-migrations==9.0.0"]
+dependencies = ["langgraph>=1.2,<1.3", "pywebpush>=2.5,<3", "jsonschema>=4.10", "boundary-contracts", "openit-link", "model-runtime", "openit-survey-schema", "psycopg[binary]==3.3.6", "waitress==3.0.2", "yoyo-migrations==9.0.0"]
 
 [tool.setuptools]
-packages = ["survey_service", "survey_service.store", "survey_service.release", "survey_service.trace"]
+packages = ["survey_service", "survey_service.components", "survey_service.wiring", "survey_service.types"]
 
 [tool.setuptools.package-data]
 survey_service = ["migrations/*/*.sql", "migrations/*/*.py"]

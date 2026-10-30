@@ -1,0 +1,3 @@
+{
+  "SURVEY_TRACE_INGEST_TOKEN_FILE": "/run/secrets/token"
+}

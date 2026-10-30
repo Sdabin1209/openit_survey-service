@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SessionStartBody",
+  "description": "POST /v1/sessions 본문(세션 시작). turn_id는 API 봉투 필드(멱등 키, 없으면 서버가 'start'), subject_ref는 세션 메타라 문진 메시지 밖이다. 나머지는 문진 스키마 FrontendMessage의 SESSION_START와 같다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "const": "SESSION_START"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])",
+      "description": "생략하면 서버가 발급한다. 정해 보내는 방식은 폐기 예정(3.0.0 제거)"
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "description": "예약 값 start·end·idle-expire도 허용"
+    },
+    "subject_ref": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])",
+          "description": "병원이 정한 불투명 환자·방문 참조"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

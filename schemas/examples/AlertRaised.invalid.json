@@ -1,0 +1,6 @@
+{
+  "op": "retry_staff_call",
+  "rejected": {
+    "kind": "INTERVAL"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "session_id": "K1",
+  "subject_ref": "PT-ref#001",
+  "status": "ENDED_LEFT",
+  "started_at": "2026-10-30T07:09:28Z",
+  "ended_at": "2026-10-30T07:09:28Z",
+  "release_id": "rel-e2e-1",
+  "question_bank_version": "1",
+  "answers": [
+    {
+      "key": "Q1.D01.diagnosed",
+      "value": false,
+      "status": "ANSWERED",
+      "precision": "exact"
+    },
+    {
+      "key": "Q1.D01.on_medication",
+      "value": false,
+      "status": "ANSWERED",
+      "precision": "exact"
+    }
+  ],
+  "skipped_details": []
+}

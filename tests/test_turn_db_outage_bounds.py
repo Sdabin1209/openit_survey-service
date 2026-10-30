@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from survey_service import pg
-from survey_service.api import PublicApi
+from survey_service.wiring import pg
+from survey_service.components.link_public_api import PublicApi
 from survey_service.settings import Settings
-from survey_service.store.postgres import PgSessionStore
+from survey_service.components.session_store import PgSessionStore
 
 from .e2e_support import Rig
 from .pg_support import pg_url

@@ -1,0 +1,66 @@
+"""생성 파일(scripts/gen_types.py). 손으로 고치지 않는다."""
+from .validation import SchemaViolation, errors, schema, validate  # noqa: F401
+
+from .ActivePointer import ActivePointer  # noqa: F401
+from .AlertRaise import AlertRaise  # noqa: F401
+from .AlertRaised import AlertRaised  # noqa: F401
+from .AlertRead import AlertRead  # noqa: F401
+from .AlertWrite import AlertWrite  # noqa: F401
+from .ApiRequest import ApiRequest  # noqa: F401
+from .ApiResponse import ApiResponse  # noqa: F401
+from .BankView import BankView  # noqa: F401
+from .BlankDetails import BlankDetails  # noqa: F401
+from .DispatchInput import DispatchInput  # noqa: F401
+from .ExtractInput import ExtractInput  # noqa: F401
+from .ExtractRequestSource import ExtractRequestSource  # noqa: F401
+from .ExtractionCheckQuery import ExtractionCheckQuery  # noqa: F401
+from .ExtractionViolations import ExtractionViolations  # noqa: F401
+from .FieldSpecIssues import FieldSpecIssues  # noqa: F401
+from .FieldSpecs import FieldSpecs  # noqa: F401
+from .FlowSource import FlowSource  # noqa: F401
+from .FlowView import FlowView  # noqa: F401
+from .FlushResult import FlushResult  # noqa: F401
+from .InferenceCall import InferenceCall  # noqa: F401
+from .InferenceResult import InferenceResult  # noqa: F401
+from .InterventionBody import InterventionBody  # noqa: F401
+from .OutboxEnqueueResult import OutboxEnqueueResult  # noqa: F401
+from .OutboxEnvelope import OutboxEnvelope  # noqa: F401
+from .PollResult import PollResult  # noqa: F401
+from .PurgeQuery import PurgeQuery  # noqa: F401
+from .PurgeReport import PurgeReport  # noqa: F401
+from .PushDelivery import PushDelivery  # noqa: F401
+from .PushOutcome import PushOutcome  # noqa: F401
+from .PushSubscribeBody import PushSubscribeBody  # noqa: F401
+from .PushUnsubscribeBody import PushUnsubscribeBody  # noqa: F401
+from .QuestionBankDoc import QuestionBankDoc  # noqa: F401
+from .ReaskCap import ReaskCap  # noqa: F401
+from .ReaskCapQuery import ReaskCapQuery  # noqa: F401
+from .ReleaseBundle import ReleaseBundle  # noqa: F401
+from .ReleaseEntry import ReleaseEntry  # noqa: F401
+from .ReleaseLookup import ReleaseLookup  # noqa: F401
+from .ReleaseReaderConfig import ReleaseReaderConfig  # noqa: F401
+from .ResponseInput import ResponseInput  # noqa: F401
+from .ResponseRequestSource import ResponseRequestSource  # noqa: F401
+from .RiskScreenQuery import RiskScreenQuery  # noqa: F401
+from .RiskScreenResult import RiskScreenResult  # noqa: F401
+from .RiskSignalBody import RiskSignalBody  # noqa: F401
+from .SessionDocument import SessionDocument  # noqa: F401
+from .SessionEndBody import SessionEndBody  # noqa: F401
+from .SessionStartBody import SessionStartBody  # noqa: F401
+from .StaffCallReportBody import StaffCallReportBody  # noqa: F401
+from .StaffCallRetryBody import StaffCallRetryBody  # noqa: F401
+from .StoreCommitRequest import StoreCommitRequest  # noqa: F401
+from .StoreCommitResult import StoreCommitResult  # noqa: F401
+from .StoreLoadRequest import StoreLoadRequest  # noqa: F401
+from .StoreLoadResult import StoreLoadResult  # noqa: F401
+from .TraceEnvelopeOut import TraceEnvelopeOut  # noqa: F401
+from .TraceEnvelopeSource import TraceEnvelopeSource  # noqa: F401
+from .TraceIngestConfig import TraceIngestConfig  # noqa: F401
+from .TurnRequest import TurnRequest  # noqa: F401
+from .TurnRoute import TurnRoute  # noqa: F401
+from .TurnRouteQuery import TurnRouteQuery  # noqa: F401
+from .TurnWriteSet import TurnWriteSet  # noqa: F401
+from .UtteranceBody import UtteranceBody  # noqa: F401
+from .WritePlanQuery import WritePlanQuery  # noqa: F401
+
+__all__ = ['SchemaViolation', 'errors', 'schema', 'validate', 'ActivePointer', 'AlertRaise', 'AlertRaised', 'AlertRead', 'AlertWrite', 'ApiRequest', 'ApiResponse', 'BankView', 'BlankDetails', 'DispatchInput', 'ExtractInput', 'ExtractRequestSource', 'ExtractionCheckQuery', 'ExtractionViolations', 'FieldSpecIssues', 'FieldSpecs', 'FlowSource', 'FlowView', 'FlushResult', 'InferenceCall', 'InferenceResult', 'InterventionBody', 'OutboxEnqueueResult', 'OutboxEnvelope', 'PollResult', 'PurgeQuery', 'PurgeReport', 'PushDelivery', 'PushOutcome', 'PushSubscribeBody', 'PushUnsubscribeBody', 'QuestionBankDoc', 'ReaskCap', 'ReaskCapQuery', 'ReleaseBundle', 'ReleaseEntry', 'ReleaseLookup', 'ReleaseReaderConfig', 'ResponseInput', 'ResponseRequestSource', 'RiskScreenQuery', 'RiskScreenResult', 'RiskSignalBody', 'SessionDocument', 'SessionEndBody', 'SessionStartBody', 'StaffCallReportBody', 'StaffCallRetryBody', 'StoreCommitRequest', 'StoreCommitResult', 'StoreLoadRequest', 'StoreLoadResult', 'TraceEnvelopeOut', 'TraceEnvelopeSource', 'TraceIngestConfig', 'TurnRequest', 'TurnRoute', 'TurnRouteQuery', 'TurnWriteSet', 'UtteranceBody', 'WritePlanQuery']

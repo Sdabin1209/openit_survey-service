@@ -3,11 +3,13 @@ import pytest
 from boundary_contracts import PIPELINE_SCHEMA_VERSION, BoundaryError
 
 import model_runtime
-from survey_service.errors import ReleaseUnavailable
-from survey_service.inference import InferenceLoadError, InferenceServer
-from survey_service.orchestrator import Orchestrator
-from survey_service.release import ReleaseLoader, ReleaseRegistry
-from survey_service.store.memory import MemorySessionStore
+from survey_service.wiring.errors import ReleaseUnavailable
+from survey_service.wiring.errors import InferenceLoadError
+from survey_service.components.link_inference import InferenceServer
+from survey_service.wiring.orchestrator import Orchestrator
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.components.session_store import MemorySessionStore
 
 from .fakes import ACTION_RULES_VERSION, FakeReleaseReader, RecordingConsole
 from .sample_bank import sample_bank
@@ -269,7 +271,7 @@ def test_release_expectations_from_installed_libraries(env):
     reader, reg, loader = env
     import model_runtime
     from model_runtime.prompts import SUPPORTED_TEMPLATE_VERSIONS
-    from survey_service.inference import role_configs
+    from survey_service.components.link_inference import role_configs
     add(reader, "rel-1")
     reader.set_pointer("rel-1")
     assert loader.poll_once().action == "LOADED"

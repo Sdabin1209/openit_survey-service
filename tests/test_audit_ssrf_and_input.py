@@ -5,8 +5,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from survey_service import netguard
-from survey_service.alerts import WebPushSender
+from survey_service.wiring import netguard
+from survey_service.components.link_push import WebPushSender
 
 from .http_server_support import stop_server, connection_limit
 from .test_staff_alerts import _client_keys, _vapid_key_pem
@@ -134,7 +134,7 @@ def test_bad_content_length_and_surrogate_utterance_are_400_not_dropped_connecti
 
 
 def test_request_id_header_and_json_log_field(tmp_path, monkeypatch):
-    from survey_service.service import JsonFormatter, _REQ
+    from survey_service.wiring.app import JsonFormatter, _REQ
     app, httpd, port = make_app(tmp_path, monkeypatch)
     try:
         c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
@@ -223,7 +223,7 @@ def test_deeply_nested_body_is_400_not_a_dropped_connection(tmp_path, monkeypatc
             body = ("[" * depth + "]" * depth).encode()
             r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
             assert b" 400 " in r.split(b"\r\n", 1)[0], (depth, r[:80])
-        from survey_service.api import _has_surrogate
+        from survey_service.components.link_public_api import _has_surrogate
         deep = cur = []
         for _ in range(20000):
             nxt = []

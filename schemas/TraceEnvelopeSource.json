@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TraceEnvelopeSource",
+  "description": "Trace 봉투 입력. 릴리스 ID는 봉투의 Id 형식이어야 하고(바깥 ID는 컴포넌트가 바꾸지만 release_id는 그대로 담는다), trace는 문진 스키마 TurnTrace이며, now는 봉투 sent_at이 될 시각(epoch 초, 주입된 시계)이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "release_id",
+    "trace",
+    "now"
+  ],
+  "properties": {
+    "release_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "봉투 release_id(계약 Id 형식)"
+    },
+    "trace": {
+      "type": "object",
+      "x-survey-schema": "TurnTrace",
+      "description": "한 턴의 Trace 전체"
+    },
+    "now": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 253402300799,
+      "description": "epoch 초. 상한은 datetime의 9999년 한계(변환이 그 위에서 실패한다)"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "SURVEY_TRACE_INGEST_URL": "ftp://x",
+  "SURVEY_TRACE_INGEST_TOKEN_FILE": "/run/secrets/token"
+}

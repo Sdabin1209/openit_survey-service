@@ -8,7 +8,8 @@ import urllib.request
 import pytest
 
 from survey_service.settings import ConfigError, Settings, load_factory
-from survey_service.service import App, serve
+from survey_service.wiring.app import App
+from survey_service.server import serve
 
 from .http_server_support import server_port, start_server, stop_server
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
@@ -117,7 +118,7 @@ def test_load_factory():
 
 
 def test_unknown_model_backend_refuses_to_start(tmp_path):
-    from survey_service.inference import InferenceLoadError
+    from survey_service.wiring.errors import InferenceLoadError
     with pytest.raises(InferenceLoadError):
         App(settings(tmp_path, model_backend="vllm"), reader=object(), ingest=object())
 

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DispatchInput",
+  "description": "결과 전달 입력. 형식은 문진 스키마 DispatchInput이 정본이다(복사하지 않는다). 세션 문서에서 고르기만 한다.",
+  "type": "object",
+  "x-survey-schema": "DispatchInput"
+}

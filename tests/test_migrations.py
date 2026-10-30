@@ -3,10 +3,10 @@ import sqlite3
 
 import pytest
 
-from survey_service.alerts import AlertStore
+from survey_service.components.alert_book import AlertStore
 from survey_service.migrate import migrate
-from survey_service.store.sqlite import SqliteSessionStore
-from survey_service.trace.outbox import Outbox
+from survey_service.components.session_store import SqliteSessionStore
+from survey_service.components.trace_outbox import Outbox
 
 LEGACY_SESSIONS = """
 CREATE TABLE sessions (session_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, release_id TEXT NOT NULL, status TEXT NOT NULL, doc TEXT NOT NULL, updated_at REAL NOT NULL DEFAULT 0);
@@ -63,7 +63,7 @@ def test_migrate_twice_is_a_noop(tmp_path):
 
 
 def test_migration_error_does_not_leak_the_target():
-    from survey_service.errors import StoreError
+    from survey_service.wiring.errors import StoreError
     with pytest.raises(StoreError) as e:
         migrate("postgresql", "postgresql://user:SECRETPW@127.0.0.1:1/db")
     assert "SECRETPW" not in str(e.value) and "user" not in str(e.value)

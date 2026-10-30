@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FlushResult",
+  "description": "버퍼를 한 번 비운 결과. retried가 있으면 수집이 일시 불능이라 쉬는 중(paused)이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sent",
+    "duplicate",
+    "retried",
+    "dead",
+    "paused"
+  ],
+  "properties": {
+    "sent": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "duplicate": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "retried": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "한 번에 최대 1건(불능이면 나머지를 쉰다)"
+    },
+    "dead": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "paused": {
+      "type": "boolean"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "retried": {
+            "const": 1
+          }
+        },
+        "required": [
+          "retried"
+        ]
+      },
+      "then": {
+        "properties": {
+          "paused": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "paused": {
+            "const": true
+          }
+        },
+        "required": [
+          "paused"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sent": {
+            "maximum": 49
+          }
+        },
+        "description": "paused면 이번 주기에 더 보내지 않는다"
+      }
+    }
+  ]
+}

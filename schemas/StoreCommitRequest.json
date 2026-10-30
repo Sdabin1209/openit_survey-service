@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoreCommitRequest",
+  "description": "세션 쓰기 확정 요청. writes는 write_plan이 낸 TurnWriteSet이다(그 타입의 정의는 write_plan 쪽 schemas/TurnWriteSet.json이 정본이고, 파일 사이 $ref를 쓰지 않으므로 여기서는 최상위 두 키만 본다). expected_revision이 저장된 revision과 다르면 REVISION_CONFLICT 결과를 낸다(거부가 아니라 값). trace_envelope가 있으면 같은 트랜잭션에 Trace 버퍼의 예약 행을 쓴다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "expected_revision",
+    "writes",
+    "turn_id",
+    "input_hash"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected_revision": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "turn_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_hash": {
+      "type": "string",
+      "minLength": 1,
+      "description": "턴 입력의 해시(멱등 기록용 문자열)"
+    },
+    "writes": {
+      "type": "object",
+      "required": [
+        "answer_updates",
+        "progress_record_update"
+      ],
+      "properties": {
+        "answer_updates": {
+          "type": "array"
+        },
+        "progress_record_update": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "description": "TurnWriteSet"
+    },
+    "trace_envelope": {
+      "type": "object",
+      "x-contract": "TraceEnvelope",
+      "description": "있으면 같은 트랜잭션에 Trace 예약 행을 쓴다"
+    }
+  }
+}

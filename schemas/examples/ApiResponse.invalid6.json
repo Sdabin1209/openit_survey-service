@@ -1,0 +1,12 @@
+{
+  "status": 503,
+  "headers": {
+    "Retry-After": "1"
+  },
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "UNAVAILABLE",
+    "message": "x",
+    "retryable": false
+  }
+}

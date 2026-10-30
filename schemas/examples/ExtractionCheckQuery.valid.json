@@ -1,0 +1,305 @@
+{
+  "output": {
+    "action": "NEXT",
+    "next_item": "Q5",
+    "values": [
+      {
+        "key": "Q4_1.daily_count",
+        "value": 10,
+        "precision": "exact",
+        "status": "ANSWERED",
+        "save": true
+      }
+    ]
+  },
+  "session": {
+    "session_info": {
+      "session_id": "S-0001",
+      "question_bank_version": 1
+    },
+    "answer_records": [
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": {
+          "answer": true
+        },
+        "risk_mark": null,
+        "history": [],
+        "precision": "exact"
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      }
+    ],
+    "progress_record": {
+      "current_question_id": "Q4_1",
+      "open_slots": [
+        {
+          "key": "Q4_1.daily_count",
+          "status": "MISSING"
+        }
+      ],
+      "skipped": [],
+      "session_status": "IN_PROGRESS",
+      "pause_history": []
+    },
+    "dialogue_log": [],
+    "dispatch_log": []
+  },
+  "flow": {
+    "flow_id": "dataset_v2",
+    "description": "학습 데이터셋 v2(IO_SPEC v2)의 문항 순서·건너뛰기 규칙과 A 입력 state의 참조 원천 문항. 조건 칸의 값이 같으면 skip_item은 묻지 않는다(D76: 소유는 survey-service, 이 표를 추론 서버 extract 요청의 flow로 보낸다).",
+    "order": [
+      "Q1.D01",
+      "Q1.D02",
+      "Q1.D03",
+      "Q1.D04",
+      "Q1.D05",
+      "Q1.D06",
+      "Q1.D07",
+      "Q1.D08",
+      "Q1.D09",
+      "Q1.D10",
+      "Q1.D11",
+      "Q2.D01",
+      "Q2.D02",
+      "Q2.D03",
+      "Q2.D04",
+      "Q2.D05",
+      "Q3",
+      "Q4",
+      "Q4_1",
+      "Q5",
+      "Q5_1",
+      "Q6",
+      "Q6_1",
+      "Q7",
+      "Q7_1",
+      "Q7_2",
+      "Q8_1",
+      "Q8_2",
+      "Q9_1",
+      "Q9_2",
+      "Q10"
+    ],
+    "skips": [
+      {
+        "slot": "Q4.answer",
+        "op": "==",
+        "value": false,
+        "skip_item": "Q4_1"
+      },
+      {
+        "slot": "Q5.answer",
+        "op": "==",
+        "value": false,
+        "skip_item": "Q5_1"
+      },
+      {
+        "slot": "Q6.answer",
+        "op": "==",
+        "value": false,
+        "skip_item": "Q6_1"
+      },
+      {
+        "slot": "Q7.does_not_drink",
+        "op": "==",
+        "value": true,
+        "skip_item": "Q7_1"
+      },
+      {
+        "slot": "Q7.does_not_drink",
+        "op": "==",
+        "value": true,
+        "skip_item": "Q7_2"
+      },
+      {
+        "slot": "Q8_1.days",
+        "op": "==",
+        "value": 0,
+        "skip_item": "Q8_2"
+      },
+      {
+        "slot": "Q9_1.days",
+        "op": "==",
+        "value": 0,
+        "skip_item": "Q9_2"
+      }
+    ],
+    "reference_sources": {
+      "Q5": [
+        "Q4"
+      ],
+      "Q5_1": [
+        "Q4_1"
+      ],
+      "Q6": [
+        "Q5"
+      ],
+      "Q9_1": [
+        "Q8_1"
+      ],
+      "Q9_2": [
+        "Q8_2"
+      ],
+      "Q10": [
+        "Q9_1"
+      ]
+    },
+    "slot_order": {
+      "Q4_1": [
+        "status",
+        "total_years",
+        "daily_count",
+        "years_since_quit"
+      ],
+      "Q5_1": [
+        "status",
+        "total_years",
+        "daily_count",
+        "years_since_quit"
+      ]
+    }
+  }
+}

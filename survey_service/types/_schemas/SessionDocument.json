@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SessionDocument",
+  "description": "세션 문서. 컴포넌트 사이에서 오가는 세션 문서이며 정의는 문진 스키마 SessionStore가 정본이다(복사하지 않는다).",
+  "type": "object",
+  "x-survey-schema": "SessionStore"
+}

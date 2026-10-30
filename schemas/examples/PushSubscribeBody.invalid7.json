@@ -1,0 +1,7 @@
+{
+  "endpoint": "https://printer.corp/x",
+  "keys": {
+    "p256dh": "k",
+    "auth": "a"
+  }
+}

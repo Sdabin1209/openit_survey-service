@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReaskCapQuery",
+  "description": "되묻기 연속 상한 계산 질의(reask_cap 입력). max_consecutive는 서비스 상한(0이면 끔), session_settings는 문항 세트(QuestionBank)의 session_settings 중 이 계산이 읽는 세 상한만 적는다(다른 키는 있어도 무시).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "max_consecutive"
+  ],
+  "properties": {
+    "max_consecutive": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "서비스 상한. 0이면 서비스 상한은 꺼져 있다."
+    },
+    "session_settings": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "문항 세트의 session_settings. 없거나 null이면 서비스 상한만 쓴다.",
+      "properties": {
+        "ask_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "문항 세트가 정한 되묻기 상한(1 이상)."
+        },
+        "confirm_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "확인 질문 상한(1 이상)."
+        },
+        "unrecognized_streak_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "인식 실패 연속 상한(1 이상)."
+        }
+      }
+    }
+  }
+}

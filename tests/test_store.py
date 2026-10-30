@@ -5,10 +5,10 @@ import threading
 
 import pytest
 
-from survey_service.errors import StoreError
-from survey_service.store import effects
-from survey_service.store.memory import MemorySessionStore
-from survey_service.store.sqlite import SqliteSessionStore
+from survey_service.wiring.errors import StoreError
+from survey_service.components import session_store as effects
+from survey_service.components.session_store import MemorySessionStore
+from survey_service.components.session_store import SqliteSessionStore
 from .sample_bank import sample_bank
 
 
@@ -17,7 +17,7 @@ def store(request, tmp_path):
     if request.param == "memory":
         yield MemorySessionStore()
     elif request.param == "postgres":
-        from survey_service.store.postgres import PgSessionStore
+        from survey_service.components.session_store import PgSessionStore
         from .pg_support import pg_url
         s = PgSessionStore(pg_url(request))
         yield s

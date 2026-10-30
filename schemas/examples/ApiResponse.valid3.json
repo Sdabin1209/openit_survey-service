@@ -1,0 +1,12 @@
+{
+  "status": 429,
+  "headers": {
+    "Retry-After": "1"
+  },
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "UNAVAILABLE",
+    "message": "요청이 너무 많다",
+    "retryable": true
+  }
+}

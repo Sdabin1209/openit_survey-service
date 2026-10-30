@@ -1,0 +1,7 @@
+{
+  "op": "report_manual_notice",
+  "session_id": "kiosk-s1",
+  "turn_id": "r1",
+  "outcome": "MAYBE",
+  "role": "kiosk"
+}

@@ -1,0 +1,33 @@
+"""보존 기간 삭제 잡의 진입(설정 읽기, 저장소 열기, 컴포넌트 호출). 업무 규칙은 components/retention_purge.py."""
+import json
+import sys
+
+from ..settings import ConfigError, Settings
+from ..components.retention_purge import purge, purge_session
+from .db import open_stores
+
+
+def run_purge(env=None, argv=None) -> int:
+    argv = argv or []
+    try:
+        settings = Settings.from_env(env)
+    except ConfigError as e:
+        print(f"설정 오류: {e}", file=sys.stderr)
+        return 2
+    try:
+        store, outbox, alert_store, _kind = open_stores(settings)
+    except Exception as e:
+        print(f"저장소를 열 수 없다: {type(e).__name__}", file=sys.stderr)
+        return 3
+    try:
+        if argv[:1] == ["--session"] and len(argv) == 2:
+            res = purge_session(store, alert_store, argv[1])
+        else:
+            res = purge(store, alert_store, settings.session_retention_days, outbox=outbox, access_log_days=settings.access_log_retention_days,
+                        alert_days=settings.alert_retention_days, dead_outbox_days=settings.dead_outbox_retention_days)
+    finally:
+        store.close()
+        outbox.close()
+        alert_store.close()
+    print(json.dumps({"event": "session_purge", **res}, ensure_ascii=False))
+    return 0

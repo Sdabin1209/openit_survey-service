@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from yoyo import get_backend, read_migrations
 
-from .errors import StoreError
+from .wiring.errors import StoreError
 
 _DIR = Path(__file__).parent / "migrations"
 

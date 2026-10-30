@@ -1,0 +1,13 @@
+{
+  "status": 409,
+  "headers": {},
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "CONFLICT",
+    "message": "처리 중",
+    "retryable": false,
+    "details": {
+      "reason": "TURN_IN_PROGRESS"
+    }
+  }
+}

@@ -1,0 +1,2405 @@
+{
+  "frontend_message": {
+    "session_id": "S1",
+    "kind": "UTTERANCE",
+    "utterance": "안 피움"
+  },
+  "intervention_decision": null,
+  "orchestrator_input": {
+    "frontend_input": {
+      "session_id": "S1",
+      "kind": "UTTERANCE",
+      "utterance": "안 피움"
+    },
+    "intervention_decision": null,
+    "session_found": true,
+    "session_question_bank_version": 1,
+    "session_status": "IN_PROGRESS",
+    "latest_question_bank_version": 1
+  },
+  "extract_input": {
+    "current_question": "응답입니다.",
+    "question_id": "Q1.D01",
+    "state": {},
+    "user_utterance": "안 피움"
+  },
+  "extract_output": {
+    "action": "NEXT",
+    "next_item": "Q1.D02",
+    "values": [
+      {
+        "key": "Q1.D01.diagnosed",
+        "value": false,
+        "precision": "exact",
+        "status": "ANSWERED",
+        "save": true
+      },
+      {
+        "key": "Q1.D01.on_medication",
+        "value": false,
+        "precision": "exact",
+        "status": "ANSWERED",
+        "save": true
+      }
+    ]
+  },
+  "extract_attempts": 1,
+  "extract_status": "OK",
+  "extract_protections": null,
+  "validation_ok": true,
+  "validation_violations": [],
+  "response_input": {
+    "action": "NEXT",
+    "known": "진단 안 받음, 지금 약 안 먹음",
+    "next": {
+      "question_id": "Q1.D02",
+      "text": "혹시 심근경색이나 협심증으로 진단받으셨거나 현재 약물 치료 중이신가요?",
+      "type": "NEXT"
+    },
+    "topic": "뇌졸중(중풍) 진단을 받았는지와 지금 약을 먹는지",
+    "user_utterance": "안 피움"
+  },
+  "response_output": "응답입니다.",
+  "response_outcome": "ok",
+  "response_protections": null,
+  "frontend_input": {
+    "response_text": "응답입니다.",
+    "turn_failure_signal": null
+  },
+  "staff_console_input": null,
+  "dispatch_input": null,
+  "dispatch_output": null,
+  "orchestrator_output": {
+    "turn_kind": "UTTERANCE",
+    "session_info_created": null,
+    "log_entry": {
+      "input": {
+        "kind": "UTTERANCE",
+        "utterance": "안 피움",
+        "intervention_decision": null
+      },
+      "handling": {
+        "handled": "UTTERANCE"
+      },
+      "question_bank_version": 1,
+      "turn_result": "COMMITTED",
+      "extract_output": {
+        "action": "NEXT",
+        "next_item": "Q1.D02",
+        "values": [
+          {
+            "key": "Q1.D01.diagnosed",
+            "value": false,
+            "precision": "exact",
+            "status": "ANSWERED",
+            "save": true
+          },
+          {
+            "key": "Q1.D01.on_medication",
+            "value": false,
+            "precision": "exact",
+            "status": "ANSWERED",
+            "save": true
+          }
+        ]
+      },
+      "validation_violations": [],
+      "staff_alert": null,
+      "response_text": "응답입니다.",
+      "staff_alert_delivery": "NOT_APPLICABLE",
+      "turn_failure_signal": null,
+      "intervention_result": null
+    },
+    "turn_failure_signal": null,
+    "intervention_result": null,
+    "dispatch_called": false
+  },
+  "session_before": {
+    "session_info": {
+      "session_id": "S1",
+      "question_bank_version": 1
+    },
+    "answer_records": [
+      {
+        "slot": {
+          "question_id": "Q1.D01",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D01",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D02",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D02",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D03",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D03",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D04",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D04",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D05",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D05",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D06",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D06",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D07",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D07",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D08",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D08",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D09",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D09",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D10",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D10",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D11",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D11",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D01",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D02",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D03",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D04",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D05",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q3",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q6",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q6_1",
+          "repeat_key": "",
+          "slot_id": "use_pattern"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7",
+          "repeat_key": "",
+          "slot_id": "does_not_drink"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7",
+          "repeat_key": "",
+          "slot_id": "frequency"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7",
+          "repeat_key": "",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q8_1",
+          "repeat_key": "",
+          "slot_id": "days"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q8_2",
+          "repeat_key": "",
+          "slot_id": "duration_minutes"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q9_1",
+          "repeat_key": "",
+          "slot_id": "days"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q9_2",
+          "repeat_key": "",
+          "slot_id": "duration_minutes"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q10",
+          "repeat_key": "",
+          "slot_id": "days"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      }
+    ],
+    "progress_record": {
+      "current_question_id": "Q1.D01",
+      "open_slots": [],
+      "skipped": [],
+      "session_status": "IN_PROGRESS",
+      "pause_history": []
+    },
+    "dialogue_log": [
+      {
+        "input": {
+          "kind": "SESSION_START",
+          "utterance": null,
+          "intervention_decision": null
+        },
+        "handling": {
+          "handled": "SESSION_START"
+        },
+        "question_bank_version": 1,
+        "turn_result": "COMMITTED",
+        "extract_output": null,
+        "validation_violations": null,
+        "staff_alert": null,
+        "response_text": "응답입니다.",
+        "staff_alert_delivery": "NOT_APPLICABLE",
+        "turn_failure_signal": null,
+        "intervention_result": null
+      }
+    ],
+    "dispatch_log": []
+  },
+  "session_after": {
+    "session_info": {
+      "session_id": "S1",
+      "question_bank_version": 1
+    },
+    "answer_records": [
+      {
+        "slot": {
+          "question_id": "Q1.D01",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": {
+          "answer": false
+        },
+        "risk_mark": null,
+        "history": [],
+        "precision": "exact"
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D01",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": {
+          "answer": false
+        },
+        "risk_mark": null,
+        "history": [],
+        "precision": "exact"
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D02",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D02",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D03",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D03",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D04",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D04",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D05",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D05",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D06",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D06",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D07",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D07",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D08",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D08",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D09",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D09",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D10",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D10",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D11",
+          "repeat_key": "",
+          "slot_id": "diagnosed"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q1.D11",
+          "repeat_key": "",
+          "slot_id": "on_medication"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D01",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D02",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D03",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D04",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q2.D05",
+          "repeat_key": "",
+          "slot_id": "family_history"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q3",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q4_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "status"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "total_years"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "daily_count"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q5_1",
+          "repeat_key": "",
+          "slot_id": "years_since_quit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q6",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q6_1",
+          "repeat_key": "",
+          "slot_id": "use_pattern"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7",
+          "repeat_key": "",
+          "slot_id": "does_not_drink"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7",
+          "repeat_key": "",
+          "slot_id": "frequency"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7",
+          "repeat_key": "",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_1",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "soju",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "soju",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "beer",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "beer",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "spirits",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "spirits",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "makgeolli",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "makgeolli",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "wine",
+          "slot_id": "amount"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q7_2",
+          "repeat_key": "wine",
+          "slot_id": "unit"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q8_1",
+          "repeat_key": "",
+          "slot_id": "days"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q8_2",
+          "repeat_key": "",
+          "slot_id": "duration_minutes"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q9_1",
+          "repeat_key": "",
+          "slot_id": "days"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q9_2",
+          "repeat_key": "",
+          "slot_id": "duration_minutes"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      },
+      {
+        "slot": {
+          "question_id": "Q10",
+          "repeat_key": "",
+          "slot_id": "days"
+        },
+        "current_value": "NONE",
+        "risk_mark": null,
+        "history": []
+      }
+    ],
+    "progress_record": {
+      "current_question_id": "Q1.D02",
+      "open_slots": [],
+      "skipped": [],
+      "session_status": "IN_PROGRESS",
+      "pause_history": []
+    },
+    "dialogue_log": [
+      {
+        "input": {
+          "kind": "SESSION_START",
+          "utterance": null,
+          "intervention_decision": null
+        },
+        "handling": {
+          "handled": "SESSION_START"
+        },
+        "question_bank_version": 1,
+        "turn_result": "COMMITTED",
+        "extract_output": null,
+        "validation_violations": null,
+        "staff_alert": null,
+        "response_text": "응답입니다.",
+        "staff_alert_delivery": "NOT_APPLICABLE",
+        "turn_failure_signal": null,
+        "intervention_result": null
+      },
+      {
+        "input": {
+          "kind": "UTTERANCE",
+          "utterance": "안 피움",
+          "intervention_decision": null
+        },
+        "handling": {
+          "handled": "UTTERANCE"
+        },
+        "question_bank_version": 1,
+        "turn_result": "COMMITTED",
+        "extract_output": {
+          "action": "NEXT",
+          "next_item": "Q1.D02",
+          "values": [
+            {
+              "key": "Q1.D01.diagnosed",
+              "value": false,
+              "precision": "exact",
+              "status": "ANSWERED",
+              "save": true
+            },
+            {
+              "key": "Q1.D01.on_medication",
+              "value": false,
+              "precision": "exact",
+              "status": "ANSWERED",
+              "save": true
+            }
+          ]
+        },
+        "validation_violations": [],
+        "staff_alert": null,
+        "response_text": "응답입니다.",
+        "staff_alert_delivery": "NOT_APPLICABLE",
+        "turn_failure_signal": null,
+        "intervention_result": null
+      }
+    ],
+    "dispatch_log": []
+  },
+  "log_entry": {
+    "input": {
+      "kind": "UTTERANCE",
+      "utterance": "안 피움",
+      "intervention_decision": null
+    },
+    "handling": {
+      "handled": "UTTERANCE"
+    },
+    "question_bank_version": 1,
+    "turn_result": "COMMITTED",
+    "extract_output": {
+      "action": "NEXT",
+      "next_item": "Q1.D02",
+      "values": [
+        {
+          "key": "Q1.D01.diagnosed",
+          "value": false,
+          "precision": "exact",
+          "status": "ANSWERED",
+          "save": true
+        },
+        {
+          "key": "Q1.D01.on_medication",
+          "value": false,
+          "precision": "exact",
+          "status": "ANSWERED",
+          "save": true
+        }
+      ]
+    },
+    "validation_violations": [],
+    "staff_alert": null,
+    "response_text": "응답입니다.",
+    "staff_alert_delivery": "NOT_APPLICABLE",
+    "turn_failure_signal": null,
+    "intervention_result": null
+  },
+  "persistence_load_request": {
+    "session_id": "S1"
+  },
+  "persistence_load_result": {
+    "session_id": "S1",
+    "status": "OK",
+    "revision": 3,
+    "state": {
+      "session_info": {
+        "session_id": "S1",
+        "question_bank_version": 1
+      },
+      "answer_records": [
+        {
+          "slot": {
+            "question_id": "Q1.D01",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D01",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D02",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D02",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D03",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D03",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D04",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D04",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D05",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D05",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D06",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D06",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D07",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D07",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D08",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D08",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D09",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D09",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D10",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D10",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D11",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D11",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q2.D01",
+            "repeat_key": "",
+            "slot_id": "family_history"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q2.D02",
+            "repeat_key": "",
+            "slot_id": "family_history"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q2.D03",
+            "repeat_key": "",
+            "slot_id": "family_history"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q2.D04",
+            "repeat_key": "",
+            "slot_id": "family_history"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q2.D05",
+            "repeat_key": "",
+            "slot_id": "family_history"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q3",
+            "repeat_key": "",
+            "slot_id": "answer"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q4",
+            "repeat_key": "",
+            "slot_id": "answer"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q4_1",
+            "repeat_key": "",
+            "slot_id": "status"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q4_1",
+            "repeat_key": "",
+            "slot_id": "total_years"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q4_1",
+            "repeat_key": "",
+            "slot_id": "daily_count"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q4_1",
+            "repeat_key": "",
+            "slot_id": "years_since_quit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q5",
+            "repeat_key": "",
+            "slot_id": "answer"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q5_1",
+            "repeat_key": "",
+            "slot_id": "status"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q5_1",
+            "repeat_key": "",
+            "slot_id": "total_years"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q5_1",
+            "repeat_key": "",
+            "slot_id": "daily_count"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q5_1",
+            "repeat_key": "",
+            "slot_id": "years_since_quit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q6",
+            "repeat_key": "",
+            "slot_id": "answer"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q6_1",
+            "repeat_key": "",
+            "slot_id": "use_pattern"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7",
+            "repeat_key": "",
+            "slot_id": "does_not_drink"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7",
+            "repeat_key": "",
+            "slot_id": "frequency"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7",
+            "repeat_key": "",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "soju",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "soju",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "beer",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "beer",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "spirits",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "spirits",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "makgeolli",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "makgeolli",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "wine",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_1",
+            "repeat_key": "wine",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "soju",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "soju",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "beer",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "beer",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "spirits",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "spirits",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "makgeolli",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "makgeolli",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "wine",
+            "slot_id": "amount"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q7_2",
+            "repeat_key": "wine",
+            "slot_id": "unit"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q8_1",
+            "repeat_key": "",
+            "slot_id": "days"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q8_2",
+            "repeat_key": "",
+            "slot_id": "duration_minutes"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q9_1",
+            "repeat_key": "",
+            "slot_id": "days"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q9_2",
+            "repeat_key": "",
+            "slot_id": "duration_minutes"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        },
+        {
+          "slot": {
+            "question_id": "Q10",
+            "repeat_key": "",
+            "slot_id": "days"
+          },
+          "current_value": "NONE",
+          "risk_mark": null,
+          "history": []
+        }
+      ],
+      "progress_record": {
+        "current_question_id": "Q1.D01",
+        "open_slots": [],
+        "skipped": [],
+        "session_status": "IN_PROGRESS",
+        "pause_history": []
+      },
+      "dialogue_log": [
+        {
+          "input": {
+            "kind": "SESSION_START",
+            "utterance": null,
+            "intervention_decision": null
+          },
+          "handling": {
+            "handled": "SESSION_START"
+          },
+          "question_bank_version": 1,
+          "turn_result": "COMMITTED",
+          "extract_output": null,
+          "validation_violations": null,
+          "staff_alert": null,
+          "response_text": "응답입니다.",
+          "staff_alert_delivery": "NOT_APPLICABLE",
+          "turn_failure_signal": null,
+          "intervention_result": null
+        }
+      ],
+      "dispatch_log": []
+    }
+  },
+  "persistence_commit_request": {
+    "session_id": "S1",
+    "expected_revision": 3,
+    "writes": {
+      "answer_updates": [
+        {
+          "slot": {
+            "question_id": "Q1.D01",
+            "repeat_key": "",
+            "slot_id": "diagnosed"
+          },
+          "action": "FIRST_WRITE",
+          "value": false,
+          "precision": "exact"
+        },
+        {
+          "slot": {
+            "question_id": "Q1.D01",
+            "repeat_key": "",
+            "slot_id": "on_medication"
+          },
+          "action": "FIRST_WRITE",
+          "value": false,
+          "precision": "exact"
+        }
+      ],
+      "progress_record_update": {
+        "current_question_id": "Q1.D02",
+        "open_slots": [],
+        "skipped_add": [],
+        "skipped_remove": [],
+        "session_status": null,
+        "pause_history_add": []
+      }
+    }
+  },
+  "persistence_commit_result": {
+    "session_id": "S1",
+    "status": "OK",
+    "write_outcome": "APPLIED",
+    "revision": 4,
+    "detail": null
+  },
+  "session_id": "S1",
+  "turn_id": "t2",
+  "contract_version": 1,
+  "turn_index": 1
+}

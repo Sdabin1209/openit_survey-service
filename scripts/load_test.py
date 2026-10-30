@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """동시 요청 부하 측정(FAULT_MATRIX N2·N3). pytest 수집 대상이 아니다(scripts/ 아래, 이름이 test_로 시작하지 않는다).
 
-PostgreSQL(LOAD_DATABASE_URL)을 붙인 App을 같은 프로세스에서 실제 서버(survey_service.service.serve, waitress)로 띄우고(가짜 모델, 가짜 릴리스 읽기/Trace 수집),
+PostgreSQL(LOAD_DATABASE_URL)을 붙인 App을 같은 프로세스에서 실제 서버(survey_service.server.serve, waitress)로 띄우고(가짜 모델, 가짜 릴리스 읽기/Trace 수집),
 N개 세션이 동시에 발화를 보낼 때의 성공률, 턴 지연 p50/p95/max, 상태 코드별 건수, PostgreSQL 연결 수 최대, 서버 스레드 수·RSS 증가를 표로 낸다.
 실제 LLM 지연은 포함되지 않는다(--model-delay로 가짜 모델에 고정 지연을 줄 수 있고, 그 값은 가정이다).
 
@@ -41,7 +41,7 @@ def pct(xs, p):
 
 
 def build_app(args, tmp: Path):
-    from survey_service.service import App
+    from survey_service.wiring.app import App
     from survey_service.settings import Settings
     from tests.fakes import FakeReleaseReader, FakeTraceIngest
     from tests.sample_bank import sample_bank
@@ -142,7 +142,7 @@ def main() -> int:
         return 2
     import logging
     logging.disable(logging.WARNING)
-    from survey_service.service import close_server, serve
+    from survey_service.server import close_server, serve
     with tempfile.TemporaryDirectory() as td:
         app = build_app(args, Path(td))
         httpd = serve(app, 0)

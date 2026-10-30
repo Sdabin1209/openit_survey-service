@@ -1,0 +1,506 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApiResponse",
+  "description": "공개 API 응답 하나. 성공(200·201·204)은 body, 오류(400·401·403·404·409·429·503)는 계약 BoundaryError(error)다. 상태 코드와 error.code의 짝, 재시도 헤더 규칙을 스키마가 정한다. body_type이 이름 붙인 본문 종류의 모양은 내는 쪽이 그 계약·문진 스키마로 내기 전에 검증한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "headers"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        200,
+        201,
+        204,
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        503
+      ]
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Retry-After": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$(?![\\s\\S])",
+          "description": "초(정수)"
+        },
+        "WWW-Authenticate": {
+          "const": "Bearer"
+        }
+      }
+    },
+    "body": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "body_type": {
+      "enum": [
+        "FrontendInput",
+        "SessionState",
+        "StaffAlertPage",
+        "StaffSessionView",
+        "SessionResult",
+        "PushConfig",
+        "StaffCallRetryResult",
+        "StaffAlert",
+        "SignalsResponse",
+        "ResultPage",
+        "PushSubscribed",
+        "PushUnsubscribed"
+      ],
+      "description": "body가 따르는 계약·문진 스키마 이름(FrontendInput·StaffSessionView·SessionResult는 문진 스키마, 나머지는 계약; ResultPage는 {items: SessionResult[], next_cursor}; PushSubscribed는 {endpoint}; PushUnsubscribed는 {endpoint, deleted})"
+    },
+    "error": {
+      "type": "object",
+      "x-contract": "BoundaryError",
+      "description": "상태 400 이상일 때의 BoundaryError 본문",
+      "if": {
+        "properties": {
+          "code": {
+            "const": "UNAVAILABLE"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": true
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 204
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "null"
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "error"
+              ]
+            },
+            {
+              "required": [
+                "body_type"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              200,
+              201
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "body",
+          "body_type"
+        ],
+        "properties": {
+          "body": {
+            "type": "object"
+          }
+        },
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              400,
+              401,
+              403,
+              404,
+              409,
+              429,
+              503
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "error"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "body_type"
+              ]
+            },
+            {
+              "properties": {
+                "body": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "body"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 400
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "INVALID_RECORD"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 401
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "PERMISSION_DENIED"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 403
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "PERMISSION_DENIED"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 404
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "NOT_FOUND"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 409
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "CONFLICT"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 429
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "UNAVAILABLE"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 503
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "UNAVAILABLE"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 401
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "headers": {
+            "required": [
+              "WWW-Authenticate"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              429,
+              503
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "if": {
+          "properties": {
+            "error": {
+              "properties": {
+                "details": {
+                  "properties": {
+                    "reason": {
+                      "const": "RETRY_LIMIT"
+                    }
+                  },
+                  "required": [
+                    "reason"
+                  ]
+                }
+              },
+              "required": [
+                "details"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ]
+        },
+        "then": {
+          "properties": {
+            "headers": {
+              "not": {
+                "required": [
+                  "Retry-After"
+                ]
+              }
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "headers": {
+              "required": [
+                "Retry-After"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": 409
+          },
+          "error": {
+            "properties": {
+              "details": {
+                "properties": {
+                  "reason": {
+                    "const": "TURN_IN_PROGRESS"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "details"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "error"
+        ]
+      },
+      "then": {
+        "properties": {
+          "headers": {
+            "required": [
+              "Retry-After"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

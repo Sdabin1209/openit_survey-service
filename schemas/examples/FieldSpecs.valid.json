@@ -1,0 +1,19 @@
+{
+  "fields": [
+    {
+      "slot": "Q4_1.daily_count",
+      "data_type": "integer",
+      "unit": "개비",
+      "minimum": 0
+    },
+    {
+      "slot": "Q7_1.amount",
+      "data_type": "number",
+      "minimum": 0,
+      "repeat_keys": [
+        "soju",
+        "beer"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "signal_id": "sig-1",
+  "source": "rules-v1",
+  "code": "SELF_HARM",
+  "severity": "RISK",
+  "occurred_at": "2026-10-15T00:00:00Z"
+}

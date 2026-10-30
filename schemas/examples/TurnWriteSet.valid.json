@@ -1,0 +1,22 @@
+{
+  "answer_updates": [
+    {
+      "slot": {
+        "question_id": "Q4_1",
+        "repeat_key": "",
+        "slot_id": "daily_count"
+      },
+      "action": "FIRST_WRITE",
+      "value": 10,
+      "precision": "exact"
+    }
+  ],
+  "progress_record_update": {
+    "current_question_id": "Q5",
+    "open_slots": [],
+    "skipped_add": [],
+    "skipped_remove": [],
+    "session_status": null,
+    "pause_history_add": []
+  }
+}

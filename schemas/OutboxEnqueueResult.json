@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutboxEnqueueResult",
+  "description": "Trace 버퍼에 넣은 결과. enqueued true는 처음 넣음, false는 같은 (session_id, turn_id)가 이미 있어 먼저 넣은 것을 유지함. 버퍼가 가득 찬 경우는 결과가 아니라 저장소 오류(StoreError)다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enqueued"
+  ],
+  "properties": {
+    "enqueued": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TurnRouteQuery",
+  "description": "처리 경로를 고르는 질의(turn_route 입력). 입력 종류와 세션 상태(없음·진행·멈춤·끝남)로 처리 표 9-1의 칸을 고른다. 세션 상태는 세션 문서의 progress_record.session_status 값이다(문진 스키마 SessionStatus의 여섯 값을 여기 열거한다: 문진 스키마는 하위 정의를 x-survey-schema로 가리킬 수 없다).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "input_kind",
+    "session_found"
+  ],
+  "properties": {
+    "input_kind": {
+      "enum": [
+        "SESSION_START",
+        "UTTERANCE",
+        "RESUME",
+        "END",
+        "SESSION_END"
+      ],
+      "description": "입력 종류(처리 표의 행). 표에 없는 조합은 열마다 정해진 기본 칸으로 간다."
+    },
+    "session_found": {
+      "type": "boolean",
+      "description": "세션 문서를 찾았는가. false면 열은 '없음'이다."
+    },
+    "status": {
+      "enum": [
+        "IN_PROGRESS",
+        "PAUSED_RISK",
+        "ENDED_COMPLETE",
+        "ENDED_STAFF",
+        "ENDED_LEFT",
+        "ENDED_USER_STOP",
+        null
+      ],
+      "description": "찾은 세션의 상태. 찾지 못했으면 null 또는 생략."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "session_found": {
+            "const": true
+          }
+        },
+        "required": [
+          "session_found"
+        ]
+      },
+      "then": {
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "IN_PROGRESS",
+              "PAUSED_RISK",
+              "ENDED_COMPLETE",
+              "ENDED_STAFF",
+              "ENDED_LEFT",
+              "ENDED_USER_STOP"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "session_found": {
+            "const": false
+          }
+        },
+        "required": [
+          "session_found"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": null
+          }
+        }
+      }
+    }
+  ]
+}

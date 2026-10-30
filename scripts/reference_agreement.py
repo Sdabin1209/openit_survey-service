@@ -68,7 +68,7 @@ def b_agreement(d: Path, splits, tables, limit):
 
 
 def doc_from_input(inp, bank, flow):
-    from survey_service.store import effects
+    from survey_service.components import session_store as effects
     doc = effects.initial_state("S", bank.raw, inp["question_id"])
     recs = {effects.slot_key(r["slot"]): r for r in doc["answer_records"]}
     for key, ent in inp["state"].items():
@@ -85,7 +85,7 @@ def doc_from_input(inp, bank, flow):
 
 
 def a_state_agreement(d: Path, splits, bank, flow, limit):
-    from survey_service import extraction
+    from survey_service.components import extraction_check as extraction
     tot = collections.Counter()
     ex = collections.defaultdict(list)
     for sp in splits:
@@ -124,7 +124,7 @@ def a_state_agreement(d: Path, splits, bank, flow, limit):
 
 def validation_check(d: Path, splits, bank, flow, limit):
     from boundary_contracts.action_rules import check_action_extraction
-    from survey_service import extraction
+    from survey_service.components import extraction_check as extraction
     tot = collections.Counter()
     codes = collections.Counter()
     ex = collections.defaultdict(list)
@@ -167,7 +167,7 @@ def _old_match(text: str) -> bool:
 
 def false_alarm_check(d: Path, splits, limit):
     """모든 user_utterance에 수정 전·후 매처를 돌려 적중 수(분모 포함)와 적중 발화를 센다. 정상 발화 데이터이므로 적중은 오탐 후보다."""
-    from survey_service.risk_rules import RuleRiskSource
+    from survey_service.components.risk_screen import RuleRiskSource
     new = RuleRiskSource.provisional_default()
     tot = collections.Counter()
     hits_new, hits_old_only = [], []
@@ -204,9 +204,9 @@ def main(argv=None) -> int:
         return 0
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import survey_schema
-    from survey_service.assembly import Bank
-    from survey_service.flow import load_flow
-    from survey_service.response_tables import ResponseTables
+    from survey_service.components.question_bank_view import Bank
+    from survey_service.components.flow_table import load_flow
+    from survey_service.components.response_request import ResponseTables
     from tests.sample_bank import sample_bank
     splits = a.splits.split(",")
     flow, bank = load_flow(), Bank(sample_bank())

@@ -1,0 +1,7 @@
+{
+  "op": "extract",
+  "output": {},
+  "outcome": "fallback",
+  "attempts": 1,
+  "protections": {}
+}

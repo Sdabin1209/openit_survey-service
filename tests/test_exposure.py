@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from boundary_contracts import validator
 
-from survey_service.api import PublicApi
+from survey_service.components.link_public_api import PublicApi
 
 ROOT = Path(__file__).resolve().parents[1]
 TABLE = json.loads((ROOT / "deploy-exposure.json").read_text(encoding="utf-8"))
@@ -53,7 +53,7 @@ def test_every_route_the_code_serves_is_declared_with_the_right_kind():
 
 def test_source_routes_are_all_in_the_served_list():
     """api.py·service.py 소스에서 /v1 경로 리터럴과 정규식 라우트를 읽어 표가 덮는지 본다: 코드에 라우트를 더하고 표를 안 고치면 실패한다."""
-    src = (ROOT / "survey_service/api.py").read_text(encoding="utf-8") + (ROOT / "survey_service/service.py").read_text(encoding="utf-8")
+    src = (ROOT / "survey_service/components/link_public_api.py").read_text(encoding="utf-8") + (ROOT / "survey_service/server.py").read_text(encoding="utf-8")
     literals = set(re.findall(r'path == "(/v1/[^"]+)"', src))
     patterns = re.findall(r'fullmatch\(r"(/v1/[^"]+)"', src)
     concrete = set(literals)

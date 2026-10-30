@@ -3,9 +3,10 @@
 import pytest
 from boundary_contracts.clients import HttpReleaseReader
 
-from survey_service.inference import InferenceServer
-from survey_service.release import ReleaseLoader, ReleaseRegistry
-from survey_service.remote import RemoteInference
+from survey_service.components.link_inference import InferenceServer
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.components.link_inference import RemoteInference
 
 from .fakes import FakeReleaseReader
 from .http_support import TOK, publish

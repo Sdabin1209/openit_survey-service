@@ -2,7 +2,7 @@
 import threading
 import time
 
-from survey_service.api import PublicApi
+from survey_service.components.link_public_api import PublicApi
 
 from .e2e_support import ANSWER_OUT, Rig
 

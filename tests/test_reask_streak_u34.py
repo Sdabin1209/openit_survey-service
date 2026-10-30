@@ -2,7 +2,7 @@
 실패 턴 재전송(같은 turn_id)은 한 번만 센다(세션 시각 기록 session_timeline의 turn_id로 거른다)."""
 import pytest
 
-from survey_service.alerts import AlertStore
+from survey_service.components.alert_book import AlertStore
 
 from .e2e_support import Rig, ext, val
 from .test_reask_limit import SENT, _bank_without_authored_limits, _kinds

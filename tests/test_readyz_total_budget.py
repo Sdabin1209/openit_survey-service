@@ -61,7 +61,7 @@ def test_healthy_readyz_still_reads_fresh_stats(tmp_path, monkeypatch):
 
 def test_ok_checks_do_not_wait_for_hanging_stats_beyond_a_short_grace(tmp_path, monkeypatch):
     """분리 직후(확인은 통과, 주 연결은 매달림)의 200 응답이 마감을 다 쓰면 다음 요청의 503이 늦는다. 확인 뒤에는 짧은 유예만 기다린다."""
-    from survey_service.service import STATS_GRACE_S
+    from survey_service.wiring.app import STATS_GRACE_S
     app = _app(tmp_path, monkeypatch)
     try:
         monkeypatch.setattr(app.exporter, "stats", _slow(10.0))

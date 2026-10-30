@@ -1,0 +1,60 @@
+{
+  "session_id": "s-1",
+  "expected_revision": 1,
+  "writes": {
+    "answer_updates": [
+      {
+        "slot": {
+          "question_id": "Q4",
+          "repeat_key": "",
+          "slot_id": "answer"
+        },
+        "action": "FIRST_WRITE",
+        "value": true,
+        "precision": "exact"
+      }
+    ],
+    "progress_record_update": null
+  },
+  "turn_id": "t-1",
+  "input_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "trace_envelope": {
+    "pipeline_schema_version": "3.0",
+    "release_id": "rel-0001",
+    "runtime_contract_version": 1,
+    "session_id": "s-1",
+    "turn_id": "t-1",
+    "sent_at": "2026-10-14T00:00:00Z",
+    "trace": {
+      "session_id": "s-1",
+      "turn_id": "t-1",
+      "contract_version": 1,
+      "frontend_message": null,
+      "intervention_decision": null,
+      "orchestrator_input": null,
+      "extract_input": null,
+      "extract_output": null,
+      "extract_attempts": null,
+      "extract_status": null,
+      "extract_protections": null,
+      "validation_ok": null,
+      "validation_violations": null,
+      "response_input": null,
+      "response_output": null,
+      "response_outcome": null,
+      "response_protections": null,
+      "frontend_input": null,
+      "staff_console_input": null,
+      "dispatch_input": null,
+      "dispatch_output": null,
+      "orchestrator_output": null,
+      "session_before": null,
+      "session_after": null,
+      "log_entry": null,
+      "persistence_load_request": null,
+      "persistence_load_result": null,
+      "persistence_commit_request": null,
+      "persistence_commit_result": null
+    }
+  }
+}

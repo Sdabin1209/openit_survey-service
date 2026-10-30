@@ -1,0 +1,15 @@
+{
+  "current_question": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 알려 주세요.",
+  "question_id": "Q4_1",
+  "state": {
+    "Q4.answer": {
+      "value": true,
+      "status": "ANSWERED"
+    },
+    "Q4_1.daily_count": {
+      "value": null,
+      "status": "MISSING"
+    }
+  },
+  "user_utterance": "하루에 열 개비쯤 피워요"
+}

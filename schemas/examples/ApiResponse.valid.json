@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "headers": {},
+  "body": {
+    "response_text": "안녕하세요",
+    "turn_failure_signal": null
+  },
+  "body_type": "FrontendInput"
+}

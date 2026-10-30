@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UtteranceBody",
+  "description": "POST /v1/sessions/{id}/turns 본문(환자 발화). turn_id는 API 봉투 필드(필수, 멱등 키)이고 나머지는 FrontendMessage의 UTTERANCE와 같다. 발화 길이 상한 1000은 SURVEY_API_MAX_UTTERANCE_CHARS의 기본값이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "kind",
+    "utterance",
+    "turn_id"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+    },
+    "kind": {
+      "const": "UTTERANCE"
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "not": {
+        "enum": [
+          "start",
+          "end",
+          "idle-expire"
+        ]
+      }
+    },
+    "utterance": {
+      "type": "string",
+      "maxLength": 1000,
+      "pattern": "\\S",
+      "description": "공백만으로 이뤄지면 거부한다(strip 뒤 빈 문자열)"
+    }
+  }
+}

@@ -63,7 +63,7 @@ def test_service_imports_without_turn_engine():
             "    def find_spec(self, name, path=None, target=None):\n"
             "        if name.split('.')[0] == 'turn_engine': raise ImportError('turn_engine 금지')\n"
             "sys.meta_path.insert(0, B())\n"
-            "import survey_service.service, survey_service.graph, survey_service.flow, survey_service.release.loader\n")
+            "import survey_service.server, survey_service.wiring.turn_graph, survey_service.components.flow_table, survey_service.components.release_loader\n")
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-500:]
 

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PushDelivery",
+  "description": "직원 기기 웹 푸시 한 건: 구독과 본문(StaffPushPayload). 구독 endpoint는 등록 때와 같은 문법 조건을 따른다(SSRF 방어의 문법 부분). 개발·시험용 SURVEY_PUSH_ALLOW_PRIVATE_HOSTS=true이면 보낼 때의 공개 주소 검사를 하지 않는다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "subscription",
+    "payload"
+  ],
+  "properties": {
+    "subscription": {
+      "type": "object",
+      "required": [
+        "endpoint",
+        "keys"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https://[^/?#@:\\s]+\\.[^/?#@:\\s]+(:443)?([/?#]\\S*)?$(?![\\s\\S])",
+          "allOf": [
+            {
+              "not": {
+                "pattern": "^https://[lL][oO][cC][aA][lL][hH][oO][sS][tT]\\.?(:443)?([/?#]|$)"
+              }
+            },
+            {
+              "not": {
+                "pattern": "^https://[^/?#@:\\s]*\\.([lL][oO][cC][aA][lL]|[lL][oO][cC][aA][lL][dD][oO][mM][aA][iI][nN]|[iI][nN][tT][eE][rR][nN][aA][lL]|[lL][aA][nN]|[hH][oO][mM][eE]|[cC][oO][rR][pP]|[iI][nN][tT][rR][aA][nN][eE][tT])\\.?(:443)?([/?#]|$)"
+              }
+            }
+          ],
+          "description": "웹 푸시 endpoint"
+        },
+        "keys": {
+          "type": "object",
+          "required": [
+            "p256dh",
+            "auth"
+          ],
+          "properties": {
+            "p256dh": {
+              "type": "string",
+              "minLength": 1
+            },
+            "auth": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "expirationTime": {}
+      }
+    },
+    "payload": {
+      "type": "object",
+      "x-contract": "StaffPushPayload"
+    }
+  }
+}

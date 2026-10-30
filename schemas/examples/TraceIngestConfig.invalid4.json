@@ -1,0 +1,5 @@
+{
+  "SURVEY_TRACE_INGEST_URL": "http://x",
+  "SURVEY_TRACE_INGEST_TOKEN_FILE": "/run/secrets/t",
+  "SURVEY_HTTP_TIMEOUT_SECONDS": "abc"
+}

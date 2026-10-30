@@ -1,0 +1,11 @@
+{
+  "kind": "CALL_STAFF",
+  "reasons": [
+    {
+      "kind": "RISK_SIGNAL",
+      "evidence": [
+        "signal:internal:prov-chest-pain"
+      ]
+    }
+  ]
+}

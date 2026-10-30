@@ -10,12 +10,13 @@ import jsonschema
 import pytest
 
 import survey_schema
-from survey_service.api import PublicApi
-from survey_service.orchestrator import Orchestrator
-from survey_service.release import ReleaseRegistry
-from survey_service.service import App, serve
+from survey_service.components.link_public_api import PublicApi
+from survey_service.wiring.orchestrator import Orchestrator
+from survey_service.components.release_registry import ReleaseRegistry
+from survey_service.wiring.app import App
+from survey_service.server import serve
 from survey_service.settings import Settings
-from survey_service.store.memory import MemorySessionStore
+from survey_service.components.session_store import MemorySessionStore
 
 from .http_server_support import start_server, server_port, stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
@@ -217,8 +218,8 @@ def test_activity_resets_idle_clock():
 
 def test_sqlite_list_idle_and_migration(tmp_path):
     import sqlite3
-    from survey_service.store import effects
-    from survey_service.store.sqlite import SqliteSessionStore
+    from survey_service.components import session_store as effects
+    from survey_service.components.session_store import SqliteSessionStore
     from .sample_bank import sample_bank
     p = str(tmp_path / "old.db")
     db = sqlite3.connect(p)                                 # updated_at 열이 없는 이전 파일

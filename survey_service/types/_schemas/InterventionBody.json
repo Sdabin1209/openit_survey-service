@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InterventionBody",
+  "description": "POST /v1/sessions/{id}/intervention 본문(직원 개입). turn_id 필수(예약 값 불가). staff_id는 받아도 버린다(직원 ID는 X-Openit-User 헤더만 믿는다). 나머지는 InterventionDecision과 같다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "decision",
+    "turn_id"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+    },
+    "decision": {
+      "enum": [
+        "RESUME",
+        "END"
+      ]
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "not": {
+        "enum": [
+          "start",
+          "end",
+          "idle-expire"
+        ]
+      }
+    },
+    "staff_id": {
+      "description": "무시된다"
+    }
+  }
+}

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import survey_schema
 
-from survey_service.response_tables import ResponseTables, josa, parse_key
+from survey_service.components.response_request import ResponseTables, josa, parse_key
 
 
 GOLD = json.loads((Path(__file__).parent / "data" / "response_tables_golden.json").read_text(encoding="utf-8"))

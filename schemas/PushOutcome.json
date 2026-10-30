@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PushOutcome",
+  "description": "웹 푸시 전송 결과. 푸시 서비스가 접수하면 ACCEPTED, 구독이 만료됐으면(404·410) GONE, 그 밖의 실패(공개 주소가 아님, 네트워크 오류, 거부)는 FAILED.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result"
+  ],
+  "properties": {
+    "result": {
+      "enum": [
+        "ACCEPTED",
+        "GONE",
+        "FAILED"
+      ]
+    }
+  }
+}

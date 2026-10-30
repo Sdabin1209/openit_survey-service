@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReleaseBundle",
+  "description": "릴리스 로더가 적재 전에 보는 묶음: 매니페스트, 게이트 판정, 문항 세트, 설치된 라이브러리 버전. 거부 조건(INVALID_RECORD, NO_APPROVAL 등)을 가능한 만큼 스키마에 적었다. 해시 대조·서로 다른 필드 사이 같음은 스키마 밖이다(ss400-outside-C.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "release_id",
+    "manifest",
+    "decision",
+    "question_bank"
+  ],
+  "properties": {
+    "release_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+    },
+    "manifest": {
+      "type": "object",
+      "x-contract": "ReleaseManifest",
+      "required": [
+        "release_id",
+        "runtime_contract_version",
+        "action_rules_version",
+        "model_runtime_version",
+        "content_hash",
+        "question_set",
+        "gate_decision_id"
+      ],
+      "properties": {
+        "model_runtime_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+",
+          "description": "MAJOR.MINOR로 시작해야 해석할 수 있다(VERSION_MISMATCH 방지)"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "result",
+        "subject",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "result": {
+          "const": "PASS",
+          "description": "PASS가 아니면 NO_APPROVAL로 거부한다"
+        },
+        "subject": {
+          "type": "object",
+          "required": [
+            "question_set",
+            "lora_a",
+            "lora_b"
+          ]
+        },
+        "runtime_contract_version": {
+          "type": "integer"
+        }
+      },
+      "description": "게이트 판정(GateDecision). subject와 runtime_contract_version은 매니페스트의 같은 이름 값과 같아야 한다(같음은 스키마 밖)"
+    },
+    "question_bank": {
+      "type": "object",
+      "x-survey-schema": "QuestionBank"
+    },
+    "installed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "action_rules_version": {
+          "type": "integer"
+        },
+        "model_runtime_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+"
+        }
+      },
+      "description": "설치된 라이브러리 판. 없는 항목은 그 검사를 하지 않는다"
+    },
+    "supported_versions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "이 서비스가 지원하는 runtime_contract_version"
+    }
+  }
+}

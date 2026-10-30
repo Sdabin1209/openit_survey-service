@@ -1,8 +1,9 @@
 """전수 점검 지적의 수정 시험: CR-D25(NOT_COMMITTED 재처리), 필수 고정 문장 적재 검사 등."""
 import copy
 
-from survey_service.inference import InferenceServer
-from survey_service.release import ReleaseLoader, ReleaseRegistry
+from survey_service.components.link_inference import InferenceServer
+from survey_service.components.release_loader import ReleaseLoader
+from survey_service.components.release_registry import ReleaseRegistry
 
 from .http_server_support import stop_server
 from .e2e_support import ANSWER_OUT, Rig
@@ -59,13 +60,13 @@ import time
 
 import pytest
 
-from survey_service.alerts import AlertStore
-from survey_service.retention import purge, purge_session
+from survey_service.components.alert_book import AlertStore
+from survey_service.components.retention_purge import purge, purge_session
 from survey_service.settings import ConfigError, Settings
-from survey_service.store.sqlite import SqliteSessionStore
-from survey_service.trace import Outbox
+from survey_service.components.session_store import SqliteSessionStore
+from survey_service.components.trace_outbox import Outbox
 
-BASE_ENV = {"SURVEY_RELEASE_READER": "x", "SURVEY_TRACE_INGEST": "x", "SURVEY_MODEL_BACKEND": "fake"}
+BASE_ENV = {"SURVEY_RELEASE_READER": "tests.fakes:release_reader", "SURVEY_TRACE_INGEST": "tests.fakes:trace_ingest", "SURVEY_MODEL_BACKEND": "fake"}
 
 
 def test_retention_defaults_are_finite_and_unlimited_is_rejected():
@@ -128,8 +129,8 @@ def test_access_log_records_the_authenticated_user_from_header_or_role_only(tmp_
 # ---------------------------------------------------------------- 기기별 키오스크 토큰 (D88 U8)
 import json as _json
 
-from survey_service.alerts import AlertHub, AlertService
-from survey_service.api import PublicApi
+from survey_service.components.alert_service import AlertHub, AlertService
+from survey_service.components.link_public_api import PublicApi
 
 
 def _device_api(tmp_path, shared=None):
@@ -164,7 +165,7 @@ def test_shared_token_still_works_for_sessions_it_created_and_device_flag_in_rea
     assert call(S, "POST", "/v1/sessions", {"session_id": "L1", "kind": "SESSION_START"})[0] == 200
     assert call(S, "GET", "/v1/sessions/L1/state")[0] == 200
     assert call("tok-device-a-0123456789", "GET", "/v1/sessions/L1/state")[0] == 404 or True      # 공유 토큰이 만든 세션(기기 없음)은 막지 않는다
-    from survey_service.service import _device_tokens
+    from survey_service.wiring.app import _device_tokens
     monkeypatch.setenv("TOKS", "a=0123456789abcdef\nb=fedcba9876543210")
     assert set(_device_tokens("TOKS")) == {"a", "b"}
     monkeypatch.setenv("TOKS", "a=short")
@@ -181,7 +182,7 @@ def _answer(rig):
 
 
 def test_value_from_outside_the_current_item_is_not_saved_unless_it_is_a_correction():
-    from survey_service.store import effects
+    from survey_service.components import session_store as effects
     rig = Rig()
     rig.store.create("S1", "rel-e2e-1", effects.initial_state("S1", rig.bank, "Q8_1"))          # 현재 문항 Q8_1
     bad = ext("NEXT", "Q8_2", val("Q8_1.days", 3), val("Q1.D01.diagnosed", True))               # 흐름은 맞고(서버 통과) 앞 문항 칸을 정정 아닌데 저장
@@ -207,12 +208,12 @@ def test_extract_input_is_trimmed_to_the_model_runtime_limit():
 
 def test_one_utterance_may_answer_several_following_items_up_to_next_item():
     """C1 학습 데이터 대조에서 확인: '운동 안 해요' 한 말이 Q8_1·Q9_1·Q10을 함께 채우고 next_item이 END인 정상 정답이 있다. 현재 문항에서 next_item까지의 문항 저장은 거부하지 않는다."""
-    from survey_service import extraction
-    from survey_service.assembly import Bank
-    from survey_service.flow import load_flow
+    from survey_service.components import extraction_check as extraction
+    from survey_service.components.question_bank_view import Bank
+    from survey_service.components.flow_table import load_flow
     from .sample_bank import sample_bank
     flow, bank = load_flow(), Bank(sample_bank())
-    from survey_service.store import effects
+    from survey_service.components import session_store as effects
     doc = effects.initial_state("S", bank.raw, "Q8_1")
     out = ext("NEXT", "END", val("Q8_1.days", 0), val("Q9_1.days", 0), val("Q10.days", 0))
     assert extraction.check_current_item(out, doc, flow) == []
@@ -222,7 +223,7 @@ def test_one_utterance_may_answer_several_following_items_up_to_next_item():
 
 # ---------------------------------------------------------------- 2차 점검 M1·M2
 def test_risk_phrase_on_unknown_session_sends_no_alert_but_store_outage_still_alerts():
-    from survey_service.risk_rules import RuleRiskSource
+    from survey_service.components.risk_screen import RuleRiskSource
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
     rig.model.queue.extend(["깨진 출력 {{"] * 6)                                            # 이 턴은 모델 단계에서 실패한다(서버 안 재시도 3회 x 서비스 재시도 2회)
     out = rig.orch.handle_turn(turn_id="x1", frontend_message={"session_id": "NOPE", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
@@ -237,8 +238,8 @@ def test_risk_phrase_on_unknown_session_sends_no_alert_but_store_outage_still_al
 
 
 def test_same_turn_resend_reuses_the_alert_once_delivered(tmp_path):
-    from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole
-    from survey_service.risk_rules import RuleRiskSource
+    from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+    from survey_service.components.risk_screen import RuleRiskSource
     store = AlertStore(str(tmp_path / "a.db"))
     svc = AlertService(store, AlertHub())
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
@@ -255,8 +256,8 @@ def test_same_turn_resend_reuses_the_alert_once_delivered(tmp_path):
 
 def test_delivery_failure_is_not_turned_into_success_by_the_idempotent_retry(tmp_path):
     """전달 경로가 없는 실제 경로(구독자 없음): 첫 시도 DELIVERY_FAILED -> 같은 턴 재시도도 DELIVERY_FAILED(알림은 하나). 구독자가 생기면 재시도가 전달하고 성공으로 바뀐다."""
-    from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole
-    from survey_service.risk_rules import RuleRiskSource
+    from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+    from survey_service.components.risk_screen import RuleRiskSource
     store = AlertStore(str(tmp_path / "a.db"))
     svc = AlertService(store, AlertHub())
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
@@ -276,11 +277,11 @@ def test_delivery_failure_is_not_turned_into_success_by_the_idempotent_retry(tmp
 
 
 def test_same_turn_different_kind_is_not_merged(tmp_path):
-    from survey_service.alerts import AlertHub, AlertService
+    from survey_service.components.alert_service import AlertHub, AlertService
     store = AlertStore(str(tmp_path / "a.db"))
     svc = AlertService(store, AlertHub())
     svc.hub.subscribe()
-    from survey_service.alerts import CURRENT_TURN
+    from survey_service.components.alert_service import CURRENT_TURN
     tok = CURRENT_TURN.set(("S1", "t1"))
     try:
         svc.raise_alert("S1", "RISK")
@@ -294,8 +295,8 @@ def test_same_turn_different_kind_is_not_merged(tmp_path):
 def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_path):
     """실제 저장소로: 없는 세션은 알림을 버리고, 저장소 장애(닫힌 DB)와 느림(한도 초과)은 알림을 보낸다."""
     import time as _t
-    from survey_service.risk_rules import RuleRiskSource
-    from survey_service.store.sqlite import SqliteSessionStore
+    from survey_service.components.risk_screen import RuleRiskSource
+    from survey_service.components.session_store import SqliteSessionStore
 
     class Slow(SqliteSessionStore):
         delay = 0.0

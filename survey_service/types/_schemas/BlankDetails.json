@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BlankDetails",
+  "description": "값이 저장되지 않은 칸과 원인 코드의 목록. 환자 발화 원문은 담지 않는다. slot이 있으면 item은 slot에서 칸 이름을 뗀 문항이다(관계라 스키마로 쓰지 못한다). slot이 없으면 로그에서 칸을 찾지 못한 건너뛴 문항이다.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "item",
+      "reason"
+    ],
+    "properties": {
+      "item": {
+        "type": "string",
+        "minLength": 1,
+        "description": "문항 ID"
+      },
+      "slot": {
+        "type": "string",
+        "pattern": "^[^\\[\\]]+(\\[[^\\]]*\\])?\\.[^.\\[\\]]+$",
+        "description": "모델 키(Q7_1[soju].amount, Q1.D01.diagnosed)"
+      },
+      "reason": {
+        "enum": [
+          "UNKNOWN",
+          "REJECTED",
+          "UNCLEAR"
+        ],
+        "description": "UNKNOWN 모름 / REJECTED 거절·나중에 / UNCLEAR 불분명·범위 밖"
+      }
+    }
+  }
+}

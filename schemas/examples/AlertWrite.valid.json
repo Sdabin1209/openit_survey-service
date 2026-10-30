@@ -1,0 +1,8 @@
+{
+  "op": "create",
+  "session_id": "kiosk-s1",
+  "kind": "RISK_STOP",
+  "rule_id": "builtin:suicide",
+  "turn_id": "t1",
+  "pause_reason": "RISK"
+}

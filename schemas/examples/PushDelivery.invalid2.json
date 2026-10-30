@@ -1,0 +1,12 @@
+{
+  "subscription": {
+    "endpoint": "https://push.example.com/x",
+    "keys": {
+      "p256dh": "k",
+      "auth": "a"
+    }
+  },
+  "payload": {
+    "kind": "RISK_STOP"
+  }
+}

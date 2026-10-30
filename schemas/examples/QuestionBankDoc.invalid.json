@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "questions": [
+    {
+      "question_id": "Q4",
+      "name": "Q4",
+      "order": 18,
+      "prerequisite": null,
+      "question_sentence": "일반담배를 평생 5갑(100개비) 이상 피운 적이 있으신가요?",
+      "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+      "guide_sentences": [],
+      "affected_followups": [],
+      "policy": {
+        "question_limit": 3,
+        "unknown_accept_after": 2,
+        "refusal_accept_after": 2
+      },
+      "repeat_keys": [],
+      "slots": [
+        {
+          "slot_id": "answer",
+          "units": [],
+          "choices": [],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "answer을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "boolean"
+        }
+      ]
+    },
+    {
+      "question_id": "Q4_1",
+      "name": "Q4_1",
+      "order": 19,
+      "prerequisite": null,
+      "question_sentence": "일반담배를 지금 피우는지, 피운 기간, 하루 개비 수, 끊은 지 얼마나 됐는지 알려 주세요.",
+      "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+      "guide_sentences": [],
+      "affected_followups": [],
+      "policy": {
+        "question_limit": 3,
+        "unknown_accept_after": 2,
+        "refusal_accept_after": 2
+      },
+      "repeat_keys": [],
+      "slots": [
+        {
+          "slot_id": "status",
+          "units": [],
+          "choices": [
+            "current",
+            "former"
+          ],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "status을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "option"
+        },
+        {
+          "slot_id": "total_years",
+          "units": [],
+          "choices": [],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "total_years을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "integer",
+          "unit": "년",
+          "minimum": 0
+        },
+        {
+          "slot_id": "daily_count",
+          "units": [],
+          "choices": [],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "daily_count을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "number",
+          "unit": "개비",
+          "minimum": 0
+        },
+        {
+          "slot_id": "years_since_quit",
+          "units": [],
+          "choices": [],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "years_since_quit을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "number",
+          "unit": "년",
+          "minimum": 0
+        }
+      ]
+    },
+    {
+      "question_id": "Q7_1",
+      "name": "Q7_1",
+      "order": 25,
+      "prerequisite": null,
+      "question_sentence": "Q7_1 문항입니다. 알려 주세요.",
+      "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.",
+      "guide_sentences": [],
+      "affected_followups": [],
+      "policy": {
+        "question_limit": 3,
+        "unknown_accept_after": 2,
+        "refusal_accept_after": 2
+      },
+      "repeat_keys": [
+        "soju",
+        "beer",
+        "spirits",
+        "makgeolli",
+        "wine"
+      ],
+      "slots": [
+        {
+          "slot_id": "amount",
+          "units": [],
+          "choices": [],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "amount을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "number",
+          "minimum": 0
+        },
+        {
+          "slot_id": "unit",
+          "units": [],
+          "choices": [
+            "bottle",
+            "can",
+            "cc",
+            "glass"
+          ],
+          "yes_no_map": null,
+          "required": true,
+          "reask_sentence": "unit을(를) 다시 말씀해 주세요.",
+          "risk_rule": null,
+          "data_type": "option"
+        }
+      ]
+    }
+  ]
+}

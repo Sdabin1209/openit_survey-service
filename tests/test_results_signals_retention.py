@@ -8,9 +8,10 @@ import jsonschema
 import pytest
 
 import survey_schema
-from survey_service.alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore
-from survey_service.api import PublicApi
-from survey_service.retention import purge
+from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
+from survey_service.components.alert_book import AlertStore
+from survey_service.components.link_public_api import PublicApi
+from survey_service.components.retention_purge import purge
 from survey_service.settings import ConfigError, Settings
 
 from .e2e_support import ANSWER_OUT, Rig, ext
@@ -26,8 +27,8 @@ class Env:
     def __init__(self, tmp_path, *, require=False, result=True, risk=True, clock=None, backend="sqlite", request=None):
         kw = {"clock": clock} if clock else {}
         if backend == "postgres":
-            from survey_service.alerts import PgAlertStore
-            from survey_service.store.postgres import PgSessionStore
+            from survey_service.components.alert_book import PgAlertStore
+            from survey_service.components.session_store import PgSessionStore
             from .pg_support import pg_url
             url = pg_url(request)
             self.store = PgAlertStore(url, **kw)
@@ -179,7 +180,7 @@ def test_result_reads_are_logged_without_subject_value_and_fail_closed(env):
     assert SUBJ not in dump and "rtok" not in dump and "list subject_ref" in dump
 
     def boom(*a, **k):
-        from survey_service.errors import StoreError
+        from survey_service.wiring.errors import StoreError
         raise StoreError("x")
     env.store.log_access_many = boom
     for path in ("/v1/results/K1", "/v1/results"):
@@ -188,7 +189,7 @@ def test_result_reads_are_logged_without_subject_value_and_fail_closed(env):
 
 
 def test_result_dispatcher_stays_no_target():
-    from survey_service.ports import UnattachedDispatcher
+    from survey_service.wiring.ports import UnattachedDispatcher
     assert Rig().orch.dispatcher_status() == {"attached": True} or True
     r = Rig(); r.orch.dispatcher = UnattachedDispatcher()
     assert r.orch.dispatcher_status()["status"] == "NO_TARGET"

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FieldSpecs",
+  "description": "칸 규격(field_specs 출력). 계약 QuestionFieldSpec 그대로이며 정본 검증은 검증기가 맡는다. 자료형이 적힌 칸이 하나도 없으면 규격을 싣지 않으므로(코드는 None) 이 문서가 없는 경우다.",
+  "type": "object",
+  "x-contract": "QuestionFieldSpec"
+}

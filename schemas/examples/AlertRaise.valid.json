@@ -1,0 +1,8 @@
+{
+  "op": "raise_alert",
+  "session_id": "kiosk-s1",
+  "staff_alert_kind": "RISK",
+  "rule_id": "builtin:suicide",
+  "pause_reason": "RISK",
+  "turn_id": "t1"
+}

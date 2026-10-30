@@ -1,0 +1,15 @@
+{
+  "status": 429,
+  "headers": {
+    "Retry-After": "5"
+  },
+  "error": {
+    "pipeline_schema_version": "3.0",
+    "code": "UNAVAILABLE",
+    "message": "세션당 상한을 넘었다",
+    "retryable": true,
+    "details": {
+      "reason": "RETRY_LIMIT"
+    }
+  }
+}

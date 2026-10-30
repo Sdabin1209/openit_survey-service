@@ -1,0 +1,11 @@
+{
+  "kind": "RISK",
+  "reasons": [
+    {
+      "kind": "RISK_SIGNAL",
+      "evidence": [
+        "가슴이 너무 아파요"
+      ]
+    }
+  ]
+}

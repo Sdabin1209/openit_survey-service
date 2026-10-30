@@ -1,0 +1,11 @@
+{
+  "method": "POST",
+  "path": "/v1/sessions",
+  "headers": {
+    "authorization": "Bearer t",
+    "x-openit-device": "bad device!"
+  },
+  "body": {
+    "kind": "SESSION_START"
+  }
+}

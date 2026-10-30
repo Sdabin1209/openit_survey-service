@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from survey_service.risk_rules import RuleRiskSource
+from survey_service.components.risk_screen import RuleRiskSource
 
 from .e2e_support import ANSWER_OUT, Rig, ext, val
 from .sample_bank import sample_bank

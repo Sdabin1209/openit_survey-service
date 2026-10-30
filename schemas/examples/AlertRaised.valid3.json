@@ -1,0 +1,7 @@
+{
+  "op": "retry_staff_call",
+  "rejected": {
+    "kind": "INTERVAL",
+    "retry_after_s": 12
+  }
+}

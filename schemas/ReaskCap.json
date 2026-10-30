@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReaskCap",
+  "description": "되묻기 연속 상한의 실효 값(reask_cap 출력). 0이면 끔.",
+  "type": "integer",
+  "minimum": 0
+}

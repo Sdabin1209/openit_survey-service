@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AlertRaise",
+  "description": "알림 서비스 작업 하나의 입력: 알림 생성·전달(raise_alert), 직원 호출 재알림(retry_staff_call), 수기 안내 보고(report_manual_notice), 알림 해소(resolve).",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "staff_alert_kind"
+      ],
+      "properties": {
+        "op": {
+          "const": "raise_alert"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "staff_alert_kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RISK | CALL_STAFF | USER_CALLED_STAFF(KIND_MAP으로 RISK_STOP | CALL_STAFF | USER_CALLED_STAFF로 바꾼다) 또는 이미 저장 이름인 RISK_STOP. 모르는 이름은 그대로 저장한다"
+        },
+        "rule_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pause_reason": {
+          "enum": [
+            "RISK",
+            "REASK_LIMIT",
+            "OTHER",
+            null
+          ]
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "turn_id가 있으면 (세션, 턴, 종류)가 같은 재전송은 기존 알림을 재사용한다(코드는 이 값을 CURRENT_TURN 맥락 변수로 받는다)"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "turn_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "retry_staff_call"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+          "not": {
+            "enum": [
+              "start",
+              "end",
+              "idle-expire"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "turn_id",
+        "outcome",
+        "role"
+      ],
+      "properties": {
+        "op": {
+          "const": "report_manual_notice"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+          "not": {
+            "enum": [
+              "start",
+              "end",
+              "idle-expire"
+            ]
+          }
+        },
+        "outcome": {
+          "enum": [
+            "STAFF_NOTIFIED_MANUALLY",
+            "NOT_NOTIFIED"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "user": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "decision"
+      ],
+      "properties": {
+        "op": {
+          "const": "resolve"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "decision": {
+          "enum": [
+            "RESUME",
+            "END",
+            null
+          ]
+        },
+        "staff_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:@/#=+-]{1,128}$(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

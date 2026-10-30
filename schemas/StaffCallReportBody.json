@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StaffCallReportBody",
+  "description": "POST /v1/sessions/{id}/staff-call/report 본문. 계약 StaffCallReport에 서비스의 turn_id 형식을 더했다.",
+  "type": "object",
+  "x-contract": "StaffCallReport",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "turn_id"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "STAFF_NOTIFIED_MANUALLY",
+        "NOT_NOTIFIED"
+      ]
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "not": {
+        "enum": [
+          "start",
+          "end",
+          "idle-expire"
+        ]
+      }
+    }
+  }
+}

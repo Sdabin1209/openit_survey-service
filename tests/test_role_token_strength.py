@@ -5,7 +5,7 @@
 """
 import pytest
 
-from survey_service.service import App
+from survey_service.wiring.app import App
 from survey_service.settings import ConfigError, Settings
 
 OK = {"SURVEY_API_TOKEN": "api-token-0123456", "SURVEY_STAFF_API_TOKEN": "staff-token-012345",

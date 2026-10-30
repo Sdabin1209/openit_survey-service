@@ -1,0 +1,12 @@
+[
+  {
+    "code": "UNKNOWN_SLOT",
+    "path": "values/0/key",
+    "message": "저장하려는 칸이 문항 세트에 없다"
+  },
+  {
+    "code": "OUT_OF_CURRENT_ITEM",
+    "path": "values/2/key",
+    "message": "현재 문항이 아닌 칸을 정정이 아닌데 저장하려 한다"
+  }
+]

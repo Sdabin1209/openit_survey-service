@@ -1,0 +1,7 @@
+{
+  "session_id": "s-1",
+  "status": "DB_ERROR",
+  "write_outcome": "APPLIED",
+  "revision": null,
+  "detail": "DB 오류"
+}

@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AlertRaised",
+  "description": "알림 서비스 작업 하나의 출력. 성공이면 result, 거절이면 rejected, 알림은 저장됐으나 닿은 전달 경로가 없으면 delivery_failed(알림 포함), 저장소 오류면 error.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "raise_alert"
+        },
+        "result": {
+          "type": "object",
+          "x-contract": "StaffAlert"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "retry_staff_call"
+        },
+        "result": {
+          "type": "object",
+          "x-contract": "StaffCallRetryResult"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "report_manual_notice"
+        },
+        "result": {
+          "type": "object",
+          "x-contract": "StaffAlert"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "result"
+      ],
+      "properties": {
+        "op": {
+          "const": "resolve"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "resolved"
+          ],
+          "properties": {
+            "resolved": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "해결한 알림 수. 열린 알림이 없으면 0(멱등)"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "rejected"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "retry_staff_call",
+            "report_manual_notice"
+          ]
+        },
+        "rejected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "NO_OPEN_ALERT",
+                "OUTCOME_MISMATCH",
+                "INTERVAL",
+                "RETRY_LIMIT"
+              ]
+            },
+            "retry_after_s": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "description": "거절. INTERVAL이면 retry_after_s(초, 1 이상)가 필요하다. OUTCOME_MISMATCH는 report_manual_notice에서만, INTERVAL·RETRY_LIMIT은 retry_staff_call(RETRY_LIMIT은 report도)에서 난다",
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "INTERVAL"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "retry_after_s"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "retry_after_s"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "delivery_failed"
+      ],
+      "properties": {
+        "op": {
+          "const": "raise_alert"
+        },
+        "delivery_failed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "alert"
+          ],
+          "properties": {
+            "alert": {
+              "type": "object",
+              "x-contract": "StaffAlert"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "error"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "raise_alert",
+            "retry_staff_call",
+            "report_manual_notice",
+            "resolve"
+          ]
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "const": "STORE_ERROR"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

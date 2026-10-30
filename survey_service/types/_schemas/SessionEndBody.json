@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SessionEndBody",
+  "description": "POST /v1/sessions/{id}/end 본문(세션 종료). turn_id는 생략하면 서버가 'end'를 쓴다. 나머지는 FrontendMessage의 SESSION_END와 같다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "kind"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+    },
+    "kind": {
+      "const": "SESSION_END"
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "description": "예약 값 허용"
+    }
+  }
+}

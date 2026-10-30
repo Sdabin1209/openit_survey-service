@@ -1,0 +1,17 @@
+{
+  "op": "raise_alert",
+  "result": {
+    "alert_id": "al-1",
+    "session_id": "kiosk-s1",
+    "kind": "RISK_STOP",
+    "created_at": "2026-10-15T00:00:00Z",
+    "status": "OPEN",
+    "resolved_by_decision": null,
+    "resolved_at": null,
+    "pause_reason": "RISK",
+    "delivery_attempts": 2,
+    "last_delivery_status": "DELIVERY_FAILED",
+    "manual_notice_outcome": "NOT_NOTIFIED",
+    "manual_notice_reported_at": "2026-10-15T00:01:00Z"
+  }
+}

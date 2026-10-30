@@ -1,0 +1,116 @@
+{
+  "flow_id": "dataset_v2",
+  "table": {
+    "order": [
+      "Q1.D01",
+      "Q1.D02",
+      "Q1.D03",
+      "Q1.D04",
+      "Q1.D05",
+      "Q1.D06",
+      "Q1.D07",
+      "Q1.D08",
+      "Q1.D09",
+      "Q1.D10",
+      "Q1.D11",
+      "Q2.D01",
+      "Q2.D02",
+      "Q2.D03",
+      "Q2.D04",
+      "Q2.D05",
+      "Q3",
+      "Q4",
+      "Q4_1",
+      "Q5",
+      "Q5_1",
+      "Q6",
+      "Q6_1",
+      "Q7",
+      "Q7_1",
+      "Q7_2",
+      "Q8_1",
+      "Q8_2",
+      "Q9_1",
+      "Q9_2",
+      "Q10"
+    ],
+    "skips": [
+      {
+        "slot": "Q4.answer",
+        "op": "==",
+        "value": false,
+        "skip_item": "Q4_1"
+      },
+      {
+        "slot": "Q5.answer",
+        "op": "==",
+        "value": false,
+        "skip_item": "Q5_1"
+      },
+      {
+        "slot": "Q6.answer",
+        "op": "==",
+        "value": false,
+        "skip_item": "Q6_1"
+      },
+      {
+        "slot": "Q7.does_not_drink",
+        "op": "==",
+        "value": true,
+        "skip_item": "Q7_1"
+      },
+      {
+        "slot": "Q7.does_not_drink",
+        "op": "==",
+        "value": true,
+        "skip_item": "Q7_2"
+      },
+      {
+        "slot": "Q8_1.days",
+        "op": "==",
+        "value": 0,
+        "skip_item": "Q8_2"
+      },
+      {
+        "slot": "Q9_1.days",
+        "op": "==",
+        "value": 0,
+        "skip_item": "Q9_2"
+      }
+    ]
+  },
+  "reference_sources": {
+    "Q5": [
+      "Q4"
+    ],
+    "Q5_1": [
+      "Q4_1"
+    ],
+    "Q6": [
+      "Q5"
+    ],
+    "Q9_1": [
+      "Q8_1"
+    ],
+    "Q9_2": [
+      "Q8_2"
+    ],
+    "Q10": [
+      "Q9_1"
+    ]
+  },
+  "slot_order": {
+    "Q4_1": [
+      "status",
+      "total_years",
+      "daily_count",
+      "years_since_quit"
+    ],
+    "Q5_1": [
+      "status",
+      "total_years",
+      "daily_count",
+      "years_since_quit"
+    ]
+  }
+}
