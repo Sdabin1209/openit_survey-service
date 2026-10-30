@@ -1,3 +1,17 @@
+# 상태 (2026-10-30, 영역 구조 개편 U400)
+
+## U400에서 한 일
+- 위에서부터 분해한 컴포넌트 26개(`docs/components.md`), 내부 타입 61개와 예시(`schemas/`), 생성 타입(`survey_service/types/`), 코드 이동(`components/`, `wiring/`), 구조 검사(`tests/test_structure.py`). 근거 ADR-0047.
+- 이미지 빌드와 스모크 통과(link v0.1.0 포함). 와이어 형식은 바꾸지 않았다.
+
+## U400에서 하지 못한 것 (한계 표는 docs/components.md 4절, schemas/README.md)
+- `link_public_api`를 `openit_link.App` 위로 옮기지 못했다: CR-link-001(헤드에게).
+- 입력 검사를 스키마 검증으로 바꾼 곳은 턴 입구(TurnRequest)뿐이다(L5). 스키마 밖 조건 표 64건.
+- 공용 기반 4개를 컴포넌트가 import한다(L1), 보조 함수 복제(L2).
+- 헤드 도구 structure-check 위반 1건: `schema/setup.py`(문진 스키마 패키지의 빌드 스크립트, 도구의 진입점 목록에 없다).
+
+---
+
 # 상태 (2026-10-15, 첫 구현 구간)
 
 ## 한 일

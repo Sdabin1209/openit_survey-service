@@ -14,6 +14,7 @@ packages = ["survey_service", "survey_service.components", "survey_service.wirin
 
 [tool.setuptools.package-data]
 survey_service = ["migrations/*/*.sql", "migrations/*/*.py"]
+"survey_service.types" = ["_schemas/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

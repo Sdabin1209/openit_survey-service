@@ -1,5 +1,8 @@
 # survey-service 영역 설계서
 
+> **구조 개편(U400, D117, ADR-0047).** 이 문서의 모듈 이름(`graph.py`, `api.py`, `store/`, `trace/`, `release/`, `alerts.py` 등)은 개편 전이다. 현행 컴포넌트 표와 파일 위치는 [components.md](components.md), 내부 타입은 `schemas/`가 정본이다. 대응: `graph.py` -> `wiring/turn_graph.py` + `components/turn_route.py` `reask_cap.py`, `orchestrator.py` -> `wiring/orchestrator.py`, `api.py` -> `components/link_public_api.py`, `service.py` -> `wiring/app.py` + `server.py`, `store/*` -> `components/session_store.py`, `trace/*` -> `components/trace_outbox.py` `trace_envelope.py` `link_trace_export.py`, `release/*` -> `components/release_loader.py` `release_registry.py`, `alerts.py` -> `components/alert_book.py` `alert_service.py` `link_push.py`, `extraction.py` -> `components/extract_request.py` `extraction_check.py` `write_plan.py` `response_request.py`, `remote.py`+`inference.py` -> `components/link_inference.py`.
+
+
 > 이 문서는 D74 구조(한 턴의 흐름 16절, 문항 순서·건너뛰기 표 17절, 표 찾기와 B 입력 18절, Trace 키·오류·위험 신호 19절)를 서술한다. v1 시절 절은 이력 문서로 옮겼고 이 문서에서 참조하지 않는다.
 
 표기: **[확인]** 계약·브리프·규칙 문서에서 읽은 것, **[결정]** 이 영역이 정한 내부 설계(경계에 닿지 않음), **[제안]** 규칙 문서에 없어 이 문서가 고른 해석(바꿀 수 있음, 필요하면 변경 요청), **[미정]** 정해지지 않은 것, **[O06 대기]** 공개 API가 정해져야 하는 것.

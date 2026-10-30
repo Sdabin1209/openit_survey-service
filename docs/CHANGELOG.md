@@ -1,5 +1,13 @@
 # 변경 이력
 
+## 영역 구조 개편 U400 [미출시] (ADR-0047)
+
+- 코드를 `components/`(26개), `wiring/`, `types/`(schemas/에서 생성), 진입점(`server.py` 등)으로 옮겼다. 와이어 형식·HTTP 응답·잡 출력은 바뀌지 않았다. 모듈 import 경로가 바뀌어 시험 import를 고쳤다.
+- 새 것: `schemas/`(61개 타입과 예시), `docs/components.md`, `tests/test_structure.py`, `scripts/gen-types.sh` `check_schemas.py`, `schema/schemas/examples/`(문진 스키마 예시).
+- 계약 고정 v3.1.1. 새 의존 openit-link v0.1.0(보내는 쪽 클라이언트). 이미지 빌드(`build-image.sh`)가 link 소스를 requirements.txt 태그로 받아 빌드 컨텍스트로 준다(요청 계약에 link 키가 없어서).
+- 계약 3.1.1의 SURVEY_RELEASE_READER 형식(`http` 또는 `모듈:함수`)에 맞춰 시험 자료의 값을 고쳤다.
+- 로더의 칸 규격 검사는 `field_check` 인자로 wiring이 꽂는다(없으면 이 검사를 건너뛴다).
+
 ## 문진 스키마 3.0.0 후보 + 적재 검사 정리 [미출시] (ADR-0045)
 
 - `/readyz`의 `reask_limit`에 `effective`(활성 문항 세트까지 반영한 실제 되묻기 상한, 활성 릴리스 없으면 null)를 더했다(ADR-0046). `active`는 effective가 있으면 effective>0, 없으면 서비스 설정>0.
