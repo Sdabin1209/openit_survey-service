@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 시간 상한 사슬 변경 [미출시] (ADR-0049)
+
+- 사용자 결정(2026-10-30): respond 호출 상한 2.0 -> 5.0초(`SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS`), 서버 턴 총 마감 6.0 -> 9.0초(`SURVEY_TURN_DEADLINE_SECONDS`). extract 3.0초 그대로, gateway 10.5초, 키오스크 12초. 측정하지 않았다.
+- 추론 클라이언트가 최근 호출 기록(`Stats.calls()`: 종류, 시도, 경과, 성공, 타임아웃)을 남긴다. 시험은 '끊긴 시점'을 턴 전체 벽시계가 아니라 이 호출 경과로 잰다(부하에서 흔들리던 좁은 벽시계 상한 제거). 남은 벽시계 상한에는 지금 부하의 스레드 깨어남 지연을 더한다(`tests/timing.py`).
+
 ## 영역 구조 개편 U400 3차 [미출시] (ADR-0048)
 
 - 고정: openit-link v0.4.1, model-runtime v0.11.3(라벨 `io.openit.model-runtime`이 v0.11.3). model-runtime이 내부를 components/wiring으로 나눠 `model_runtime.prompts`가 없어졌다(시험 한 곳이 새 경로를 쓴다).

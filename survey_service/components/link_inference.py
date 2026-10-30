@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import collections
 import logging
 import threading
 import time
@@ -64,6 +65,15 @@ class Stats:
         self._lock = threading.Lock()
         self.data = {"calls": 0, "failures": 0, "retries": 0, "retry_skipped_budget": 0, "timeouts": 0, "output_invalid": 0, "reloads": 0, "outcome_fallback": 0}
         self.protections: dict[str, int] = {}      # 출력 보호 규칙 코드별 건수(G0, G5 ...). 원문 없음
+        self._calls: "collections.deque[dict]" = collections.deque(maxlen=64)      # 최근 호출 기록(호출 하나의 경과, 원문 없음): 시험이 '끊긴 시점'을 턴 전체 벽시계가 아니라 호출 경과로 잰다
+
+    def record_call(self, op: str, attempt: int, elapsed: float, ok: bool, timed_out: bool) -> None:
+        with self._lock:
+            self._calls.append({"op": op, "attempt": attempt, "elapsed": elapsed, "ok": ok, "timed_out": timed_out})
+
+    def calls(self) -> list:
+        with self._lock:
+            return list(self._calls)
 
     def add(self, key: str, n: int = 1) -> None:
         with self._lock:
@@ -117,14 +127,17 @@ class RemoteModelSession:
             t0 = time.monotonic()
             try:
                 res = self._call_once(op, request, flow, fields)
+                self.stats.record_call(op, attempt + 1, time.monotonic() - t0, True, False)
                 break
             except BoundaryError as e:
                 if is_output_invalid(e):
+                    self.stats.record_call(op, attempt + 1, time.monotonic() - t0, False, False)
                     self.stats.add("output_invalid")
                     self.stats.add("failures")
                     raise
                 elapsed = time.monotonic() - t0
                 timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, limit)
+                self.stats.record_call(op, attempt + 1, elapsed, False, timed_out)
                 log.warning("추론 호출 실패 op=%s %s elapsed=%.2fs read_timeout=%.1fs classified=%s attempt=%d", op, _failure_info(e),
                             elapsed, limit, "timeout" if timed_out else "not_timeout", attempt + 1)
                 if timed_out:
@@ -162,7 +175,7 @@ class RemoteInference:
     needs_adapters = False     # 어댑터는 추론 서버(model-runtime)가 직접 받는다. 서비스는 문항 세트만 받는다 (ADR-0040)
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
-                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 2.0) -> None:
+                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 5.0) -> None:
         self.backend = "remote"
         self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
         # 환자 턴의 호출은 종류마다 상한이 다르다(extract 3.0초, respond 2.0초: 계약 CONVENTIONS 2.2.0 배분, 측정 안 함, ADR-0026)

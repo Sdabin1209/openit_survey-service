@@ -86,7 +86,7 @@ class Orchestrator:
         self.max_consecutive_reask = max(0, int(max_consecutive_reask))   # 0이면 끔(G12). 서비스 기본은 3(settings.py, ADR-0020)
         self.trace_sink = trace_sink
         self.timeline = timeline        # 선택. record(session_id, turn_index, turn_id)를 가진 객체(AlertStore). 직원 조회의 시각용, 실패해도 턴은 계속된다
-        self.turn_deadline_seconds = max(0.0, float(turn_deadline_seconds))      # 0이면 마감 없음(서비스는 설정 기본 6초를 준다)
+        self.turn_deadline_seconds = max(0.0, float(turn_deadline_seconds))      # 0이면 마감 없음(서비스는 설정 기본 9초를 준다)
         self.extract_input_max_chars = max(0, int(extract_input_max_chars))      # 0이면 줄이지 않는다(서비스는 설정 기본 2400을 준다)
         self._locks = _SessionLocks()
         self.errors = SimpleNamespace(StoreError=StoreError, TurnIdConflict=TurnIdConflict, TurnInProgress=TurnInProgress, SessionNotFound=SessionNotFound,

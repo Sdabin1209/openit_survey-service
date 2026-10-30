@@ -82,10 +82,9 @@ def test_slow_but_within_timeout_is_fine(env):
 def test_slow_extract_beyond_timeout_fails_the_step_without_retry(env):
     env.start()
     env.srv.delay = 2.0
-    t0 = time.monotonic()
     o = env.turn()
-    el = time.monotonic() - t0
-    assert 0.4 < el < 1.5                                            # 타임아웃(0.5s)에서 끊고 다시 시도하지 않는다
+    cs = [c for c in env.client.stats.calls() if c["op"] == "extract"]
+    assert len(cs) == 1 and cs[0]["timed_out"] and cs[0]["elapsed"] >= 0.4, cs      # 타임아웃(0.5s)에서 끊고 다시 시도하지 않는다(벽시계가 아니라 호출 경과로 잰다: 부하에 흔들린다)
     assert failed(o) == LORA_A_FAIL
     assert o.orchestrator_output["turn_failure_signal"] == {"session_id": "S1", "write_committed": "NOT_COMMITTED", "staff_alert": "NONE"}
     s = env.client.stats.snapshot()
@@ -139,9 +138,10 @@ def test_retries_zero_means_single_attempt(tmp_path):
 def test_server_down_fails_fast_after_one_retry(env):
     env.start()
     env.close()
-    t0 = time.monotonic()
+    n0 = len(env.client.stats.calls())
     o = env.turn()
-    assert time.monotonic() - t0 < 1.5 and failed(o) == LORA_A_FAIL
+    cs = env.client.stats.calls()[n0:]
+    assert failed(o) == LORA_A_FAIL and len(cs) == 2 and all(c["elapsed"] < 1.0 for c in cs), cs      # 연결 거부는 매달리지 않고 바로 실패한다: 호출마다 경과가 짧다
     assert env.client.stats.snapshot()["retries"] == 1
 
 
@@ -220,9 +220,9 @@ def test_forgotten_release_with_slow_reload_fails_the_turn_instead_of_waiting(tm
         assert e.loader.poll_once().action == "LOADED"                 # 적재 신호 뒤 끝날 때까지 기다린다
         e.start()
         e.srv.forget()
-        t0 = time.monotonic()
         o = e.turn()
-        assert time.monotonic() - t0 < 0.9 and failed(o) == LORA_A_FAIL
+        cs = [c for c in e.client.stats.calls() if c["op"] == "extract"]
+        assert failed(o) == LORA_A_FAIL and cs and cs[-1]["elapsed"] < 1.0, cs      # 적재(1.0초)를 기다리지 않고 실패했다: 호출 경과가 적재 시간보다 짧다
         time.sleep(1.3)                                                # 서버가 다 올리면 다음 턴은 성공
         assert failed(e.turn()) == []
     finally:
@@ -266,7 +266,9 @@ def test_other_sessions_are_not_blocked_by_slow_inference(tmp_path):
         ts = [threading.Thread(target=lambda i=i: e.orch.handle_turn(turn_id="a", frontend_message={"session_id": f"P{i}", "kind": "SESSION_START"}))
               for i in range(4)]
         [t.start() for t in ts]; [t.join() for t in ts]
-        assert time.monotonic() - t0 < 0.9                                   # 직렬이면 4 x 0.3 = 1.2초 이상
+        wall = time.monotonic() - t0
+        cs = e.client.stats.calls()
+        assert len(cs) >= 4 and wall < 0.9 * sum(c["elapsed"] for c in cs), (wall, cs)      # 병렬이면 벽시계가 호출 경과의 합보다 짧다(직렬이면 같다). 절대 시간이 아니라 상대 비교라 부하에 안 흔들린다
     finally:
         e.close()
 

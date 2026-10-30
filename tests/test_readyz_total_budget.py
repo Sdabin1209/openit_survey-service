@@ -9,7 +9,9 @@ import time
 from .test_readyz_db_outage import _app
 
 BUDGET = 2.0
-SLACK = 0.25      # 스레드 시작·직렬화 여유(측정 아님, 이 PC)
+from .timing import slack
+
+SLACK = slack(0.25)      # 스레드 시작·직렬화 여유 0.25초(측정 아님, 이 PC) + 지금 부하의 스레드 깨어남 지연 x 20(tests/timing.py)
 
 
 def _slow(seconds):
@@ -54,7 +56,7 @@ def test_healthy_readyz_still_reads_fresh_stats(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch)
     try:
         ok, body, el = _timed(app)
-        assert ok and body["db_stats_stale"] is False and body["trace_outbox"] is not None and el < 1.0
+        assert ok and body["db_stats_stale"] is False and body["trace_outbox"] is not None and el < 1.0 + SLACK
     finally:
         app.stop()
 

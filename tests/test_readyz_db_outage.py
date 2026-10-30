@@ -1,5 +1,6 @@
 """/readyz는 DB가 죽거나 멈춰도 짧은 상한 안에 503(db unavailable)으로 답하고, 복구되면 다시 200이 된다(CR-D23).
 PostgreSQL 시험은 TEST_DATABASE_URL이 없으면 SKIP(통과로 세지 않는다). 연결 불가는 응답 없는 주소(10.255.255.1)로 만든다."""
+from .timing import slack
 import json
 import threading
 import time
@@ -145,7 +146,7 @@ def test_turn_ends_not_committed_within_deadline_when_db_is_frozen(request):
         t = time.monotonic()
         out = rig.say("안 피움", turn_id="t-frozen")
         dt = time.monotonic() - t
-        assert dt < 6 and out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", dt
+        assert dt < 6 + slack(0.5) and out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED", dt
     finally:
         pc.unpause(cid)
     time.sleep(1)
@@ -246,13 +247,14 @@ def test_readyz_deadline_boundary_check_finishing_just_before_counts_ok_just_aft
     try:
         budget = app.settings.readyz_db_timeout_seconds
         margin = 0.3
+        late = slack(0.3)      # 마감을 넘겨 끝난 확인을 기다리지 않았다는 상한의 여유: 0.3초 + 지금 부하의 스레드 깨어남 지연 x 20(tests/timing.py)
         monkeypatch.setattr(app.store, "ping", lambda: time.sleep(budget - margin))      # 마감 직전에 끝남
         monkeypatch.setattr(app.outbox, "ping", lambda: time.sleep(budget + margin))     # 마감 직후에 끝남
         monkeypatch.setattr(app.alert_store, "ping", lambda: None)
         ok, body, took = _timed(app)
         assert ok is False
         assert [p for p in body["problems"] if p.endswith("_db")] == ["outbox_db"]
-        assert took < budget + margin, took
+        assert took < budget + late, took
     finally:
         app.stop() if hasattr(app, "stop") else None
 

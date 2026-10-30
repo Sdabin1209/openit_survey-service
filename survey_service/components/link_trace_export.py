@@ -33,7 +33,7 @@ class FlushResult:
 class TraceExporter:
     def __init__(self, outbox, ingest, *, base_delay: float = 1.0, max_delay: float = 60.0, batch: int = 50,
                  validate: bool = True, clock: Callable[[], float] = time.time, stage_grace: float = 60.0) -> None:
-        # stage_grace: 예약 행(턴 진행 중)이 이만큼 오래되면 턴이 사라진 것으로 보고 승격한다. 서버 턴 마감 6초(ADR-0008)의 10배, 측정하지 않았다 (ADR-0023)
+        # stage_grace: 예약 행(턴 진행 중)이 이만큼 오래되면 턴이 사라진 것으로 보고 승격한다. 서버 턴 마감 9초(ADR-0049)의 6배 이상, 측정하지 않았다 (ADR-0023)
         self.stage_grace = stage_grace
         self.outbox, self.ingest = outbox, ingest
         self.base_delay, self.max_delay, self.batch = base_delay, max_delay, batch

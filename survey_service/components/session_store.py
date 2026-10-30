@@ -475,7 +475,7 @@ except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
     DRIVER_ERRORS = ()
 
 # 주 연결의 대기 상한(초). 설정으로 바꾼다(`configure`, db.open_stores). 근거는 docs/boundary.md §5: 정상일 때 문장 하나는 수 ms이고 턴 하나의 쓰기는 몇 문장이라
-# 2초면 느린 디스크·잠깐의 잠금 대기는 견디고(libpq 접속 상한은 2초 미만이 의미 없다), 서버 턴 총 마감(기본 6초)과 gateway 상한(8.5초) 안에서 재접속 한 번까지 시도할 수 있다. 근거: ADR-0011.
+# 2초면 느린 디스크·잠깐의 잠금 대기는 견디고(libpq 접속 상한은 2초 미만이 의미 없다), 서버 턴 총 마감(기본 9초, ADR-0049)과 gateway 상한(8.5초) 안에서 재접속 한 번까지 시도할 수 있다. 근거: ADR-0011.
 DEFAULT_CONNECT_TIMEOUT = 2.0         # libpq의 connect_timeout은 2초 미만이 의미 없다
 DEFAULT_STATEMENT_TIMEOUT = 2.0
 DEFAULT_RECONNECT_BACKOFF = 1.0       # 접속에 실패한 뒤 이 시간 동안은 다시 접속을 시도하지 않고 바로 실패한다(턴 하나가 접속 시도 여러 번을 기다리지 않게)

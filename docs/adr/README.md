@@ -46,3 +46,4 @@
 - [ADR-0042](ADR-0042.md) 위험 규칙 파일 형식은 계약 SurveyRiskRulesFile로 검증한다 (U48)
 - [ADR-0043](ADR-0043.md) extract는 항상 flow·fields와 부르고 칸 규격 없는 문항 은행은 적재를 거부한다 (계약 3.0.0)
 - [ADR-0044](ADR-0044.md) 문진 스키마 2.0.0: SessionResult.skipped 폐지 (정수 CONTRACT_VERSION은 그대로)
+- [ADR-0049](ADR-0049.md) 시간 상한 사슬 extract 3.0 / respond 5.0 / 턴 마감 9.0 (ADR-0008·0026의 값을 대체)

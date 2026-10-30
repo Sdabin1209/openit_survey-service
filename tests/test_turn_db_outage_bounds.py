@@ -1,5 +1,6 @@
 """환자 턴의 DB 장애 시간 상한(FAULT_POLICY 원칙 1·3·4): 연결 거부는 빠르게 503 UNAVAILABLE, 무응답(pause)은 턴 마감 안에 끝난다.
-불변식: 키오스크 대기 10초 > gateway 9.5초(연결 1 + 응답 헤더 8.5) > 서버 턴 마감(기본 6초). TEST_DATABASE_URL이 없으면 SKIP."""
+불변식: 키오스크 대기 12초 > gateway 10.5초 > 서버 턴 마감(기본 9초, ADR-0049). TEST_DATABASE_URL이 없으면 SKIP."""
+from .timing import slack
 import json
 import os
 import subprocess
@@ -41,8 +42,8 @@ def _turn(api, tid):
 
 def test_defaults_keep_the_timeout_ordering():
     s = Settings.from_env(BASE)
-    # 키오스크 10 > gateway 9.5(연결 1 + 헤더 8.5) > 서버 마감. 마감 직전에 시작한 접속 시도(connect)가 끝나는 시간도 gateway 상한 안에 든다
-    assert s.turn_deadline_seconds + 0.5 < 8.5 and s.turn_deadline_seconds <= 7
+    # 키오스크 12 > gateway 10.5(연결 1 + 헤더 9.5) > 서버 마감 9(ADR-0049). 마감 직전에 시작한 접속 시도(connect)가 끝나는 시간도 gateway 상한 안에 든다
+    assert s.turn_deadline_seconds + 0.5 <= 9.5 and s.turn_deadline_seconds <= 9
     assert s.db_connect_timeout_seconds + s.db_statement_timeout_seconds + 1 < s.turn_deadline_seconds + 1
 
 
@@ -52,10 +53,10 @@ def test_connection_refused_ends_fast_with_503_then_recovers(request):
     store._db._conn.close()
     store._db._url = REFUSED
     code, resp, dt = _turn(api, "t-refused")
-    assert code == 503 and resp["code"] == "UNAVAILABLE" and resp["retryable"] is True and dt < s.db_connect_timeout_seconds + 1, dt
+    assert code == 503 and resp["code"] == "UNAVAILABLE" and resp["retryable"] is True and dt < s.db_connect_timeout_seconds + slack(1.0), dt
     assert "p-canary-55" not in json.dumps(resp)
     code, resp, dt = _turn(api, "t-refused-2")                  # 접속 실패 직후(재접속 유예 중)에는 접속을 시도하지 않고 바로 실패한다
-    assert code == 503 and dt < 0.5, dt
+    assert code == 503 and dt < slack(0.5), dt      # 접속을 시도하지 않고 바로 실패한다: 0.5초 + 지금 부하의 깨어남 지연 x 20
     store._db._url = good
     time.sleep(s.db_reconnect_backoff_seconds + 0.2)
     rig.model.queue.append({"action": "NEXT", "next_item": "END", "values": []})
@@ -71,8 +72,8 @@ def test_frozen_db_ends_within_server_turn_deadline(request):
     pc.pause(cid)
     try:
         code, resp, dt = _turn(api, "t-frozen")
-        # 어느 경로든(사전 확인의 503 또는 턴 마감의 NOT_COMMITTED) 서버 턴 마감 안에, gateway 응답 헤더 상한(8.5초)보다 충분히 짧게 끝난다
-        assert dt < s.turn_deadline_seconds + 0.5 and dt < 7.0, dt
+        # 어느 경로든(사전 확인의 503 또는 턴 마감의 NOT_COMMITTED) 서버 턴 마감 안에, gateway 상한(10.5초) 안에 끝난다
+        assert dt < s.turn_deadline_seconds + slack(0.5) and dt < 10.5, dt
         assert code == 503 or resp["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
     finally:
         pc.unpause(cid)
