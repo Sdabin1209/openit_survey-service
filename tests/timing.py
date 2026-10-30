@@ -16,3 +16,13 @@ def jitter(n: int = 20) -> float:
 def slack(base: float, factor: float = 20.0) -> float:
     """기본 여유 base에 지금 부하의 깨어남 지연 x factor를 더한다(측정 근거: 부하가 없을 때 jitter는 수 ms라 base가 그대로다)."""
     return base + factor * jitter()
+
+
+def wait_until(cond, timeout: float = 10.0, step: float = 0.02) -> bool:
+    """조건이 참이 될 때까지 기다린다(고정 sleep으로 '이쯤이면 됐겠지'를 추측하지 않는다). timeout은 부하가 심해도 넘지 않을 바깥 한도이고 판정은 조건이 한다."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if cond():
+            return True
+        time.sleep(step)
+    return bool(cond())

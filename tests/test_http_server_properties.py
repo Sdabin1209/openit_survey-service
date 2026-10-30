@@ -19,7 +19,8 @@ def test_idle_partial_connections_do_not_block_other_requests(tmp_path, monkeypa
         t0 = time.monotonic()
         for _ in range(5):
             assert http_call(port, "GET", "/healthz", token=None)[0] == 200
-        assert time.monotonic() - t0 < 3.0
+        # 반쯤 열린 연결 20개가 다른 요청을 막지 않는다. 막혔다면 소켓 제한(15초)이 지나야 풀리므로 10초 안에 끝나면 막히지 않은 것이다(3초는 부하에서 흔들렸다)
+        assert time.monotonic() - t0 < 10.0
     finally:
         for s in socks:
             s.close()

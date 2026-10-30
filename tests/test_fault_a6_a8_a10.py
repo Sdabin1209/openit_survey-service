@@ -1,4 +1,5 @@
 """FAULT_MATRIX A6(Trace outbox -> 수집: 멈춤·5xx·깨진 응답, 큐 상한), A8(릴리스 사본 볼륨: 쓰기 불가), A10(직원 SSE: 이어 받기·DB 오류·연결 누수)."""
+from .timing import wait_until
 import json
 import threading
 import time
@@ -172,7 +173,7 @@ def test_sse_tells_client_to_resync_when_events_were_trimmed(tmp_path, monkeypat
         code, body = http_call(port, "GET", "/v1/staff/alerts?status=OPEN")           # 목록 API로 따라잡는다
         assert code == 200 and len(body["items"]) == 3
         sse2 = Sse(port, last_id=app.alert_store.latest_event_id())      # 이어 받을 수 있으면 resync는 없다
-        time.sleep(0.5)
+        assert wait_until(lambda: sse2.heartbeats)          # 스트림이 살아서 하트비트가 온 뒤에 비었음을 본다(고정 sleep은 스트림이 아직 안 열렸어도 통과한다)
         assert sse2.events.empty()
         sse2.close()
     finally:
@@ -202,8 +203,7 @@ def test_dropped_sse_clients_do_not_leak_subscriptions_or_threads(tmp_path, monk
     try:
         base = threading.active_count()
         clients = [Sse(port) for _ in range(8)]
-        time.sleep(0.5)
-        assert app.alerts.hub.count() == 8
+        assert wait_until(lambda: app.alerts.hub.count() == 8)
         for c in clients:
             c.close()                                           # 클라이언트가 말없이 떠난다
         end = time.monotonic() + 5

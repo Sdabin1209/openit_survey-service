@@ -23,7 +23,7 @@ def redirect_extraction(req: dict) -> dict:
 
 
 class FlakyRuntime(RuntimeReferenceServer):
-    def __init__(self, tokens, rid="rel-1", *, load_delay: float = 0.0, load_error: BoundaryError | None = None):
+    def __init__(self, tokens, rid="rel-1", *, load_delay: float = 0.0, load_error: BoundaryError | None = None, load_gate=None):
         super().__init__(tokens)
         self.available[rid] = "ok"
         self.rid = rid
@@ -35,6 +35,7 @@ class FlakyRuntime(RuntimeReferenceServer):
         self.calls: list = []
         self.extract_bodies: list = []     # extract POST가 받은 본문(JSON). 서비스가 ExtractRequest를 보냈는지 본다
         self.load_delay, self.load_error = load_delay, load_error
+        self.load_gate = load_gate         # threading.Event: 주면 적재는 시간이 아니라 이 이벤트가 켜질 때 끝난다(부하에서 '아직 LOADING'이 뒤집히지 않는다)
         self._load_started: dict = {}
 
     def start(self, port: int = 0) -> "FlakyRuntime":
@@ -67,11 +68,13 @@ class FlakyRuntime(RuntimeReferenceServer):
             return "ABSENT"
         if self.load_error is not None:
             return "FAILED"
+        if self.load_gate is not None:
+            return "LOADED" if self.load_gate.is_set() else "LOADING"
         return "LOADED" if time.monotonic() - t0 >= self.load_delay else "LOADING"
 
     def _route(self, method, path, q, body, role):
         parts = path.split("/")
-        if len(parts) == 4 and parts[1:3] == ["v1", "releases"] and (self.load_delay or self.load_error):
+        if len(parts) == 4 and parts[1:3] == ["v1", "releases"] and (self.load_delay or self.load_gate is not None or self.load_error):
             rid = parts[3]
             if method == "PUT":
                 self.puts += 1
@@ -107,7 +110,7 @@ class FlakyRuntime(RuntimeReferenceServer):
                     raise step
                 if step is not None:
                     return step
-            if self.load_delay and parts[3] not in self.loaded:
+            if (self.load_delay or self.load_gate is not None) and parts[3] not in self.loaded:
                 raise BoundaryError("NOT_FOUND", "적재되지 않은 릴리스")
         return super()._route(method, path, q, body, role)
 

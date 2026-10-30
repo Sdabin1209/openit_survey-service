@@ -1,4 +1,5 @@
 """공개 API 보완(D66): 세션 상태, 푸시 설정, 오류 표, Retry-After, turn_id 봉투, 응답 스키마 검증."""
+from .timing import wait_until
 import json
 import re
 import threading
@@ -211,7 +212,8 @@ def test_alert_list_and_pages_validate_against_boundary_schemas(ar):
 def test_sse_events_are_alert_and_resolved_with_event_numbers_and_validate(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     try:
-        sse = Sse(port); time.sleep(0.2)
+        sse = Sse(port)
+        assert wait_until(lambda: app.alerts.hub.count() >= 1)
         start_and_risk(port, "K1", "t-1")
         i1, ev1, a1 = sse.next()
         assert api(port, "POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, token="test-staff-token")[0] == 200

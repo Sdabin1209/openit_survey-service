@@ -1,5 +1,6 @@
 """D88 U1·U2: 위험 규칙 감지는 모델 추출 성공·쓰기 확정과 무관하게 모든 발화 턴에 적용되고, 알림은 확정과 분리해 먼저 나간다. 임시 기본 목록, 문항 세트 저작 값."""
 import copy
+import threading
 import time
 
 import pytest
@@ -53,11 +54,16 @@ def test_alert_goes_out_even_when_the_turn_deadline_is_exceeded():
     rig = _rig(turn_deadline_seconds=0.4)
     real = rig.store.load
 
+    release = threading.Event()
+
     def slow(sid):
-        time.sleep(0.9)
+        release.wait(30)                              # 턴이 마감(0.4초)으로 돌아온 뒤에 풀어 준다: 고정 sleep(0.9)은 부하에서 마감과 순서가 바뀔 수 있다
         return real(sid)
     rig.store.load = slow
-    out = rig.say("가슴이 아파요")
+    try:
+        out = rig.say("가슴이 아파요")
+    finally:
+        release.set()
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
     assert len(_alerts(rig)) == 1                                                    # 선별이 DB 읽기보다 앞에서 알림을 보냈다
 

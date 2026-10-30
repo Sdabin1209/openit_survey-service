@@ -1,4 +1,5 @@
 """직원 알림(D64): 영속 저장, 목록, SSE(이어 받기), 웹 푸시 구독, 해결 표시, 권한, 전달 판정."""
+from .timing import wait_until
 import base64
 import http.server
 import json
@@ -354,7 +355,7 @@ class PushService:
 def test_webpush_sender_against_local_push_service(status, expected):
     ps = PushService(status)
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=3, allow_private_hosts=True)
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=60, allow_private_hosts=True)      # 시간을 보는 시험이 아니다: 부하로 3초를 넘기면 GONE이 FAILED로 바뀌어 흔들렸다(410 단독 재실행은 통과). 60초는 바깥 한도일 뿐
         payload = json.dumps({"alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
         assert sender.send({"endpoint": ps.url, "keys": _client_keys()}, payload) == expected
         hdr, body = ps.requests[0]
@@ -466,7 +467,7 @@ def live(tmp_path, monkeypatch):
 def test_sse_streams_new_alerts_resolves_and_heartbeats(live):
     app, port, _ = live
     sse = Sse(port)
-    time.sleep(0.2)
+    assert wait_until(lambda: app.alerts.hub.count() >= 1)           # 구독이 등록된 뒤에만 알림을 낸다(고정 sleep으로 추측하지 않는다)
     code, fi = start_and_risk(port, "K1", "t-1")
     assert code == 200 and fi["turn_failure_signal"]["staff_alert"] == "DELIVERED"      # SSE 연결이 있어 DELIVERED
     i1, ev, alert = sse.next()
@@ -474,18 +475,19 @@ def test_sse_streams_new_alerts_resolves_and_heartbeats(live):
     assert api(port, "POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, token="test-staff-token")[0] == 200
     i2, ev2, alert2 = sse.next()
     assert ev2 == "resolved" and alert2["alert_id"] == alert["alert_id"] and alert2["resolved_by_decision"] == "RESUME" and i2 == i1 + 1
-    time.sleep(0.6)
-    assert any("ping" in c for c in sse.comments)
+    assert wait_until(lambda: any("ping" in c for c in sse.comments))      # 하트비트(0.2초 설정) 주석 줄이 올 때까지
     sse.close()
 
 
 def test_sse_resumes_with_last_event_id_and_after_restart(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     try:
-        sse = Sse(port); time.sleep(0.2)
+        sse = Sse(port)
+        assert wait_until(lambda: app.alerts.hub.count() >= 1)
         start_and_risk(port, "A", "t-a")
         first_id, _, _ = sse.next()
-        sse.close(); time.sleep(0.8)      # 서버는 다음 하트비트 쓰기에서 끊김을 안다
+        sse.close()
+        assert wait_until(lambda: app.alerts.hub.count() == 0)      # 서버는 다음 하트비트 쓰기에서 끊김을 알고 구독을 푼다
         code, fi = start_and_risk(port, "B", "t-b")                                # 끊긴 동안의 알림: 전달 경로 없음
         assert fi["turn_failure_signal"]["staff_alert"] == "DELIVERY_FAILED"
         start_and_risk(port, "C", "t-c")

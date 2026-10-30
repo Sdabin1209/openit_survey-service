@@ -215,32 +215,35 @@ def test_forgotten_release_is_reloaded_once(env):
 
 
 def test_forgotten_release_with_slow_reload_fails_the_turn_instead_of_waiting(tmp_path):
-    e = Env(tmp_path, load_delay=1.0)
+    gate = threading.Event()
+    gate.set()                                                         # 처음 적재는 바로 끝난다
+    e = Env(tmp_path, load_gate=gate)
     try:
         assert e.loader.poll_once().action == "LOADED"                 # 적재 신호 뒤 끝날 때까지 기다린다
         e.start()
+        gate.clear()                                                   # 서버가 릴리스를 잊고 다시 적재하는 동안 LOADING이다(시간과 무관)
         e.srv.forget()
         o = e.turn()
-        cs = [c for c in e.client.stats.calls() if c["op"] == "extract"]
-        assert failed(o) == LORA_A_FAIL and cs and cs[-1]["elapsed"] < 1.0, cs      # 적재(1.0초)를 기다리지 않고 실패했다: 호출 경과가 적재 시간보다 짧다
-        time.sleep(1.3)                                                # 서버가 다 올리면 다음 턴은 성공
+        assert failed(o) == LORA_A_FAIL and e.client.stats.snapshot()["reloads"] >= 1      # 적재를 기다리지 않고 이 턴을 실패시켰다(기다렸다면 게이트가 켜지기 전에는 끝나지 않는다)
+        gate.set()                                                     # 서버가 다 올리면 다음 턴은 성공
         assert failed(e.turn()) == []
     finally:
         e.close()
 
 
 def test_async_load_is_polled_until_loaded(tmp_path):
-    e = Env(tmp_path, load_delay=0.4)
+    gate = threading.Event()
+    e = Env(tmp_path, load_gate=gate)
     try:
-        t0 = time.monotonic()
-        assert e.loader.poll_once().action == "LOADED" and time.monotonic() - t0 >= 0.35
+        threading.Timer(0.3, gate.set).start()                         # 적재 신호 뒤 잠깐 LOADING이었다가 끝난다
+        assert e.loader.poll_once().action == "LOADED"                 # 끝까지 폴링했다(시간 하한은 단언하지 않는다)
         assert e.registry.active_id() == "rel-1"
     finally:
         e.close()
 
 
 def test_load_wait_timeout_is_transient_not_a_rejection(tmp_path):
-    e = Env(tmp_path, load_delay=1.5, load_timeout=0.3)
+    e = Env(tmp_path, load_gate=threading.Event(), load_timeout=0.3)      # 게이트가 꺼져 있어 항상 LOADING(시간과 무관)
     try:
         r = e.loader.poll_once()           # 서버가 아직 적재 중이다: 영구 거부가 아니라 재시도(tests/test_loader_retry.py)
         assert r.action == "RETRY_LATER" and r.code == "REMOTE_TIMEOUT" and e.registry.active() is None and not e.loader.status.rejections

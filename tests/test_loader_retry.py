@@ -132,12 +132,13 @@ def test_new_pointer_that_is_also_failing_restarts_the_retry_count(e):
 
 
 def test_slow_load_that_outlasts_the_wait_succeeds_on_a_later_try(tmp_path):
-    e = Env(tmp_path, load_delay=0.6, load_timeout=0.25)
+    gate = threading.Event()
+    e = Env(tmp_path, load_gate=gate, load_timeout=0.25)
     try:
         clock = with_clock(e)
         r = e.loader.poll_once()
-        assert r.action == "RETRY_LATER" and r.code == "REMOTE_TIMEOUT"                          # 서버는 아직 LOADING
-        time.sleep(0.7)                                                                          # 서버가 다 올렸다
+        assert r.action == "RETRY_LATER" and r.code == "REMOTE_TIMEOUT"                          # 서버는 아직 LOADING(게이트가 꺼져 있어 시간과 무관하다)
+        gate.set()                                                                               # 서버가 다 올렸다
         clock.t += 5
         r = e.loader.poll_once()
         assert r.action == "LOADED" and e.registry.active_id() == "rel-1" and e.loader.status.retry is None
@@ -146,11 +147,12 @@ def test_slow_load_that_outlasts_the_wait_succeeds_on_a_later_try(tmp_path):
 
 
 def test_slow_load_within_the_wait_is_just_waited_for(tmp_path):
-    e = Env(tmp_path, load_delay=0.5, load_timeout=5)
+    gate = threading.Event()
+    e = Env(tmp_path, load_gate=gate, load_timeout=30)
     try:
         with_clock(e)
-        t0 = time.monotonic()
-        assert e.loader.poll_once().action == "LOADED" and time.monotonic() - t0 >= 0.45 and e.loader.status.retry is None
+        threading.Timer(0.3, gate.set).start()                                                   # 적재 신호 뒤 잠깐 LOADING이었다가 끝난다
+        assert e.loader.poll_once().action == "LOADED" and e.loader.status.retry is None          # 끝까지 기다렸다(시간 하한은 단언하지 않는다: LOADING 뒤 LOADED라는 순서가 증거)
     finally:
         e.close()
 
@@ -307,7 +309,8 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
     gate.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                      model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
-    srv = FlakyRuntime({TOKEN: "survey-service"}, load_delay=1.5).start()
+    gate_ev = threading.Event()
+    srv = FlakyRuntime({TOKEN: "survey-service"}, load_gate=gate_ev).start()
     monkeypatch.setenv("SURVEY_API_TOKEN", "a-0123456789abcdef"); monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s-0123456789abcdef"); monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", TOKEN)
     s = Settings.from_env({"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
                            "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_INFERENCE_URL": srv.url,
@@ -315,15 +318,15 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
     app = App(s, reader=gate, ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     front = None
     try:
-        t0 = time.monotonic()
-        app.start()
-        assert time.monotonic() - t0 < 1.2                                                           # 적재를 끝까지 기다리지 않았다
+        app.start()                                                                                  # 적재(게이트가 꺼져 있는 동안 끝나지 않는다)를 끝까지 기다리지 않고 돌아온다: 돌아왔다는 사실 자체가 증거다
+        assert app.registry.active_id() is None
         front = serve(app, 0)
         start_server(front)
         port = server_port(front)
         assert http(port, "/healthz")[0] == 200
         assert http(port, "/readyz")[0] == 503
-        deadline = time.monotonic() + 8
+        gate_ev.set()                                                                                # 서버가 다 올렸다
+        deadline = time.monotonic() + 30      # 바깥 한도(판정은 /readyz 200)
         while time.monotonic() < deadline and http(port, "/readyz")[0] != 200:
             time.sleep(0.1)
         assert http(port, "/readyz")[0] == 200

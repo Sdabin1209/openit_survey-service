@@ -95,11 +95,15 @@ import socket
 import time
 
 from .test_staff_alerts import http_call, make_app
+from .timing import wait_until
 
 
 def _raw(port, request: bytes, timeout=5):
     s = socket.create_connection(("127.0.0.1", port), timeout=timeout)
-    s.sendall(request)
+    try:
+        s.sendall(request)
+    except OSError:      # 서버가 본문을 다 받기 전에 응답하고 닫으면(413 등) 보내다 끊긴다(TCP 경쟁). 이미 받은 응답을 읽어 판정한다
+        pass
     data = b""
     try:
         while True:
@@ -172,15 +176,16 @@ def test_connection_limit_holds_new_connections_and_idle_timeout_frees_slots(tmp
     app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_SOCKET_TIMEOUT_SECONDS": "1", "SURVEY_MAX_CONNECTIONS": "2"})
     try:
         assert connection_limit(httpd) == 2 + 2             # 설정 2 + waitress 내부 소켓 2
+        t_idle = time.monotonic()
         idle = [socket.create_connection(("127.0.0.1", port)) for _ in range(2)]     # 요청을 보내지 않고 매달린 연결(slowloris)
-        time.sleep(0.3)
         s = socket.create_connection(("127.0.0.1", port))
         s.sendall(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
-        s.settimeout(0.5)
-        with pytest.raises(socket.timeout):                  # 자리가 없어 아직 받아 주지 않는다
-            s.recv(100)
-        s.settimeout(5)
-        assert b" 200 " in s.recv(4096).split(b"\r\n", 1)[0]       # 읽기 제한(1초)으로 매달린 연결이 정리되면 처리된다
+        s.settimeout(30)                                     # 판정은 시간 상한이 아니라 아래 두 조건이 한다(바깥 한도일 뿐)
+        first = s.recv(4096)
+        t_served = time.monotonic() - t_idle
+        assert b" 200 " in first.split(b"\r\n", 1)[0]          # 읽기 제한(1초)으로 매달린 연결이 정리되면 처리된다
+        # 자리가 없는 동안에는 받아 주지 않는다: 처리된 때는 매달린 연결이 생긴 지 읽기 제한(1초)이 지난 뒤여야 한다. 부하로 더 늦어지는 것은 허용하고 더 빠른 것만 거부한다
+        assert t_served >= 0.9, t_served
         s.close()
         for c in idle:
             c.close()
@@ -194,7 +199,7 @@ def test_sse_connection_cap(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch, extra={"SURVEY_MAX_SSE_CONNECTIONS": "1"})
     try:
         first = Sse(port)
-        time.sleep(0.3)
+        assert wait_until(lambda: app.alerts.hub.count() >= 1)
         with pytest.raises(urllib.error.HTTPError) as e:
             Sse(port)
         assert e.value.code == 503 and e.value.headers.get("Retry-After")

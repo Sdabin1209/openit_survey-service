@@ -116,10 +116,15 @@ def test_deadline_slow_store_load_skips_commit():
     before = _answers(rig)
     real_load = rig.store.load
     slow = threading.Event()
+    release, done = threading.Event(), threading.Event()
 
     def load(sid):
         if slow.is_set():
-            time.sleep(0.9)                           # DB 대기
+            release.wait(30)                          # DB 대기: 턴이 마감으로 돌아온 뒤에 풀어 준다(고정 sleep은 부하에서 마감과 순서가 바뀔 수 있다)
+            try:
+                return real_load(sid)
+            finally:
+                done.set()
         return real_load(sid)
     rig.store.load = load
     rig.model.queue.append(ANSWER_OUT)
@@ -129,7 +134,9 @@ def test_deadline_slow_store_load_skips_commit():
     slow.set()
     out = _say(rig, "t-db")
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
-    time.sleep(1.2)
+    release.set()                                     # 늦게 끝난 읽기: 이 뒤에 확정하지 않아야 한다
+    assert done.wait(30)
+    time.sleep(0.3)                                   # 읽기가 끝난 뒤 이어질 수 있는 확정이 있다면 그 시간을 준다(없음을 보는 단언이라 늦어도 거짓 실패는 없다)
     assert not commits and _answers(rig) == before
 
 
