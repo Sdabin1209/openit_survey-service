@@ -271,13 +271,13 @@ class Orchestrator:
         """같은 DB 모드일 때 TraceEnvelope. 아니면 None(기존 경로: _submit_trace)."""
         if not self.atomic_trace() or release_id is None or not trace:
             return None
-        return self.trace_sink.envelope(release_id, trace)
+        return checked.envelope(self.trace_sink, release_id, trace)
 
     def _submit_trace(self, out: TurnOutcome) -> None:
         if self.trace_sink is None or out.release_id is None:
             return
         try:
-            self.trace_sink.submit(out.release_id, out.trace)
+            checked.submit(self.trace_sink, out.release_id, out.trace)
         except Exception as e:  # Trace 때문에 턴이 실패하면 안 된다(I6)
             log.error("Trace를 outbox에 넣지 못했다 error=%s", type(e).__name__)
             self._count("trace_enqueue_failed")

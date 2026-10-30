@@ -20,6 +20,7 @@ from ..components.link_push import WebPushSender, endpoint_syntax_error
 from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
 from .. import types
+from . import checked
 from .checked import effective_reask_cap
 from .orchestrator import Orchestrator
 from ..components.field_specs import invalid_field_specs
@@ -89,9 +90,9 @@ class App:
                 push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds, allow_private_hosts=settings.push_allow_private_hosts)
             except ValueError as e:
                 raise ConfigError(str(e)) from None
-        self.alerts = AlertService(self.alert_store, AlertHub(), push, settings.push_timeout_seconds,
+        self.alerts = checked.wrap_alert_service(AlertService(checked.wrap_alert_store(self.alert_store), AlertHub(), push, settings.push_timeout_seconds,
                                     settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
-                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error)
+                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error))
         self.registry = ReleaseRegistry()
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
             tok = _secret(settings.inference_token_env, "추론 서버 토큰")
@@ -128,7 +129,7 @@ class App:
         elif risk_source is None and settings.risk_default_rules:
             risk_source = RuleRiskSource.provisional_default()                        # 임상 검토 전 임시 기본 목록. 입력원이 꺼진 채 시작하지 않는다 (D88 U2, ADR-0013)
             log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
-        self.orchestrator = Orchestrator(self.store, self.registry, risk_source=risk_source, staff_console=console, dispatcher=disp,
+        self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask,
                                          turn_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars)

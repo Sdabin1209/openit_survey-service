@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 영역 구조 개편 U400 3차 [미출시] (ADR-0048)
+
+- 고정: openit-link v0.4.1, model-runtime v0.11.3(라벨 `io.openit.model-runtime`이 v0.11.3). model-runtime이 내부를 components/wiring으로 나눠 `model_runtime.prompts`가 없어졌다(시험 한 곳이 새 경로를 쓴다).
+- 상태 객체 컴포넌트(alert_book, alert_service, release_registry, trace_envelope)도 동작마다 입력 스키마로 검증한다(`wiring/checked.py`). 스키마의 매개변수 이름을 실제 시그니처에 맞췄다(AlertWrite: n, sub, log_access_many, record).
+- 발화 길이 상한: 정본은 스키마 `UtteranceBody.utterance.maxLength`다. `SURVEY_API_MAX_UTTERANCE_CHARS`의 기본값은 그 값이고 그보다 크면 시작을 거부한다.
+
 ## 영역 구조 개편 U400 2차 [미출시] (ADR-0048)
 
 - 공개 API 받는 쪽을 `openit_link.App`(v0.3.0) 위로. 컴포넌트가 wiring을 import하지 않는다. 컴포넌트 입력을 wiring이 스키마로 검증한다(`wiring/checked.py`). 와이어 변경 목록은 ADR-0048 "결과".

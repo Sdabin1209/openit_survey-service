@@ -33,13 +33,13 @@ class AlertWrite3(TypedDict, closed=True):
 
 class AlertWrite4(TypedDict, closed=True):
     op: Literal['record_delivery']
-    alert_n: int
+    n: int
     status: Literal['DELIVERED', 'DELIVERY_FAILED']
 
 
 class AlertWrite5(TypedDict, closed=True):
     op: Literal['begin_retry']
-    alert_n: int
+    n: int
     turn_id: str
     count_attempt: NotRequired[bool]
 
@@ -47,7 +47,7 @@ class AlertWrite5(TypedDict, closed=True):
 class AlertWrite6(TypedDict, closed=True):
     op: Literal['finish_retry']
     session_id: str
-    alert_n: int
+    n: int
     turn_id: str
     status: Literal['DELIVERED', 'DELIVERY_FAILED']
     response: str
@@ -56,7 +56,7 @@ class AlertWrite6(TypedDict, closed=True):
 class AlertWrite7(TypedDict, closed=True):
     op: Literal['record_report']
     session_id: str
-    alert_n: int
+    n: int
     turn_id: str
     outcome: Literal['STAFF_NOTIFIED_MANUALLY', 'NOT_NOTIFIED']
     role: str
@@ -64,14 +64,14 @@ class AlertWrite7(TypedDict, closed=True):
 
 
 class AlertWrite8(TypedDict, closed=True):
-    op: Literal['record_timeline']
+    op: Literal['record']
     session_id: str
     turn_index: int
     turn_id: NotRequired[str | None]
 
 
 class AlertWrite9(TypedDict, closed=True):
-    op: Literal['log_access']
+    op: Literal['log_access_many']
     role: str
     session_ids: list[str | Literal['*']]
     outcome: str
@@ -90,7 +90,6 @@ class AlertWrite11(TypedDict, closed=True):
     op: Literal['record_signal']
     session_id: str
     signal: dict[str, Any]
-    alert_n: int
     session_status: Literal[
         'IN_PROGRESS',
         'PAUSED_RISK',
@@ -99,6 +98,7 @@ class AlertWrite11(TypedDict, closed=True):
         'ENDED_LEFT',
         'ENDED_USER_STOP',
     ]
+    alert_n: int
 
 
 class AlertWrite12(TypedDict, closed=True):
@@ -129,7 +129,7 @@ class Keys(TypedDict):
     auth: str
 
 
-class Subscription(TypedDict, closed=True):
+class Sub(TypedDict, closed=True):
     endpoint: Endpoint
     keys: Keys
     expirationTime: NotRequired[Any]
@@ -137,7 +137,7 @@ class Subscription(TypedDict, closed=True):
 
 class AlertWrite16(TypedDict, closed=True):
     op: Literal['upsert_subscription']
-    subscription: Subscription
+    sub: Sub
 
 
 class AlertWrite17(TypedDict, closed=True):

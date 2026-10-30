@@ -270,7 +270,7 @@ def test_release_expectations_from_installed_libraries(env):
     """설치된 model-runtime이 내보내는 serving_config 기준값(prompt 버전, 보호 정책)과 역할별 system_prompt를 가진 매니페스트를 적재한다."""
     reader, reg, loader = env
     import model_runtime
-    from model_runtime.prompts import SUPPORTED_TEMPLATE_VERSIONS
+    from model_runtime.components.prompt_render import SUPPORTED_TEMPLATE_VERSIONS      # v0.11.3부터 model-runtime이 components/로 나뉘었다(공개 이름이 아니다: 이 시험만 쓴다)
     from survey_service.components.link_inference import role_configs
     add(reader, "rel-1")
     reader.set_pointer("rel-1")
@@ -296,7 +296,7 @@ def test_release_with_prompt_3_is_rejected(env):
     """model-runtime의 지원 목록에 없는 prompt 버전은 적재되지 않는다. 이전 릴리스를 유지하고 거부한다."""
     import model_runtime
     reader, reg, loader = env
-    from model_runtime.prompts import SUPPORTED_TEMPLATE_VERSIONS
+    from model_runtime.components.prompt_render import SUPPORTED_TEMPLATE_VERSIONS      # v0.11.3부터 model-runtime이 components/로 나뉘었다(공개 이름이 아니다: 이 시험만 쓴다)
     stem = "prompt"
     newest = max(int(v.rsplit("-", 1)[1]) for v in SUPPORTED_TEMPLATE_VERSIONS)
     unsupported = next(f"{stem}-{n}" for n in range(newest + 1, newest + 50) if f"{stem}-{n}" not in SUPPORTED_TEMPLATE_VERSIONS)   # 지원 목록에 없는 버전

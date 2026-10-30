@@ -131,14 +131,14 @@
       "additionalProperties": false,
       "required": [
         "op",
-        "alert_n",
+        "n",
         "status"
       ],
       "properties": {
         "op": {
           "const": "record_delivery"
         },
-        "alert_n": {
+        "n": {
           "type": "integer",
           "minimum": 1,
           "description": "알림 번호 n. alert_id는 'al-<n>'"
@@ -156,14 +156,14 @@
       "additionalProperties": false,
       "required": [
         "op",
-        "alert_n",
+        "n",
         "turn_id"
       ],
       "properties": {
         "op": {
           "const": "begin_retry"
         },
-        "alert_n": {
+        "n": {
           "type": "integer",
           "minimum": 1,
           "description": "알림 번호 n. alert_id는 'al-<n>'"
@@ -190,7 +190,7 @@
       "required": [
         "op",
         "session_id",
-        "alert_n",
+        "n",
         "turn_id",
         "status",
         "response"
@@ -203,7 +203,7 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
         },
-        "alert_n": {
+        "n": {
           "type": "integer",
           "minimum": 1,
           "description": "알림 번호 n. alert_id는 'al-<n>'"
@@ -238,7 +238,7 @@
       "required": [
         "op",
         "session_id",
-        "alert_n",
+        "n",
         "turn_id",
         "outcome",
         "role"
@@ -251,7 +251,7 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
         },
-        "alert_n": {
+        "n": {
           "type": "integer",
           "minimum": 1,
           "description": "알림 번호 n. alert_id는 'al-<n>'"
@@ -300,7 +300,7 @@
       ],
       "properties": {
         "op": {
-          "const": "record_timeline"
+          "const": "record"
         },
         "session_id": {
           "type": "string",
@@ -335,7 +335,7 @@
       ],
       "properties": {
         "op": {
-          "const": "log_access"
+          "const": "log_access_many"
         },
         "role": {
           "type": "string",
@@ -447,11 +447,6 @@
           "type": "object",
           "x-survey-schema": "RiskSignal"
         },
-        "alert_n": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "알림 번호 n. alert_id는 'al-<n>'"
-        },
         "session_status": {
           "enum": [
             "IN_PROGRESS",
@@ -461,6 +456,11 @@
             "ENDED_LEFT",
             "ENDED_USER_STOP"
           ]
+        },
+        "alert_n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "알림 번호 n. alert_id는 'al-<n>'"
         }
       }
     },
@@ -542,13 +542,13 @@
       "additionalProperties": false,
       "required": [
         "op",
-        "subscription"
+        "sub"
       ],
       "properties": {
         "op": {
           "const": "upsert_subscription"
         },
-        "subscription": {
+        "sub": {
           "type": "object",
           "required": [
             "endpoint",

@@ -85,3 +85,64 @@ def store_commit(store: Any, req: Mapping, *, turn_id: str, input_hash: str, **k
         payload["trace_envelope"] = kw["trace_envelope"]
     types.validate("StoreCommitRequest", payload)
     return store.commit(req, turn_id=turn_id, input_hash=input_hash, **kw)
+
+
+# ---------------------------------------------------------------- 상태 객체 컴포넌트(여러 동작을 가진 것): 동작마다 입력 스키마로 검증한다
+
+def _ops_of(type_name: str) -> frozenset:
+    """op 기반 입력 스키마(oneOf의 op const)에서 동작 이름을 읽는다."""
+    return frozenset(b["properties"]["op"]["const"] for b in types.schema(type_name).get("oneOf", []) if "const" in b.get("properties", {}).get("op", {}))
+
+
+class _Checked:
+    """상태 객체를 감싸는 얇은 껍데기. 스키마에 적힌 동작은 부르기 전에 `{"op": 동작, **인자}`를 type_name 스키마로 검증하고, 나머지(속성, 생명주기)는 그대로 넘긴다.
+    왜 껍데기인가: 컴포넌트 안에 검사를 두지 않고(DESIGN 5절) 부르는 쪽(wiring)이 검증한다. 호출 지점이 많은 객체라 호출마다 래퍼를 쓰지 않고 한 번 감싼다."""
+
+    def __init__(self, target: Any, type_name: str, exclude: tuple = ()) -> None:
+        object.__setattr__(self, "_t", target)
+        object.__setattr__(self, "_type", type_name)
+        object.__setattr__(self, "_ops", _ops_of(type_name) - set(exclude))
+
+    def __getattr__(self, name: str):
+        attr = getattr(self._t, name)
+        if name not in self._ops or not callable(attr):
+            return attr
+        import inspect
+        sig = inspect.signature(attr)
+
+        def call(*a, **kw):
+            bound = sig.bind(*a, **kw)
+            types.validate(self._type, {"op": name, **bound.arguments})
+            return attr(*a, **kw)
+        return call
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._t, name, value)
+
+
+def wrap_alert_store(store: Any) -> Any:
+    return _Checked(store, "AlertWrite")
+
+
+def wrap_alert_service(service: Any) -> Any:
+    return _Checked(service, "AlertRaise")
+
+
+def wrap_registry(registry: Any) -> Any:
+    """register(살아 있는 모델 세션을 가진 객체)와 gc(순회자)는 JSON이 아니라 스키마 밖이다: 감싸지 않는다."""
+    return _Checked(registry, "ReleaseEntry", exclude=("register", "gc"))
+
+
+def envelope(sink: Any, release_id: str, trace: Mapping) -> dict:
+    """TurnTrace -> TraceEnvelope(trace_envelope 컴포넌트). 입력은 TraceEnvelopeSource, 출력은 outbox가 받기 전에 OutboxEnvelope로 한 번 더 본다(내는 쪽 검증)."""
+    import time
+    types.validate("TraceEnvelopeSource", {"release_id": release_id, "trace": trace, "now": time.time()})
+    env = sink.envelope(release_id, trace)
+    types.validate("OutboxEnvelope", env)
+    return env
+
+
+def submit(sink: Any, release_id: str, trace: Mapping) -> None:
+    if hasattr(sink, "envelope"):          # 봉투를 만드는 sink(OutboxTraceSink)만 입력·출력을 본다. 다른 TraceSink 구현(시험 대역 등)은 그대로 넘긴다
+        envelope(sink, release_id, trace)
+    sink.submit(release_id, trace)

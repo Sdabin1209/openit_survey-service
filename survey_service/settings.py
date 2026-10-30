@@ -12,6 +12,12 @@ class ConfigError(Exception):
     pass
 
 
+def _utterance_max() -> int:
+    """발화 길이 상한의 정본은 스키마 UtteranceBody.utterance.maxLength 하나다(설정은 이 값을 넘길 수 없고 기본값도 이 값). 둘이 어긋나 스키마가 설정보다 먼저 거절하는 일을 막는다."""
+    from . import types
+    return int(types.schema("UtteranceBody")["properties"]["utterance"]["maxLength"])
+
+
 def _int(env: Mapping, key: str, default: int, minimum: int = 0) -> int:
     raw = env.get(key)
     if raw is None or raw == "":
@@ -22,6 +28,12 @@ def _int(env: Mapping, key: str, default: int, minimum: int = 0) -> int:
         raise ConfigError(f"{key}는 정수여야 한다") from None
     if v < minimum:
         raise ConfigError(f"{key}는 {minimum} 이상이어야 한다")
+    return v
+
+
+def _bounded(v: int, key: str, upper: int) -> int:
+    if v > upper:
+        raise ConfigError(f"{key}는 {upper} 이하여야 한다(스키마 UtteranceBody의 상한)")
     return v
 
 
@@ -136,7 +148,7 @@ class Settings:
     kiosk_device_tokens_env: str = "SURVEY_KIOSK_DEVICE_TOKENS"   # 기기별 키오스크 토큰 표(`device_id=토큰` 줄). NAME_FILE이 있으면 파일 내용 (D88 U8)
     staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
     api_max_inflight: int = 32  # [근거: ADR-0004, 부하 측정 boundary.md §6-1 (기본 32)]
-    api_max_utterance_chars: int = 1000
+    api_max_utterance_chars: int = 1000      # 기본값은 스키마 UtteranceBody의 상한과 같아야 한다(tests/test_settings_utterance_max.py)
     session_idle_seconds: int = 300          # 0이면 유휴 만료를 하지 않는다
     # 모델 런타임을 HTTP 경계 뒤에 둘 때(추론 컨테이너): 비우면 프로세스 안에서 적재한다
     inference_url: str = ""
@@ -197,7 +209,7 @@ class Settings:
             max_push_subscriptions=_int(env, "SURVEY_MAX_PUSH_SUBSCRIPTIONS", 100, 1),
             staff_api_token_env=env.get("SURVEY_STAFF_API_TOKEN_ENV", "SURVEY_STAFF_API_TOKEN"),
             api_max_inflight=_int(env, "SURVEY_API_MAX_INFLIGHT", 32, 1),
-            api_max_utterance_chars=_int(env, "SURVEY_API_MAX_UTTERANCE_CHARS", 1000, 1),
+            api_max_utterance_chars=_bounded(_int(env, "SURVEY_API_MAX_UTTERANCE_CHARS", _utterance_max(), 1), "SURVEY_API_MAX_UTTERANCE_CHARS", _utterance_max()),
             session_idle_seconds=_int(env, "SURVEY_SESSION_IDLE_SECONDS", 300, 0),
             inference_url=env.get("SURVEY_INFERENCE_URL", ""),
             inference_token_env=env.get("SURVEY_INFERENCE_TOKEN_ENV", "SURVEY_INFERENCE_TOKEN"),
