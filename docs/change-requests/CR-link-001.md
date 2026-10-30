@@ -1,4 +1,4 @@
-# CR-link-001: link v0.1.0의 받는 쪽(openit_link.App)이 survey-service 공개 API를 담기에 부족한 점
+# CR-link-001: link의 받는 쪽(openit_link.App)이 survey-service 공개 API를 담기에 부족한 점 (v0.1.0 기준, v0.2.0 갱신 포함)
 
 요청처: 헤드(link 소유). 작성: survey-service 영역 에이전트, 2026-10-30, U400.
 
@@ -16,4 +16,13 @@
 ## 이 영역이 한 것
 - `components/link_boundary_clients.py`, `components/link_inference.py`: 클라이언트를 `openit_link.clients`에서 가져온다.
 - `components/link_public_api.py`: 기존 `PublicApi` 유지(HTTP 서버 라이브러리를 직접 쓰지 않는 순수 라우팅). 위 1~6이 해결되면 `openit_link.App` 위로 옮긴다.
-- `requirements.txt`, `pyproject.toml`에 `openit-link` v0.1.0 추가. GitHub 리포가 아직 없으므로 `git+ssh` 설치는 아직 되지 않는다. 개발 venv에는 `git+file:///home/user/sdabin/healthKiosk/link@v0.1.0`로 설치했다. 이미지 빌드(`build-image`)는 헤드가 알린 뒤에 돌린다.
+- `requirements.txt`, `pyproject.toml`에 `openit-link`(현재 v0.2.0, GitHub 리포에서 git+ssh로 설치)를 고정했다. `scripts/build-image.sh`가 같은 태그를 받아 이미지에 넣는다(요청 계약에 link 키가 없어서; 이 점도 계약 쪽 요청 사항이다: `BuildImageRequest.dependency_sources`에 `link` 키).
+
+## v0.2.0 이후 상태 (2026-10-30 갱신, server.py를 읽은 범위. 옮겨 시험하지는 않았다)
+v0.2.0이 해결하는 것: 위 2번(bytes 반복자 스트리밍), 6번(`Route.query_schema`), 1번의 일부(토큰 표 값 `{"role","actor"}` -> `Request.actor`로 기기 토큰의 기기 ID를 줄 수 있다), 토큰 상수 시간 비교.
+아직 막는 것(그래서 `link_public_api`는 `openit_link.App` 위로 옮기지 않았다. 옮기면 응답이 달라진다):
+1. **토큰 없이 기기 헤더로 인증**: 키오스크 경로는 게이트웨이가 mTLS로 확인한 `X-Openit-Device`가 있으면 토큰 없이 통과한다(ADR-0031). `App`은 역할이 있는 경로에서 토큰을 항상 요구한다. 요청: Route별 "헤더 신원 허용"(예: `device_header=True`).
+2. **오류 응답에 임의 헤더와 상태**: 429/503에 `Retry-After`를 붙이고 429(동시 처리 상한)를 낸다. `BoundaryError` 경로에는 헤더를 줄 방법이 없다(`details.http_status`로 상태만 바꿀 수 있다).
+3. **본문 해석의 추가 조건**: 중복 키 거부, 짝 없는 서로게이트 거부, 본문이 JSON 객체가 아니면 400. `App`은 `json.loads`만 한다.
+4. **상태 기반 인가**: "세션을 만든 기기만 접근" 판정은 저장소를 읽어야 한다(핸들러에 남는다. 이것은 라이브러리 몫이 아니다).
+5. 요청 단위 카운터(`/readyz`의 `api`)와 거절 로그는 라이브러리가 낼 수 없다(미들웨어 훅이 있으면 좋다).
