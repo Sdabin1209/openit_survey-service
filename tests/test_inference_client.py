@@ -22,7 +22,7 @@ TOKEN = "inf-tok"
 
 
 class Env:
-    def __init__(self, tmp, *, timeout=0.5, retries=1, load_timeout=5.0, **srv_kw):
+    def __init__(self, tmp, *, timeout=5.0, retries=1, load_timeout=5.0, **srv_kw):
         self.reader = FakeReleaseReader(tmp / "gate")
         self.reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                                 model_runtime_version=INSTALLED["model_runtime_version"])
@@ -50,7 +50,17 @@ class Env:
 
 @pytest.fixture
 def env(tmp_path):
+    # 호출 상한 5초: 시간을 보지 않는 시험이 부하로 0.5초를 넘겨 LoRA-A 타임아웃으로 흔들렸다(왜 5초: 바깥 한도일 뿐 판정은 상태가 한다)
     e = Env(tmp_path)
+    assert e.loader.poll_once().action == "LOADED"
+    yield e
+    e.close()
+
+
+@pytest.fixture
+def slow_env(tmp_path):
+    """호출 상한 0.5초: 타임아웃으로 끊기는 것을 보는 시험 전용(서버가 2초 걸리게 만들어 항상 끊긴다)."""
+    e = Env(tmp_path, timeout=0.5)
     assert e.loader.poll_once().action == "LOADED"
     yield e
     e.close()
@@ -79,7 +89,8 @@ def test_slow_but_within_timeout_is_fine(env):
     assert o.frontend_input["response_text"] and o.orchestrator_output["turn_failure_signal"] is None
 
 
-def test_slow_extract_beyond_timeout_fails_the_step_without_retry(env):
+def test_slow_extract_beyond_timeout_fails_the_step_without_retry(slow_env):
+    env = slow_env
     env.start()
     env.srv.delay = 2.0
     o = env.turn()
@@ -91,7 +102,8 @@ def test_slow_extract_beyond_timeout_fails_the_step_without_retry(env):
     assert s["timeouts"] == 1 and s["retries"] == 0 and s["failures"] == 1
 
 
-def test_slow_respond_fails_after_commit_state_is_kept(env):
+def test_slow_respond_fails_after_commit_state_is_kept(slow_env):
+    env = slow_env
     env.start()
     real = env.registry.active().session.respond
 
