@@ -2,6 +2,7 @@
 
 ## 문진 스키마 3.0.0 후보 + 적재 검사 정리 [미출시] (ADR-0045)
 
+- `/readyz`의 `reask_limit`에 `effective`(활성 문항 세트까지 반영한 실제 되묻기 상한, 활성 릴리스 없으면 null)를 더했다(ADR-0046). `active`는 effective가 있으면 effective>0, 없으면 서비스 설정>0.
 - **버그:** option 칸 선택지를 `choice_catalog`로 내는 문항 은행(question-authoring 방식)이 `choices`만 보는 코드 때문에 `MISSING_FIELD_SPEC`으로 거부됐다. 이제 catalog의 `code`를 `QuestionFieldSpec.options`로 쓴다.
 - **문진 스키마 3.0.0(깨지는 변경):** `QuestionBank`가 적재 거부 조건을 미리 표현한다: 슬롯 `data_type` 필수, option 칸은 `choices` 또는 `choice_catalog` 필수, 문항 ID·칸 ID 문자 패턴(계약 `QuestionFieldSpec.slot`과 같게), `choices` 중복 금지, 필수 고정 문장 4개. 적재가 이미 거부하던 은행만 스키마도 거부하므로 적재되던 은행은 없어지지 않지만, 스키마만 보던 생산자의 은행이 무효가 될 수 있어 MAJOR다. 정수 `CONTRACT_VERSION`은 1 그대로. 태그는 헤드가 만든다.
 - **적재 거부 코드 변경:** `MISSING_FIXED_SENTENCE`, `MISSING_FIELD_SPEC`은 없어지고 `INVALID_RECORD`(위반 위치 포함)가 된다. 새 `INVALID_FIELD_SPEC`은 계약 `QuestionFieldSpec` 검증(스키마로 표현할 수 없는 choice_catalog 코드 중복 등).

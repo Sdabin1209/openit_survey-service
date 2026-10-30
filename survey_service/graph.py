@@ -18,7 +18,7 @@ import operator
 import threading
 import time
 from dataclasses import asdict, dataclass
-from typing import Annotated, Any, Optional, TypedDict
+from typing import Annotated, Any, Mapping, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -42,6 +42,16 @@ TRACE_KEYS = ["frontend_message", "intervention_decision", "orchestrator_input",
               "persistence_commit_request", "persistence_commit_result"]
 STREAK_ACTIONS = ("REASK", "CONFIRM", "REDIRECT")   # 연속 상한이 세는 action (ADR-0020, REDIRECT는 U34 ADR-0032)
 MAX_EXTRACT_CALLS = 2         # 첫 호출 + 같은 요청의 1회 재시도(D75)
+
+
+def effective_reask_cap(max_consecutive: int, session_settings: Optional[Mapping]) -> int:
+    """되묻기 연속 상한의 실효 값(0이면 끔). /readyz의 reask_limit.effective도 이 함수를 쓴다: 이웃이 규칙을 따로 계산하지 않게 한다(구조 규칙 4, ADR-0046).
+    문항 세트가 정한 상한(U2) ask_limit·confirm_limit·unrecognized_streak_limit는 같은 연속 횟수에 적용하는 근사(ADR-0014)여서 가장 작은 값을 쓰고, 서비스 상한이 켜져 있으면 그것과도 min이다."""
+    authored = [(session_settings or {}).get(k) for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit")]
+    authored = [a for a in authored if isinstance(a, int) and not isinstance(a, bool) and a >= 1]
+    if not authored:
+        return max_consecutive
+    return min(authored + ([max_consecutive] if max_consecutive > 0 else []))
 
 
 @dataclass(frozen=True)
@@ -636,12 +646,7 @@ class TurnGraph:
         return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF"), "pause_reason": "REASK_LIMIT"}
 
     def _reask_cap(self, ctx) -> int:
-        cap = self.o.max_consecutive_reask
-        authored = [ctx.bank.settings.get(k) for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit")] if ctx.bank else []
-        authored = [a for a in authored if isinstance(a, int) and not isinstance(a, bool) and a >= 1]
-        if authored:            # 문항 세트가 정한 상한(U2). 세 값은 같은 연속 횟수에 적용하는 근사다(ADR-0014): 가장 작은 값을 쓴다
-            cap = min(authored + ([cap] if cap > 0 else []))
-        return cap
+        return effective_reask_cap(self.o.max_consecutive_reask, ctx.bank.settings if ctx.bank else None)
 
     def _streak(self, st) -> int:
         """이번 턴 앞까지 이어진 '진전 없는 턴' 수(U34, ADR-0032): REASK·CONFIRM·REDIRECT로 확정된 턴과 추출·검증이 실패한 턴(NOT_COMMITTED).

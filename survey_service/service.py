@@ -29,6 +29,7 @@ from .alerts import AlertHub, AlertService, AlertStaffConsole, AlertStore, WebPu
 from .api import PublicApi, _err
 from .inference import InferenceServer
 from .remote import RemoteInference
+from .graph import effective_reask_cap
 from .orchestrator import Orchestrator
 from .release import ReleaseLoader, ReleaseRegistry
 from .risk_rules import RuleRiskSource
@@ -301,6 +302,13 @@ class App:
         """세 저장소 확인 결과만(시험·진단용). /readyz는 `_db_check`를 쓴다."""
         return self._db_check()[0]
 
+    def _reask_limit(self) -> dict:
+        """되묻기 상한. effective는 활성 문항 세트까지 반영한 실제 적용 값(0=끔, 활성 릴리스가 없으면 null). 이웃은 규칙을 흉내 내지 않고 이 값을 읽는다(ADR-0046)."""
+        mx = self.settings.max_consecutive_reask
+        rel = self.registry.active()
+        eff = effective_reask_cap(mx, rel.bank.get("session_settings") if rel else None) if rel else None
+        return {"active": (eff if eff is not None else mx) > 0, "max_consecutive": mx, "effective": eff}
+
     def readiness(self) -> tuple[bool, dict]:
         problems, dbs = self._db_check()
         if self.draining.is_set():
@@ -331,7 +339,7 @@ class App:
             "kiosk_tokens": {"shared_kiosk_token": bool(self.api.token), "device_tokens": len(self.api.device_tokens),
                              "warning": ("공유 키오스크 토큰 사용 중: 기기별 토큰으로 바꾸는 것을 권고(ADR-0016)" if self.api.token else None)},
             "api": {**{"idle_expiry_seconds": self.settings.session_idle_seconds}, **self.api.api_stats()},
-            "reask_limit": {"active": self.settings.max_consecutive_reask > 0, "max_consecutive": self.settings.max_consecutive_reask},
+            "reask_limit": self._reask_limit(),
             "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
             "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
