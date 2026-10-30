@@ -39,7 +39,7 @@ def test_values_that_break_the_contract_format_are_rejected_by_name(name, value)
 
 
 def test_required_names_come_from_the_contract():
-    for missing in BASE:
+    for missing in ("SURVEY_RELEASE_READER", "SURVEY_TRACE_INGEST"):     # 추론 연결은 둘 중 하나라 아래 별도 시험
         env = {k: v for k, v in BASE.items() if k != missing}
         with pytest.raises(ConfigError) as e:
             Settings.from_env(env)
@@ -64,3 +64,35 @@ def test_startup_exits_with_a_configuration_error_for_an_unknown_name(monkeypatc
         monkeypatch.setenv(k, v)
     assert main([]) == 2
     assert "SURVEY_MAX_CONNECTION" in capsys.readouterr().err
+
+
+# 계약 3.0.2: 추론 연결은 SURVEY_INFERENCE_URL(원격 추론) 또는 SURVEY_MODEL_BACKEND(서비스 안 가짜 백엔드) 중 하나면 된다. 운영 배포는 원격 추론만 준다 (D62).
+REMOTE_ONLY = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": "http://inference:8081"}
+
+
+def test_remote_inference_alone_is_enough_to_start():
+    s = Settings.from_env(REMOTE_ONLY)
+    assert s.inference_url == "http://inference:8081" and s.model_backend == ""
+
+
+def test_model_backend_alone_is_still_enough():
+    assert Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}).model_backend == "fake"
+
+
+def test_neither_inference_url_nor_model_backend_is_rejected_by_name():
+    with pytest.raises(ConfigError) as e:
+        Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y"})
+    assert "SURVEY_INFERENCE_URL" in str(e.value) and "SURVEY_MODEL_BACKEND" in str(e.value)
+
+
+def test_empty_values_do_not_count():
+    with pytest.raises(ConfigError):
+        Settings.from_env({**REMOTE_ONLY, "SURVEY_INFERENCE_URL": ""})
+
+
+def test_startup_succeeds_to_the_app_with_remote_inference_only(monkeypatch, tmp_path):
+    """시작 경로(main)가 설정 단계에서 막히지 않는다: 원격 추론만 준 구성이 설정 오류(종료 코드 2)를 내지 않는다."""
+    for k, v in {**REMOTE_ONLY, "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_WORK_DIR": str(tmp_path / "w")}.items():
+        monkeypatch.setenv(k, v)
+    s = Settings.from_env()
+    assert s.inference_url

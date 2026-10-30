@@ -1,5 +1,5 @@
 # 개발·CI 의존(Git 태그로 설치). 이미지는 requirements.lock(서드파티)과 build-image.sh 요청의 이웃 소스 트리(dependency_sources)로 만든다(ADR-0037).
-git+ssh://git@github.com/Sdabin1209/openit_boundary-contracts.git@v3.0.0
+git+ssh://git@github.com/Sdabin1209/openit_boundary-contracts.git@v3.0.2
 git+ssh://git@github.com/Sdabin1209/openit_model-runtime.git@v0.11.1
 # 문진 스키마 패키지(이 리포지토리의 schema/). 다른 영역은 헤드가 태그를 붙인 뒤 아래 형식으로 설치한다:
 #   openit-survey-schema @ git+ssh://git@github.com/Sdabin1209/openit_survey-service.git@<태그>#subdirectory=schema

@@ -61,6 +61,8 @@ def validate_env(env: Mapping[str, str]) -> None:
     for e in validator("SurveyServiceEnv").iter_errors(checked):
         if e.validator == "required":
             missing.append(re.match(r"'([^']+)'", e.message).group(1))
+        elif e.validator == "anyOf" and not e.path and isinstance(e.instance, dict):              # 계약 3.0.2: 추론 연결은 둘 중 하나. 가지마다 필수 이름이 하나씩이다
+            missing.append(" 또는 ".join(re.match(r"'([^']+)'", c.message).group(1) for c in e.context if c.validator == "required"))
         elif not e.path and isinstance(e.instance, str):           # propertyNames: 계약 목록에 없는 SURVEY_* 이름
             unknown.append(e.instance)
         elif e.path:
@@ -228,8 +230,9 @@ class Settings:
             outbox_max_pending=_int(env, "SURVEY_OUTBOX_MAX_PENDING", 20000, 0),
             outbox_keep_sent_hours=_int(env, "SURVEY_OUTBOX_KEEP_SENT_HOURS", 24, 1),
             outbox_stage_grace_seconds=_float(env, "SURVEY_OUTBOX_STAGE_GRACE_SECONDS", 60.0), log_level=env.get("SURVEY_LOG_LEVEL", "INFO").upper())
-        missing = [n for n, v in (("SURVEY_RELEASE_READER", s.release_reader), ("SURVEY_TRACE_INGEST", s.trace_ingest),
-                                  ("SURVEY_MODEL_BACKEND", s.model_backend)) if not v]     # 계약은 이름의 존재만 요구한다. 빈 값은 설정이 아니다
+        missing = [n for n, v in (("SURVEY_RELEASE_READER", s.release_reader), ("SURVEY_TRACE_INGEST", s.trace_ingest)) if not v]     # 계약은 이름의 존재만 요구한다. 빈 값은 설정이 아니다
+        if not (s.inference_url or s.model_backend):   # 계약 3.0.2 SurveyServiceEnv: 둘 중 하나. 운영은 원격 추론만 준다(D62)
+            missing.append("SURVEY_INFERENCE_URL 또는 SURVEY_MODEL_BACKEND")
         for name, spec, url in (("SURVEY_RELEASE_READER", s.release_reader, s.release_reader_url),
                                 ("SURVEY_TRACE_INGEST", s.trace_ingest, s.trace_ingest_url)):
             if spec == "http" and not url:
