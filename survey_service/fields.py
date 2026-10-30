@@ -10,6 +10,12 @@ from typing import Mapping, Optional
 _COPY = ("unit", "minimum", "maximum", "exclusive_minimum")
 
 
+def option_codes(slot: Mapping) -> list[str]:
+    """option 칸의 선택지 코드. 문진 스키마는 choice_catalog가 있으면 choices를 비우게 하므로(question-authoring은 choice_catalog로 낸다) 카탈로그의 code가 우선이고, 없으면 choices다."""
+    cat = slot.get("choice_catalog")
+    return [c["code"] for c in cat] if cat else list(slot.get("choices") or [])
+
+
 def build_field_specs(bank: Mapping) -> Optional[dict]:
     """QuestionFieldSpec(`{"fields": [...]}`). 자료형(data_type)이 적힌 칸이 하나도 없으면 None(규격을 싣지 않는다)."""
     fields = []
@@ -21,20 +27,24 @@ def build_field_specs(bank: Mapping) -> Optional[dict]:
             for k in _COPY:
                 if k in s:
                     f[k] = s[k]
-            if s["data_type"] == "option" and s.get("choices"):
-                f["options"] = list(s["choices"])               # 지금 문항 은행의 choices를 그대로 쓴다
+            if s["data_type"] == "option" and option_codes(s):
+                f["options"] = option_codes(s)
             if q.get("repeat_keys"):
                 f["repeat_keys"] = list(q["repeat_keys"])
             fields.append(f)
     return {"fields": fields} if fields else None
 
 
-def missing_field_specs(bank: Mapping) -> list[str]:
-    """칸 규격이 없는 칸의 이름(`문항.칸`). 규격이 없는 칸은 서버가 값 규칙을 보증하지 못하므로 문항 은행 검증이 적재를 거부한다(계약 3.0.0: extract는 항상 fields와 함께, ADR-0043).
-    규격이 없다는 것은 `data_type`이 없거나, option 칸인데 선택지(`choices`)가 비어 있는 것이다(선택지를 모르면 서버가 선택지 값을 막을 수 없다)."""
+def invalid_field_specs(bank: Mapping) -> list[str]:
+    """계약 QuestionFieldSpec을 어기는 칸의 `문항.칸`과 이유. 문진 스키마(QuestionBank)가 표현하는 규칙(자료형 필수, option의 선택지 필수, id 문자, choices 중복)은 스키마가 먼저 거부하고,
+    여기는 스키마로 표현할 수 없는 것(choice_catalog 코드 중복)과 두 스키마 사이의 어긋남을 적재 때 잡는다(ADR-0045). 그대로 두면 적재는 되고 extract가 400이 된다."""
+    from boundary_contracts import validator
+    specs = build_field_specs(bank)
+    if specs is None:
+        return ["(자료형이 적힌 칸이 하나도 없다)"]
+    v = validator("QuestionFieldSpec")
     out = []
-    for q in bank["questions"]:
-        for s in q["slots"]:
-            if "data_type" not in s or (s["data_type"] == "option" and not s.get("choices")):
-                out.append(f"{q['question_id']}.{s['slot_id']}")
+    for i, f in enumerate(specs["fields"]):
+        for e in v.iter_errors({"fields": [f]}):
+            out.append(f"{f['slot']}: " + (e.message if not list(e.path)[2:] else f"{list(e.path)[2]} {e.message}"))
     return out

@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 문진 스키마 3.0.0 후보 + 적재 검사 정리 [미출시] (ADR-0045)
+
+- **버그:** option 칸 선택지를 `choice_catalog`로 내는 문항 은행(question-authoring 방식)이 `choices`만 보는 코드 때문에 `MISSING_FIELD_SPEC`으로 거부됐다. 이제 catalog의 `code`를 `QuestionFieldSpec.options`로 쓴다.
+- **문진 스키마 3.0.0(깨지는 변경):** `QuestionBank`가 적재 거부 조건을 미리 표현한다: 슬롯 `data_type` 필수, option 칸은 `choices` 또는 `choice_catalog` 필수, 문항 ID·칸 ID 문자 패턴(계약 `QuestionFieldSpec.slot`과 같게), `choices` 중복 금지, 필수 고정 문장 4개. 적재가 이미 거부하던 은행만 스키마도 거부하므로 적재되던 은행은 없어지지 않지만, 스키마만 보던 생산자의 은행이 무효가 될 수 있어 MAJOR다. 정수 `CONTRACT_VERSION`은 1 그대로. 태그는 헤드가 만든다.
+- **적재 거부 코드 변경:** `MISSING_FIXED_SENTENCE`, `MISSING_FIELD_SPEC`은 없어지고 `INVALID_RECORD`(위반 위치 포함)가 된다. 새 `INVALID_FIELD_SPEC`은 계약 `QuestionFieldSpec` 검증(스키마로 표현할 수 없는 choice_catalog 코드 중복 등).
+
 ## 계약 고정 v3.0.2 [미출시]
 
 - boundary-contracts v3.0.0 -> v3.0.2. 추론 연결 필수 조건이 `SURVEY_INFERENCE_URL` 또는 `SURVEY_MODEL_BACKEND` 중 하나로 바로잡혔다. `settings.py` 자체 검사를 같게 고쳐, 원격 추론만 준 운영 구성이 다시 시작한다(ADR-0038 갱신).

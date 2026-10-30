@@ -41,7 +41,7 @@ def test_release_without_required_fixed_sentence_is_rejected_with_reason(tmp_pat
     bank["session_settings"]["fixed_sentences"] = [f for f in bank["session_settings"]["fixed_sentences"] if f["key"] != "RISK_NOTICE"]
     reg, loader = _loader(tmp_path, bank)
     r = loader.poll_once()
-    assert r.action == "REJECTED" and r.code == "MISSING_FIXED_SENTENCE" and reg.active_id() is None
+    assert r.action == "REJECTED" and r.code == "INVALID_RECORD" and reg.active_id() is None
     assert "RISK_NOTICE" in loader.status.rejections[-1]["detail"]
 
 
@@ -51,7 +51,7 @@ def test_release_with_blank_fixed_sentence_is_rejected(tmp_path):
         if f["key"] == "CALL_STAFF":
             f["sentence"] = "  "
     reg, loader = _loader(tmp_path, bank)
-    assert loader.poll_once().code == "MISSING_FIXED_SENTENCE"
+    assert loader.poll_once().code == "INVALID_RECORD"
 
 
 # ---------------------------------------------------------------- 보존(D88 U4)과 접근 기록의 개인 ID(U7)

@@ -24,7 +24,7 @@ from boundary_contracts import BoundaryError, canonical, validator
 
 import survey_schema
 
-from ..fields import missing_field_specs
+from ..fields import invalid_field_specs
 from ..inference import InferenceLoadError, InferenceServer
 from ..ports import LoadedRelease
 from .registry import ReleaseRegistry
@@ -33,7 +33,6 @@ log = logging.getLogger("survey_service.release")
 
 
 # 서비스가 직접 환자 화면에 내보내는 고정 문장(graph.py의 _fixed 호출). 문항 세트에 없으면 적재를 거부한다.
-REQUIRED_FIXED_SENTENCES = ("RISK_NOTICE", "CALL_STAFF", "RESUME", "SURVEY_STOPPED")
 
 
 class LoadRejected(Exception):
@@ -229,19 +228,18 @@ class ReleaseLoader:
     def _check_bank(self, manifest: dict, bank: dict) -> None:
         ver = manifest["runtime_contract_version"]
         v = jsonschema.Draft202012Validator(survey_schema.load_schema("QuestionBank", ver))
-        if list(v.iter_errors(bank)):
-            raise LoadRejected("INVALID_RECORD", "문항 세트가 QuestionBank 스키마를 어긴다")
+        errs = sorted(v.iter_errors(bank), key=lambda e: [str(x) for x in e.path])
+        if errs:         # 필수 고정 문장 4개·칸 자료형·option 선택지·id 문자는 스키마가 표현한다(ADR-0045). 위반 위치와 이유(스키마가 적은 설명)를 알린다
+            e = errs[0]
+            where = "".join(f"[{x}]" if isinstance(x, int) else f".{x}" for x in e.path) or "(최상위)"
+            raise LoadRejected("INVALID_RECORD", f"문항 세트가 QuestionBank 스키마를 어긴다: {where} {e.schema.get('description') or e.message}"[:300] + (f" (위반 {len(errs)}건)" if len(errs) > 1 else ""))
         if canonical.sha256_hash(bank) != manifest["question_set"]["content_hash"]:
             raise LoadRejected("INTEGRITY_ERROR", "문항 세트 해시가 매니페스트와 다르다")
         if str(bank["version"]) != str(manifest["question_set"]["version"]):
             raise LoadRejected("INVALID_RECORD", "문항 세트 버전이 ArtifactRef와 다르다")
-        no_spec = missing_field_specs(bank)
-        if no_spec:      # 칸 규격(data_type, option이면 choices)이 없는 칸이 있으면 서버가 값 규칙을 보증하지 못한다: extract는 항상 fields와 함께 부른다(계약 3.0.0, ADR-0043)
-            raise LoadRejected("MISSING_FIELD_SPEC", f"칸 규격이 없는 칸이 {len(no_spec)}개 있다: " + ", ".join(no_spec[:5]) + (" ..." if len(no_spec) > 5 else ""))
-        have = {f["key"] for f in bank["session_settings"]["fixed_sentences"] if isinstance(f.get("sentence"), str) and f["sentence"].strip()}
-        missing = sorted(set(REQUIRED_FIXED_SENTENCES) - have)
-        if missing:      # 위험 정지 안내·직원 호출·재개·종료 안내가 비면 환자 화면이 비므로 적재 단계에서 거부한다(감사 I3)
-            raise LoadRejected("MISSING_FIXED_SENTENCE", "필수 고정 문장이 없거나 비어 있다: " + ", ".join(missing))
+        bad = invalid_field_specs(bank)
+        if bad:          # 스키마로 표현하지 못하는 칸 규격 위반(코드 중복 등)과 계약 QuestionFieldSpec 검증: 그대로 적재하면 extract가 400이 된다
+            raise LoadRejected("INVALID_FIELD_SPEC", f"칸 규격이 계약 QuestionFieldSpec을 어긴다({len(bad)}건): " + "; ".join(bad[:3]) + (" ..." if len(bad) > 3 else ""))
 
     def _check_library_versions(self, manifest: dict) -> list:
         """게이트가 승인한 동작과 서비스 동작이 달라지지 않게(I4): 릴리스의 action_rules_version(LoRA-A 출력 규칙 판, 계약 3.0.0)이 설치된 계약의 규칙 판과 같지 않으면 거부하고,

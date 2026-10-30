@@ -65,8 +65,8 @@ def test_graph_always_sends_flow_and_the_fields_built_from_the_bank():
 
 
 def test_a_bank_with_a_slot_lacking_its_field_spec_is_rejected_at_load(tmp_path):
-    """계약 3.0.0: extract는 항상 fields와 함께 부른다. 칸 규격이 없는 문항 은행은 서버가 값 규칙을 보증하지 못하므로 적재를 거부한다(ADR-0043)."""
-    from survey_service.fields import missing_field_specs
+    """계약 3.0.0: extract는 항상 fields와 함께 부른다. 칸 규격이 없는 문항 은행은 서버가 값 규칙을 보증하지 못하므로 적재를 거부한다(ADR-0043).
+    wo-320(ADR-0045)부터 거부 조건(자료형 필수, option의 선택지 필수)은 문진 스키마 QuestionBank가 표현하고 적재는 INVALID_RECORD로 거부한다."""
     from survey_service.inference import InferenceServer
     from survey_service.release import ReleaseLoader, ReleaseRegistry
 
@@ -74,16 +74,16 @@ def test_a_bank_with_a_slot_lacking_its_field_spec_is_rejected_at_load(tmp_path)
     from .test_release_loader import INSTALLED
     bank = copy.deepcopy(sample_bank())
     bank["questions"][0]["slots"][0].pop("data_type")
-    assert missing_field_specs(bank) == ["Q1.D01.diagnosed"]
     option = copy.deepcopy(sample_bank())
     next(s for q in option["questions"] for s in q["slots"] if s["slot_id"] == "use_pattern")["choices"] = []      # option 칸에 선택지가 없다
-    assert missing_field_specs(option) == ["Q6_1.use_pattern"] and missing_field_specs(sample_bank()) == []
-    reader = FakeReleaseReader(tmp_path / "gate")
-    reader.add_release("rel-1", bank, **INSTALLED)
-    reader.set_pointer("rel-1")
-    loader = ReleaseLoader(reader, ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
-    r = loader.poll_once()
-    assert r.action == "REJECTED" and r.code == "MISSING_FIELD_SPEC"
+    for i, b in enumerate((bank, option)):
+        reader = FakeReleaseReader(tmp_path / f"gate{i}")
+        reader.add_release("rel-1", b, **INSTALLED)
+        reader.set_pointer("rel-1")
+        loader = ReleaseLoader(reader, ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / f"w{i}", installed_versions=INSTALLED, retry_base_seconds=0)
+        r = loader.poll_once()
+        assert r.action == "REJECTED" and r.code == "INVALID_RECORD"
+        assert "questions[" in loader.status.rejections[-1]["detail"]       # 위반 위치를 알린다
 
 
 RESULT = SimpleNamespace(is_fallback=False, protections={})
