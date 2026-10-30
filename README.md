@@ -72,7 +72,7 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 `survey_service/types/`는 `schemas/*.json`에서만 만든다. 손으로 고치지 않는다. 도구(datamodel-code-generator 0.87.0, `requirements-tools.txt`에 고정)는 런타임 의존이 아니라 별도 가상환경에 설치된다.
 
 ```bash
-bash scripts/gen-types.sh                       # .venv-tools를 만들고 types/ 를 다시 생성한다
+bash scripts/gen-types.sh                       # types/ 를 다시 생성한다(.venv-tools는 setup-env.sh가 만든다)
 .venv/bin/python scripts/check_schemas.py       # 모든 스키마의 통과·거부 예시를 확인한다
 ```
 

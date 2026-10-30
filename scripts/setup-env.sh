@@ -47,4 +47,14 @@ if ! install; then
   install || fail "pip install 두 번 실패(네트워크, GitHub ssh 접근, 또는 핀 충돌). 위 pip 출력을 확인"
 fi
 
+# 왜: 시험(tests/test_structure.py 5번)이 types/ 를 다시 생성해 비교하므로 생성 도구(requirements-tools.txt: datamodel-code-generator)도 시험 명령에 필요한 환경이다.
+#     런타임 의존과 섞이지 않게 별도 가상환경 .venv-tools 에 설치한다(scripts/gen-types.sh 와 같은 곳).
+if [ -f requirements-tools.txt ]; then
+  if [ ! -x .venv-tools/bin/python ]; then
+    echo "[setup-env] .venv-tools 생성(타입 생성 도구)"
+    python3 -m venv .venv-tools || fail "python3 -m venv .venv-tools 실패"
+  fi
+  .venv-tools/bin/python -m pip install -q -r requirements-tools.txt || fail "타입 생성 도구 설치 실패(requirements-tools.txt)"
+fi
+
 echo "[setup-env] 완료. 시험: .venv/bin/python -m pytest"
