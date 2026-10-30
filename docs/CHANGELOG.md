@@ -3,6 +3,7 @@
 ## 계약 고정 v3.0.2 [미출시]
 
 - boundary-contracts v3.0.0 -> v3.0.2. 추론 연결 필수 조건이 `SURVEY_INFERENCE_URL` 또는 `SURVEY_MODEL_BACKEND` 중 하나로 바로잡혔다. `settings.py` 자체 검사를 같게 고쳐, 원격 추론만 준 운영 구성이 다시 시작한다(ADR-0038 갱신).
+- model-runtime 고정 v0.11.1 -> v0.11.2(계약 3.0.2 고정). 라벨 `io.openit.model-runtime`이 v0.11.2가 된다.
 
 ## model-runtime 고정 v0.11.1 [미출시]
 
