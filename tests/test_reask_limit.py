@@ -22,7 +22,7 @@ def test_default_is_off_and_never_escalates():
     assert Settings.from_env({**base, "SURVEY_MAX_CONSECUTIVE_REASK": "0"}).max_consecutive_reask == 0
     bank = copy.deepcopy(sample_bank())
     for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
-        bank["session_settings"].pop(k, None)              # 문항 세트가 상한을 저작하지 않았고 서비스 상한도 끈 경우(Orchestrator 기본 0)
+        bank["session_settings"][k] = 99              # 문항 세트가 상한을 저작하지 않았고 서비스 상한도 끈 경우(Orchestrator 기본 0)
     rig = Rig(bank=bank)
     rig.start()
     for _ in range(8):
@@ -77,7 +77,7 @@ def test_streak_is_counted_from_session_state_so_it_survives_restart():
 def _bank_without_authored_limits():
     bank = copy.deepcopy(sample_bank())
     for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
-        bank["session_settings"].pop(k, None)          # 서비스 상한만 시험한다(저작값이 있으면 최솟값이 이긴다, ADR-0014)
+        bank["session_settings"][k] = 99          # 서비스 상한만 시험한다(저작값이 있으면 최솟값이 이긴다, ADR-0014)
     return bank
 
 

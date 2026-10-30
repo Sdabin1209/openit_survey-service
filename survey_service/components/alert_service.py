@@ -20,9 +20,29 @@ import time
 from datetime import datetime, timezone
 from typing import Mapping, Optional, Protocol
 
-from ..wiring.errors import DeliveryFailed, StaffCallRejected, StoreError
+from boundary_contracts import BoundaryError
 
 log = logging.getLogger("survey_service.alerts")
+
+
+class DeliveryFailed(BoundaryError):
+    """알림은 저장됐지만 닿은 전달 경로가 없다(SSE 연결 없음, 푸시 접수 없음)."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("UNAVAILABLE", message, {"reason": "DELIVERY_FAILED"})
+
+
+class StaffCallRejected(BoundaryError):
+    """재알림·실패 기록 거절. kind: NO_OPEN_ALERT(409), OUTCOME_MISMATCH(409), INTERVAL(429), RETRY_LIMIT(429). 한계 L2: alert_book에도 같은 정의가 있다."""
+
+    def __init__(self, kind: str, retry_after_s: int = 0) -> None:
+        super().__init__("UNAVAILABLE" if kind in ("INTERVAL", "RETRY_LIMIT") else "CONFLICT", kind, {"reason": "STAFF_CALL_REJECTED", "kind": kind})
+        self.kind, self.retry_after_s = kind, retry_after_s
+
+
+def _is_store_error(e: BoundaryError) -> bool:
+    """저장소 컴포넌트가 던진 StoreError인가(구조적 판정: 컴포넌트끼리 클래스를 import하지 않는다)."""
+    return (e.details or {}).get("reason") == "STORE_ERROR"
 
 KIND_MAP = {"RISK": "RISK_STOP", "CALL_STAFF": "CALL_STAFF", "USER_CALLED_STAFF": "USER_CALLED_STAFF"}
 CURRENT_TURN: contextvars.ContextVar = contextvars.ContextVar("survey_current_turn", default=None)      # (session_id, turn_id): 알림 생성의 멱등 키
@@ -97,7 +117,8 @@ class PushSender(Protocol):
 class AlertService:
     def __init__(self, store, hub: Optional[AlertHub] = None, push: Optional[PushSender] = None,
                  push_timeout: float = 3.0, retry_min_interval_s: int = DEFAULT_RETRY_MIN_INTERVAL_S,
-                 retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION) -> None:
+                 retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None) -> None:
+        self.endpoint_check = endpoint_check
         self.store, self.hub, self.push, self.push_timeout = store, hub or AlertHub(), push, push_timeout
         self.retry_min_interval_s, self.retry_max_per_session = max(0, int(retry_min_interval_s)), max(0, int(retry_max_per_session))
         self.report_max_per_session = max(0, int(report_max_per_session))
@@ -138,7 +159,9 @@ class AlertService:
         pushed = self._push(event)
         try:
             self.store.record_delivery(int(event["alert"]["alert_id"][3:]), "DELIVERED" if live + pushed else "DELIVERY_FAILED")      # 시도 횟수와 결과(직원 콘솔이 전달 실패 알림을 구분한다)
-        except StoreError:
+        except BoundaryError as _e:
+            if not _is_store_error(_e):
+                raise
             log.warning("전달 시도 기록을 남기지 못했다")
         if live + pushed == 0:
             self._count("delivery_failed")
@@ -148,7 +171,9 @@ class AlertService:
         self._count("delivered")
         try:
             self.store.mark_delivered(session_id, turn_id, kind)
-        except StoreError:
+        except BoundaryError as _e:
+            if not _is_store_error(_e):
+                raise
             pass
         return event["alert"]
 
@@ -157,7 +182,9 @@ class AlertService:
             return 0
         try:
             subs = self.store.subscriptions()
-        except StoreError:
+        except BoundaryError as _e:
+            if not _is_store_error(_e):
+                raise
             return 0                                  # 구독을 읽지 못하면 푸시는 못 보낸 것이다(SSE 연결은 따로 센다)
         if not subs:
             return 0
@@ -174,7 +201,9 @@ class AlertService:
             if r == "GONE":
                 try:
                     self.store.remove_subscription(sub["endpoint"])
-                except StoreError:
+                except BoundaryError as _e:
+                    if not _is_store_error(_e):
+                        raise
                     pass
         threads = [threading.Thread(target=one, args=(s,), daemon=True) for s in subs]
         [t.start() for t in threads]
@@ -254,6 +283,10 @@ class AlertService:
             for e in events:
                 self.hub.publish(e)
         return len(events)
+
+    def endpoint_error(self, endpoint: str):
+        """푸시 구독 endpoint의 등록 때 검사(SSRF 문법 검사). 문제 사유 문장 또는 None. 검사 함수는 wiring이 꽂는다(endpoint_check)."""
+        return self.endpoint_check(endpoint) if self.endpoint_check else None
 
     def public_key(self) -> Optional[str]:
         """웹 푸시 공개키(VAPID). 푸시가 꺼져 있으면 None."""

@@ -85,9 +85,7 @@
 
 | 번호 | 한계 | 이유 | 다음 |
 |---|---|---|---|
-| L1 | 공용 기반 4개(`wiring/errors.py`, `ports.py`, `pg.py`, `netguard.py`)를 컴포넌트가 import한다 | 예외 종류와 DB 연결 어댑터를 컴포넌트마다 복제하면 `except StoreError`가 갈라진다. 컴포넌트끼리 import는 아니라 구조 검사 2번은 통과하지만 규칙 4(컴포넌트는 자기 스키마밖에 모른다)에는 못 미친다 | 예외를 각 컴포넌트 출력 스키마의 오류 종류로 바꾸는 일은 별도 작업 |
-| L2 | 컴포넌트 사이에 같은 3~10줄 보조 함수(`model_key`, `item_of`, `slot_ref`)가 복제돼 있다 | import 금지(DESIGN 2절)와 코드 재사용이 부딪힌다. 표기 규칙(`Q7_1[soju].amount`)은 문진 스키마의 값 모양이라 각 컴포넌트가 입력 스키마에서 읽는다 | 문진 스키마가 키 구조를 필드로 내면 복제가 없어진다(문진 스키마 와이어 변경이라 오늘 하지 않는다) |
-| L3 | 자세한 스키마 밖 조건은 `schemas/README.md` | | |
+| L2 | 컴포넌트 사이에 같은 3~10줄 보조 함수(`model_key`, `item_of`, `slot_ref`)와 같은 이름의 예외 클래스(`StoreError` 3곳, `StaffCallRejected` 2곳, `TurnInputError` 2곳)가 복제돼 있다 | import 금지(DESIGN 2절)와 코드 재사용이 부딪힌다. 표기 규칙(`Q7_1[soju].amount`)은 문진 스키마의 값 모양이라 각 컴포넌트가 입력 스키마에서 읽는다. 예외는 모두 `BoundaryError` 하위 클래스이고 `details.reason`으로 구조적으로 알아본다 | 문진 스키마가 키 구조를 필드로 내면 보조 함수 복제가 없어진다(문진 스키마 와이어 변경이라 오늘 하지 않는다) |
+| L5 | 입력 검사를 스키마 검증으로 건 곳은 `wiring/checked.py`(턴 입구 `TurnRequest`, 한 턴의 순수 컴포넌트 12개, 세션 저장소의 load·commit)다. 아직 안 건 컴포넌트: trace_envelope(입력 TurnTrace 전체는 전송 전 exporter가 이미 검증한다, R7), trace_outbox, alert_book, alert_service, release_registry, release_loader, link_* | 이웃에서 오는 값은 계약 클라이언트가 검증하고(보내는 쪽 `openit_link.clients`), 이 컴포넌트들은 여러 동작(op)을 가진 상태 객체라 동작마다 입력 스키마를 걸어야 한다. 오늘은 거기까지 못 했다 | 동작별로 `checked.py`에 래퍼를 더한다 |
 
-| L4 | `link_public_api`가 `openit_link.App` 위로 옮겨지지 않았다 | link v0.1.0에 기기별 토큰·상태 기반 인가, 스트리밍(SSE) 응답, 쿼리 스키마가 없다 | [CR-link-001](change-requests/CR-link-001.md) |
-| L5 | 입력 검사를 스키마 검증으로 바꾼 곳은 `wiring/orchestrator.py` 진입(`TurnRequest`)뿐이다. 나머지 컴포넌트의 손 검사는 코드에 남아 있다 | 오늘 안에 바꾼 범위가 거기까지다. 스키마는 모두 작성돼 있고 `types.validate`로 바로 걸 수 있다 | 컴포넌트별로 바꾸되 동작(오류 메시지)을 보존하는 시험을 함께 |
+해소된 한계: L1(컴포넌트가 wiring을 import) - 예외는 컴포넌트 안에 정의, `PgConn`은 `session_store`로 옮겨 다른 저장소에 주입, 주소 검사는 `link_push`로 옮겨 `AlertService.endpoint_error`로 노출, `LoadedRelease`는 `release_loader`로. L4(`link_public_api`를 `openit_link.App` 위로) - link v0.3.0으로 해소.

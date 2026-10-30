@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Optional, Protocol
+from typing import Any, Mapping, Optional, Protocol
+
+from ..components.release_loader import LoadedRelease  # noqa: F401 (재노출: 적재된 릴리스의 정의는 로더 컴포넌트에 있다)
 
 
 class ModelSessionLike(Protocol):
@@ -10,16 +12,6 @@ class ModelSessionLike(Protocol):
     실패는 `boundary_contracts.BoundaryError`로 던진다(extract가 끝내 형식을 못 지키면 UNAVAILABLE + details.reason=OUTPUT_INVALID, D75)."""
     def extract(self, request: Mapping) -> Any: ...
     def respond(self, request: Mapping) -> Any: ...
-
-
-@dataclass
-class LoadedRelease:
-    """적재된 릴리스. 문항 세트와 모델 세션을 가진다."""
-    release_id: str
-    manifest: Mapping
-    bank: Mapping
-    session: ModelSessionLike
-    warnings: list = field(default_factory=list)
 
 
 class ReleaseProvider(Protocol):

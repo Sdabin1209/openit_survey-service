@@ -80,7 +80,7 @@ def test_auth_and_routes(rig_api):
         code, body, hdr = call(api, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, auth=auth)
         assert code == 401 and body["code"] == "PERMISSION_DENIED" and hdr["WWW-Authenticate"] == "Bearer"
     assert rig.store.load("K1")["status"] == "NOT_FOUND"
-    assert call(api, "POST", "/v1/nope", {})[0] == 404 and call(api, "GET", "/v1/sessions", None)[0] == 404
+    assert call(api, "POST", "/v1/nope", {})[0] == 404 and call(api, "GET", "/v1/sessions", None)[0] == 405      # 알려진 경로의 다른 메서드는 405(openit_link 규약, 옛 동작은 404)
     assert call(api, "POST", "/v1/sessions/K1/turns/x", {})[0] == 404
 
 
@@ -114,7 +114,7 @@ def test_malformed_bodies(rig_api):
     assert call(api, "POST", "/v1/sessions", raw=b"{not json")[0] == 400
     assert call(api, "POST", "/v1/sessions", raw=b"[1]")[0] == 400
     assert call(api, "POST", "/v1/sessions", raw=b"")[0] == 400
-    assert call(api, "POST", "/v1/sessions", raw=b"x" * 70000)[0] == 400
+    assert call(api, "POST", "/v1/sessions", raw=b"x" * 70000)[0] == 413      # 본문 상한 초과는 413(openit_link 규약, 옛 동작은 400)
     assert call(api, "POST", "/v1/sessions", raw=b"\xff\xfe")[0] == 400
 
 

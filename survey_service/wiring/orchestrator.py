@@ -17,16 +17,19 @@ from typing import Mapping, Optional
 from boundary_contracts import canonical
 
 from .. import types
-from .errors import SessionEnded, SessionNotFound, StoreError, TurnIdConflict, TurnInProgress
+from types import SimpleNamespace
+
+from .errors import SessionEnded, SessionNotFound, StaffCallRejected, StoreError, TurnIdConflict, TurnInProgress
 from .turn_graph import SCHEMA_CONTRACT_VERSION, TRACE_KEYS, TurnCtx, TurnGraph, initial_state, _pause_reasons  # noqa: F401 (재노출)
 from ..components.turn_route import Route, route  # noqa: F401 (재노출)
 import survey_schema
 
 from ..components.flow_table import Flow, load_flow
-from ..components.blank_details import blank_details
+from . import checked
 from .ports import (FrontendSink, ReleaseProvider, ResultDispatcher, RiskSource, StaffConsole, TraceSink, UnattachedDispatcher,
                     UnconfiguredStaffConsole)
 from ..components.response_request import ResponseTables
+from ..components import session_store
 from ..components.session_store import SessionStorePort
 
 log = logging.getLogger("survey_service.orchestrator")
@@ -86,7 +89,9 @@ class Orchestrator:
         self.turn_deadline_seconds = max(0.0, float(turn_deadline_seconds))      # 0이면 마감 없음(서비스는 설정 기본 6초를 준다)
         self.extract_input_max_chars = max(0, int(extract_input_max_chars))      # 0이면 줄이지 않는다(서비스는 설정 기본 2400을 준다)
         self._locks = _SessionLocks()
-        self.blank_details = blank_details       # link_public_api가 쓴다(컴포넌트끼리 import하지 않으므로 wiring이 건넨다)
+        self.errors = SimpleNamespace(StoreError=StoreError, TurnIdConflict=TurnIdConflict, TurnInProgress=TurnInProgress, SessionNotFound=SessionNotFound,
+                                      SessionEnded=SessionEnded, StaffCallRejected=StaffCallRejected)      # link_public_api가 오류 종류를 알아보는 데 쓴다(컴포넌트가 wiring을 import하지 않으므로 건넨다)
+        self.blank_details = checked.blank_details
         self._inflight: set = set()                # 처리 중인 (세션, 턴 ID). 같은 턴이 겹치면 두 번째는 새로 시작하지 않는다
         self._inflight_guard = threading.Lock()
         self._stats_lock = threading.Lock()
@@ -179,9 +184,9 @@ class Orchestrator:
             prev = signals.get_signal(sid, signal["signal_id"])
             if prev is not None:
                 return False, prev
-            loaded = self.store.load(sid)
+            loaded = checked.store_load(self.store, sid)
             if loaded["status"] == "DB_ERROR":
-                raise StoreError("세션을 읽을 수 없다")
+                raise session_store.StoreError("세션을 읽을 수 없다")
             if loaded["status"] != "OK":
                 raise SessionNotFound(sid)
             status = loaded["state"]["progress_record"]["session_status"]
@@ -195,10 +200,10 @@ class Orchestrator:
                     "skipped_remove": [], "session_status": "PAUSED_RISK",
                     "pause_history_add": [{"kind": "PAUSE", "reasons": _pause_reasons(alert) if severity == "RISK" else [],
                                            "pause_reason": "RISK" if severity == "RISK" else "OTHER"}]}}
-                res = self.store.commit({"session_id": sid, "expected_revision": loaded["revision"], "writes": writes},
+                res = checked.store_commit(self.store, {"session_id": sid, "expected_revision": loaded["revision"], "writes": writes},
                                         turn_id="risk-signal:" + signal["signal_id"], input_hash=canonical.sha256_hash({"risk_signal": dict(signal)}))
                 if res["status"] != "OK":
-                    raise StoreError("세션을 멈추지 못했다")
+                    raise session_store.StoreError("세션을 멈추지 못했다")
                 status = "PAUSED_RISK"
             rule_id = f"{signal['source']}:{signal['code']}"
             try:

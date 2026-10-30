@@ -273,14 +273,14 @@ def test_staff_routes_need_staff_token(ar):
         assert ar.call(method, path, body, auth=AUTH)[0] == 403                 # 키오스크 토큰
         assert ar.call(method, path, body, auth="Bearer nope")[0] == 401
         assert ar.call(method, path, body, auth="")[0] == 401
-    assert ar.api.stream_auth_error(AUTH)[0] == 403 and ar.api.stream_auth_error("")[0] == 401 and ar.api.stream_auth_error(STAFF) is None
+    assert ar.api.handle("GET", "/v1/staff/alerts/stream", AUTH, b"")[0] == 403 and ar.api.handle("GET", "/v1/staff/alerts/stream", "", b"")[0] == 401 and ar.api.handle("GET", "/v1/staff/alerts/stream", STAFF, b"")[0] not in (401, 403)      # 스트림 인증은 라이브러리가 한다(서버 없이는 처리 함수가 안 붙어 503)
     assert ar.store.count_subscriptions() == 0
 
 
 def test_kiosk_routes_reject_staff_token_and_alert_routes_absent_without_service(ar):
     assert ar.call("POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, auth=STAFF)[0] == 403
     bare = PublicApi(ar.rig.orch, "tok", staff_token="stok")
-    assert bare.handle("GET", "/v1/staff/alerts", STAFF, b"")[0] == 404 and bare.stream_auth_error(STAFF)[0] == 404
+    assert bare.handle("GET", "/v1/staff/alerts", STAFF, b"")[0] == 404 and bare.handle("GET", "/v1/staff/alerts/stream", STAFF, b"")[0] == 404
 
 
 # ---------------------------------------------------------------- 푸시 구독

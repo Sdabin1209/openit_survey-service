@@ -52,16 +52,9 @@ def test_every_route_the_code_serves_is_declared_with_the_right_kind():
 
 
 def test_source_routes_are_all_in_the_served_list():
-    """api.py·service.py 소스에서 /v1 경로 리터럴과 정규식 라우트를 읽어 표가 덮는지 본다: 코드에 라우트를 더하고 표를 안 고치면 실패한다."""
-    src = (ROOT / "survey_service/components/link_public_api.py").read_text(encoding="utf-8") + (ROOT / "survey_service/server.py").read_text(encoding="utf-8")
-    literals = set(re.findall(r'path == "(/v1/[^"]+)"', src))
-    patterns = re.findall(r'fullmatch\(r"(/v1/[^"]+)"', src)
-    concrete = set(literals)
-    for p in patterns:
-        p = p.replace("([^/]+)", "X")
-        alts = re.search(r"\(([a-z|]+)\)", p)
-        for a in (alts.group(1).split("|") if alts else [None]):
-            concrete.add(re.sub(r"\([a-z|]+\)", a, p) if a else p)
+    """link_public_api의 경로 표(_SPEC)를 읽어 노출 표가 덮는지 본다: 코드에 라우트를 더하고 표를 안 고치면 실패한다."""
+    from survey_service.components.link_public_api import _SPEC
+    concrete = {pat.replace("{sid}", "X") for _n, _m, pat, *_ in _SPEC}      # 경로 표(_SPEC)가 서버가 내는 공개 API 경로의 정본이다(SSE 스트림 포함)
     assert concrete >= {"/v1/results", "/v1/staff/alerts", "/v1/sessions", "/v1/sessions/X/state", "/v1/sessions/X/staff-call/retry"}      # 소스 읽기가 동작한다
     for path in sorted(concrete):
         assert any(_declared(m, path) is not None for m in METHODS), f"코드 라우트가 노출 표에 없다: {path}"

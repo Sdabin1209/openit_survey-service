@@ -14,8 +14,8 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PKG = ROOT / "survey_service"
 COMPONENTS = PKG / "components"
-# 컴포넌트가 import해도 되는 컴포넌트 밖 모듈(한계 L1, docs/components.md): 예외·접점·DB 어댑터·주소 검사와 설정·마이그레이션·생성 타입
-ALLOWED_OUTSIDE = {"wiring.errors", "wiring.ports", "wiring.pg", "wiring.netguard", "settings", "migrate", "types"}
+# 컴포넌트가 import해도 되는 컴포넌트 밖 모듈: 설정·마이그레이션·생성 타입뿐이다. wiring/은 import하지 않는다(DESIGN 6절, L1 해소)
+ALLOWED_OUTSIDE = {"settings", "migrate", "types"}
 HTTP_MODULES = {"boundary_contracts.clients", "urllib.request", "http.client", "http.server", "requests", "waitress", "wsgiref", "pywebpush", "aiohttp", "httpx"}
 ENTRY = re.compile(r"(^|/)(__main__|main|app|server|config|settings|migrate|cli|index)\.py$|(^|/)migrations?/")
 
@@ -56,10 +56,8 @@ def test_2_components_do_not_import_each_other():
                 bad += [f"{p.name}: components 패키지에서 {n}" for n in names if n in comps and n != p.stem]
             if rel.startswith("components."):
                 bad.append(f"{p.name}: {rel}")
-            if rel.startswith("wiring.") and rel not in ALLOWED_OUTSIDE and not any(rel.startswith(a) for a in ALLOWED_OUTSIDE):
-                bad.append(f"{p.name}: 허용되지 않은 wiring 모듈 {rel}")
-            if rel == "wiring" and not set(names) <= {"errors", "ports", "pg", "netguard"}:
-                bad.append(f"{p.name}: 허용되지 않은 wiring 이름 {names}")
+            if rel == "wiring" or rel.startswith("wiring."):
+                bad.append(f"{p.name}: 컴포넌트가 wiring을 import한다 ({rel})")
             if rel in ("orchestrator", "server"):
                 bad.append(f"{p.name}: {rel}")
     assert not bad, bad

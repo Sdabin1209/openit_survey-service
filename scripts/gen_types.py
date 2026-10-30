@@ -20,6 +20,7 @@ if "--out" in sys.argv:      # 구조 검사 5번이 임시 폴더에 다시 생
 VALIDATION = '''"""생성 파일(scripts/gen_types.py). 손으로 고치지 않는다. 스키마 검증 한 곳: validate / errors."""
 from __future__ import annotations
 
+import collections
 import functools
 import json
 import pathlib
@@ -84,15 +85,53 @@ def _walk(node: Any, value: Any, root: Any = None):
             yield from _walk(node["items"], v, root)
 
 
-def errors(name: str, value: Any) -> list[str]:
-    """위반 목록(경로: 이유). 비어 있으면 통과. 값 자체는 메시지에 넣지 않는다."""
-    out = [f"{'/'.join(str(p) for p in e.absolute_path) or '(최상위)'}: {e.message[:200]}" for e in _validator(name).iter_errors(value)]
-    out += [f"{'/'.join(str(p) for p in e.absolute_path) or '(최상위)'}: {e.message[:200]}" for e in _walk(schema(name), value, schema(name))]
+_PASSED: "collections.OrderedDict[tuple, Any]" = collections.OrderedDict()      # 이미 통과한 오래 사는 문서(문항 세트, 문항 흐름, 표). 객체가 바뀌지 않는다는 약속(입력 문서는 바꾸지 않는다)에 기대어 같은 객체는 한 번만 본다
+_PASSED_MAX = 256
+
+
+@functools.lru_cache(maxsize=None)
+def _relaxed(name: str, static: tuple):
+    """static 속성의 자리를 비워 둔 검증기(그 속성은 따로 한 번만 검증한다)."""
+    sch = json.loads(json.dumps(schema(name)))
+    for k in static:
+        sch["properties"][k] = {}
+    return jsonschema.Draft202012Validator(sch)
+
+
+def _fmt(e) -> str:
+    return f"{'/'.join(str(p) for p in e.absolute_path) or '(최상위)'}: {e.message[:200]}"
+
+
+def errors(name: str, value: Any, static: tuple = ()) -> list[str]:
+    """위반 목록(경로: 이유). 비어 있으면 통과. 값 자체는 메시지에 넣지 않는다.
+    static: 이 입력에서 오래 사는 문서를 담은 속성 이름들(예: 문항 세트). 느려서(문항 세트 한 번에 약 100ms, 측정) 같은 객체는 한 번만 검증한다."""
+    sch = schema(name)
+    if not static or not isinstance(value, dict):
+        out = [_fmt(e) for e in _validator(name).iter_errors(value)]
+        out += [_fmt(e) for e in _walk(sch, value, sch)]
+        return sorted(set(out))
+    out = [_fmt(e) for e in _relaxed(name, tuple(static)).iter_errors(value)]
+    for k in static:
+        if k not in value:
+            continue
+        key = (name, k, id(value[k]))
+        if key in _PASSED and _PASSED[key] is value[k]:
+            continue
+        sub = sch["properties"][k]
+        defs = sch.get("$defs", {})
+        errs = [f"{k}/{_fmt(e)}" for e in jsonschema.Draft202012Validator({**sub, "$defs": defs}).iter_errors(value[k])]
+        errs += [f"{k}/{_fmt(e)}" for e in _walk(sub, value[k], {**sch, **sub})]
+        if errs:
+            out += errs
+        else:
+            _PASSED[key] = value[k]
+            if len(_PASSED) > _PASSED_MAX:
+                _PASSED.popitem(last=False)
     return sorted(set(out))
 
 
-def validate(name: str, value: Any) -> None:
-    errs = errors(name, value)
+def validate(name: str, value: Any, static: tuple = ()) -> None:
+    errs = errors(name, value, static)
     if errs:
         raise SchemaViolation(name, errs)
 

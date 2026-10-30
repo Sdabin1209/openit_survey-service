@@ -1,60 +1,36 @@
-"""서비스 안의 오류. 경계 호출 오류(BoundaryError)와 구분한다."""
+"""wiring이 아는 오류 이름. 컴포넌트는 자기가 내는 오류를 자기 파일에 BoundaryError 하위 클래스로 정의한다(이 모듈을 import하지 않는다, DESIGN 6절).
+여기서는 (1) 같은 뜻의 여러 컴포넌트 클래스를 튜플로 묶어 `except StoreError` / `pytest.raises(StoreError)`가 그대로 되게 하고,
+(2) 컴포넌트가 아니라 wiring(Orchestrator)이 내는 오류를 정의한다. 모두 BoundaryError(code, details.reason)다."""
+from boundary_contracts import BoundaryError
+
+from ..components import alert_book, alert_service, extract_request, link_inference, release_registry, response_request, session_store, trace_outbox
+
+StoreError = (session_store.StoreError, alert_book.StoreError, trace_outbox.StoreError)
+StoreEffectError = session_store.StoreEffectError
+StaffCallRejected = (alert_book.StaffCallRejected, alert_service.StaffCallRejected)
+DeliveryFailed = alert_service.DeliveryFailed
+InferenceLoadError = link_inference.InferenceLoadError
+ReleaseUnavailable = release_registry.ReleaseUnavailable
+TurnInputError = (extract_request.TurnInputError, response_request.TurnInputError)
 
 
-class SurveyServiceError(Exception):
-    pass
-
-
-class StoreError(SurveyServiceError):
-    """저장소를 쓸 수 없다(DB 오류 등). 값(발화 등)은 메시지에 담지 않는다."""
-
-
-class StoreEffectError(SurveyServiceError):
-    """저장 결정을 기록에 반영할 수 없다(없는 슬롯, 맞지 않는 확인 대기 ID 등). 커밋 전체를 거부한다."""
-
-
-class TurnIdConflict(SurveyServiceError):
+class TurnIdConflict(BoundaryError):
     """같은 (세션, 턴 ID)에 다른 입력이 왔다."""
+    def __init__(self, message: str = "같은 턴 ID에 다른 입력이 왔다") -> None:
+        super().__init__("CONFLICT", message, {"reason": "TURN_ID_CONFLICT"})
 
 
-class TurnInProgress(SurveyServiceError):
+class TurnInProgress(BoundaryError):
     """같은 (세션, 턴 ID)가 아직 처리 중이다. 새로 시작하지 않는다(FAULT_POLICY 2). API는 409 + Retry-After로 알린다."""
+    def __init__(self, message: str = "같은 턴 ID가 처리 중이다") -> None:
+        super().__init__("CONFLICT", message, {"reason": "TURN_IN_PROGRESS"})
 
 
-class ReleaseUnavailable(SurveyServiceError):
-    """세션이 묶인 릴리스를 쓸 수 없다."""
+class SessionNotFound(BoundaryError):
+    def __init__(self, message: str = "모르는 세션이다") -> None:
+        super().__init__("NOT_FOUND", message, {"reason": "SESSION_NOT_FOUND"})
 
 
-class SessionNotFound(SurveyServiceError):
-    pass
-
-
-class SessionEnded(SurveyServiceError):
-    pass
-
-
-class InferenceLoadError(SurveyServiceError):
-    """모델을 적재할 수 없다. code는 거부 사유(상태·런북에 쓴다)."""
-    def __init__(self, code: str, message: str, *, retryable: bool = False) -> None:
-        super().__init__(f"{code}: {message}")
-        self.code = code
-        self.retryable = retryable      # 일시적이라 같은 릴리스를 나중에 다시 시도할 수 있는 실패(추론 서버가 아직 뜨는 중 등)
-
-
-class TurnInputError(Exception):
-    """응답·추출 입력을 조립할 수 없다(표·문항 세트에 없음). code는 값 없는 이름."""
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
-        self.code = code
-
-
-class StaffCallRejected(SurveyServiceError):
-    """재알림·실패 기록 거절. kind: NO_OPEN_ALERT(409), OUTCOME_MISMATCH(409), INTERVAL(429), RETRY_LIMIT(429)."""
-
-    def __init__(self, kind: str, retry_after_s: int = 0) -> None:
-        super().__init__(kind)
-        self.kind, self.retry_after_s = kind, retry_after_s
-
-
-class DeliveryFailed(SurveyServiceError):
-    """알림은 저장됐지만 닿은 전달 경로가 없다(SSE 연결 없음, 푸시 접수 없음)."""
+class SessionEnded(BoundaryError):
+    def __init__(self, message: str = "끝난 세션이다") -> None:
+        super().__init__("CONFLICT", message, {"reason": "SESSION_ENDED"})

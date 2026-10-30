@@ -29,13 +29,13 @@ def test_idle_partial_connections_do_not_block_other_requests(tmp_path, monkeypa
 def test_in_flight_request_gets_its_response_when_shutdown_is_requested(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     started, result = threading.Event(), {}
-    real = app.api.handle
+    real = app.api.dispatch      # 서버는 api.dispatch(openit_link.App 통과)로 요청을 처리한다
 
     def slow(*a, **kw):
         started.set()
         time.sleep(1.0)
         return real(*a, **kw)
-    monkeypatch.setattr(app.api, "handle", slow)
+    monkeypatch.setattr(app.api, "dispatch", slow)
 
     def call():
         result["r"] = http_call(port, "GET", "/v1/staff/alerts")

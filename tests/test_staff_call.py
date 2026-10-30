@@ -8,10 +8,10 @@ from boundary_contracts import validator
 from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
 from survey_service.components.alert_book import AlertStore, PgAlertStore
 from survey_service.components.link_public_api import PublicApi
-from survey_service.wiring.errors import StoreError
+from survey_service.components.session_store import StoreError
 
 from .e2e_support import RISK_OUT, Rig, ScriptedRisk, ext, val
-from .pg_support import pg_url
+from .pg_support import pg_link, pg_url
 
 KIOSK, STAFF, DEV_A, DEV_B = "Bearer kiosk-tok-0123456789", "Bearer staff-tok-0123456789", "Bearer dev-a-tok-0123456789", "Bearer dev-b-tok-0123456789"
 RISK_TEXT = "숨이 안 쉬어져요"
@@ -63,7 +63,7 @@ def mk(request, tmp_path):
     stores = []
 
     def make(**kw):
-        s = PgAlertStore(pg_url(request), clock=lambda: t[0]) if request.param == "postgres" else AlertStore(str(tmp_path / "a.db"), clock=lambda: t[0])
+        s = PgAlertStore(pg_url(request), **pg_link(), clock=lambda: t[0]) if request.param == "postgres" else AlertStore(str(tmp_path / "a.db"), clock=lambda: t[0])
         stores.append(s)
         r = SRig(s, t, **kw)
         if not kw.get("devices"):
@@ -263,7 +263,7 @@ def test_authorization_and_path_bypass(mk):
         assert r.call("POST", path, {"turn_id": "z"}, auth=DEV_B)[0] in (404, 400), path
     for path in ("/v1/sessions/K1%2FK2/staff-call/retry", "/v1/sessions/K1%00/staff-call/retry", "/v1/sessions/%2e%2e/staff-call/retry"):
         assert r.call("POST", path, {"turn_id": "z"}, auth=DEV_A)[0] in (400, 404), path      # 형식 위반(기기 확인이 먼저면 404): 어느 쪽이든 아무것도 바꾸지 않는다
-    assert r.call("GET", "/v1/sessions/K1/staff-call/retry", auth=DEV_A)[0] == 404 and r.call("PUT", "/v1/sessions/K1/staff-call/retry", {"turn_id": "z"}, auth=DEV_A)[0] == 404
+    assert r.call("GET", "/v1/sessions/K1/staff-call/retry", auth=DEV_A)[0] == 405 and r.call("PUT", "/v1/sessions/K1/staff-call/retry", {"turn_id": "z"}, auth=DEV_A)[0] == 405      # 알려진 경로의 다른 메서드는 405(openit_link 규약, 옛 동작은 404)
     assert r.retry("q1", sid="NOPE", auth=DEV_A)[0] == 404                                    # 없는 세션
 
 

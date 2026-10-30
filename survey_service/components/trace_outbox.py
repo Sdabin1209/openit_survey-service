@@ -10,14 +10,28 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
-from ..wiring.errors import StoreError
+from boundary_contracts import BoundaryError
 from ..migrate import migrate
-from ..wiring.pg import DRIVER_ERRORS, PgConn
+
+
+class StoreError(BoundaryError):
+    """저장소를 쓸 수 없다(DB 오류 등). 값(발화 등)은 메시지에 담지 않는다. 오류는 BoundaryError(UNAVAILABLE, details.reason=STORE_ERROR)다:
+    컴포넌트가 다른 모듈의 오류 클래스를 import하지 않는다(DESIGN 6절). 같은 뜻의 클래스가 저장소 컴포넌트마다 있고 조립 계층이 묶어 준다."""
+    def __init__(self, message: str = "저장소를 쓸 수 없다") -> None:
+        super().__init__("UNAVAILABLE", message, {"reason": "STORE_ERROR"})
 
 # 왜: 세션 commit과 같은 트랜잭션에 쓰는 행은 그때 Trace가 아직 완성되지 않았다(응답 생성·전달이 commit 뒤다). 그래서 commit 트랜잭션에는
 # '예약(staged)' 행을 쓰고(내용은 그때까지의 Trace) 턴이 끝나면 같은 행을 완성본으로 바꾼다. 예약 행은 다음 시각을 이 값으로 두어 전송 대상에서
 # 빠진다(`due`는 next_attempt_at<=now). 스키마(CHECK 제약)를 바꾸지 않으려고 새 상태 값 대신 이 표식을 쓴다. 값 1e18은 어떤 epoch 초보다 크다는 것뿐이다.
 STAGED_AT = 1e18
+
+
+def _migrate(kind: str, target: str) -> None:
+    """마이그레이션 실패(migrate는 컴포넌트가 아니라 BoundaryError를 던진다)를 이 컴포넌트의 StoreError로 바꾼다."""
+    try:
+        migrate(kind, target)
+    except BoundaryError as e:
+        raise StoreError(e.message) from None
 
 
 def _count_pending(db, limit: int) -> int:
@@ -55,7 +69,7 @@ class Outbox:
             raise StoreError(f"outbox를 열 수 없다: {type(e).__name__}") from e
 
     def _open(self, path: str) -> None:
-        migrate("sqlite", path)
+        _migrate("sqlite", path)
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
@@ -186,12 +200,17 @@ class Outbox:
 
 
 class PgOutbox(Outbox):
-    _ERRORS = DRIVER_ERRORS
+    """PostgreSQL outbox. 연결 클래스와 드라이버 오류 튜플은 조립 계층이 주입한다(session_store를 import하지 못한다. 한계 L2).
+    주입한 연결이 접속 실패 때 던지는 오류(세션 저장소의 StoreError, reason=STORE_ERROR)는 그대로 올라가고 호출자가 StoreError 튜플로 잡는다."""
     KIND = "postgresql"
 
+    def __init__(self, url: str, *, connect, driver_errors: tuple) -> None:
+        self._connect, self._ERRORS = connect, tuple(driver_errors)
+        super().__init__(url)
+
     def _open(self, url: str) -> None:
-        migrate("postgresql", url)
-        self._db = PgConn(url, "outbox")
+        _migrate("postgresql", url)
+        self._db = self._connect(url, "outbox")
 
     def ping(self) -> None:
         """/readyz용. 주 연결과 락을 쓰지 않는 별도 짧은 연결로 확인한다(전송 스레드가 연결을 쥐고 있어도 막히지 않는다)."""

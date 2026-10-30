@@ -63,8 +63,8 @@ def test_migrate_twice_is_a_noop(tmp_path):
 
 
 def test_migration_error_does_not_leak_the_target():
-    from survey_service.wiring.errors import StoreError
-    with pytest.raises(StoreError) as e:
+    from boundary_contracts import BoundaryError      # migrate는 컴포넌트가 아니라 BoundaryError(reason STORE_ERROR)를 던진다; 저장소 컴포넌트가 자기 StoreError로 바꾼다
+    with pytest.raises(BoundaryError) as e:
         migrate("postgresql", "postgresql://user:SECRETPW@127.0.0.1:1/db")
     assert "SECRETPW" not in str(e.value) and "user" not in str(e.value)
 

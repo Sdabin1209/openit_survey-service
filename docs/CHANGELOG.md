@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 영역 구조 개편 U400 2차 [미출시] (ADR-0048)
+
+- 공개 API 받는 쪽을 `openit_link.App`(v0.3.0) 위로. 컴포넌트가 wiring을 import하지 않는다. 컴포넌트 입력을 wiring이 스키마로 검증한다(`wiring/checked.py`). 와이어 변경 목록은 ADR-0048 "결과".
+- `/readyz`의 `reask_limit.effective`는 계약 SurveyReadyz(3.1.x)에 맞춰 1 이상 또는 null(상한이 꺼져 있으면 null).
+- 버그: 연속 실패 승격(합성 REASK)이 계약 ActionExtraction이 요구하는 `targets`를 빼고 있었다.
+
 ## 영역 구조 개편 U400 [미출시] (ADR-0047)
 
 - 코드를 `components/`(26개), `wiring/`, `types/`(schemas/에서 생성), 진입점(`server.py` 등)으로 옮겼다. 와이어 형식·HTTP 응답·잡 출력은 바뀌지 않았다. 모듈 import 경로가 바뀌어 시험 import를 고쳤다.

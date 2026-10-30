@@ -29,9 +29,9 @@ class Env:
         if backend == "postgres":
             from survey_service.components.alert_book import PgAlertStore
             from survey_service.components.session_store import PgSessionStore
-            from .pg_support import pg_url
+            from .pg_support import pg_link, pg_url
             url = pg_url(request)
-            self.store = PgAlertStore(url, **kw)
+            self.store = PgAlertStore(url, **pg_link(), **kw)
             self.rig = Rig(store=PgSessionStore(url), timeline=self.store)
         else:
             self.store = AlertStore(str(tmp_path / "alerts.db"), **kw)
@@ -180,7 +180,7 @@ def test_result_reads_are_logged_without_subject_value_and_fail_closed(env):
     assert SUBJ not in dump and "rtok" not in dump and "list subject_ref" in dump
 
     def boom(*a, **k):
-        from survey_service.wiring.errors import StoreError
+        from survey_service.components.session_store import StoreError
         raise StoreError("x")
     env.store.log_access_many = boom
     for path in ("/v1/results/K1", "/v1/results"):

@@ -6,19 +6,19 @@ import pytest
 
 from survey_service.components.alert_book import AlertStore, PgAlertStore
 from survey_service.wiring.errors import StoreError
-from survey_service.wiring.pg import translate
+from survey_service.components.session_store import translate
 from survey_service.components.session_store import PgSessionStore
 from survey_service.components.trace_outbox import Outbox
 from survey_service.components.trace_outbox import PgOutbox
 
-from .pg_support import kill_connection, pg_url
+from .pg_support import kill_connection, pg_link, pg_url
 
 
 @pytest.fixture(params=["sqlite", "postgres"])
 def alerts(request, tmp_path):
     t = [1_700_000_000.0]
     if request.param == "postgres":
-        s = PgAlertStore(pg_url(request), clock=lambda: t[0])
+        s = PgAlertStore(pg_url(request), **pg_link(), clock=lambda: t[0])
     else:
         s = AlertStore(str(tmp_path / "a.db"), clock=lambda: t[0])
     s.t = t
@@ -28,7 +28,7 @@ def alerts(request, tmp_path):
 
 @pytest.fixture(params=["sqlite", "postgres"])
 def outbox(request, tmp_path):
-    ob = PgOutbox(pg_url(request)) if request.param == "postgres" else Outbox(str(tmp_path / "o.db"))
+    ob = PgOutbox(pg_url(request), **pg_link()) if request.param == "postgres" else Outbox(str(tmp_path / "o.db"))
     yield ob
     ob.close()
 
@@ -120,7 +120,7 @@ def test_session_store_reconnects_after_connection_kill(request):
 
 def test_alert_store_and_outbox_reconnect(request):
     url = pg_url(request)
-    a, o = PgAlertStore(url), PgOutbox(url)
+    a, o = PgAlertStore(url, **pg_link()), PgOutbox(url, **pg_link())
     a.create("S1", "RISK_STOP")
     kill_connection(a._db)
     assert a.list(None, 10, None)[0][0]["session_id"] == "S1"

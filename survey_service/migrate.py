@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from yoyo import get_backend, read_migrations
 
-from .wiring.errors import StoreError
+from boundary_contracts import BoundaryError
 
 _DIR = Path(__file__).parent / "migrations"
 
@@ -31,4 +31,4 @@ def migrate(kind: str, target: str) -> None:
         with backend.lock():
             backend.apply_migrations(backend.to_apply(migrations))
     except Exception as e:           # 접속 문자열(암호 포함 가능)이 예외 문구에 들어 있을 수 있어 클래스 이름만 남긴다
-        raise StoreError(f"스키마 마이그레이션 실패: {type(e).__name__}") from None
+        raise BoundaryError("UNAVAILABLE", f"스키마 마이그레이션 실패: {type(e).__name__}", {"reason": "STORE_ERROR"}) from None

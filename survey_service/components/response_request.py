@@ -14,7 +14,15 @@ from __future__ import annotations
 
 import re
 
-from ..wiring.errors import TurnInputError
+from boundary_contracts import BoundaryError
+
+
+class TurnInputError(BoundaryError):
+    """입력을 조립할 수 없다(표·문항 세트에 없음). input_code는 값 없는 이름. 한계 L2: extract_request, response_request에 같은 정의가 있다."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__("INVALID_RECORD", code, {"reason": "TURN_INPUT", "input_code": code})
+        self.input_code = code
 import string
 import threading
 from typing import Any, Iterable, Mapping, Optional

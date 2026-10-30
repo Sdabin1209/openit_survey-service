@@ -16,10 +16,11 @@ from boundary_contracts.action_rules import load_rules
 
 from .. import SERVICE_VERSION
 from ..components.alert_service import AlertHub, AlertService, AlertStaffConsole
-from ..components.link_push import WebPushSender
+from ..components.link_push import WebPushSender, endpoint_syntax_error
 from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
-from ..components.reask_cap import effective_reask_cap
+from .. import types
+from .checked import effective_reask_cap
 from .orchestrator import Orchestrator
 from ..components.field_specs import invalid_field_specs
 from ..components.release_loader import ReleaseLoader
@@ -90,7 +91,7 @@ class App:
                 raise ConfigError(str(e)) from None
         self.alerts = AlertService(self.alert_store, AlertHub(), push, settings.push_timeout_seconds,
                                     settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
-                                    settings.staff_call_report_max_per_session)
+                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error)
         self.registry = ReleaseRegistry()
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
             tok = _secret(settings.inference_token_env, "추론 서버 토큰")
@@ -296,11 +297,12 @@ class App:
         return self._db_check()[0]
 
     def _reask_limit(self) -> dict:
-        """되묻기 상한. effective는 활성 문항 세트까지 반영한 실제 적용 값(0=끔, 활성 릴리스가 없으면 null). 이웃은 규칙을 흉내 내지 않고 이 값을 읽는다(ADR-0046)."""
+        """되묻기 상한(계약 SurveyReadyz.reask_limit, 3.1.0). effective는 활성 문항 세트까지 반영한 실제 적용 값이고, 활성 릴리스가 없거나 상한이 꺼져 있으면(0) null이다
+        (계약: effective는 1 이상 또는 null). 이웃은 규칙을 흉내 내지 않고 이 값만 읽는다(ADR-0046)."""
         mx = self.settings.max_consecutive_reask
         rel = self.registry.active()
-        eff = effective_reask_cap(mx, rel.bank.get("session_settings") if rel else None) if rel else None
-        return {"active": (eff if eff is not None else mx) > 0, "max_consecutive": mx, "effective": eff}
+        cap = effective_reask_cap(mx, rel.bank.get("session_settings") if rel else None) if rel else None
+        return {"active": (cap if cap is not None else mx) > 0, "max_consecutive": mx, "effective": cap or None}
 
     def readiness(self) -> tuple[bool, dict]:
         problems, dbs = self._db_check()

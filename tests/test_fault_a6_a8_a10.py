@@ -9,7 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from boundary_contracts.clients import HttpTraceIngest
 
-from survey_service.wiring.errors import StoreError
+from survey_service.wiring.errors import StoreError as StoreErrors      # 여러 컴포넌트 클래스의 튜플(잡을 때 쓴다)
+from survey_service.components.alert_book import StoreError      # 던질 때 쓰는 알림 저장소의 클래스
 from survey_service.components.link_inference import InferenceServer
 from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
@@ -117,7 +118,7 @@ def test_outbox_has_a_pending_cap_and_counts_drops(tmp_path):
         env = {"session_id": f"s{i}", "turn_id": "t", "x": 1}
         try:
             ob.enqueue(env, 1000.0)
-        except StoreError:
+        except StoreErrors:
             pass
     assert ob.counts()["PENDING"] <= 6 and ob.dropped_full >= 4          # 상한 근처에서 멈추고 버린 건수를 센다
     ex = TraceExporter(ob, object())

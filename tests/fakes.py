@@ -58,7 +58,7 @@ class FaultyStore:
 
     def create(self, *a, **k):
         if self.fail_create:
-            from survey_service.wiring.errors import StoreError
+            from survey_service.components.session_store import StoreError
             raise StoreError("만들 수 없다(시험)")
         return self._inner.create(*a, **k)
 
@@ -69,7 +69,7 @@ class FaultyStore:
 
     def append_log(self, *a, **k):
         if self.fail_append_log:
-            from survey_service.wiring.errors import StoreError
+            from survey_service.components.session_store import StoreError
             raise StoreError("쓸 수 없다(시험)")
         return self._inner.append_log(*a, **k)
 

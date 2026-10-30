@@ -28,3 +28,15 @@ def kill_connection(conn) -> None:
     with psycopg.connect(os.environ["TEST_DATABASE_URL"], autocommit=True) as c:
         c.execute("SELECT pg_terminate_backend(%s)", (conn.kill_backend_pid(),))
     time.sleep(0.2)
+
+
+def pg_link() -> dict:
+    """PgOutbox·PgAlertStore에 wiring(db.open_stores)이 주입하는 연결 클래스와 드라이버 오류 튜플."""
+    from survey_service.components import session_store
+    return {"connect": session_store.PgConn, "driver_errors": session_store.DRIVER_ERRORS}
+
+
+def pg_link() -> dict:
+    """PgOutbox·PgAlertStore에 주입하는 접속 수단(조립 계층 wiring/db.py가 하는 일과 같다). 컴포넌트끼리 import하지 않으므로 생성자 인자로 받는다."""
+    from survey_service.components import session_store
+    return {"connect": session_store.PgConn, "driver_errors": session_store.DRIVER_ERRORS}

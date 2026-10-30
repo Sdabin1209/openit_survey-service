@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from survey_service.wiring import netguard
+from survey_service.components import link_push as netguard      # 주소 검사는 link_push 컴포넌트가 소유한다(wiring/netguard 폐지)
 from survey_service.components.link_push import WebPushSender
 
 from .http_server_support import stop_server, connection_limit
@@ -219,16 +219,12 @@ def test_ssrf_guard_allows_embedded_public_ipv4():
 def test_deeply_nested_body_is_400_not_a_dropped_connection(tmp_path, monkeypatch):
     app, httpd, port = make_app(tmp_path, monkeypatch)
     try:
-        for depth in (600, 5000, 100000):
+        for depth, want in ((600, b" 400 "), (5000, b" 400 "), (100000, b" 413 ")):      # 100000단계는 본문이 상한(64 KiB)을 넘어 413(옛 동작은 400)
             body = ("[" * depth + "]" * depth).encode()
             r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
-            assert b" 400 " in r.split(b"\r\n", 1)[0], (depth, r[:80])
-        from survey_service.components.link_public_api import _has_surrogate
-        deep = cur = []
-        for _ in range(20000):
-            nxt = []
-            cur.append(nxt)
-            cur = nxt
-        assert _has_surrogate(deep) is False and _has_surrogate({"a": ["\ud800"]}) is True
+            assert want in r.split(b"\r\n", 1)[0], (depth, r[:80])
+        body = b'{"kind": "SESSION_START", "session_id": "\\ud800"}'      # 짝 없는 서로게이트(JSON 이스케이프): 라이브러리의 엄격한 JSON이 400
+        r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+        assert b" 400 " in r.split(b"\r\n", 1)[0]
     finally:
         _shutdown(app, httpd)

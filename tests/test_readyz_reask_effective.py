@@ -47,3 +47,13 @@ def test_readyz_effective_is_the_service_cap_when_the_bank_limits_are_larger(run
     for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
         bank["session_settings"][k] = 9
     assert _ready(app, reader, port, bank) == {"active": True, "max_consecutive": 3, "effective": 3}
+
+
+def test_readyz_matches_the_contract_schema(running):
+    """계약 SurveyReadyz.reask_limit.effective는 1 이상 또는 null이다. 문항 세트는 세 상한을 반드시 저작하므로(QuestionBank 3.0.0) 활성 릴리스가 있으면 1 이상이다."""
+    from boundary_contracts import validator
+    app, reader, ingest, port = running
+    _ready(app, reader, port, copy.deepcopy(sample_bank()))
+    body = get(port, "/readyz")[1]
+    assert body["reask_limit"]["effective"] >= 1
+    assert not list(validator("SurveyReadyz").iter_errors(body))

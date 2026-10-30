@@ -4,8 +4,16 @@ from __future__ import annotations
 import threading
 from typing import Iterable, Optional
 
-from ..wiring.errors import ReleaseUnavailable
-from ..wiring.ports import LoadedRelease
+from boundary_contracts import BoundaryError
+
+LoadedRelease = object      # 적재된 릴리스(release_loader.LoadedRelease). 레지스트리는 release_id만 읽는다: 컴포넌트끼리 import하지 않으므로 구조적 타입으로 받는다
+
+
+class ReleaseUnavailable(BoundaryError):
+    """세션이 묶인 릴리스를 쓸 수 없다."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("UNAVAILABLE", message, {"reason": "RELEASE_UNAVAILABLE"})
 
 
 class ReleaseRegistry:

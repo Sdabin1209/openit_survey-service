@@ -40,6 +40,8 @@ class Flow:
     reference_sources: Mapping[str, tuple]
     slot_order: Mapping[str, tuple]
     flow_id: str
+    raw: Any = None          # 만든 원본 문서(QuestionFlow). 호출 전 입력 검증이 이 문서를 가리킨다(wiring/checked.py)
+    raw: Mapping | None = None      # 만든 원본(QuestionFlow 문서). wiring이 입력 스키마 검증에 쓴다
 
     def previous_item(self, item: str, saved: Mapping[str, Any]) -> str | None:
         """`item` 바로 앞에 물은 문항(건너뛴 문항은 뺀다). 첫 문항이면 None."""
@@ -65,7 +67,7 @@ def build_flow(data: Mapping) -> Flow:
         raise ValueError("문항 순서에 중복이 있거나 건너뛸 문항이 순서에 없다")
     table = FlowTable(order=tuple(data["order"]), skips=tuple({k: s[k] for k in ("slot", "op", "value", "skip_item")} for s in data["skips"]))
     return Flow(table, {k: tuple(v) for k, v in data["reference_sources"].items()},
-                {k: tuple(v) for k, v in data["slot_order"].items()}, data["flow_id"])
+                {k: tuple(v) for k, v in data["slot_order"].items()}, data["flow_id"], data)
 
 
 def load_flow(version: int = survey_schema.DEFAULT_VERSION) -> Flow:

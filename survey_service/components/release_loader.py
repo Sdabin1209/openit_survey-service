@@ -17,20 +17,28 @@ import time
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 import jsonschema
 from boundary_contracts import BoundaryError, canonical, validator
 
 import survey_schema
 
-from ..wiring.errors import InferenceLoadError
-from ..wiring.ports import LoadedRelease
 
 log = logging.getLogger("survey_service.release")
 
 
 # 서비스가 직접 환자 화면에 내보내는 고정 문장(graph.py의 _fixed 호출). 문항 세트에 없으면 적재를 거부한다.
+
+
+@dataclass
+class LoadedRelease:
+    """적재된 릴리스. 문항 세트와 모델 세션을 가진다."""
+    release_id: str
+    manifest: Mapping
+    bank: Mapping
+    session: Any
+    warnings: list = field(default_factory=list)
 
 
 class LoadRejected(Exception):
@@ -192,8 +200,10 @@ class ReleaseLoader:
         warnings = self._check_library_versions(manifest)
         try:
             session = self.inference.load(manifest, adapters, contract_version=manifest["runtime_contract_version"])
-        except InferenceLoadError as e:
-            raise LoadRejected(e.code, str(e), retryable=e.retryable) from e
+        except BoundaryError as e:
+            if (e.details or {}).get("reason") != "INFERENCE_LOAD":      # 추론 컴포넌트의 적재 거부만 거부 사유로 바꾼다(구조적 판정: 컴포넌트끼리 클래스를 import하지 않는다)
+                raise
+            raise LoadRejected(e.details["load_code"], str(e), retryable=e.details["load_retryable"]) from e
         for w in warnings:
             log.warning("릴리스 경고 release=%s %s", rid, w)
         self.status.warnings = (self.status.warnings + [{"release_id": rid, "warning": w} for w in warnings])[-20:]

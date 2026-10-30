@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from survey_service.wiring import pg
+from survey_service.components import session_store as pg
 from survey_service.components.link_public_api import PublicApi
 from survey_service.settings import Settings
 from survey_service.components.session_store import PgSessionStore

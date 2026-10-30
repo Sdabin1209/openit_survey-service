@@ -11,10 +11,12 @@ import sys
 import threading
 import time
 import uuid
-from http import HTTPStatus
 from typing import Optional
 
+from http import HTTPStatus
+
 from boundary_contracts import PIPELINE_SCHEMA_VERSION
+from openit_link import Request, Response
 from waitress import create_server
 from waitress import wasyncore
 
@@ -81,82 +83,80 @@ def _sse(ev: dict) -> bytes:
     return f"id: {ev['id']}\nevent: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode()
 
 
+def _stream(app: App, req: Request) -> Response:
+    """GET /v1/staff/alerts/stream: SSE. Last-Event-ID가 있으면 그 뒤 이벤트부터 이어 받는다. 인증(staff 역할)은 라이브러리가 이미 했다."""
+    hub, store = app.alerts.hub, app.alert_store
+    retry = {"Retry-After": str(app.settings.retry_after_seconds)}
+    if hub.count() >= app.settings.max_sse_connections:      # 스트림은 연결마다 작업 스레드를 쥔다: 상한을 넘으면 503
+        raise _err("UNAVAILABLE", "알림 스트림 연결이 너무 많다", 503, retry)
+    last = req.headers.get("last-event-id", "").strip()
+    q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
+    try:
+        latest, oldest = store.latest_event_id(), store.oldest_event_id()
+        first = [b"retry: 3000\n\n", _heartbeat()]           # 연결 직후에도 한 번(콘솔이 '연결됨'을 확인할 수 있게)
+        sent = -1
+        if last.isdigit():                               # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
+            sent = int(last)
+            if sent > latest or (oldest is not None and sent < oldest - 1):      # 이어 받을 수 없다(오래된 이벤트가 지워졌거나 순번이 앞섰다): 목록 API로 다시 맞추게 알린다
+                first.append(b'event: resync\ndata: {"reason":"EVENTS_NOT_RESUMABLE"}\n\n')
+            for ev in store.events_after(sent):
+                first.append(_sse(ev))
+                sent = ev["id"]
+    except StoreError:                             # 알림 DB가 죽어 있으면 200 스트림을 열지 않고 503(클라이언트는 Retry-After 뒤 Last-Event-ID로 다시 연결한다)
+        hub.unsubscribe(q)
+        raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다", 503, retry) from None
+    return Response(200, _chain(first, _SseBody(app, q, sent, hub)), {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                    content_type="text/event-stream; charset=utf-8")
+
+
 def make_wsgi(app: App):
-    """WSGI(PEP 3333) 애플리케이션. 서버(소켓, 스레드, 접속·시간 제한)는 waitress가 맡고 이 함수는 경로 분기와 응답 모양만 안다 (ADR-0029)."""
+    """WSGI(PEP 3333) 애플리케이션. 서버(소켓, 스레드, 접속·시간 제한)는 waitress가 맡고, /v1/·/healthz·/readyz는 openit_link.App(공개 API 컴포넌트의 경로 목록)이 받는다 (ADR-0029).
+    여기에 남기는 것: X-Request-Id와 로그 필드, 204에 본문 없음, 공개 API 밖 경로의 404."""
+    link = app.api.link_app(ready=app.readiness, stream=lambda req: _stream(app, req))
 
     def application(environ, start_response):
         method = environ["REQUEST_METHOD"]
         raw_path = environ.get("RAW_URI") or environ.get("REQUEST_URI") or environ.get("PATH_INFO", "/")
         path = raw_path.split("?", 1)[0]
-        hdr_in = lambda name: environ.get("HTTP_" + name.upper().replace("-", "_"), "")
-        rid = hdr_in("X-Request-Id").strip()
+        rid = environ.get("HTTP_X_REQUEST_ID", "").strip()
         _REQ.rid = rid if _REQ_ID.match(rid) else uuid.uuid4().hex[:16]
 
-        def respond(code: int, body: Optional[dict], extra: Optional[dict] = None):
-            headers = [("X-Request-Id", _REQ.rid)]
-            if code == 204:      # 왜: 204는 본문이 없어야 한다(RFC 9110 15.3.5). 본문과 Content-Type을 보내지 않는다
-                start_response(_status_line(204), headers + list((extra or {}).items()))
-                return [b""]
+        def respond(code: int, body: dict, extra: Optional[dict] = None):
             raw = json.dumps(body, ensure_ascii=False).encode()
-            headers += [("Content-Type", "application/json; charset=utf-8"), ("Content-Length", str(len(raw)))] + list((extra or {}).items())
-            start_response(_status_line(code), headers)
-            return [raw]
+            return finish(code, {"Content-Type": "application/json", **(extra or {})}, raw)
 
-        if method == "GET" and path == "/v1/staff/alerts/stream":
-            return stream(environ, respond, start_response, hdr_in)
-        if path.startswith("/v1/") and method in ("GET", "POST", "DELETE"):
+        def finish(code: int, headers: dict, body):
+            out = [("X-Request-Id", _REQ.rid)]
+            if code == 204:      # 왜: 204는 본문이 없어야 한다(RFC 9110 15.3.5). 본문과 Content-Type을 보내지 않는다
+                start_response(_status_line(204), out + [(k, v) for k, v in headers.items() if k not in ("Content-Type", "Content-Length")])
+                return [b""]
+            headers = dict(headers)
+            if headers.get("Content-Type") == "application/json":
+                headers["Content-Type"] = "application/json; charset=utf-8"
+            if isinstance(body, (bytes, bytearray)):
+                headers["Content-Length"] = str(len(body))
+                body = [bytes(body)]
+            start_response(_status_line(code), out + list(headers.items()))      # 반복자(SSE)는 길이를 모른다: 나눠 보낸다
+            return body
+
+        if path.startswith("/v1/"):
             try:
-                n = int(environ.get("CONTENT_LENGTH") or 0)
-                if n < 0:
+                if int(environ.get("CONTENT_LENGTH") or 0) < 0:
                     raise ValueError
             except ValueError:                                     # waitress가 먼저 걸러 보통 오지 않는다. 오면 400
                 return respond(400, {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "code": "INVALID_RECORD",
                                      "message": "Content-Length가 올바르지 않다", "retryable": False})
-            raw = environ["wsgi.input"].read(n) if n > 0 else b""
-            code, body, hdr = app.api.handle(method, raw_path, hdr_in("Authorization"), raw, user=hdr_in("X-Openit-User").strip() or None,
-                                             device=environ.get("HTTP_X_OPENIT_DEVICE"))
-            return respond(code, body, hdr)
-        if method == "GET" and path == "/healthz":
-            return respond(200, {"status": "ok"})
-        if method == "GET" and path == "/readyz":
-            ok, body = app.readiness()
-            return respond(200 if ok else 503, body)
+            return finish(*_order(app.api.dispatch(environ, link)))
+        if path in ("/healthz", "/readyz"):
+            return finish(*_order(link.handle(environ)))
         return respond(404, {"error": "not found"})            # 공개 API 밖의 경로·메서드는 없다
 
-    def stream(environ, respond, start_response, hdr_in):
-        """GET /v1/staff/alerts/stream: SSE. Last-Event-ID가 있으면 그 뒤 이벤트부터 이어 받는다."""
-        err = app.api.stream_auth_error(hdr_in("Authorization"))
-        if err:
-            code, body, hdr = err
-            return respond(code, body, hdr)
-        hub, store = app.alerts.hub, app.alert_store
-        if hub.count() >= app.settings.max_sse_connections:      # 스트림은 연결마다 작업 스레드를 쥔다: 상한을 넘으면 503
-            return respond(*_err("UNAVAILABLE", "알림 스트림 연결이 너무 많다", 503, {"Retry-After": str(app.settings.retry_after_seconds)}))
-        last = hdr_in("Last-Event-ID").strip()
-        q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
-        try:
-            try:
-                latest, oldest = store.latest_event_id(), store.oldest_event_id()
-            except StoreError:                             # 알림 DB가 죽어 있으면 200 스트림을 열지 않고 503(클라이언트는 Retry-After 뒤 Last-Event-ID로 다시 연결한다)
-                hub.unsubscribe(q)
-                return respond(*_err("UNAVAILABLE", "알림 저장소를 읽을 수 없다", 503, {"Retry-After": str(app.settings.retry_after_seconds)}))
-            first = [b"retry: 3000\n\n", _heartbeat()]           # 연결 직후에도 한 번(콘솔이 '연결됨'을 확인할 수 있게)
-            sent = -1
-            if last.isdigit():                               # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
-                sent = int(last)
-                if sent > latest or (oldest is not None and sent < oldest - 1):      # 이어 받을 수 없다(오래된 이벤트가 지워졌거나 순번이 앞섰다): 목록 API로 다시 맞추게 알린다
-                    first.append(b'event: resync\ndata: {"reason":"EVENTS_NOT_RESUMABLE"}\n\n')
-                for ev in store.events_after(sent):
-                    first.append(_sse(ev))
-                    sent = ev["id"]
-        except StoreError:
-            hub.unsubscribe(q)
-            return respond(*_err("UNAVAILABLE", "알림 저장소를 읽을 수 없다", 503, {"Retry-After": str(app.settings.retry_after_seconds)}))
-        start_response("200 OK", [("Content-Type", "text/event-stream; charset=utf-8"), ("Cache-Control", "no-cache"), ("X-Accel-Buffering", "no")])
-        body = _SseBody(app, q, sent, hub)
-        return _chain(first, body)
-
     return application
+
+
+def _order(result: tuple) -> tuple:
+    """라이브러리는 (상태, 머리글, 본문)을 낸다. finish의 인자 순서와 같다."""
+    return result
 
 
 class _chain:

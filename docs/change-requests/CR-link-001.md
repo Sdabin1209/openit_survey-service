@@ -1,3 +1,5 @@
+> **상태: 해소(2026-10-30, link v0.3.0).** 기기 머리글 인증은 `App(authenticate=...)`, `Retry-After`는 `HttpError`, 엄격한 JSON은 라이브러리 기본으로 해결됐다. `link_public_api`는 `openit_link.App` 위로 옮겼다(ADR-0048). 아래는 요청 당시의 기록이다. 계약 `BuildImageRequest.dependency_sources`에 `link` 키가 없는 점은 아직 열려 있다.
+
 # CR-link-001: link의 받는 쪽(openit_link.App)이 survey-service 공개 API를 담기에 부족한 점 (v0.1.0 기준, v0.2.0 갱신 포함)
 
 요청처: 헤드(link 소유). 작성: survey-service 영역 에이전트, 2026-10-30, U400.

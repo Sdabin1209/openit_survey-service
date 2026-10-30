@@ -99,7 +99,7 @@ def test_view_not_found_and_auth(vr):
     assert vr.call("GET", "/v1/staff/sessions/K1", auth="Bearer wrong")[0] == 401
     assert vr.call("GET", "/v1/staff/sessions/K1", auth=AUTH)[0] == 403          # 키오스크 토큰은 직원 경로에 못 간다
     assert vr.call("GET", "/v1/staff/sessions/bad%20id")[0] == 400
-    assert vr.call("POST", "/v1/staff/sessions/K1", {})[0] == 404
+    assert vr.call("POST", "/v1/staff/sessions/K1", {})[0] == 405      # 알려진 경로의 다른 메서드는 405(옛 동작은 404)
 
 
 def test_every_read_is_logged_without_secrets_or_utterances(vr):
@@ -120,7 +120,7 @@ def test_read_is_refused_when_access_cannot_be_logged(vr):
     converse(vr)
 
     def boom(*a, **k):
-        from survey_service.wiring.errors import StoreError
+        from survey_service.components.session_store import StoreError
         raise StoreError("x")
     vr.store.log_access_many = boom
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")

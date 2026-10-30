@@ -11,7 +11,7 @@ from .test_reask_limit import _bank_without_authored_limits, _kinds
 
 def _fresh(bank):
     for k in ("ask_limit", "confirm_limit", "unrecognized_streak_limit"):
-        bank["session_settings"].pop(k, None)       # 연속 실패 상한(ADR-0032)과 섞이지 않게
+        bank["session_settings"][k] = 99       # 연속 실패 상한(ADR-0032)과 섞이지 않게
     return bank
 
 

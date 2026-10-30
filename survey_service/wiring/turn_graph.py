@@ -25,11 +25,12 @@ from langgraph.graph import END, START, StateGraph
 from boundary_contracts import BoundaryError
 from ..components.link_inference import is_output_invalid
 
-from ..components import dispatch_input, question_bank_view as assembly
-from ..components import extract_request, extraction_check, write_plan, response_request, session_store as effects
-from ..components.turn_route import COLUMNS, _DEFAULT, column_of
+from ..components import question_bank_view as assembly
+from ..components import session_store as effects
 from ..components.reask_cap import effective_reask_cap  # noqa: F401 (재노출)
 from ..components.field_specs import build_field_specs
+from . import checked
+from .checked import column_of
 from .errors import ReleaseUnavailable, StoreError
 from .ports import LoadedRelease
 
@@ -259,7 +260,7 @@ class TurnGraph:
         try:
             active = self.o.releases.active()
             extra = tuple(active.bank["session_settings"].get("risk_phrases") or ()) if active else ()       # 문항 세트에 저작된 위험 문구(U2)
-            alert = src.screen(utt, extra)
+            alert = checked.screen(src, utt, extra)
         except Exception as e:
             log.warning("위험 선별 오류 session=%s error=%s", st["session_id"], type(e).__name__)
             self.o._count("risk_source_error")
@@ -274,7 +275,7 @@ class TurnGraph:
 
         def probe() -> None:
             try:
-                box["s"] = self.o.store.load(sid)["status"]
+                box["s"] = checked.store_load(self.o.store, sid)["status"]
             except Exception:
                 box["s"] = "DB_ERROR"
         th = threading.Thread(target=probe, daemon=True)
@@ -330,7 +331,7 @@ class TurnGraph:
     def n_load_session(self, st, config):
         sid = st["session_id"]
         tr = {"persistence_load_request": {"session_id": sid}}
-        loaded = self.o.store.load(sid)
+        loaded = checked.store_load(self.o.store, sid)
         tr["persistence_load_result"] = copy.deepcopy(loaded)
         if loaded["status"] == "DB_ERROR":
             return {"loaded": loaded, "trace": tr, "fatal": "no_route"}
@@ -346,8 +347,7 @@ class TurnGraph:
 
     def _column(self, name: str):
         def node(st, config):
-            r = COLUMNS[name].get(st["input_kind"], _DEFAULT[name])
-            return {"route": asdict(r)}
+            return {"route": asdict(checked.route(st["input_kind"], st["found"], st["status"]))}
         return node
 
     def n_col_none(self, st, config):
@@ -460,7 +460,7 @@ class TurnGraph:
         inp = st["extract_in"]
         if inp is None:
             try:
-                inp = extract_request.build_extract_input(doc, ctx.bank, self.o.flow, st["utterance"])
+                inp = checked.build_extract_input(doc, ctx.bank, self.o.flow, st["utterance"])
             except Exception as e:
                 upd.update(extract_next="finalize", failed=self._fail(st, "LoRA-A", e))
                 tr["extract_status"] = "ERROR"
@@ -496,8 +496,8 @@ class TurnGraph:
         ctx, doc = _ctx(config), st["state_doc"]
         out = st["extract_out"]
         try:
-            viol = list(extraction_check.check_slots(out, doc["answer_records"]))
-            viol += extraction_check.check_current_item(out, doc, self.o.flow)                # 현재 문항 밖 저장(서버가 못 보는 것). 자료형·범위는 서버가 fields로 보증한다 (ADR-0043)
+            viol = checked.check_slots(out, doc)
+            viol += checked.check_current_item(out, doc, self.o.flow)                # 현재 문항 밖 저장(서버가 못 보는 것). 자료형·범위는 서버가 fields로 보증한다 (ADR-0043)
         except Exception as e:                               # 서비스 쪽 검사가 입력을 읽지 못했다: 재시도해도 같다
             return {"extract_next": "finalize", "failed": self._fail(st, "VALIDATE", e),
                     "trace": {"extract_status": "ERROR", "validation_ok": False, "validation_violations": None}}
@@ -520,7 +520,7 @@ class TurnGraph:
         ctx, doc = _ctx(config), st["state_doc"]
         out = st["extract_out"]
         try:
-            writes = write_plan.plan_writes(doc, out)
+            writes = checked.plan_writes(doc, out)
         except Exception as e:
             return {"failed": self._fail(st, "VALIDATE", e)}
         upd: dict = {"writes": writes, "resp": {"kind": "model"}, "flow_end": out["next_item"] == "END"}
@@ -567,7 +567,7 @@ class TurnGraph:
             if not v.get("save"):
                 continue
             try:
-                ref = extraction_check._slot_ref(v["key"])
+                ref = effects.slot_ref(v["key"])
                 q = ctx.bank.by_id.get(ref["question_id"])
                 slot = next((x for x in (q or {}).get("slots", []) if x["slot_id"] == ref["slot_id"]), None)
             except Exception:
@@ -600,7 +600,8 @@ class TurnGraph:
         return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF"), "pause_reason": "REASK_LIMIT"}
 
     def _reask_cap(self, ctx) -> int:
-        return effective_reask_cap(self.o.max_consecutive_reask, ctx.bank.settings if ctx.bank else None)
+        settings = ctx.bank.settings if ctx.bank else None
+        return checked.effective_reask_cap(self.o.max_consecutive_reask, settings)
 
     def _streak(self, st) -> int:
         """이번 턴 앞까지 이어진 '진전 없는 턴' 수(U34, ADR-0032): REASK·CONFIRM·REDIRECT로 확정된 턴과 추출·검증이 실패한 턴(NOT_COMMITTED).
@@ -641,7 +642,10 @@ class TurnGraph:
         if any(f["step"] not in ("LoRA-A", "VALIDATE") for f in res["failed"]) or self._streak(st) < cap:
             return res
         cur = st["state_doc"]["progress_record"]["current_question_id"]
-        synthetic = {"action": "REASK", "next_item": cur, "reason": "MISSING", "values": []}
+        q = ctx.bank.by_id.get(cur) if ctx.bank else None
+        slot = q["slots"][0]["slot_id"] if q and q.get("slots") else "x"
+        # 계약 ActionExtraction은 REASK에 reason과 targets(1개 이상)를 요구한다: 현재 문항의 첫 칸을 대상으로 한다(저장·응답에는 쓰이지 않는다: 같은 직원 호출 경로가 고정 문장을 낸다)
+        synthetic = {"action": "REASK", "next_item": cur, "reason": "MISSING", "targets": [f"{cur}.{slot}"], "values": []}
         return {**res, "extract_next": "plan", "failed": [], "extract_out": synthetic, "fail_escalation": True}
 
     @staticmethod
@@ -684,7 +688,7 @@ class TurnGraph:
         env = self.o.trace_envelope(st.get("release_id"), dict(st["trace"], persistence_commit_request=copy.deepcopy(req)))
         if env is not None:      # 세션 commit과 같은 트랜잭션에 Trace 예약 행을 쓴다(H02). 턴이 끝나면 finalize_turn이 완성본으로 바꾼다
             kw["trace_envelope"] = env
-        res = self.o.store.commit(req, turn_id=st["turn_id"], input_hash=st["input_hash"], **kw)
+        res = checked.store_commit(self.o.store, req, turn_id=st["turn_id"], input_hash=st["input_hash"], **kw)
         tr = {"persistence_commit_request": copy.deepcopy(req), "persistence_commit_result": copy.deepcopy(res)}
         if res["status"] == "OK":
             return {"committed": True, "revision": res["revision"], "post_doc": effects.apply_writes(doc, writes), "trace": tr}
@@ -723,7 +727,7 @@ class TurnGraph:
 
     def n_dispatch_result(self, st, config):
         """결과 전달(문진이 끝나는 턴)."""
-        din = dispatch_input.dispatch_input(st["post_doc"])
+        din = checked.dispatch_input(st["post_doc"])
         tr = {"dispatch_input": din}
         if not getattr(self.o.dispatcher, "attached", True):
             # 결과 전달 대상이 아직 없다(붙을 예정, 정상 구성). 오류가 아니라 명시된 상태로 기록한다. 전달 기록은 succeeded=false(전달되지 않았다)
@@ -767,9 +771,9 @@ class TurnGraph:
             return {"failed": _step_failed(("AFTER_COMMIT", "LoRA-B")), "trace": tr}
         try:
             if plan["kind"] == "model_start":
-                req = response_request.build_start_request(ctx.bank, self.o.tables, self.o.flow.table.order[0])
+                req = checked.build_start_request(ctx.bank, self.o.tables, self.o.flow.table.order[0])
             else:
-                req = response_request.build_response_request(st["extract_out"], st["extract_in"], st["post_doc"], ctx.bank, self.o.tables)
+                req = checked.build_response_request(st["extract_out"], st["extract_in"], st["post_doc"], ctx.bank, self.o.tables)
             tr["response_input"] = copy.deepcopy(req)
             res = _model_call(ctx, "respond", req)
         except Exception as e:
@@ -901,7 +905,7 @@ class TurnGraph:
         tr["staff_console_input"] = copy.deepcopy(sc)
         if fi is not None and st["trace"].get("frontend_input") is None and tr.get("frontend_input") is None:
             tr["frontend_input"] = copy.deepcopy(fi)
-        after = self.o.store.load(st["session_id"])
+        after = checked.store_load(self.o.store, st["session_id"])
         if after["status"] == "OK":
             tr["session_after"] = after["state"]
         if doc is not None:

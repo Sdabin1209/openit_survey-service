@@ -262,7 +262,7 @@ def test_restart_preloads_release_of_open_session_outside_turns(env):
 def test_inference_backend_must_be_known():
     with pytest.raises(InferenceLoadError) as e:
         InferenceServer("vllm")
-    assert e.value.code == "UNKNOWN_BACKEND"
+    assert e.value.load_code == "UNKNOWN_BACKEND"
     assert InferenceServer("fake").production_safe is False
 
 

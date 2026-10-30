@@ -25,9 +25,18 @@ from typing import Any, Callable
 import model_runtime
 import survey_schema
 
-from ..wiring.errors import InferenceLoadError
 
 log = logging.getLogger("survey_service.remote")
+
+
+class InferenceLoadError(BoundaryError):
+    """모델을 적재할 수 없다. load_code는 거부 사유(상태·런북에 쓴다). load_retryable: 일시적이라 같은 릴리스를 나중에 다시 시도할 수 있는 실패(추론 서버가 아직 뜨는 중 등).
+    BoundaryError의 code·retryable과 이름이 겹치지 않게 load_ 접두를 쓴다."""
+
+    def __init__(self, code: str, message: str, *, retryable: bool = False) -> None:
+        super().__init__("UNAVAILABLE" if retryable else "FAILED_PRECONDITION", f"{code}: {message}",
+                         {"reason": "INFERENCE_LOAD", "load_code": code, "load_retryable": retryable})
+        self.load_code, self.load_retryable = code, retryable
 
 
 def _timed_out(e: BoundaryError, elapsed: float, timeout: float) -> bool:
@@ -176,6 +185,8 @@ class RemoteInference:
                     raise InferenceLoadError("REMOTE_TIMEOUT", "추론 서버의 릴리스 적재가 시간 안에 끝나지 않았다", retryable=True)
                 time.sleep(self.poll_interval)
                 rec = self._rt.get_release_state(rid)
+        except InferenceLoadError:
+            raise
         except BoundaryError as e:
             # 연결 실패, 타임아웃, 502·503·504는 UNAVAILABLE이다: 추론 서버가 아직 뜨는 중일 수 있어 다시 시도할 수 있다.
             # 412·422·403·404 등 결정적 거부는 다시 시도해도 같다.

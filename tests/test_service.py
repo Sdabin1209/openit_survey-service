@@ -74,9 +74,10 @@ def test_readyz_not_ready_when_pointer_points_to_unsupported_version(running):
 
 def test_no_public_api_only_health_endpoints(running):
     app, reader, ingest, port = running
-    for path in ("/v1/sessions", "/v1/turns", "/", "/metrics"):
+    for path in ("/v1/turns", "/", "/metrics"):
         assert get(port, path)[0] == 404
-    assert get(port, "/v1/turns", "POST")[0] == 404 and get(port, "/healthz", "POST")[0] == 404
+    assert get(port, "/v1/sessions")[0] == 405         # 알려진 경로에 다른 메서드: link 기반의 405 + Allow(U400 와이어 변경 목록)
+    assert get(port, "/v1/turns", "POST")[0] == 404 and get(port, "/healthz", "POST")[0] in (404, 405)
 
 
 def test_turn_through_app_reaches_ingest(running):

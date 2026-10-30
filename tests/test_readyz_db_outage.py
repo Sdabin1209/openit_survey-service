@@ -124,7 +124,7 @@ def test_readyz_db_timeout_setting():
 
 def test_turn_ends_not_committed_within_deadline_when_db_is_frozen(request):
     """docker pause 같은 무응답 DB: 서버 statement_timeout은 못 듣는다. 클라이언트 강제 끊기와 턴 총 마감으로 NOT_COMMITTED로 끝나고, 풀리면 복구된다."""
-    from survey_service.wiring import pg
+    from survey_service.components import session_store as pg
     from survey_service.components.session_store import PgSessionStore
     from .e2e_support import ANSWER_OUT, Rig
     from . import pg_container as pc

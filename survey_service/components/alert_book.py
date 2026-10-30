@@ -11,11 +11,33 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Optional
 
-from ..wiring.errors import StaffCallRejected, StoreError
+from boundary_contracts import BoundaryError
 from ..migrate import migrate
-from ..wiring.pg import DRIVER_ERRORS, PgConn  # noqa: F401
 
 log = logging.getLogger("survey_service.alerts")
+
+
+class StoreError(BoundaryError):
+    """저장소를 쓸 수 없다(DB 오류 등). 값(발화 등)은 메시지에 담지 않는다. 오류는 BoundaryError(UNAVAILABLE, details.reason=STORE_ERROR)다:
+    컴포넌트가 다른 모듈의 오류 클래스를 import하지 않는다(DESIGN 6절). 같은 뜻의 클래스가 저장소 컴포넌트마다 있고 조립 계층이 묶어 준다."""
+    def __init__(self, message: str = "저장소를 쓸 수 없다") -> None:
+        super().__init__("UNAVAILABLE", message, {"reason": "STORE_ERROR"})
+
+
+def _migrate(kind: str, target: str) -> None:
+    """마이그레이션 실패(migrate는 컴포넌트가 아니라 BoundaryError를 던진다)를 이 컴포넌트의 StoreError로 바꾼다."""
+    try:
+        migrate(kind, target)
+    except BoundaryError as e:
+        raise StoreError(e.message) from None
+
+
+class StaffCallRejected(BoundaryError):
+    """재알림·실패 기록 거절. kind: NO_OPEN_ALERT(409), OUTCOME_MISMATCH(409), INTERVAL(429), RETRY_LIMIT(429)."""
+    def __init__(self, kind: str, retry_after_s: int = 0) -> None:
+        super().__init__("CONFLICT" if kind in ("NO_OPEN_ALERT", "OUTCOME_MISMATCH") else "UNAVAILABLE", kind,
+                         {"reason": "STAFF_CALL_REJECTED", "kind": kind})
+        self.kind, self.retry_after_s = kind, retry_after_s
 
 
 def _iso(ts: float) -> str:
@@ -51,7 +73,7 @@ class AlertStore:
             raise StoreError(f"알림 DB를 열 수 없다: {type(e).__name__}") from e
 
     def _open(self, path: str) -> None:
-        migrate("sqlite", path)
+        _migrate("sqlite", path)
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
@@ -356,9 +378,14 @@ class PgAlertStore(AlertStore):
     """PostgreSQL 알림 저장소. 연결·스키마 방언만 다르고 나머지는 AlertStore와 같다."""
     KIND = "postgresql"
 
+    def __init__(self, url: str, *, connect, driver_errors: tuple, clock: Callable[[], float] = time.time) -> None:
+        # 연결 클래스·드라이버 오류는 조립 계층이 주입한다(session_store를 import하지 못한다. 한계 L2). 주입한 연결의 접속 실패 오류는 그대로 올라간다.
+        self._connect, self._ERRORS = connect, tuple(driver_errors)
+        super().__init__(url, clock)
+
     def _open(self, url: str) -> None:
-        migrate("postgresql", url)
-        self._db = PgConn(url, "알림 DB")
+        _migrate("postgresql", url)
+        self._db = self._connect(url, "알림 DB")
 
     def ping(self) -> None:
         """/readyz용. 주 연결과 락을 쓰지 않는 별도 짧은 연결로 확인한다."""
@@ -367,9 +394,3 @@ class PgAlertStore(AlertStore):
         except self._ERRORS as e:
             raise StoreError(f"알림 DB를 읽을 수 없다: {type(e).__name__}") from None
 
-
-try:
-    from ..wiring.pg import DRIVER_ERRORS as _PG_ERRORS
-    PgAlertStore._ERRORS = _PG_ERRORS
-except ImportError:      # pragma: no cover
-    pass

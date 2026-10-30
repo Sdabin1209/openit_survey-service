@@ -8,6 +8,7 @@ from survey_service.components.alert_book import PgAlertStore
 from survey_service.wiring.errors import StaffCallRejected
 
 from . import pg_container
+from .pg_support import pg_link
 
 pytestmark = pytest.mark.skipif(not pg_container.docker_ready(), reason="Docker 또는 postgres 이미지가 없어 건너뜀")
 
@@ -20,7 +21,7 @@ def url():
 
 
 def test_retry_after_resolve_on_another_connection_is_rejected(url):
-    a, b = PgAlertStore(url), PgAlertStore(url)              # 연결이 서로 다르다: 한 프로세스 락을 공유하지 않는다
+    a, b = PgAlertStore(url, **pg_link()), PgAlertStore(url, **pg_link())              # 연결이 서로 다르다: 한 프로세스 락을 공유하지 않는다
     try:
         a.create("S-seq", "RISK")
         row = a._db.execute("SELECT n FROM alerts WHERE session_id=?", ("S-seq",)).fetchone()[0]
@@ -37,7 +38,7 @@ def test_retry_after_resolve_on_another_connection_is_rejected(url):
 
 
 def test_concurrent_retry_and_resolve_never_emit_alert_event_after_resolved(url):
-    a, b = PgAlertStore(url), PgAlertStore(url)
+    a, b = PgAlertStore(url, **pg_link()), PgAlertStore(url, **pg_link())
     try:
         sessions = [f"S-race-{i}" for i in range(40)]
         ns = {}

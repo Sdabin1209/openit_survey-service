@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from boundary_contracts import SecretError, read_secret
 
-from . import pg
 from ..components.alert_book import AlertStore, PgAlertStore
 from ..settings import ConfigError, Settings
+from ..components import session_store
 from ..components.session_store import PgSessionStore, SqliteSessionStore
 from ..components.trace_outbox import Outbox, PgOutbox
 
@@ -26,12 +26,14 @@ def open_stores(settings: Settings, url: str | None = None):
     """(세션 저장소, outbox, 알림 저장소, 종류). 종류는 'postgresql' 또는 'sqlite'."""
     url = database_url() if url is None else url
     if url:
-        pg.configure(connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
+        session_store.configure(connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
                      reconnect_backoff=settings.db_reconnect_backoff_seconds,
                      probe_timeout=settings.readyz_db_timeout_seconds)
-        store, outbox = PgSessionStore(url), PgOutbox(url)
+        # 왜 주입하나: outbox·알림은 세션 저장소 컴포넌트를 import하지 못한다(컴포넌트끼리 import 금지). 연결 소유자는 session_store다.
+        link = {"connect": session_store.PgConn, "driver_errors": session_store.DRIVER_ERRORS}
+        store, outbox = PgSessionStore(url), PgOutbox(url, **link)
         store.outbox_gate = outbox          # 같은 데이터베이스의 outbox 표를 세션 commit과 같은 트랜잭션에 쓴다 (H02, ADR-0023)
-        return store, outbox, PgAlertStore(url), "postgresql"
+        return store, outbox, PgAlertStore(url, **link), "postgresql"
     # 왜: SQLite도 outbox 표를 세션 DB 파일에 둔다. 세션 commit과 같은 트랜잭션에 쓰려면 같은 파일이어야 한다(H02, ADR-0023).
     # settings.outbox_db(SURVEY_OUTBOX_DB)는 더 쓰지 않는다. 그 파일에 남은 미전송 행은 옮기지 않는다(운영은 PostgreSQL, SQLite는 개발·시험).
     store, outbox = SqliteSessionStore(settings.session_db), Outbox(settings.session_db)
