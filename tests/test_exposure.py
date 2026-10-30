@@ -85,3 +85,25 @@ def test_label_is_added_by_build_image_and_matches_the_file():
     finally:
         subprocess.run(["docker", "rmi", "-f", tag], capture_output=True)
         shutil.rmtree(work, ignore_errors=True)
+
+
+def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
+    """시간 상한 사슬(ADR-0049): 서버 턴 마감 9.0 < gateway(dial + response_header = 10.5) < 키오스크 대기 12. 같은 리포의 두 값을 대조한다(이웃을 읽지 않는다).
+    키오스크 경로(device-token)는 사슬 안이고, 직원 경로(account)는 턴 마감보다 길기만 하면 되며, /readyz는 자기 확인 예산보다 길어야 한다."""
+    from survey_service.settings import Settings
+    s = Settings()
+    deadline, kiosk_wait = s.turn_deadline_seconds, 12.0      # 12는 ADR-0049의 사슬 값(사용자 결정 2026-10-30): 키오스크 쪽 상수이므로 여기에 근거만 적는다
+    checked = 0
+    for r in TABLE["routes"]:
+        t = r.get("timeouts_ms")
+        if not t:
+            continue
+        gateway = (t.get("dial", 0) + t["response_header"]) / 1000
+        if r["auth"]["kind"] == "device-token":
+            assert deadline + 1.5 <= gateway < kiosk_wait, (r["paths"], gateway, deadline)      # 사슬의 간격: 9.0 + 1.5 = 10.5 (ADR-0049). 턴 마감 직전에 끝난 응답이 게이트웨이 상한 안에 도착해야 한다
+        elif r["auth"]["kind"] == "account":
+            assert t["response_header"] / 1000 > deadline, (r["paths"], t)
+        else:
+            assert t["response_header"] / 1000 >= s.readyz_db_timeout_seconds, (r["paths"], t)       # /readyz: DB 확인 상한(2.0초)보다 짧으면 게이트웨이가 먼저 끊는다
+        checked += 1
+    assert checked >= 6
