@@ -5,7 +5,7 @@
 """
 import threading
 
-from .test_readyz_db_outage import _app, hanging, ready_after_deadline
+from .test_readyz_db_outage import _app, hanging, quick, ready_after_deadline
 from .timing import FakeClock
 
 
@@ -15,7 +15,10 @@ def test_ok_checks_plus_hanging_stats_return_ok_with_stale_stats(tmp_path, monke
     gate, entered = threading.Event(), threading.Event()
     try:
         monkeypatch.setattr(app.exporter, "stats", hanging(gate, entered))         # 주 연결 읽기가 매달림
-        ok, body = ready_after_deadline(app, clock, [entered])
+        started = [threading.Event() for _ in range(3)]
+        for st, ev in zip((app.store, app.outbox, app.alert_store), started):
+            monkeypatch.setattr(st, "ping", quick(st.ping, ev))               # 세 확인은 바로 통과한다: 그 결과가 나온 뒤에 마감을 넘긴다
+        ok, body = ready_after_deadline(app, clock, [entered], list(zip(started, ("session_db", "outbox_db", "alert_db"))))
         assert ok and body["db_stats_stale"] is True
     finally:
         gate.set(); app.stop()

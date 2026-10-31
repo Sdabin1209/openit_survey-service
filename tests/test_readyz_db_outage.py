@@ -46,13 +46,25 @@ def hanging(gate, entered):
     return f
 
 
-def ready_after_deadline(app, clock, entered):
-    """readiness를 다른 스레드에서 시작하고, 막힌 확인이 모두 시작된 뒤 주입한 시계로 마감을 넘긴다(실제로 기다리지 않는다). 돌아온 (ok, body)."""
+def quick(fn, started):
+    """바로 끝나는 확인을 감싼다: 시작했음을 started로 알린다(결과는 그대로)."""
+    def f(*a, **k):
+        started.set()
+        return fn(*a, **k)
+    return f
+
+
+def ready_after_deadline(app, clock, entered, quick_checks=()):
+    """readiness를 다른 스레드에서 시작하고, 막힌 확인이 모두 시작되고 **바로 끝나는 확인(quick_checks: (started Event, 확인 이름))이 결과를 낸 뒤** 주입한 시계로 마감을 넘긴다(실제로 기다리지 않는다).
+    바로 끝나는 확인이 끝나기 전에 시계를 흘리면 그 확인도 마감 초과로 세어져 결과가 실행마다 갈린다(U427 재현 보고): 확인 스레드가 끝난 것을 이름(readyz-<이름>)으로 기다린다. 돌아온 (ok, body)."""
     res = {}
     th = threading.Thread(target=lambda: res.update(r=app.readiness()), daemon=True)
     th.start()
     for ev in entered:
         assert ev.wait(HANG_GUARD_SECONDS)
+    for ev, name in quick_checks:
+        assert ev.wait(HANG_GUARD_SECONDS)
+        assert wait_until(lambda n=name: not any(t.name == f"readyz-{n}" and t.is_alive() for t in threading.enumerate()))
     # 마감 시각은 readiness 스레드가 확인 시작 뒤에 정하므로(경쟁) 돌아올 때까지 시계를 계속 흘린다: 시계는 시험이 흘릴 때만 가고 실제 시간은 판정에 쓰이지 않는다
     for _ in range(HANG_GUARD_SECONDS * 20):
         clock.advance(app.settings.readyz_db_timeout_seconds + 10)
@@ -130,7 +142,9 @@ def test_readyz_has_hard_cap_when_a_check_hangs(tmp_path, monkeypatch):
         ok, body = _ready(app)
         assert ok is True and body["database"] == {"kind": "sqlite"} and body["db_stats_stale"] is False
         app.outbox.ping = hanging(gate, entered)
-        ok, body = ready_after_deadline(app, clock, [entered])
+        s1, s2 = threading.Event(), threading.Event()
+        app.store.ping, app.alert_store.ping = quick(app.store.ping, s1), quick(app.alert_store.ping, s2)
+        ok, body = ready_after_deadline(app, clock, [entered], [(s1, "session_db"), (s2, "alert_db")])
         assert ok is False and body["problems"] == ["outbox_db"]
     finally:
         gate.set()
@@ -188,13 +202,18 @@ def test_readyz_total_deadline_with_three_hanging_dbs_and_reasons_are_kept(tmp_p
         assert ok is False
         assert {"session_db", "outbox_db", "alert_db"} <= set(body["problems"])
 
+        gate.set()                      # 첫 단계에서 버려진 확인 스레드를 모두 끝낸다: 같은 이름(readyz-<이름>)의 남은 스레드를 둘째 단계의 확인으로 오인하지 않게
+        assert wait_until(lambda: not any(t.name.startswith("readyz-") and t.is_alive() for t in threading.enumerate()))
+
         def boom():
             raise RuntimeError("x")
-        monkeypatch.setattr(app.store, "ping", boom)                  # 하나는 즉시 실패, 하나는 멈춤, 하나는 정상
-        monkeypatch.setattr(app.alert_store, "ping", lambda: None)
+        gate = threading.Event()
+        s1, s2 = threading.Event(), threading.Event()
+        monkeypatch.setattr(app.store, "ping", quick(boom, s1))                  # 하나는 즉시 실패, 하나는 멈춤, 하나는 정상
+        monkeypatch.setattr(app.alert_store, "ping", quick(lambda: None, s2))
         ents2 = threading.Event()
         monkeypatch.setattr(app.outbox, "ping", hanging(gate, ents2))
-        ok, body = ready_after_deadline(app, clock, [ents2])
+        ok, body = ready_after_deadline(app, clock, [ents2], [(s1, "session_db"), (s2, "alert_db")])
         assert ok is False
         assert [p for p in body["problems"] if p.endswith("_db")] == ["session_db", "outbox_db"]
     finally:
