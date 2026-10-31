@@ -15,7 +15,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PKG = ROOT / "survey_service"
 COMPONENTS = PKG / "components"
 # 컴포넌트가 import해도 되는 컴포넌트 밖 모듈: 설정·마이그레이션·생성 타입뿐이다. wiring/은 import하지 않는다(DESIGN 6절, L1 해소)
-ALLOWED_OUTSIDE = {"settings", "migrate", "types"}
+ALLOWED_OUTSIDE = {"settings", "migrate", "types", "config"}
 HTTP_MODULES = {"boundary_contracts.clients", "urllib.request", "http.client", "http.server", "requests", "waitress", "wsgiref", "pywebpush", "aiohttp", "httpx"}
 ENTRY = re.compile(r"(^|/)(__main__|main|app|server|config|settings|migrate|cli|index)\.py$|(^|/)migrations?/")
 
@@ -107,3 +107,13 @@ def test_components_have_no_stray_modules_without_a_row_in_components_md():
     doc = (ROOT / "docs" / "components.md").read_text(encoding="utf-8")
     missing = [p.stem for p in _py(COMPONENTS) if p.stem != "__init__" and f"components/{p.stem}.py" not in doc]
     assert not missing, f"docs/components.md 표에 없는 컴포넌트: {missing}"
+
+
+def test_components_never_read_the_time_module_directly():
+    """ADR-0050: 컴포넌트는 `time`을 import하지 않는다. 시계는 인자로 받고, 기본값은 `survey_service/config.py`(조립 기본값)에서 온다."""
+    bad = []
+    for p in _py(COMPONENTS):
+        for mod, names in _imports(p):
+            if mod == "time" or mod.startswith("time."):
+                bad.append(f"{p.name}: import {mod}")
+    assert not bad, bad

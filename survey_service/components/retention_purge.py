@@ -9,8 +9,9 @@
 """
 from __future__ import annotations
 
+from ..config import REAL_WALL_CLOCK
+
 import logging
-import time
 from typing import Optional
 
 
@@ -19,8 +20,8 @@ BATCH = 200
 
 
 def purge(store, alert_store, retention_days: Optional[int], now: Optional[float] = None, *, outbox=None, access_log_days: Optional[int] = None,
-          alert_days: Optional[int] = None, dead_outbox_days: Optional[int] = None) -> dict:
-    now = time.time() if now is None else now
+          alert_days: Optional[int] = None, dead_outbox_days: Optional[int] = None, clock=REAL_WALL_CLOCK) -> dict:
+    now = clock() if now is None else now
     res: dict = {"configured": retention_days is not None, "purged_sessions": 0}
     if retention_days is not None:
         res["retention_days"] = retention_days

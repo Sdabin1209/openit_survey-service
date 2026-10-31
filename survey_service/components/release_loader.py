@@ -10,10 +10,11 @@
 """
 from __future__ import annotations
 
+from ..config import REAL_WALL_CLOCK
+
 import logging
 import re
 import threading
-import time
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,7 +74,7 @@ class ReleaseLoader:
                  supported_versions: Optional[Iterable[int]] = None, installed_versions: Optional[dict] = None,
                  keep_releases: int = 2, open_release_ids: Callable[[], set] = lambda: set(),
                  retry_base_seconds: float = 5.0, retry_max_seconds: float = 60.0, give_up_seconds: float = 0.0,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = REAL_WALL_CLOCK) -> None:
         self.reader, self.registry, self.inference = reader, registry, inference
         self.field_check = field_check      # 칸 규격 검사(field_specs.invalid_field_specs). 컴포넌트끼리 import하지 않으므로 wiring이 꽂는다. None이면 이 검사를 하지 않는다
         self.workdir = Path(workdir)

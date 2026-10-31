@@ -9,10 +9,11 @@
 """
 from __future__ import annotations
 
+from ..config import REAL_MONOTONIC, REAL_SLEEP
+
 import collections
 import logging
 import threading
-import time
 from typing import Callable, Mapping, Optional
 
 from boundary_contracts import BoundaryError
@@ -92,11 +93,11 @@ class Stats:
 class RemoteModelSession:
     """graph가 아는 extract/respond. 둘 다 RuntimeResult(output, outcome, attempts, protections)를 돌려준다."""
 
-    accepts_deadline = True      # graph가 턴 마감(time.monotonic 기준)을 넘겨 준다: 재시도 판단에 쓴다
+    accepts_deadline = True      # graph가 턴 마감(단조 시계 기준)을 넘겨 준다: 재시도 판단에 쓴다
 
     def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None,
                  op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None,
-                 monotonic: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> None:
+                 monotonic: Callable[[], float] = REAL_MONOTONIC, sleep: Callable[[float], None] = REAL_SLEEP) -> None:
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050): 재시도 예산과 백오프 대기를 시험이 가짜 시계로 흘린다. 기본은 실제 시계
         self._rt, self.release_id, self.retries, self.backoff = runtime, release_id, retries, backoff
         self._ops = dict(op_runtimes or {})      # 호출 종류별 클라이언트(호출별 상한이 다르다). 없으면 runtime 하나를 쓴다
@@ -178,7 +179,7 @@ class RemoteInference:
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
                  poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 5.0,
-                 monotonic: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> None:
+                 monotonic: Callable[[], float] = REAL_MONOTONIC, sleep: Callable[[float], None] = REAL_SLEEP) -> None:
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050)
         self.backend = "remote"
         self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)

@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from ..config import REAL_MONOTONIC, REAL_WALL_CLOCK
+
 import copy
 import json
 import os
@@ -14,7 +16,6 @@ import re
 import socket
 import sqlite3
 import threading
-import time
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Protocol
 
@@ -224,7 +225,7 @@ class SqliteSessionStore:
     supports_trace_outbox = True
     outbox_gate = None      # 서비스가 Outbox를 꽂는다(max_pending·dropped_full). 없으면 상한 없이 쓴다
 
-    def __init__(self, path: str, clock=time.time) -> None:
+    def __init__(self, path: str, clock=REAL_WALL_CLOCK) -> None:
         self._path = path
         self._clock = clock
         self._lock = threading.RLock()
@@ -479,11 +480,11 @@ except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
 DEFAULT_CONNECT_TIMEOUT = 2.0         # libpq의 connect_timeout은 2초 미만이 의미 없다
 DEFAULT_STATEMENT_TIMEOUT = 2.0
 DEFAULT_RECONNECT_BACKOFF = 1.0       # 접속에 실패한 뒤 이 시간 동안은 다시 접속을 시도하지 않고 바로 실패한다(턴 하나가 접속 시도 여러 번을 기다리지 않게)
-_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None, "backoff": DEFAULT_RECONNECT_BACKOFF}
+_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None, "backoff": DEFAULT_RECONNECT_BACKOFF, "monotonic": REAL_MONOTONIC}
 
 
 def configure(*, connect_timeout: float | None = None, statement_timeout: float | None = None, probe_timeout: float | None = None,
-              reconnect_backoff: float | None = None) -> None:
+              reconnect_backoff: float | None = None, monotonic=None) -> None:
     """이후 만드는 PgConn의 기본 상한을 정한다(서비스 시작 때 한 번)."""
     if connect_timeout is not None:
         _cfg["connect"] = float(connect_timeout)
@@ -493,6 +494,8 @@ def configure(*, connect_timeout: float | None = None, statement_timeout: float 
         _cfg["probe"] = float(probe_timeout)
     if reconnect_backoff is not None:
         _cfg["backoff"] = float(reconnect_backoff)
+    if monotonic is not None:
+        _cfg["monotonic"] = monotonic      # 재접속 유예를 세는 단조 시계(주입, ADR-0050)
 
 
 DEFAULT_PROBE_TIMEOUT = 2.0  # /readyz의 DB 확인 상한 기본값(초). libpq의 connect_timeout 최소 단위가 2초라 이보다 작게 의미가 없다
@@ -515,7 +518,8 @@ class PgConn:
         self.probe_timeout = _cfg["probe"] or DEFAULT_PROBE_TIMEOUT      # /readyz 확인용 상한(초)
         self.connect_timeout = _cfg["connect"]            # 주 연결의 접속 상한(초)
         self.reconnect_backoff = _cfg["backoff"]
-        self._retry_after = 0.0                           # time.monotonic() 기준: 이 시각 전에는 재접속을 시도하지 않는다
+        self._monotonic = _cfg["monotonic"]
+        self._retry_after = 0.0                           # 단조 시계 기준: 이 시각 전에는 재접속을 시도하지 않는다
         self.statement_timeout = _cfg["statement"]        # 문장 하나의 상한(초): 서버 쪽 statement_timeout + 클라이언트 쪽 강제 끊기(서버가 얼어도 끝난다)
         self._lock = threading.RLock()
         self._conn = self._connect(initial=True)
@@ -527,7 +531,7 @@ class PgConn:
         return params
 
     def _connect(self, initial: bool = False):
-        if not initial and time.monotonic() < self._retry_after:        # 방금 접속에 실패했다: 또 기다리지 않고 바로 실패한다(빠른 실패)
+        if not initial and self._monotonic() < self._retry_after:        # 방금 접속에 실패했다: 또 기다리지 않고 바로 실패한다(빠른 실패)
             raise psycopg.OperationalError("reconnect backoff")
         try:
             c = psycopg.connect(autocommit=True, **self._params(max(1, int(self.connect_timeout + 0.999)), self.statement_timeout))
@@ -536,7 +540,7 @@ class PgConn:
         except Exception as e:                      # 메시지에 host/user가 들어갈 수 있어 클래스 이름만 남긴다
             if initial:
                 raise StoreError(f"{self._what} 접속 실패: {type(e).__name__}") from None
-            self._retry_after = time.monotonic() + self.reconnect_backoff
+            self._retry_after = self._monotonic() + self.reconnect_backoff
             raise psycopg.OperationalError(f"reconnect failed: {type(e).__name__}") from None     # 호출자는 드라이버 오류로 다룬다(StoreError/DB_ERROR로 바꾼다)
 
     @staticmethod
@@ -658,7 +662,7 @@ class PgSessionStore(SqliteSessionStore):
 # ---------------------------------------------------------------- 메모리
 
 class MemorySessionStore:
-    def __init__(self, clock=time.time) -> None:
+    def __init__(self, clock=REAL_WALL_CLOCK) -> None:
         self._clock = clock
         self._lock = threading.RLock()
         self._sessions: dict[str, dict] = {}   # id -> {doc, revision, release_id}

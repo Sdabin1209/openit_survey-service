@@ -23,6 +23,8 @@ HTTP 규약(토큰 -> 역할 401/403, 본문 상한 413, 엄격한 JSON 해석, 
 """
 from __future__ import annotations
 
+from ..config import REAL_MONOTONIC
+
 import collections
 import hmac
 import io
@@ -31,7 +33,6 @@ import logging
 import re
 import secrets
 import threading
-import time
 from datetime import datetime
 from typing import Callable, Mapping, Optional
 
@@ -110,7 +111,7 @@ class PublicApi:
                  max_utterance_chars: int = 1000, alerts=None, max_subscriptions: int = 100,
                  retry_after_seconds: int = 1, push_allow_private: bool = False, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
                  risk_token: Optional[str] = None, require_subject_ref: bool = False, device_tokens: Optional[dict] = None) -> None:
-        self._now = getattr(orchestrator, "clock", time.monotonic)        # 주입한 단조 시계(ADR-0050): 오케스트레이터와 같은 시계로 턴 마감·상태 조회 간격을 센다
+        self._now = getattr(orchestrator, "clock", REAL_MONOTONIC)        # 주입한 단조 시계(ADR-0050): 오케스트레이터와 같은 시계로 턴 마감·상태 조회 간격을 센다
         self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 2.x 호환. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
         token = token or None                                  # 키오스크 토큰은 2.x 호환이다. 없어도 된다: 기기 인증은 게이트웨이 mTLS가 넘기는 X-Openit-Device다 (ADR-0031)
         if staff_token is not None and (not staff_token or (token is not None and hmac.compare_digest(staff_token.encode(), token.encode()))):

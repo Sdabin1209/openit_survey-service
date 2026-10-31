@@ -7,6 +7,7 @@ from __future__ import annotations
 from boundary_contracts import SecretError, read_secret
 
 from ..components.alert_book import AlertStore, PgAlertStore
+from ..config import REAL_MONOTONIC
 from ..settings import ConfigError, Settings
 from ..components import session_store
 from ..components.session_store import PgSessionStore, SqliteSessionStore
@@ -26,7 +27,7 @@ def open_stores(settings: Settings, url: str | None = None):
     """(세션 저장소, outbox, 알림 저장소, 종류). 종류는 'postgresql' 또는 'sqlite'."""
     url = database_url() if url is None else url
     if url:
-        session_store.configure(connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
+        session_store.configure(monotonic=REAL_MONOTONIC, connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
                      reconnect_backoff=settings.db_reconnect_backoff_seconds,
                      probe_timeout=settings.readyz_db_timeout_seconds)
         # 왜 주입하나: outbox·알림은 세션 저장소 컴포넌트를 import하지 못한다(컴포넌트끼리 import 금지). 연결 소유자는 session_store다.
