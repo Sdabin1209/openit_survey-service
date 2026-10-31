@@ -138,7 +138,7 @@ class App:
         self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox, REAL_WALL_CLOCK), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask,
-                                         turn_deadline_seconds=settings.turn_deadline_seconds, request_deadline_seconds=settings.request_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
+                                         turn_deadline_seconds=settings.turn_deadline_seconds, request_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
         staff_token = _secret(settings.staff_api_token_env, "직원 개입 토큰")

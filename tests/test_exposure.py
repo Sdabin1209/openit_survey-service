@@ -123,5 +123,5 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
         assert r["timeouts_ms"] == {"dial": 1000, "response_header": 9500, "read": 3600000}, r["paths"]
     header = staff[0]["timeouts_ms"]["response_header"] / 1000
     # 요청 전체 마감(D120)이 응답 머리글 상한보다 짧다: 여러 문장을 읽는 직원 GET도 마감 안에 응답하거나 503을 낸다(tests/test_request_deadline.py).
-    assert s.request_deadline_seconds < header
+    assert s.turn_deadline_seconds < header      # 요청 전체 마감은 턴 마감과 같은 설정 값을 쓴다(ADR-0051)
     assert s.turn_deadline_seconds < header      # 개입(intervention)은 턴 마감 9.0이 상한이다
