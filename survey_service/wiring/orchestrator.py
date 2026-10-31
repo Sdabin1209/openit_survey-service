@@ -75,7 +75,7 @@ class Orchestrator:
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
-                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0,
+                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0, request_deadline_seconds: float = 0.0,
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.clock = clock                       # 단조 시계(주입, ADR-0050): 턴 마감을 이 시계로 센다. wiring(App)이 실제 시계를, 시험이 가짜 시계를 넣는다
         self.store = store
@@ -89,6 +89,7 @@ class Orchestrator:
         self.max_consecutive_reask = max(0, int(max_consecutive_reask))   # 0이면 끔(G12). 서비스 기본은 3(settings.py, ADR-0020)
         self.trace_sink = trace_sink
         self.timeline = timeline        # 선택. record(session_id, turn_index, turn_id)를 가진 객체(AlertStore). 직원 조회의 시각용, 실패해도 턴은 계속된다
+        self.request_deadline_seconds = max(0.0, float(request_deadline_seconds))      # 0이면 요청 마감 없음(서비스는 설정 기본 9초를 준다)
         self.turn_deadline_seconds = max(0.0, float(turn_deadline_seconds))      # 0이면 마감 없음(서비스는 설정 기본 9초를 준다)
         self.extract_input_max_chars = max(0, int(extract_input_max_chars))      # 0이면 줄이지 않는다(서비스는 설정 기본 2400을 준다)
         self._locks = _SessionLocks()
@@ -103,6 +104,32 @@ class Orchestrator:
         self._graph = TurnGraph(self).build()      # 체크포인터 없이 컴파일
 
     # ------------------------------------------------------------------ 공개
+    def request_until(self) -> Optional[float]:
+        """요청 전체 마감 시각(주입 시계 기준). 마감을 쓰지 않으면 None."""
+        return None if self.request_deadline_seconds <= 0 else self.clock() + self.request_deadline_seconds
+
+    def bounded(self, fn: Callable, until: Optional[float]):
+        """DB 문장 하나를 `until`까지만 기다린다. 넘기면 StoreError(호출자가 503 UNAVAILABLE로 바꾼다). 왜: 한 요청이 여러 문장을 읽어도 응답 머리글이 요청 마감 안에 나오게 한다(문장마다 남은 시간이 상한).
+        넘긴 문장의 스레드는 데몬이라 버려지고 문장 자체의 statement_timeout이 끝낸다. 시계는 주입한 것이라 시험은 시계를 흘려 마감을 낸다."""
+        if until is None:
+            return fn()
+        if until - self.clock() <= 0:
+            raise session_store.StoreError("요청 마감 초과")
+        out: dict = {}
+
+        def run():
+            try:
+                out["v"] = fn()
+            except BaseException as e:       # 호출한 스레드로 그대로 넘긴다
+                out["e"] = e
+        th = threading.Thread(target=run, name="request-db", daemon=True)
+        th.start()
+        if not join_until(th, until, self.clock):
+            raise session_store.StoreError("요청 마감 초과")
+        if "e" in out:
+            raise out["e"]
+        return out["v"]
+
     def handle_turn(self, *, turn_id: str, frontend_message: Optional[Mapping] = None,
                     intervention_decision: Optional[Mapping] = None, staff_id: Optional[str] = None,
                     started: Optional[float] = None) -> TurnOutcome:

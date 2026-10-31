@@ -114,6 +114,7 @@ class Settings:
     retention_interval_seconds: int = 3600                         # 서비스 안에서 보존 정리를 도는 주기(초). 0이면 서비스는 돌리지 않는다(deploy의 purge 잡만)
     risk_default_rules: bool = True  # 규칙 파일·입력원이 없으면 임시 기본 목록(임상 검토 전)을 쓴다. SURVEY_RISK_DEFAULT_RULES=off로 끈다 (ADR-0013)
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
+    request_deadline_seconds: float = 9.0         # 직원 조회·구독 요청 전체 마감(초). 여러 DB 문장을 읽는 직원 경로의 응답 머리글이 게이트웨이 상한(dial 1000 + response_header 9500)보다 먼저 나오게 한다. 각 문장은 남은 시간이 상한이고 넘기면 503 UNAVAILABLE [근거: 사용자 결정 2026-10-31(헤드 지시 U427), 시간 사슬 D119·D120, ADR-0049. 측정하지 않았다]
     turn_deadline_seconds: float = 9.0            # 서버 턴 총 마감(초). 넘으면 NOT_COMMITTED(FAULT_POLICY 3). 시간 상한 사슬: extract 3.0 + respond 5.0 = 8.0, 여유 1.0 -> 9.0 < gateway 10.5 < 키오스크 12 [근거: 사용자 결정 2026-10-30, 계약 CONVENTIONS 시간 상한 사슬, ADR-0049(ADR-0008의 6초를 대체). 측정하지 않았다]
     db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초  [근거: ADR-0011]
     db_statement_timeout_seconds: float = 2.0     # 문장 하나의 상한(초). 서버 statement_timeout + 클라이언트 강제 끊기  [근거: ADR-0011]
@@ -221,6 +222,7 @@ class Settings:
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
             startup_wait_seconds=_float(env, "SURVEY_STARTUP_WAIT_SECONDS", 5.0),
             turn_deadline_seconds=_float(env, "SURVEY_TURN_DEADLINE_SECONDS", 9.0),
+            request_deadline_seconds=_float(env, "SURVEY_REQUEST_DEADLINE_SECONDS", 9.0),
             db_connect_timeout_seconds=_float(env, "SURVEY_DB_CONNECT_TIMEOUT_SECONDS", 2.0),
             db_statement_timeout_seconds=_float(env, "SURVEY_DB_STATEMENT_TIMEOUT_SECONDS", 2.0),
             db_reconnect_backoff_seconds=_float(env, "SURVEY_DB_RECONNECT_BACKOFF_SECONDS", 1.0),

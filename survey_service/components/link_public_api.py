@@ -301,8 +301,11 @@ class PublicApi:
             raise _err("INVALID_RECORD", "경로의 세션 ID와 본문의 session_id가 다르다")
 
     # ------------------------------------------------------------------ 동작
-    def _state_of(self, sid: str):
-        r = self.orch.store.load(sid)
+    def _state_of(self, sid: str, until=None):
+        try:
+            r = self.orch.bounded(lambda: self.orch.store.load(sid), until)
+        except self.orch.errors.StoreError:
+            return "ERROR", None
         if r["status"] == "DB_ERROR":
             return "ERROR", None
         return (r["state"]["progress_record"]["session_status"] if r["status"] == "OK" else None), r
@@ -536,7 +539,7 @@ class PublicApi:
         except ValueError:
             raise _err("INVALID_RECORD", "limit(1~200) 또는 cursor가 잘못됐다") from None
         try:
-            items, nxt = self.alerts.store.list(status, limit, cursor)
+            items, nxt = self.orch.bounded(lambda: self.alerts.store.list(status, limit, cursor), self.orch.request_until())
         except self.orch.errors.StoreError:
             raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다") from None
         return 200, {"items": items, "next_cursor": nxt}, {}
@@ -552,10 +555,11 @@ class PublicApi:
                             "status": "CORRECTION" if rec.get("history") else "ANSWERED", "precision": rec.get("precision", "unspecified")})
         return out
 
-    def _audit(self, role: str, sids: list, outcome: str, detail: Optional[str] = None) -> bool:
+    def _audit(self, role: str, sids: list, outcome: str, detail: Optional[str] = None, until=None) -> bool:
         """접근 기록을 남긴다. 못 남기면 False(호출자는 데이터를 주지 않는다)."""
         try:
-            self.alerts.store.log_access_many(role, sids, outcome, detail, getattr(self._tl, 'user', None))
+            user = getattr(self._tl, 'user', None)
+            self.orch.bounded(lambda: self.alerts.store.log_access_many(role, sids, outcome, detail, user), until)
             return True
         except self.orch.errors.StoreError:
             log.error("접근 기록을 남기지 못해 조회를 거부했다 role=%s", role)
@@ -569,18 +573,20 @@ class PublicApi:
         기록을 남기지 못하면 데이터를 주지 않는다(기록 없는 열람을 만들지 않는다). 토큰 값·발화 내용은 기록에 없다."""
         sid, role = req.params["sid"], req.role
         _sid(sid)
-        status, r = self._state_of(sid)
+        until = self.orch.request_until()          # 요청 전체 마감: 아래 DB 문장마다 남은 시간이 상한이다
+        status, r = self._state_of(sid, until)
         if status == "ERROR":
             raise _err("UNAVAILABLE", "지금은 조회할 수 없다")
-        if not self._audit(role, [sid], "OK" if r is not None and r["status"] == "OK" else "NOT_FOUND"):
+        if not self._audit(role, [sid], "OK" if r is not None and r["status"] == "OK" else "NOT_FOUND", until=until):
             raise _err(*self._NO_AUDIT)
         if status is None:
             raise _err("NOT_FOUND", "모르는 세션이다")
         doc = r["state"]
         try:
-            times = self.alerts.store.timeline(sid)
-            alerts = self.alerts.store.alerts_of_session(sid)
-            subject = self.alerts.store.subject_of(sid)
+            times = self.orch.bounded(lambda: self.alerts.store.timeline(sid), until)
+            alerts = self.orch.bounded(lambda: self.alerts.store.alerts_of_session(sid), until)
+            subject = self.orch.bounded(lambda: self.alerts.store.subject_of(sid), until)
+            release_id = self.orch.bounded(lambda: self.orch.store.release_id_of(sid), until)
         except self.orch.errors.StoreError:
             raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다") from None
         turns = []
@@ -589,7 +595,7 @@ class PublicApi:
             turns.append({"turn_index": i, "turn_id": t.get("turn_id"), "at": t.get("at"), "utterance": e["input"]["utterance"],
                           "response_text": e["response_text"], "action": (e.get("extract_output") or {}).get("action")})
         pr = self._pause_reason(sid, doc) if status == "PAUSED_RISK" else None
-        view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": self.orch.store.release_id_of(sid),
+        view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": release_id,
                 "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": self._values(doc),
                 "alerts": [{"alert_id": a["alert_id"], "kind": a["kind"], "status": a["status"],
                             "created_at": a["created_at"], "rule_id": a["rule_id"], "resolved_by": a["resolved_by"],
@@ -700,10 +706,11 @@ class PublicApi:
         ep, keys = body["endpoint"], body["keys"]
         sub = {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}}
         try:
-            if self.alerts.store.count_subscriptions() >= self.max_subscriptions and not any(
-                    s["endpoint"] == ep for s in self.alerts.store.subscriptions()):
+            until = self.orch.request_until()
+            if self.orch.bounded(self.alerts.store.count_subscriptions, until) >= self.max_subscriptions and not any(
+                    s["endpoint"] == ep for s in self.orch.bounded(self.alerts.store.subscriptions, until)):
                 raise _err("CONFLICT", "구독 수 한도를 넘었다")
-            self.alerts.store.upsert_subscription(sub)
+            self.orch.bounded(lambda: self.alerts.store.upsert_subscription(sub), until)
         except self.orch.errors.StoreError:
             raise _err("UNAVAILABLE", "알림 저장소에 쓸 수 없다") from None
         return 201, {"endpoint": ep}, {}

@@ -113,7 +113,7 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
     """직원 경로의 노출 선언(dial 1000 + response_header 9500 = 10.5초, 시간 사슬)과 서버 쪽 시한을 설정 값으로 대조한다(실제 시간을 재지 않는다).
     - 개입(intervention)은 턴 처리라 턴 마감(9.0)이 응답 머리글까지의 상한이다: 9.0 < 9.5.
     - DB를 한 번 읽는 경로는 접속(connect_timeout) + 문장(statement_timeout) + 강제 끊기 여유(1.0)가 최악이다: 5.0 < 9.5.
-    확인하지 않은 것: 한 요청이 DB 문장을 여러 번 읽는 경로(알림 목록 등)에 요청 단위 마감이 있는지는 코드로 확인하지 않았다. 없다면 최악은 문장 수 x 위 값이라 9.5초를 넘을 수 있다(보고서에 미확인으로 적었다).
+    여러 DB 문장을 읽는 직원 경로(알림 목록, 직원 세션 보기, 푸시 구독 등록)는 요청 전체 마감을 주입 시계로 센다(Orchestrator.bounded).
     """
     from survey_service.settings import Settings
     s = Settings()
@@ -122,5 +122,6 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
     for r in staff:
         assert r["timeouts_ms"] == {"dial": 1000, "response_header": 9500, "read": 3600000}, r["paths"]
     header = staff[0]["timeouts_ms"]["response_header"] / 1000
-    assert s.turn_deadline_seconds < header
-    assert s.db_connect_timeout_seconds + s.db_statement_timeout_seconds + 1.0 < header
+    # 요청 전체 마감(D120)이 응답 머리글 상한보다 짧다: 여러 문장을 읽는 직원 GET도 마감 안에 응답하거나 503을 낸다(tests/test_request_deadline.py).
+    assert s.request_deadline_seconds < header
+    assert s.turn_deadline_seconds < header      # 개입(intervention)은 턴 마감 9.0이 상한이다
