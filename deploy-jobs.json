@@ -1,0 +1,11 @@
+{
+  "jobs": [
+    {
+      "name": "session-purge",
+      "argv": ["python", "-m", "survey_service", "purge"],
+      "idempotent": true,
+      "secret_files": ["SURVEY_DATABASE_URL_FILE"],
+      "needs": ["postgres"]
+    }
+  ]
+}
