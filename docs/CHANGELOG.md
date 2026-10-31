@@ -1,5 +1,10 @@
 # 변경 이력
 
+## R7 생산자 검증 (U424·U426) [미출시]
+
+- 응답 계약 검증: `Route.response_schema`(state SessionState, staff-call retry/report, 알림 목록 StaffAlertPage, push-config PushConfig). 직원 웹 푸시 본문은 보내기 전에 StaffPushPayload로, `/readyz` 본문은 내보내기 전에 SurveyReadyz로 검증한다(어기면 푸시는 보내지 않고 실패로 세고, `/readyz`는 값 없이 위반 위치만 담아 503 `readyz_contract_violation`).
+- `python -m survey_service purge`의 종료 코드: 0 성공, 2 설정 오류, 3 저장소를 열 수 없음, **4 계약 출력 위반**(출력이 SurveyPurgeOutput을 어김: 표준 출력은 비고 표준 오류에 한국어 한 줄). 4는 계약 문서에 아직 없다(헤드가 한 줄 추가).
+
 ## 시간 상한 사슬 변경 [미출시] (ADR-0049)
 
 - 사용자 결정(2026-10-30): respond 호출 상한 2.0 -> 5.0초(`SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS`), 서버 턴 총 마감 6.0 -> 9.0초(`SURVEY_TURN_DEADLINE_SECONDS`). extract 3.0초 그대로, gateway 10.5초, 키오스크 12초. 측정하지 않았다.

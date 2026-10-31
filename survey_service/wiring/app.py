@@ -12,7 +12,7 @@ from pathlib import Path
 
 import model_runtime
 import survey_schema
-from boundary_contracts import PIPELINE_SCHEMA_VERSION, SecretError, read_secret, secret_source
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, SecretError, read_secret, secret_source, validator
 from boundary_contracts.action_rules import load_rules
 
 from .. import SERVICE_VERSION
@@ -352,6 +352,11 @@ class App:
                                "rejections": self.loader.status.rejections[-5:], "warnings": self.loader.status.warnings[-5:]},
             "trace_outbox": dbs["trace_outbox"], "db_stats_stale": dbs["stale"],
         }
+        # R7: 만드는 쪽이 내보내기 전에 계약 SurveyReadyz로 검증한다(openit_link.App의 ready는 스키마를 보지 않는다). 어기면 값은 싣지 않고 위반 위치만 담아 준비 안 됨(503)으로 낸다
+        errs = sorted({"/".join(str(x) for x in e.absolute_path) or "(최상위)" for e in validator("SurveyReadyz").iter_errors(body)})
+        if errs:
+            log.error("/readyz 본문이 계약 SurveyReadyz를 어긴다 paths=%s", errs[:5])
+            return False, {"ready": False, "problems": ["readyz_contract_violation"], "violation_paths": errs[:10]}
         return not problems, body
 
 

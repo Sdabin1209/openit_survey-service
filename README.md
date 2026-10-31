@@ -67,6 +67,10 @@ SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake py
 
 시험 개수와 통과 결과는 아래 '현재 상태'에만 적는다. 변경 때마다 `pytest` 실제 출력(위 2)의 명령)으로 다시 확인한다. 명령은 문서(runbook, scripts)에서 옮겼다.
 
+## 보존 정리 잡의 종료 코드
+
+`python -m survey_service purge [--session <id>]`: 0 성공(표준 출력에 계약 SurveyPurgeOutput 한 줄), 2 설정 오류, 3 저장소를 열 수 없음, 4 계약 출력 위반(표준 출력은 비고 표준 오류에 한국어 한 줄; R7 생산자 검증).
+
 ## 4. 타입 생성 (schemas/ -> types/)
 
 `survey_service/types/`는 `schemas/*.json`에서만 만든다. 손으로 고치지 않는다. 도구(datamodel-code-generator 0.87.0, `requirements-tools.txt`에 고정)는 런타임 의존이 아니라 별도 가상환경에 설치된다.

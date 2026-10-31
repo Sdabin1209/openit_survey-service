@@ -20,7 +20,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Optional, Protocol
 
-from boundary_contracts import BoundaryError
+from boundary_contracts import BoundaryError, validator
 
 log = logging.getLogger("survey_service.alerts")
 
@@ -191,8 +191,13 @@ class AlertService:
         if not subs:
             return 0
         a = event["alert"]
-        payload = json.dumps({"alert_id": a["alert_id"], "session_id": a["session_id"], "kind": a["kind"]},        # 계약 StaffPushPayload의 키만(additionalProperties false). type은 알림 문구에 필요 없다
-                             ensure_ascii=False).encode()
+        body = {"alert_id": a["alert_id"], "session_id": a["session_id"], "kind": a["kind"]}        # 계약 StaffPushPayload의 키만(additionalProperties false). type은 알림 문구에 필요 없다
+        errs = [e.message[:120] for e in validator("StaffPushPayload").iter_errors(body)]
+        if errs:       # R7: 보내는 쪽(만드는 쪽)이 계약으로 검증한다. 어기면 보내지 않고 실패로 센다(값은 로그에 싣지 않는다)
+            log.error("푸시 본문이 계약 StaffPushPayload를 어긴다 errors=%d", len(errs))
+            self._count("push_failed", len(subs))
+            return 0
+        payload = json.dumps(body, ensure_ascii=False).encode()
         results: list[str] = []
         lock = threading.Lock()
 
