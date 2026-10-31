@@ -113,7 +113,8 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
     """직원 경로의 노출 선언(dial 1000 + response_header 9500 = 10.5초, 시간 사슬)과 서버 쪽 시한을 설정 값으로 대조한다(실제 시간을 재지 않는다).
     - 개입(intervention)은 턴 처리라 턴 마감(9.0)이 응답 머리글까지의 상한이다: 9.0 < 9.5.
     - DB를 한 번 읽는 경로는 접속(connect_timeout) + 문장(statement_timeout) + 강제 끊기 여유(1.0)가 최악이다: 5.0 < 9.5.
-    알려진 한계: 알림 목록·직원 세션 보기처럼 한 요청이 DB를 여러 번 읽는 경로에는 요청 단위 마감이 없어, 최악 시간이 문장 수 x 위 값이다(2문장이면 10.0 > 9.5). 이 사실은 보고했다."""
+    확인하지 않은 것: 한 요청이 DB 문장을 여러 번 읽는 경로(알림 목록 등)에 요청 단위 마감이 있는지는 코드로 확인하지 않았다. 없다면 최악은 문장 수 x 위 값이라 9.5초를 넘을 수 있다(보고서에 미확인으로 적었다).
+    """
     from survey_service.settings import Settings
     s = Settings()
     staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms")]
