@@ -99,7 +99,7 @@ from .timing import HANG_GUARD_SECONDS, wait_until
 
 
 def _raw(port, request: bytes):
-    s = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    s = socket.create_connection(("127.0.0.1", port), timeout=HANG_GUARD_SECONDS)      # 매달림 감시
     try:
         s.sendall(request)
     except OSError:      # 서버가 본문을 다 받기 전에 응답하고 닫으면(413 등) 보내다 끊긴다(TCP 경쟁). 이미 받은 응답을 읽어 판정한다

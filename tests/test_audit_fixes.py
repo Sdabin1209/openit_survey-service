@@ -5,7 +5,7 @@ from survey_service.components.link_inference import InferenceServer
 from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
 
-from .timing import HANG_GUARD_SECONDS, FakeClock
+from .timing import HANG_GUARD_SECONDS, FakeClock, wait_until
 from .http_server_support import stop_server
 from .e2e_support import ANSWER_OUT, Rig
 from .fakes import FakeReleaseReader
@@ -100,11 +100,11 @@ def test_purge_removes_old_access_log_resolved_alerts_dead_outbox_and_keeps_rece
     ob.mark_dead(1, old, "PERMISSION_DENIED: x")
     ob.enqueue({"session_id": "s", "turn_id": "t2"}, NOW0)
     ob.mark_dead(2, NOW0, "PERMISSION_DENIED: x")
-    res = purge(store, alerts, 90, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)
+    res = purge(store, alerts, 90, now=NOW0, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)
     assert res["purged_access_log"] == 1 and res["purged_alerts"] == 1 and res["purged_dead_outbox"] == 1
     assert [r["session_id"] for r in alerts.access_log()] == ["S2"] and alerts.access_log()[0]["user_id"] == "lee"
     assert [a["session_id"] for a in alerts.list(None, 10, None)[0]] == ["S2"] and ob.counts()["DEAD"] == 1
-    assert purge(store, alerts, 90, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)["purged_access_log"] == 0      # 멱등
+    assert purge(store, alerts, 90, now=NOW0, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)["purged_access_log"] == 0      # 멱등
 
 
 def test_purge_single_session(tmp_path):
@@ -298,21 +298,23 @@ def test_same_turn_different_kind_is_not_merged(tmp_path):
 
 def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_path):
     """실제 저장소로: 없는 세션은 알림을 버리고, 저장소 장애(닫힌 DB)와 느림(한도 초과)은 알림을 보낸다."""
-    import time as _t
     from survey_service.components.risk_screen import RuleRiskSource
     from survey_service.components.session_store import SqliteSessionStore
 
     clock = FakeClock()
     entered, gate = threading.Event(), threading.Event()
+    finished: list = []
 
     class Slow(SqliteSessionStore):
         blocked = False
 
         def load(self, sid):
+            res = super().load(sid)                 # 실제 읽기는 먼저 끝낸다(풀린 뒤에 sqlite를 다시 쓰면 닫는 시험 스레드와 겹쳐 비정상 종료한다)
             if self.blocked:
                 entered.set()
-                gate.wait(HANG_GUARD_SECONDS)       # 느린 DB: 시험이 주입한 시계로 확인 한도를 넘긴 뒤에 풀어 준다
-            return super().load(sid)
+                gate.wait(HANG_GUARD_SECONDS)       # 느린 DB: 결과를 돌려주기 전에 붙잡는다. 시험이 주입한 시계로 확인 한도를 넘긴 뒤에 풀어 준다
+                finished.append(1)
+            return res
     store = Slow(str(tmp_path / "s.db"))
     rig = Rig(store=store, risk_source=RuleRiskSource.provisional_default(), turn_deadline_seconds=9.0, clock=clock)
     rig.start("S2")
@@ -322,12 +324,13 @@ def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_
     th = threading.Thread(target=lambda: rig.orch.handle_turn(turn_id="b", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "가슴이 아파요"}), daemon=True)
     th.start()
     assert entered.wait(HANG_GUARD_SECONDS)
-    clock.advance(100)
+    clock.advance(2.0)                                # 선별의 확인 한도(마감의 30%, 최대 1초)만 넘긴다: 알림이 먼저 나간다
+    assert wait_until(lambda: len([c for c in rig.console.inputs if c.get("staff_alert")]) == 1)
+    clock.advance(100)                                # 이어서 턴 마감
     th.join(HANG_GUARD_SECONDS)
     gate.set()
-    assert len([c for c in rig.console.inputs if c.get("staff_alert")]) == 1
     store.blocked = False
-    store._db.close()                                                                                                        # 장애: 닫힌 DB는 DB_ERROR
+    store.load = lambda sid: {"session_id": sid, "status": "DB_ERROR", "revision": None, "state": None}                      # 장애: 읽기가 DB_ERROR를 돌려준다(실제 연결을 닫지 않는다: 다른 스레드가 쓰는 중 닫으면 sqlite가 비정상 종료한다)
     try:
         rig.orch.handle_turn(turn_id="c", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "숨이 안 쉬어져요"})
     except Exception:

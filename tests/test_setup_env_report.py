@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+from .timing import HANG_GUARD_SECONDS
 import subprocess
 from pathlib import Path
 

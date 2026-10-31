@@ -440,7 +440,7 @@ class Sse:
             pass
 
     def next(self):      # 매달림 감시(정상은 수 ms)
-        ev = self.events.get(timeout=timeout)
+        ev = self.events.get(timeout=HANG_GUARD_SECONDS)
         return int(ev["id"]), ev["event"], json.loads(ev["data"])
 
     def close(self):
