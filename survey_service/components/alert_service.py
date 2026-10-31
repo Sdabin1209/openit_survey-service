@@ -120,6 +120,7 @@ class AlertService:
                  retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None,
                  *, monotonic: Callable[[], float]) -> None:
         self._now = monotonic      # 시계 주입(ADR-0050)
+        self._push_validator = validator("StaffPushPayload")      # 기동 때 한 번: 푸시마다 만들면 스키마 파일을 매번 다시 읽는다(ADR-0050)
         self.endpoint_check = endpoint_check
         self.store, self.hub, self.push, self.push_timeout = store, hub or AlertHub(), push, push_timeout
         self.retry_min_interval_s, self.retry_max_per_session = max(0, int(retry_min_interval_s)), max(0, int(retry_max_per_session))
@@ -192,7 +193,7 @@ class AlertService:
             return 0
         a = event["alert"]
         body = {"alert_id": a["alert_id"], "session_id": a["session_id"], "kind": a["kind"]}        # 계약 StaffPushPayload의 키만(additionalProperties false). type은 알림 문구에 필요 없다
-        errs = [e.message[:120] for e in validator("StaffPushPayload").iter_errors(body)]
+        errs = [e.message[:120] for e in self._push_validator.iter_errors(body)]
         if errs:       # R7: 보내는 쪽(만드는 쪽)이 계약으로 검증한다. 어기면 보내지 않고 실패로 센다(값은 로그에 싣지 않는다)
             log.error("푸시 본문이 계약 StaffPushPayload를 어긴다 errors=%d", len(errs))
             self._count("push_failed", len(subs))

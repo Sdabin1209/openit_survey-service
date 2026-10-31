@@ -81,6 +81,7 @@ class App:
 
     def __init__(self, settings: Settings, *, reader=None, ingest=None, staff_console=None, dispatcher=None, risk_source=None,
                  clock: Callable[[], float] = time.monotonic) -> None:
+        self._readyz_validator = validator("SurveyReadyz")      # 기동 때 한 번: validator()는 호출마다 계약 스키마 파일을 다시 읽고 검사해, 요청마다 만들면 /readyz 2초 마감 뒤에 그 비용이 붙는다(E2E 5pn, ADR-0050)
         self.clock = clock          # 주입한 단조 시계(ADR-0050): 턴 마감·/readyz 마감·추론 재시도 예산을 이 시계로 센다. 기본은 실제 시계
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
@@ -355,7 +356,7 @@ class App:
             "trace_outbox": dbs["trace_outbox"], "db_stats_stale": dbs["stale"],
         }
         # R7: 만드는 쪽이 내보내기 전에 계약 SurveyReadyz로 검증한다(openit_link.App의 ready는 스키마를 보지 않는다). 어기면 값은 싣지 않고 위반 위치만 담아 준비 안 됨(503)으로 낸다
-        errs = sorted({"/".join(str(x) for x in e.absolute_path) or "(최상위)" for e in validator("SurveyReadyz").iter_errors(body)})
+        errs = sorted({"/".join(str(x) for x in e.absolute_path) or "(최상위)" for e in self._readyz_validator.iter_errors(body)})
         if errs:
             log.error("/readyz 본문이 계약 SurveyReadyz를 어긴다 paths=%s", errs[:5])
             return False, {"ready": False, "problems": ["readyz_contract_violation"], "violation_paths": errs[:10]}
