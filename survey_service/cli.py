@@ -16,6 +16,7 @@ import uuid
 import model_runtime
 import survey_schema
 
+from .config import REAL_WALL_CLOCK
 from .wiring.orchestrator import Orchestrator
 from .components.link_inference import LocalModelSession
 from .wiring.ports import LoadedRelease
@@ -47,7 +48,7 @@ def build(bank: dict, db: str, extraction: dict):
                                              backend=backend)
     reg = ReleaseRegistry()
     reg.register(LoadedRelease("rel-dev", {}, bank, LocalModelSession(session)), activate=True)
-    return Orchestrator(SqliteSessionStore(db), reg, staff_console=_Console(), dispatcher=_Dispatcher())
+    return Orchestrator(SqliteSessionStore(db, REAL_WALL_CLOCK), reg, staff_console=_Console(), dispatcher=_Dispatcher())
 
 
 def main(argv=None) -> int:

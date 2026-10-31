@@ -151,7 +151,7 @@ def test_db_timeouts_are_passed_from_settings_to_the_connection(monkeypatch):
     from survey_service.wiring import db
     seen = {}
     monkeypatch.setattr(session_store, "configure", lambda **kw: seen.update(kw))
-    monkeypatch.setattr(db, "PgSessionStore", lambda url: type("S", (), {})())
+    monkeypatch.setattr(db, "PgSessionStore", lambda url, *a, **k: type("S", (), {})())
     monkeypatch.setattr(db, "PgOutbox", lambda url, **k: type("O", (), {})())
     monkeypatch.setattr(db, "PgAlertStore", lambda url, **k: type("A", (), {})())
     s = Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",

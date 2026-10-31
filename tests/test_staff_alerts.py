@@ -1,5 +1,5 @@
 """직원 알림(D64): 영속 저장, 목록, SSE(이어 받기), 웹 푸시 구독, 해결 표시, 권한, 전달 판정."""
-from .timing import HANG_GUARD_SECONDS, wait_until
+from .timing import HANG_GUARD_SECONDS, fake_clock, wait_until
 import base64
 import http.server
 import json
@@ -45,9 +45,9 @@ class FakePush:
 class AlertRig:
     def __init__(self, tmp_path, push=None, db="alerts.db"):
         self.rig = Rig(risk=True)
-        self.store = AlertStore(str(tmp_path / db))
+        self.store = AlertStore(str(tmp_path / db), clock=fake_clock())
         self.hub = AlertHub()
-        self.service = AlertService(self.store, self.hub, push, push_timeout=HANG_GUARD_SECONDS)
+        self.service = AlertService(self.store, self.hub, push, push_timeout=HANG_GUARD_SECONDS, monotonic=fake_clock())
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
         self.api = PublicApi(self.rig.orch, "tok", staff_token="stok", alerts=self.service)
 
@@ -174,7 +174,7 @@ def test_alerts_and_events_survive_restart(tmp_path):
     r.intervene("RESUME", "i-1")
     ids = [e["id"] for e in r.store.events_after(0)]
     r.store.close()
-    s2 = AlertStore(str(tmp_path / "alerts.db"))
+    s2 = AlertStore(str(tmp_path / "alerts.db"), clock=fake_clock())
     items, _ = s2.list(None, 10, None)
     assert len(items) == 1 and items[0]["status"] == "RESOLVED" and items[0]["resolved_by_decision"] == "RESUME"
     assert [e["id"] for e in s2.events_after(0)] == ids == [1, 2]
@@ -183,7 +183,7 @@ def test_alerts_and_events_survive_restart(tmp_path):
 
 
 def test_alert_and_event_rows_are_one_transaction(tmp_path):
-    s = AlertStore(str(tmp_path / "a.db"))
+    s = AlertStore(str(tmp_path / "a.db"), clock=fake_clock())
     real = s._event
     def broken(etype, n):
         raise sqlite_error()
@@ -198,7 +198,7 @@ def test_alert_and_event_rows_are_one_transaction(tmp_path):
 
 
 def test_trim_events_keeps_alert_rows(tmp_path):
-    s = AlertStore(str(tmp_path / "a.db"))
+    s = AlertStore(str(tmp_path / "a.db"), clock=fake_clock())
     for i in range(5):
         s.create(f"K{i}", "RISK_STOP")
     assert s.trim_events(keep=2) == 3 and [e["id"] for e in s.events_after(0)] == [4, 5]

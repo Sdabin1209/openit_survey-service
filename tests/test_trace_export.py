@@ -10,7 +10,7 @@ from survey_service.components.trace_outbox import Outbox
 from survey_service.components.trace_envelope import OutboxTraceSink
 from survey_service.components.link_trace_export import TraceExporter
 
-from .timing import FakeClock, wait_until
+from .timing import FakeClock, FakeWait, wait_until
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeTraceIngest
 
@@ -28,7 +28,7 @@ def parts(tmp_path):
     clock = Clock()
     ob = Outbox(str(tmp_path / "ob.db"))
     ing = FakeTraceIngest()
-    ex = TraceExporter(ob, ing, base_delay=2.0, max_delay=8.0, clock=clock)
+    ex = TraceExporter(ob, ing, base_delay=2.0, max_delay=8.0, clock=clock, wait=FakeWait())
     sink = OutboxTraceSink(ob, clock)
     yield clock, ob, ing, ex, sink
     ob.close()
@@ -127,7 +127,7 @@ def test_restart_resends_what_was_not_confirmed(tmp_path):
     ob.close()
     ob = Outbox(path)                                               # 프로세스를 다시 띄운 것과 같다
     ing = FakeTraceIngest()
-    r = TraceExporter(ob, ing, clock=clock).flush_once()
+    r = TraceExporter(ob, ing, clock=clock, wait=FakeWait()).flush_once()
     assert r.sent == 3 and len(ing.received) == 3
 
 
@@ -201,7 +201,10 @@ def test_background_thread_delivers(parts):
     ex.start(interval=0.05)
     try:
         run_turns(OutboxTraceSink(ob, ex.clock))
-        assert wait_until(lambda: ob.counts()["SENT"] == 3)
+        def one_period_and_check():
+            ex._wait.tick()                  # 주입한 가짜 대기: 한 주기가 지났다고 알린다(실제로 기다리지 않는다)
+            return ob.counts()["SENT"] == 3
+        assert wait_until(one_period_and_check)
     finally:
         ex.stop()
 

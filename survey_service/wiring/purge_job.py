@@ -2,6 +2,7 @@
 import json
 import sys
 
+from ..config import REAL_WALL_CLOCK
 from ..settings import ConfigError, Settings
 from ..components.retention_purge import purge, purge_session
 from .db import open_stores
@@ -23,7 +24,7 @@ def run_purge(env=None, argv=None) -> int:
         if argv[:1] == ["--session"] and len(argv) == 2:
             res = purge_session(store, alert_store, argv[1])
         else:
-            res = purge(store, alert_store, settings.session_retention_days, outbox=outbox, access_log_days=settings.access_log_retention_days,
+            res = purge(store, alert_store, settings.session_retention_days, REAL_WALL_CLOCK(), outbox=outbox, access_log_days=settings.access_log_retention_days,
                         alert_days=settings.alert_retention_days, dead_outbox_days=settings.dead_outbox_retention_days)
     finally:
         store.close()

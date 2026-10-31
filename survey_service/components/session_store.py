@@ -7,7 +7,6 @@
 """
 from __future__ import annotations
 
-from ..config import REAL_MONOTONIC, REAL_WALL_CLOCK
 
 import copy
 import json
@@ -225,7 +224,7 @@ class SqliteSessionStore:
     supports_trace_outbox = True
     outbox_gate = None      # 서비스가 Outbox를 꽂는다(max_pending·dropped_full). 없으면 상한 없이 쓴다
 
-    def __init__(self, path: str, clock=REAL_WALL_CLOCK) -> None:
+    def __init__(self, path: str, clock) -> None:
         self._path = path
         self._clock = clock
         self._lock = threading.RLock()
@@ -480,11 +479,11 @@ except ImportError:          # 드라이버가 없으면 SQLite만 쓴다
 DEFAULT_CONNECT_TIMEOUT = 2.0         # libpq의 connect_timeout은 2초 미만이 의미 없다
 DEFAULT_STATEMENT_TIMEOUT = 2.0
 DEFAULT_RECONNECT_BACKOFF = 1.0       # 접속에 실패한 뒤 이 시간 동안은 다시 접속을 시도하지 않고 바로 실패한다(턴 하나가 접속 시도 여러 번을 기다리지 않게)
-_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None, "backoff": DEFAULT_RECONNECT_BACKOFF, "monotonic": REAL_MONOTONIC}
+_cfg = {"connect": DEFAULT_CONNECT_TIMEOUT, "statement": DEFAULT_STATEMENT_TIMEOUT, "probe": None, "backoff": DEFAULT_RECONNECT_BACKOFF, "monotonic": None, "timer": None}
 
 
 def configure(*, connect_timeout: float | None = None, statement_timeout: float | None = None, probe_timeout: float | None = None,
-              reconnect_backoff: float | None = None, monotonic=None) -> None:
+              reconnect_backoff: float | None = None, monotonic=None, timer=None) -> None:
     """이후 만드는 PgConn의 기본 상한을 정한다(서비스 시작 때 한 번)."""
     if connect_timeout is not None:
         _cfg["connect"] = float(connect_timeout)
@@ -496,6 +495,8 @@ def configure(*, connect_timeout: float | None = None, statement_timeout: float 
         _cfg["backoff"] = float(reconnect_backoff)
     if monotonic is not None:
         _cfg["monotonic"] = monotonic      # 재접속 유예를 세는 단조 시계(주입, ADR-0050)
+    if timer is not None:
+        _cfg["timer"] = timer              # 문장 강제 끊기 타이머 만들기: timer(초, 함수, 인자) -> start()·cancel()을 가진 것(주입)
 
 
 DEFAULT_PROBE_TIMEOUT = 2.0  # /readyz의 DB 확인 상한 기본값(초). libpq의 connect_timeout 최소 단위가 2초라 이보다 작게 의미가 없다
@@ -518,7 +519,9 @@ class PgConn:
         self.probe_timeout = _cfg["probe"] or DEFAULT_PROBE_TIMEOUT      # /readyz 확인용 상한(초)
         self.connect_timeout = _cfg["connect"]            # 주 연결의 접속 상한(초)
         self.reconnect_backoff = _cfg["backoff"]
-        self._monotonic = _cfg["monotonic"]
+        self._monotonic, self._timer = _cfg["monotonic"], _cfg["timer"]
+        if self._monotonic is None or self._timer is None:
+            raise StoreError(f"{what}: 시계와 타이머가 주입되지 않았다(session_store.configure(monotonic=, timer=)를 먼저 부른다)")
         self._retry_after = 0.0                           # 단조 시계 기준: 이 시각 전에는 재접속을 시도하지 않는다
         self.statement_timeout = _cfg["statement"]        # 문장 하나의 상한(초): 서버 쪽 statement_timeout + 클라이언트 쪽 강제 끊기(서버가 얼어도 끝난다)
         self._lock = threading.RLock()
@@ -558,9 +561,8 @@ class PgConn:
     def _exec(self, sql: str, args):
         """문장 하나를 상한 안에서 실행한다. statement_timeout + 1초 안에 안 끝나면 연결을 끊어 OperationalError로 끝낸다."""
         conn = self._conn
-        timer = threading.Timer(self.statement_timeout + 1.0, self._abort, args=(conn,))
-        timer.daemon = True
-        timer.start()
+        timer = self._timer(self.statement_timeout + 1.0, self._abort, (conn,))
+        timer.start()      # 데몬 여부는 타이머를 만드는 쪽(wiring)이 정한다
         try:
             return conn.execute(translate(sql), tuple(args))
         finally:
@@ -662,7 +664,7 @@ class PgSessionStore(SqliteSessionStore):
 # ---------------------------------------------------------------- 메모리
 
 class MemorySessionStore:
-    def __init__(self, clock=REAL_WALL_CLOCK) -> None:
+    def __init__(self, clock) -> None:
         self._clock = clock
         self._lock = threading.RLock()
         self._sessions: dict[str, dict] = {}   # id -> {doc, revision, release_id}

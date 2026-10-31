@@ -38,3 +38,53 @@ def wait_until(cond, timeout: float = HANG_GUARD_SECONDS, step: float = POLL_SEC
             return True
         time.sleep(step)
     return bool(cond())
+
+
+FAKE_EPOCH = 1_700_000_000.0      # 가짜 벽시계의 시작값(고정). 실제 시계를 읽지 않는다
+
+
+def fake_clock(start: float = FAKE_EPOCH) -> FakeClock:
+    """컴포넌트에 넘기는 가짜 시계 하나(시험마다 실제 시계를 넣지 않는다). 시간은 시험이 advance()할 때만 간다."""
+    return FakeClock(start)
+
+
+def clock_kwargs() -> dict:
+    """추론 클라이언트에 넘기는 단조 시계와 sleep(sleep은 같은 가짜 시계를 흘린다: 기다리지 않는다)."""
+    c = FakeClock()
+    return {"monotonic": c, "sleep": c.sleep}
+
+
+class FakeWait:
+    """주입하는 주기 대기: wait(중지 Event, 초). 실제로 기다리지 않고, 시험이 tick()을 부를 때 한 주기가 지난 것으로 돌려준다(중지 Event가 켜지면 True로 끝난다)."""
+
+    def __init__(self) -> None:
+        self._cv, self._ticks = threading.Condition(), 0
+
+    def tick(self) -> None:
+        with self._cv:
+            self._ticks += 1
+            self._cv.notify_all()
+
+    def __call__(self, stop: threading.Event, seconds: float) -> bool:
+        with self._cv:
+            seen = self._ticks
+            while self._ticks == seen and not stop.is_set():
+                self._cv.wait(POLL_SECONDS)      # 반응 간격(중지 Event를 다시 보는 주기). 판정에 쓰이지 않는다
+            return stop.is_set()
+
+
+class FakeTimer:
+    """주입하는 시한 타이머: 시험이 fire()를 부를 때만 함수를 실행한다. cancel()하면 실행하지 않는다."""
+
+    def __init__(self, seconds: float, fn, args=()) -> None:
+        self.seconds, self._fn, self._args, self.cancelled, self.started = seconds, fn, args, False, False
+
+    def start(self) -> None:
+        self.started = True
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def fire(self) -> None:
+        if self.started and not self.cancelled:
+            self._fn(*self._args)

@@ -1,4 +1,5 @@
 """G01: 직원 알림 입력원은 포트(RiskSource)로 분리되어 있고 SURVEY_RISK_SOURCE로 구현을 고른다. 기본은 비활성. 입력원은 정해지지 않았다."""
+from .timing import fake_clock
 from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
 from survey_service.components.alert_book import AlertStore
 from survey_service.wiring.app import App
@@ -42,8 +43,8 @@ def test_default_is_inactive_and_configured_source_is_reported_active(tmp_path, 
 def test_alert_flows_from_fake_source_to_alert_store(tmp_path):
     src = FakeInputSource()
     rig = Rig(risk_source=src)
-    store = AlertStore(str(tmp_path / "alerts.db"))
-    rig.orch.staff_console = AlertStaffConsole(AlertService(store, AlertHub()))       # 기본 조립과 같은 직원 접점
+    store = AlertStore(str(tmp_path / "alerts.db"), clock=fake_clock())
+    rig.orch.staff_console = AlertStaffConsole(AlertService(store, AlertHub(), monotonic=fake_clock()))       # 기본 조립과 같은 직원 접점
     rig.start()
     rig.say("괜찮아요", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"))
     assert store.list(None, 10, None)[0] == []

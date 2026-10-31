@@ -20,7 +20,7 @@ from survey_service.components.trace_outbox import Outbox
 from survey_service.components.trace_envelope import OutboxTraceSink, envelope_id
 from survey_service.components.link_trace_export import TraceExporter
 
-from .timing import wait_until
+from .timing import FakeWait, fake_clock, wait_until
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .http_support import TOK, publish
 from conformance.servers import ReferenceServer
@@ -38,7 +38,7 @@ def srv():
 def loader_env(srv, tmp_path):
     reg = ReleaseRegistry()
     loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "work",
-                           installed_versions=INSTALLED, retry_base_seconds=0)
+                           installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
     return srv, reg, loader
 
 
@@ -100,7 +100,7 @@ def test_non_pass_release_is_not_loaded_over_http(loader_env, tmp_path):
 def test_wrong_token_is_a_rejection_not_a_crash(srv, tmp_path):
     publish(srv, tmp_path, "rel-1")
     loader = ReleaseLoader(HttpReleaseReader(srv.url, "nope", 5), ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / "w",
-                           installed_versions=INSTALLED, retry_base_seconds=0)
+                           installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
     r = loader.poll_once()
     assert r.action == "RETRY_LATER" and r.code == "PERMISSION_DENIED"      # 포인터를 읽지 못했을 뿐이다. 서비스는 죽지 않는다
     assert loader.registry.active() is None
@@ -109,13 +109,13 @@ def test_wrong_token_is_a_rejection_not_a_crash(srv, tmp_path):
 def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
     publish(srv, tmp_path, "rel-1")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
+    loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
     loader.poll_once()
     ob = Outbox(str(tmp_path / "ob.db"))
     now = [1_700_000_000.0]      # 주입한 시계의 시작값(고정)
     clock = lambda: now[0]
-    ex = TraceExporter(ob, HttpTraceIngest(srv.url, "w-tok", 5), base_delay=2, max_delay=8, clock=clock)
-    orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher(),
+    ex = TraceExporter(ob, HttpTraceIngest(srv.url, "w-tok", 5), base_delay=2, max_delay=8, clock=clock, wait=FakeWait())
+    orch = Orchestrator(MemorySessionStore(clock=fake_clock()), reg, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher(),
                         trace_sink=OutboxTraceSink(ob, clock))
     sid = "세션 하나"                                       # Id 형식이 아니어서 봉투에서는 x- 해시로 바뀐다
     orch.handle_turn(turn_id="턴 1", frontend_message={"session_id": sid, "kind": "SESSION_START"})
@@ -141,10 +141,10 @@ def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
 def test_non_retryable_ingest_error_goes_dead_over_http(srv, tmp_path):
     publish(srv, tmp_path, "rel-1")
     reg = ReleaseRegistry()
-    ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0).poll_once()
+    ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock()).poll_once()
     ob = Outbox(str(tmp_path / "ob.db"))
-    ex = TraceExporter(ob, HttpTraceIngest(srv.url, "r-tok", 5))        # 읽기 토큰으로 쓰기 -> PERMISSION_DENIED, 재시도하지 않는다
-    Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole(), trace_sink=OutboxTraceSink(ob)).handle_turn(
+    ex = TraceExporter(ob, HttpTraceIngest(srv.url, "r-tok", 5), clock=fake_clock(), wait=FakeWait())        # 읽기 토큰으로 쓰기 -> PERMISSION_DENIED, 재시도하지 않는다
+    Orchestrator(MemorySessionStore(clock=fake_clock()), reg, staff_console=RecordingConsole(), trace_sink=OutboxTraceSink(ob, clock=fake_clock())).handle_turn(
         turn_id="t1", frontend_message={"session_id": "S1", "kind": "SESSION_START"})
     r = ex.flush_once()
     assert r.dead == 1 and ob.dead_rows()[0]["error"].startswith("PERMISSION_DENIED")

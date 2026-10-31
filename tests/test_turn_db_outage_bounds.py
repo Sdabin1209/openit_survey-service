@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from .timing import fake_clock
 from survey_service.components import session_store as pg
 from survey_service.components.link_public_api import PublicApi
 from survey_service.settings import Settings
@@ -21,7 +22,7 @@ def _rig(request, deadline=None, url=None):
     s = Settings.from_env(BASE)
     pg.configure(connect_timeout=s.db_connect_timeout_seconds, statement_timeout=s.db_statement_timeout_seconds,
                  reconnect_backoff=0.0)      # 접속 실패 뒤 재접속 유예는 시간 기반이라 시험에서는 0으로 둔다(유예 값이 설정에서 오는지는 test_readyz_db_outage의 설정 확인이 본다)
-    store = PgSessionStore(url or pg_url(request))
+    store = PgSessionStore(url or pg_url(request), clock=fake_clock())
     request.addfinalizer(store.close)
     rig = Rig(store=store, turn_deadline_seconds=s.turn_deadline_seconds if deadline is None else deadline)
     api = PublicApi(rig.orch, "tok", max_utterance_chars=100)

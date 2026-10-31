@@ -4,6 +4,7 @@ import logging
 
 import pytest
 
+from .timing import fake_clock
 from survey_service.components.alert_book import AlertStore, PgAlertStore
 from survey_service.wiring.errors import StoreError
 from survey_service.components.session_store import translate
@@ -104,7 +105,7 @@ def test_outbox_conformance(outbox):
 # ---------------------------------------------------------------- PostgreSQL 전용
 def test_session_store_reconnects_after_connection_kill(request):
     from .test_store import make, writes
-    s = PgSessionStore(pg_url(request))
+    s = PgSessionStore(pg_url(request), clock=fake_clock())
     st, rev = make(s)
     kill_connection(s._db)
     assert s.load("S1")["status"] == "OK"                       # 끊긴 뒤 첫 읽기가 새 연결로 복구한다
@@ -120,7 +121,7 @@ def test_session_store_reconnects_after_connection_kill(request):
 
 def test_alert_store_and_outbox_reconnect(request):
     url = pg_url(request)
-    a, o = PgAlertStore(url, **pg_link()), PgOutbox(url, **pg_link())
+    a, o = PgAlertStore(url, **pg_link(), clock=fake_clock()), PgOutbox(url, **pg_link())
     a.create("S1", "RISK_STOP")
     kill_connection(a._db)
     assert a.list(None, 10, None)[0][0]["session_id"] == "S1"
@@ -136,7 +137,7 @@ def test_alert_store_and_outbox_reconnect(request):
 
 
 def test_connection_lost_inside_transaction_is_not_retried(request):
-    s = PgSessionStore(pg_url(request))
+    s = PgSessionStore(pg_url(request), clock=fake_clock())
     s._db.execute("BEGIN")
     kill_connection(s._db)
     with pytest.raises(Exception):
@@ -147,7 +148,7 @@ def test_connection_lost_inside_transaction_is_not_retried(request):
 
 
 def test_unrecoverable_is_store_error_and_hides_url(request, caplog):
-    s = PgSessionStore(pg_url(request))
+    s = PgSessionStore(pg_url(request), clock=fake_clock())
     s._db._url = "postgresql://svc:pw-canary-77@127.0.0.1:1/db"       # 다시 열 수 없는 주소
     kill_connection(s._db)
     with caplog.at_level(logging.DEBUG):
@@ -160,7 +161,7 @@ def test_unrecoverable_is_store_error_and_hides_url(request, caplog):
 
 def test_bad_url_is_store_error_without_secret():
     with pytest.raises(StoreError) as e:
-        PgSessionStore("postgresql://svc:pw-canary-88@127.0.0.1:1/db")
+        PgSessionStore("postgresql://svc:pw-canary-88@127.0.0.1:1/db", clock=fake_clock())
     assert "pw-canary-88" not in str(e.value) and "127.0.0.1" not in str(e.value)
 
 

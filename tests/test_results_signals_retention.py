@@ -8,6 +8,7 @@ import jsonschema
 import pytest
 
 import survey_schema
+from .timing import fake_clock
 from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
 from survey_service.components.alert_book import AlertStore
 from survey_service.components.link_public_api import PublicApi
@@ -31,12 +32,12 @@ class Env:
             from survey_service.components.session_store import PgSessionStore
             from .pg_support import pg_link, pg_url
             url = pg_url(request)
-            self.store = PgAlertStore(url, **pg_link(), **kw)
-            self.rig = Rig(store=PgSessionStore(url), timeline=self.store)
+            self.store = PgAlertStore(url, **pg_link(), **{**kw, "clock": kw.get("clock", fake_clock())})
+            self.rig = Rig(store=PgSessionStore(url, clock=fake_clock()), timeline=self.store)
         else:
-            self.store = AlertStore(str(tmp_path / "alerts.db"), **kw)
+            self.store = AlertStore(str(tmp_path / "alerts.db"), **{**kw, "clock": kw.get("clock", fake_clock())})
             self.rig = Rig(timeline=self.store)
-        self.service = AlertService(self.store, AlertHub(), push=None)
+        self.service = AlertService(self.store, AlertHub(), push=None, monotonic=fake_clock())
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
         self.api = PublicApi(self.rig.orch, "tok", staff_token="stok", alerts=self.service, result_token="rtok" if result else None,
                              risk_token="xtok" if risk else None, require_subject_ref=require)

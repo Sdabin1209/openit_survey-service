@@ -5,6 +5,7 @@ import jsonschema
 import pytest
 import survey_schema
 
+from .timing import fake_clock
 from survey_service.components.field_specs import invalid_field_specs
 from survey_service.components.field_specs import build_field_specs
 from survey_service.components.link_inference import InferenceServer
@@ -38,7 +39,7 @@ def _poll(tmp_path, bank):
     reader.add_release("rel-1", bank, **INSTALLED)
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, field_check=invalid_field_specs)
+    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, field_check=invalid_field_specs, clock=fake_clock())
     return reg, loader, loader.poll_once()
 
 

@@ -2,6 +2,7 @@
 실패 턴 재전송(같은 turn_id)은 한 번만 센다(세션 시각 기록 session_timeline의 turn_id로 거른다)."""
 import pytest
 
+from .timing import fake_clock
 from survey_service.components.alert_book import AlertStore
 
 from .e2e_support import Rig, ext, val
@@ -15,7 +16,7 @@ BROKEN = "깨진 출력 {{"
 
 @pytest.fixture
 def rig(tmp_path):
-    r = Rig(bank=_bank_without_authored_limits(), max_consecutive_reask=3, timeline=AlertStore(str(tmp_path / "a.db")))
+    r = Rig(bank=_bank_without_authored_limits(), max_consecutive_reask=3, timeline=AlertStore(str(tmp_path / "a.db"), clock=fake_clock()))
     r.start()
     yield r
 

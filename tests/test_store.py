@@ -5,6 +5,7 @@ import threading
 
 import pytest
 
+from .timing import fake_clock
 from survey_service.wiring.errors import StoreError
 from survey_service.components import session_store as effects
 from survey_service.components.session_store import MemorySessionStore
@@ -15,15 +16,15 @@ from .sample_bank import sample_bank
 @pytest.fixture(params=["memory", "sqlite", "postgres"])
 def store(request, tmp_path):
     if request.param == "memory":
-        yield MemorySessionStore()
+        yield MemorySessionStore(clock=fake_clock())
     elif request.param == "postgres":
         from survey_service.components.session_store import PgSessionStore
         from .pg_support import pg_url
-        s = PgSessionStore(pg_url(request))
+        s = PgSessionStore(pg_url(request), clock=fake_clock())
         yield s
         s.close()
     else:
-        s = SqliteSessionStore(str(tmp_path / "s.db"))
+        s = SqliteSessionStore(str(tmp_path / "s.db"), clock=fake_clock())
         yield s
         s.close()
 
@@ -147,17 +148,17 @@ def test_concurrent_commit_only_one_wins(store):
 
 def test_sqlite_persists_across_reopen(tmp_path):
     p = str(tmp_path / "x.db")
-    s1 = SqliteSessionStore(p)
+    s1 = SqliteSessionStore(p, clock=fake_clock())
     st, rev = make(s1)
     s1.commit({"session_id": "S1", "expected_revision": rev, "writes": writes(7)}, turn_id="t1", input_hash="h")
     s1.close()
-    s2 = SqliteSessionStore(p)
+    s2 = SqliteSessionStore(p, clock=fake_clock())
     assert s2.load("S1")["revision"] == rev + 1 and s2.get_turn("S1", "t1").committed and s2.release_id_of("S1") == "rel-1"
     s2.close()
 
 
 def test_sqlite_db_error_is_reported_not_raised(tmp_path):
-    s = SqliteSessionStore(str(tmp_path / "x.db"))
+    s = SqliteSessionStore(str(tmp_path / "x.db"), clock=fake_clock())
     make(s)
     s._db.close()
     assert s.load("S1")["status"] == "DB_ERROR"
@@ -169,4 +170,4 @@ def test_sqlite_db_error_is_reported_not_raised(tmp_path):
 
 def test_sqlite_unwritable_path():
     with pytest.raises(StoreError):
-        SqliteSessionStore("/nonexistent-dir/x/y.db")
+        SqliteSessionStore("/nonexistent-dir/x/y.db", clock=fake_clock())

@@ -8,7 +8,7 @@ from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
 from survey_service.components.link_inference import RemoteInference
 
-from .timing import HANG_GUARD_SECONDS
+from .timing import HANG_GUARD_SECONDS, clock_kwargs, fake_clock
 from .fakes import FakeReleaseReader
 from .http_support import TOK, publish
 from .runtime_support import FlakyRuntime
@@ -33,7 +33,7 @@ def test_local_fake_backend_still_needs_the_adapters_so_it_uses_load_bundle(tmp_
     reader.add_release("rel-1", sample_bank())
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
+    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
     assert loader.poll_once().action == "LOADED"
     assert reader.calls.get("load_bundle") == 1 and reader.calls.get("get_release_question_bank", 0) == 0
 
@@ -58,9 +58,9 @@ def test_http_question_bank_endpoint_is_used_with_remote_inference(tmp_path):
     try:
         with ReferenceServer(TOK) as srv:
             publish(srv, tmp_path, "rel-1")
-            client = RemoteInference(rt.url, TOKEN, HANG_GUARD_SECONDS, load_timeout=HANG_GUARD_SECONDS, poll_interval=0.05)
+            client = RemoteInference(rt.url, TOKEN, HANG_GUARD_SECONDS, load_timeout=HANG_GUARD_SECONDS, poll_interval=0.05, **clock_kwargs())
             loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), ReleaseRegistry(), client, workdir=tmp_path / "work",
-                                   installed_versions=INSTALLED, retry_base_seconds=0)
+                                   installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
             assert loader.poll_once().action == "LOADED"
             paths = [p for _, p, _ in srv.requests]
             assert any(p.endswith("/question-bank") for p in paths) and not any(p.endswith("/bundle") for p in paths)

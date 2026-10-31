@@ -6,7 +6,6 @@
 """
 from __future__ import annotations
 
-from ..config import REAL_WALL_CLOCK
 
 import logging
 import threading
@@ -33,7 +32,9 @@ class FlushResult:
 
 class TraceExporter:
     def __init__(self, outbox, ingest, *, base_delay: float = 1.0, max_delay: float = 60.0, batch: int = 50,
-                 validate: bool = True, clock: Callable[[], float] = REAL_WALL_CLOCK, stage_grace: float = 60.0) -> None:
+                 validate: bool = True, clock: Callable[[], float], stage_grace: float = 60.0,
+                 wait: Callable[[threading.Event, float], bool]) -> None:
+        self._wait = wait      # 주기 대기(주입한 타이머, ADR-0050): wait(중지 Event, 초) -> 중지됐으면 True. wiring이 실제 대기를, 시험이 가짜 타이머를 넣는다
         # stage_grace: 예약 행(턴 진행 중)이 이만큼 오래되면 턴이 사라진 것으로 보고 승격한다. 서버 턴 마감 9초(ADR-0049)의 6배 이상, 측정하지 않았다 (ADR-0023)
         self.stage_grace = stage_grace
         self.outbox, self.ingest = outbox, ingest
@@ -124,7 +125,7 @@ class TraceExporter:
         self._stop.clear()
 
         def loop():
-            while not self._stop.wait(interval):
+            while not self._wait(self._stop, interval):
                 try:
                     self.flush_once()
                 except Exception as e:                # 스레드가 죽으면 안 된다
@@ -135,7 +136,7 @@ class TraceExporter:
     def stop(self) -> None:
         self._stop.set()
         if self._thread:
-            self._thread.join(timeout=5)
+            self._thread.join()      # 루프는 중지 Event로 끝난다(시한을 두지 않는다)
             self._thread = None
 
     def stats(self) -> dict:

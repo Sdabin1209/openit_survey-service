@@ -13,7 +13,7 @@ from survey_service.components.release_registry import ReleaseRegistry
 from survey_service.components.link_inference import RemoteInference, Stats
 from survey_service.components.session_store import MemorySessionStore
 
-from .timing import FakeClock, HANG_GUARD_SECONDS, wait_until
+from .timing import FakeClock, HANG_GUARD_SECONDS, clock_kwargs, fake_clock, wait_until
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .runtime_support import FlakyRuntime, raw_response, redirect_extraction
 from .sample_bank import sample_bank
@@ -32,10 +32,10 @@ class Env:
         self.url = self.srv.url
         self.registry = ReleaseRegistry()
         self.client = RemoteInference(self.url, TOKEN, timeout, load_timeout=load_timeout, retries=retries, poll_interval=0.05, backoff=0.01,
-                                     **({"monotonic": clock, "sleep": clock.sleep} if clock else {}),
+                                     monotonic=(clock or fake_clock()), sleep=(clock or fake_clock()).sleep,
                                      extract_timeout=timeout, respond_timeout=timeout)   # 호출 상한은 이 시험들의 주제가 아니다: 가짜 서버가 즉시 답하므로 시한이 결과를 바꾸지 않는다(매달림 감시 값). 시한 처리는 아래 '시간 초과' 시험이 즉시 던지는 오류로 본다
-        self.loader = ReleaseLoader(self.reader, self.registry, self.client, workdir=tmp / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0)
-        self.orch = Orchestrator(MemorySessionStore(), self.registry, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
+        self.loader = ReleaseLoader(self.reader, self.registry, self.client, workdir=tmp / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
+        self.orch = Orchestrator(MemorySessionStore(clock=fake_clock()), self.registry, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
         self.n = 0
 
     def turn(self, text="안녕하세요", sid="S1"):

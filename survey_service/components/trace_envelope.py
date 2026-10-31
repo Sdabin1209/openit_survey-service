@@ -1,7 +1,6 @@
 """Trace 봉투 컴포넌트: TurnTrace를 TraceEnvelope(계약)에 담는다. 입력 TraceEnvelopeSource -> 출력 TraceEnvelope. 바깥 ID는 `Id` 형식으로 바꾼다(CONVENTIONS 10절)."""
 from __future__ import annotations
 
-from ..config import REAL_WALL_CLOCK
 
 import hashlib
 import re
@@ -27,7 +26,7 @@ def _iso(ts: float) -> str:
 
 class OutboxTraceSink:
     """Orchestrator의 TraceSink 구현: TurnTrace를 TraceEnvelope에 담아 outbox에 넣는다."""
-    def __init__(self, outbox, clock: Callable[[], float] = REAL_WALL_CLOCK) -> None:
+    def __init__(self, outbox, clock: Callable[[], float]) -> None:
         self.outbox, self.clock = outbox, clock
 
     def envelope(self, release_id: str, trace: dict) -> dict:

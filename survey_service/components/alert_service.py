@@ -11,7 +11,6 @@
 """
 from __future__ import annotations
 
-from ..config import REAL_MONOTONIC
 
 import contextvars
 import json
@@ -119,7 +118,7 @@ class AlertService:
     def __init__(self, store, hub: Optional[AlertHub] = None, push: Optional[PushSender] = None,
                  push_timeout: float = 3.0, retry_min_interval_s: int = DEFAULT_RETRY_MIN_INTERVAL_S,
                  retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None,
-                 monotonic: Callable[[], float] = REAL_MONOTONIC) -> None:
+                 *, monotonic: Callable[[], float]) -> None:
         self._now = monotonic      # 시계 주입(ADR-0050)
         self.endpoint_check = endpoint_check
         self.store, self.hub, self.push, self.push_timeout = store, hub or AlertHub(), push, push_timeout

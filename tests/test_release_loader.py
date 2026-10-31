@@ -3,6 +3,7 @@ import pytest
 from boundary_contracts import PIPELINE_SCHEMA_VERSION, BoundaryError
 
 import model_runtime
+from .timing import fake_clock
 from survey_service.wiring.errors import ReleaseUnavailable
 from survey_service.wiring.errors import InferenceLoadError
 from survey_service.components.link_inference import InferenceServer
@@ -21,7 +22,7 @@ INSTALLED = {"action_rules_version": ACTION_RULES_VERSION, "model_runtime_versio
 def env(tmp_path):
     reader = FakeReleaseReader(tmp_path / "gate")
     reg = ReleaseRegistry()
-    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0)
+    loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
     return reader, reg, loader
 
 
@@ -53,7 +54,7 @@ def test_pointer_change_switches_active_new_sessions_only(env):
     add(reader, "rel-2", 2)
     reader.set_pointer("rel-1")
     loader.poll_once()
-    orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole())
+    orch = Orchestrator(MemorySessionStore(clock=fake_clock()), reg, staff_console=RecordingConsole())
     o1 = orch.handle_turn(turn_id="a1", frontend_message={"session_id": "OLD", "kind": "SESSION_START"})
     assert o1.release_id == "rel-1"
     reader.set_pointer("rel-2")
@@ -238,7 +239,7 @@ def test_registry_never_calls_the_reader_during_a_turn(env):
     reader, reg, loader = env
     add(reader, "rel-1", 1)
     reader.set_pointer("rel-1"); loader.poll_once()
-    orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole())
+    orch = Orchestrator(MemorySessionStore(clock=fake_clock()), reg, staff_console=RecordingConsole())
     before = dict(reader.calls)
     for i in range(3):
         orch.handle_turn(turn_id=f"t{i}", frontend_message={"session_id": f"S{i}", "kind": "SESSION_START"})

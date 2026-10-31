@@ -10,7 +10,7 @@ from survey_service.components.alert_book import AlertStore, PgAlertStore
 from survey_service.components.link_public_api import PublicApi
 from survey_service.components.session_store import StoreError
 
-from .timing import HANG_GUARD_SECONDS
+from .timing import HANG_GUARD_SECONDS, fake_clock
 from .e2e_support import RISK_OUT, Rig, ScriptedRisk, ext, val
 from .pg_support import pg_link, pg_url
 
@@ -30,7 +30,7 @@ class SRig:
         self.rig = Rig(risk=risk, **orch_kw)
         self.store = store
         self.hub = AlertHub()
-        self.service = AlertService(store, self.hub, None, push_timeout=HANG_GUARD_SECONDS, retry_min_interval_s=interval, retry_max_per_session=cap)
+        self.service = AlertService(store, self.hub, None, push_timeout=HANG_GUARD_SECONDS, retry_min_interval_s=interval, retry_max_per_session=cap, monotonic=fake_clock())
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
         kw = {"device_tokens": {"dev-a": DEV_A[7:], "dev-b": DEV_B[7:]}} if devices else {}
         self.api = PublicApi(self.rig.orch, KIOSK[7:], staff_token=STAFF[7:], alerts=self.service, result_token="res-tok-0123456789",

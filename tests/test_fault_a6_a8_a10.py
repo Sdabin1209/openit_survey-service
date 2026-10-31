@@ -1,5 +1,5 @@
 """FAULT_MATRIX A6(Trace outbox -> 수집: 멈춤·5xx·깨진 응답, 큐 상한), A8(릴리스 사본 볼륨: 쓰기 불가), A10(직원 SSE: 이어 받기·DB 오류·연결 누수)."""
-from .timing import HANG_GUARD_SECONDS, wait_until
+from .timing import FakeWait, HANG_GUARD_SECONDS, fake_clock, wait_until
 import json
 import threading
 import time
@@ -74,7 +74,7 @@ def test_ingest_stuck_or_broken_keeps_rows_pending_and_never_fails_turns(stub, t
     """F2 멈춤 / F5 5xx / F6 깨진 응답: 보낸 것으로 치지 않고(PENDING 유지, 유실 없음) 턴은 영향이 없다."""
     s = stub(mode)
     ob = Outbox(str(tmp_path / "ob.db"))
-    ex = TraceExporter(ob, HttpTraceIngest(s.url, "w-tok", 60), base_delay=1.0, clock=lambda: 1000.0)      # 클라이언트 시한은 이 시험의 주제가 아니다(서버가 즉시 답한다)
+    ex = TraceExporter(ob, HttpTraceIngest(s.url, "w-tok", 60), base_delay=1.0, clock=lambda: 1000.0, wait=FakeWait())      # 클라이언트 시한은 이 시험의 주제가 아니다(서버가 즉시 답한다)
     run_turns(OutboxTraceSink(ob, lambda: 1000.0))             # 전송은 턴 경로 밖이다(전송이 없으니 턴은 영향이 없다)
     assert ob.counts()["PENDING"] == 3
     res = ex.flush_once()
@@ -92,7 +92,7 @@ def test_ingest_timeout_keeps_rows_pending_and_never_fails_turns(tmp_path):
         def send(self, env):
             raise BoundaryError("UNAVAILABLE", "수집이 응답하지 않는다", {"reason": "TimeoutError"})
     ob = Outbox(str(tmp_path / "ob.db"))
-    ex = TraceExporter(ob, Timeout(), base_delay=1.0, clock=lambda: 1000.0)
+    ex = TraceExporter(ob, Timeout(), base_delay=1.0, clock=lambda: 1000.0, wait=FakeWait())
     run_turns(OutboxTraceSink(ob, lambda: 1000.0))
     assert ob.counts()["PENDING"] == 3
     res = ex.flush_once()
@@ -112,7 +112,7 @@ def test_integrity_error_is_quarantined_not_retried(tmp_path):
             raise BoundaryError("INTEGRITY_ERROR", "응답이 스키마를 위반한다")
     clock = [1000.0]
     ob = Outbox(str(tmp_path / "ob.db"))
-    ex = TraceExporter(ob, Broken(), base_delay=1.0, max_delay=2.0, clock=lambda: clock[0])
+    ex = TraceExporter(ob, Broken(), base_delay=1.0, max_delay=2.0, clock=lambda: clock[0], wait=FakeWait())
     run_turns(OutboxTraceSink(ob, lambda: 1000.0), n=2)
     for _ in range(12):
         ex.flush_once()
@@ -135,7 +135,7 @@ def test_outbox_has_a_pending_cap_and_counts_drops(tmp_path):
         except StoreErrors:
             pass
     assert ob.counts()["PENDING"] <= 6 and ob.dropped_full >= 4          # 상한 근처에서 멈추고 버린 건수를 센다
-    ex = TraceExporter(ob, object())
+    ex = TraceExporter(ob, object(), clock=fake_clock(), wait=FakeWait())
     assert ex.stats()["dropped_full"] == ob.dropped_full
     ob.close()
 
@@ -146,7 +146,7 @@ def _loader(tmp_path):
     reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
-    return reader, reg, ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0)
+    return reader, reg, ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
 
 
 def test_volume_not_writable_is_a_visible_retry_not_a_dead_poller_then_recovers(tmp_path):

@@ -10,6 +10,7 @@ import pytest
 import survey_schema
 from boundary_contracts import validator
 
+from .timing import clock_kwargs, fake_clock
 from survey_service.components.field_specs import build_field_specs
 from survey_service.components.flow_table import load_flow
 from survey_service.components.link_inference import RemoteModelSession
@@ -81,7 +82,7 @@ def test_a_bank_with_a_slot_lacking_its_field_spec_is_rejected_at_load(tmp_path)
         reader = FakeReleaseReader(tmp_path / f"gate{i}")
         reader.add_release("rel-1", b, **INSTALLED)
         reader.set_pointer("rel-1")
-        loader = ReleaseLoader(reader, ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / f"w{i}", installed_versions=INSTALLED, retry_base_seconds=0)
+        loader = ReleaseLoader(reader, ReleaseRegistry(), InferenceServer("fake"), workdir=tmp_path / f"w{i}", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
         r = loader.poll_once()
         assert r.action == "REJECTED" and r.code == "INVALID_RECORD"
         assert "questions[" in loader.status.rejections[-1]["detail"]       # 위반 위치를 알린다
@@ -102,10 +103,10 @@ def test_remote_session_passes_flow_and_fields_to_the_contract_client():
             return RESULT
     f, spec = {"order": ["Q1"], "skips": []}, {"fields": [{"slot": "Q1.a", "data_type": "boolean"}]}
     c = Client()
-    assert RemoteModelSession(c, "rel").extract({"x": 1}, flow=f, fields=spec) is RESULT
+    assert RemoteModelSession(c, "rel", **clock_kwargs()).extract({"x": 1}, flow=f, fields=spec) is RESULT
     assert c.calls == [(f, spec)]
     with pytest.raises(TypeError):
-        RemoteModelSession(c, "rel").extract({"x": 1}, flow=f)              # fields 없는 호출은 없다(3.0.0: flow·fields 필수)
+        RemoteModelSession(c, "rel", **clock_kwargs()).extract({"x": 1}, flow=f)              # fields 없는 호출은 없다(3.0.0: flow·fields 필수)
 
 
 def test_reference_server_gets_fields_and_returns_the_dataset_answer_shape_for_an_out_of_range_value(tmp_path):

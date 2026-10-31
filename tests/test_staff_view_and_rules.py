@@ -8,6 +8,7 @@ import pytest
 from boundary_contracts import BoundaryError
 
 import survey_schema
+from .timing import fake_clock
 from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
 from survey_service.components.alert_book import AlertStore
 from survey_service.components.link_public_api import PublicApi
@@ -31,12 +32,12 @@ VIEW = jsonschema.Draft202012Validator(survey_schema.load_schema("StaffSessionVi
 
 class ViewRig:
     def __init__(self, tmp_path, rules=None, timeline=True):
-        self.store = AlertStore(str(tmp_path / "alerts.db"))
+        self.store = AlertStore(str(tmp_path / "alerts.db"), clock=fake_clock())
         kw = {"timeline": self.store} if timeline else {}
         if rules is not None:
             kw["risk_source"] = RuleRiskSource(json.dumps(rules).encode())
         self.rig = Rig(**kw)
-        self.service = AlertService(self.store, AlertHub(), push=None)
+        self.service = AlertService(self.store, AlertHub(), push=None, monotonic=fake_clock())
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
         self.api = PublicApi(self.rig.orch, "tok", staff_token="stok", alerts=self.service)
 
@@ -152,7 +153,7 @@ def test_alert_store_migrates_old_file_without_rule_id(tmp_path):
                      " status TEXT NOT NULL DEFAULT 'OPEN', resolved_by_decision TEXT, resolved_at TEXT);"
                      "INSERT INTO alerts(session_id, kind, created_at) VALUES ('S','RISK_STOP','2026-01-01T00:00:00Z');")
     db.commit(); db.close()
-    s = AlertStore(p)
+    s = AlertStore(p, clock=fake_clock())
     assert s.alerts_of_session("S")[0]["rule_id"] is None
     s.close()
 

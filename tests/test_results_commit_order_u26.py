@@ -10,7 +10,7 @@ from survey_service.components import session_store as effects
 from survey_service.components.session_store import PgSessionStore
 from survey_service.components.session_store import SqliteSessionStore
 
-from .timing import HANG_GUARD_SECONDS
+from .timing import HANG_GUARD_SECONDS, fake_clock
 from .pg_support import pg_url
 from .sample_bank import sample_bank
 
@@ -59,7 +59,7 @@ def _scenario(store_a, store_b):
 
 def test_postgres_sequence_order_equals_commit_order(request):
     url = pg_url(request)
-    a, b = PgSessionStore(url), PgSessionStore(url)
+    a, b = PgSessionStore(url, clock=fake_clock()), PgSessionStore(url, clock=fake_clock())
     try:
         done, seq = _scenario(a, b)
         assert sorted(done) == ["A", "B"]
@@ -71,7 +71,7 @@ def test_postgres_sequence_order_equals_commit_order(request):
 
 def test_sqlite_sequence_order_equals_commit_order(tmp_path):
     path = str(tmp_path / "s.db")
-    a, b = SqliteSessionStore(path), SqliteSessionStore(path)             # 같은 파일, 연결 둘
+    a, b = SqliteSessionStore(path, clock=fake_clock()), SqliteSessionStore(path, clock=fake_clock())             # 같은 파일, 연결 둘
     try:
         done, seq = _scenario(a, b)
         assert sorted(done) == ["A", "B"]

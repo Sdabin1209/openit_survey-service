@@ -18,7 +18,7 @@ from survey_service.server import serve
 from survey_service.settings import Settings
 from survey_service.components.session_store import MemorySessionStore
 
-from .timing import HANG_GUARD_SECONDS, wait_until
+from .timing import HANG_GUARD_SECONDS, fake_clock, wait_until
 from .http_server_support import start_server, server_port, stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
@@ -154,7 +154,7 @@ def test_failure_signal_is_passed_through_with_200(rig_api):
 
 def test_no_active_release_is_503():
     from .fakes import FaultyStore
-    api = PublicApi(Orchestrator(MemorySessionStore(), ReleaseRegistry(), staff_console=RecordingConsole()), "tok")
+    api = PublicApi(Orchestrator(MemorySessionStore(clock=fake_clock()), ReleaseRegistry(), staff_console=RecordingConsole()), "tok")
     code, body, _ = start(api)
     assert code == 503 and body["code"] == "UNAVAILABLE" and body["retryable"] is True
     rig = Rig()

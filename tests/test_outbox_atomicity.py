@@ -9,6 +9,7 @@
 """
 import pytest
 
+from .timing import FakeWait, fake_clock
 from survey_service.wiring.db import open_stores
 from survey_service.settings import Settings
 from survey_service.components.trace_outbox import Outbox
@@ -58,7 +59,7 @@ def test_crash_right_after_session_commit_does_not_lose_the_trace(opener):
     def commit_then_die(request, *, turn_id, **kw):
         real_commit(request, turn_id=turn_id, **kw)      # 세션 변경이 영속이 된다
         raise ProcessCrash()                             # 그 직후 프로세스가 죽는다
-    rig = Rig(store=store, trace_sink=OutboxTraceSink(outbox))
+    rig = Rig(store=store, trace_sink=OutboxTraceSink(outbox, clock=fake_clock()))
     rig.say(kind="SESSION_START")                        # t1: 정상 턴(commit 정상)
     store.commit = commit_then_die
     with pytest.raises(ProcessCrash):
@@ -79,7 +80,7 @@ def test_row_left_by_a_crash_is_eventually_visible_not_stuck(opener):
     def commit_then_die(request, *, turn_id, **kw):
         real_commit(request, turn_id=turn_id, **kw)
         raise ProcessCrash()
-    rig = Rig(store=store, trace_sink=OutboxTraceSink(outbox))
+    rig = Rig(store=store, trace_sink=OutboxTraceSink(outbox, clock=fake_clock()))
     rig.say(kind="SESSION_START")
     store.commit = commit_then_die
     with pytest.raises(ProcessCrash):
@@ -89,7 +90,7 @@ def test_row_left_by_a_crash_is_eventually_visible_not_stuck(opener):
     store, outbox, alerts, kind = opener()
     try:
         clock = [10_000_000_000.0]                       # 한참 뒤(유예 경과)
-        ex = TraceExporter(outbox, FakeTraceIngest(), clock=lambda: clock[0])
+        ex = TraceExporter(outbox, FakeTraceIngest(), clock=lambda: clock[0], wait=FakeWait())
         for _ in range(3):
             ex.flush_once()
         c = outbox.counts()

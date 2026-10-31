@@ -21,6 +21,7 @@ from ..components.link_push import WebPushSender, endpoint_syntax_error
 from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
 from .. import types
+from ..config import REAL_SLEEP, REAL_WALL_CLOCK, real_wait
 from . import checked
 from .clock import join_until
 from .checked import effective_reask_cap
@@ -96,7 +97,7 @@ class App:
                 raise ConfigError(str(e)) from None
         self.alerts = checked.wrap_alert_service(AlertService(checked.wrap_alert_store(self.alert_store), AlertHub(), push, settings.push_timeout_seconds,
                                     settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
-                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error))
+                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error, monotonic=clock))
         self.registry = ReleaseRegistry()
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
             tok = _secret(settings.inference_token_env, "추론 서버 토큰")
@@ -105,7 +106,7 @@ class App:
             self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds,
                                          load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries,
                                          extract_timeout=settings.inference_extract_timeout_seconds,
-                                         respond_timeout=settings.inference_respond_timeout_seconds, monotonic=clock)
+                                         respond_timeout=settings.inference_respond_timeout_seconds, monotonic=clock, sleep=REAL_SLEEP)
         else:
             self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
@@ -115,9 +116,10 @@ class App:
             installed_versions={"action_rules_version": load_rules()["rules_version"], "model_runtime_version": model_runtime.RUNTIME_VERSION},
             open_release_ids=self.store.open_release_ids, retry_base_seconds=settings.release_retry_base_seconds,
             retry_max_seconds=settings.release_retry_max_seconds, give_up_seconds=settings.release_retry_give_up_seconds,
-            field_check=invalid_field_specs)
+            field_check=invalid_field_specs, clock=REAL_WALL_CLOCK)
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,
-                                      max_delay=settings.export_backoff_max_seconds, stage_grace=settings.outbox_stage_grace_seconds)
+                                      max_delay=settings.export_backoff_max_seconds, stage_grace=settings.outbox_stage_grace_seconds,
+                                      clock=REAL_WALL_CLOCK, wait=real_wait)
         console = staff_console if staff_console is not None else (load_factory(settings.staff_console)() if settings.staff_console else None)
         disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
         if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다
@@ -134,7 +136,7 @@ class App:
             risk_source = RuleRiskSource.provisional_default()                        # 임상 검토 전 임시 기본 목록. 입력원이 꺼진 채 시작하지 않는다 (D88 U2, ADR-0013)
             log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
         self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
-                                         trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
+                                         trace_sink=OutboxTraceSink(self.outbox, REAL_WALL_CLOCK), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask,
                                          turn_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
@@ -201,7 +203,7 @@ class App:
                 from ..components.retention_purge import purge
                 while not self._stop.wait(st.retention_interval_seconds):
                     try:
-                        self.last_retention = purge(self.store, self.alert_store, st.session_retention_days, outbox=self.outbox,
+                        self.last_retention = purge(self.store, self.alert_store, st.session_retention_days, REAL_WALL_CLOCK(), outbox=self.outbox,
                                                     access_log_days=st.access_log_retention_days, alert_days=st.alert_retention_days,
                                                     dead_outbox_days=st.dead_outbox_retention_days)
                         self.last_retention["at"] = time.time()

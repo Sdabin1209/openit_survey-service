@@ -13,7 +13,7 @@ from survey_service.wiring.ports import LoadedRelease
 from survey_service.components.session_store import MemorySessionStore
 from survey_service.components.session_store import SqliteSessionStore
 
-from .timing import HANG_GUARD_SECONDS
+from .timing import HANG_GUARD_SECONDS, fake_clock
 from .e2e_support import Rig, ScriptedModel, ScriptedRisk, ext, make_session, val
 from .fakes import FaultyStore, RecordingSink
 from .sample_bank import sample_bank
@@ -394,7 +394,7 @@ def test_dispatch_failure_is_recorded_not_a_turn_failure():
 
 def test_unconfigured_staff_console_fails_honestly():
     rig = risk_rig()
-    rig.orch.staff_console = Orchestrator(MemorySessionStore(), rig.registry).staff_console   # 기본값
+    rig.orch.staff_console = Orchestrator(MemorySessionStore(clock=fake_clock()), rig.registry).staff_console   # 기본값
     rig.start()
     o = rig.say("숨이 안 쉬어져요", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"))
     assert o.orchestrator_output["turn_failure_signal"]["staff_alert"] == "DELIVERY_FAILED"
@@ -589,12 +589,12 @@ def test_replayed_turn_is_not_traced_twice():
 # ---------------------------------------------------------------- SQLite 저장소로 같은 흐름
 def test_conversation_on_sqlite_survives_restart(tmp_path):
     db = str(tmp_path / "s.db")
-    rig = Rig(store=SqliteSessionStore(db))
+    rig = Rig(store=SqliteSessionStore(db, clock=fake_clock()))
     rig.start()
     rig.say("안 먹어요", out=HEALTH, turn_id="T-A")
     first = rig.doc()
     rig.store.close()
-    rig2 = Rig(store=SqliteSessionStore(db))
+    rig2 = Rig(store=SqliteSessionStore(db, clock=fake_clock()))
     assert rig2.doc() == first
     again = rig2.orch.handle_turn(turn_id="T-A", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "안 먹어요"})
     assert again.replayed and rig2.doc() == first

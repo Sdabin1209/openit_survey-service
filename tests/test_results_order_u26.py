@@ -5,6 +5,7 @@ import sqlite3
 
 import pytest
 
+from .timing import fake_clock
 from .test_results_signals_retention import RESULT, env  # noqa: F401  (env는 sqlite와 postgres를 도는 픽스처)
 
 
@@ -64,7 +65,7 @@ def test_pre_u26_sqlite_file_is_backfilled_in_the_old_order(tmp_path):
 CREATE TABLE sessions (session_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, release_id TEXT NOT NULL, status TEXT NOT NULL, doc TEXT NOT NULL, updated_at REAL NOT NULL DEFAULT 0);
 CREATE TABLE turns (session_id TEXT NOT NULL, turn_id TEXT NOT NULL, input_hash TEXT NOT NULL, committed INTEGER NOT NULL DEFAULT 0, result_json TEXT, PRIMARY KEY (session_id, turn_id));
 INSERT INTO sessions VALUES ('B', 1, 'r', 'IN_PROGRESS', '{}', 5.0), ('A', 1, 'r', 'IN_PROGRESS', '{}', 5.0), ('C', 1, 'r', 'IN_PROGRESS', '{}', 3.0);""")
-    store = SqliteSessionStore(p)
+    store = SqliteSessionStore(p, clock=fake_clock())
     try:
         assert [r[0] for r in store.list_sessions()] == ["C", "A", "B"]       # updated_at, 같으면 session_id (옛 순서)
     finally:

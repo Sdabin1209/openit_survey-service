@@ -12,6 +12,7 @@ from typing import Optional
 import survey_schema
 from model_runtime import FakeBackend, FakeModelSession, fake_serving_config, serving_config_hash
 
+from .timing import fake_clock
 from survey_service.components.link_inference import LocalModelSession
 from survey_service.wiring.orchestrator import Orchestrator
 from survey_service.wiring.ports import LoadedRelease
@@ -93,7 +94,7 @@ class Rig:
             orch_kw["risk_source"] = ScriptedRisk()
         self.model = ScriptedModel()
         self.bank = bank or sample_bank()
-        self.store = store or MemorySessionStore()
+        self.store = store or MemorySessionStore(clock=fake_clock())
         self.registry = ReleaseRegistry()
         self.session = make_session(self.model)
         self.release = LoadedRelease("rel-e2e-1", {}, self.bank, self.session)

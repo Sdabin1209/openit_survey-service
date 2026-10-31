@@ -3,7 +3,6 @@
 """
 from __future__ import annotations
 
-from ..config import REAL_WALL_CLOCK
 
 import json
 import logging
@@ -65,7 +64,7 @@ class AlertStore:
 
     _ERRORS: tuple = (sqlite3.Error,)
 
-    def __init__(self, path: str, clock: Callable[[], float] = REAL_WALL_CLOCK) -> None:
+    def __init__(self, path: str, clock: Callable[[], float]) -> None:
         self._clock = clock
         self._lock = threading.RLock()
         try:
@@ -379,7 +378,7 @@ class PgAlertStore(AlertStore):
     """PostgreSQL 알림 저장소. 연결·스키마 방언만 다르고 나머지는 AlertStore와 같다."""
     KIND = "postgresql"
 
-    def __init__(self, url: str, *, connect, driver_errors: tuple, clock: Callable[[], float] = REAL_WALL_CLOCK) -> None:
+    def __init__(self, url: str, *, connect, driver_errors: tuple, clock: Callable[[], float]) -> None:
         # 연결 클래스·드라이버 오류는 조립 계층이 주입한다(session_store를 import하지 못한다. 한계 L2). 주입한 연결의 접속 실패 오류는 그대로 올라간다.
         self._connect, self._ERRORS = connect, tuple(driver_errors)
         super().__init__(url, clock)

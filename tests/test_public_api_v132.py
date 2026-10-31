@@ -1,5 +1,5 @@
 """공개 API 보완(D66): 세션 상태, 푸시 설정, 오류 표, Retry-After, turn_id 봉투, 응답 스키마 검증."""
-from .timing import HANG_GUARD_SECONDS, wait_until
+from .timing import HANG_GUARD_SECONDS, fake_clock, wait_until
 import json
 import re
 import threading
@@ -157,7 +157,7 @@ def test_503_without_release_has_retry_after():
     from survey_service.components.release_registry import ReleaseRegistry
     from survey_service.components.session_store import MemorySessionStore
     from .fakes import RecordingConsole
-    api_ = PublicApi(Orchestrator(MemorySessionStore(), ReleaseRegistry(), staff_console=RecordingConsole()), "tok")
+    api_ = PublicApi(Orchestrator(MemorySessionStore(clock=fake_clock()), ReleaseRegistry(), staff_console=RecordingConsole()), "tok")
     s, b, h = api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
     assert (s, b["code"], h["Retry-After"]) == (503, "UNAVAILABLE", "1")
 

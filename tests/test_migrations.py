@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from .timing import fake_clock
 from survey_service.components.alert_book import AlertStore
 from survey_service.migrate import migrate
 from survey_service.components.session_store import SqliteSessionStore
@@ -26,8 +27,8 @@ def _cols(path, table):
 
 def test_fresh_sqlite_gets_all_tables_and_columns(tmp_path):
     p = str(tmp_path / "a.db")
-    SqliteSessionStore(p).close()
-    AlertStore(p).close()
+    SqliteSessionStore(p, clock=fake_clock()).close()
+    AlertStore(p, clock=fake_clock()).close()
     Outbox(p).close()
     with sqlite3.connect(p) as db:
         names = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -39,7 +40,7 @@ def test_existing_pre_yoyo_sqlite_schema_is_accepted_and_data_kept(tmp_path):
     p = str(tmp_path / "old.db")
     with sqlite3.connect(p) as db:
         db.executescript(LEGACY_SESSIONS)
-    store = SqliteSessionStore(p)                                   # 이미 있는 표 위에서 시작
+    store = SqliteSessionStore(p, clock=fake_clock())                                   # 이미 있는 표 위에서 시작
     try:
         assert store.load("S1")["status"] == "OK"                   # 데이터가 그대로
     finally:
@@ -50,7 +51,7 @@ def test_pre_yoyo_sqlite_without_updated_at_gets_the_column(tmp_path):
     p = str(tmp_path / "older.db")
     with sqlite3.connect(p) as db:
         db.executescript(LEGACY_SESSIONS.replace(", updated_at REAL NOT NULL DEFAULT 0", "").replace("'{}', 5.0", "'{}'"))
-    SqliteSessionStore(p).close()
+    SqliteSessionStore(p, clock=fake_clock()).close()
     assert "updated_at" in _cols(p, "sessions")
 
 

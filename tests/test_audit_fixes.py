@@ -5,7 +5,7 @@ from survey_service.components.link_inference import InferenceServer
 from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
 
-from .timing import HANG_GUARD_SECONDS, FakeClock, wait_until
+from .timing import FakeClock, HANG_GUARD_SECONDS, fake_clock, wait_until
 from .http_server_support import stop_server
 from .e2e_support import ANSWER_OUT, Rig
 from .fakes import FakeReleaseReader
@@ -35,7 +35,7 @@ def _loader(tmp_path, bank):
     reader.add_release("rel-1", bank, action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     reg = ReleaseRegistry()
-    return reg, ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0)
+    return reg, ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "work", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
 
 
 def test_release_without_required_fixed_sentence_is_rejected_with_reason(tmp_path):
@@ -87,7 +87,7 @@ def test_purge_removes_old_access_log_resolved_alerts_dead_outbox_and_keeps_rece
     t = [NOW0]
     alerts = AlertStore(str(tmp_path / "a.db"), clock=lambda: t[0])
     ob = Outbox(str(tmp_path / "o.db"))
-    store = SqliteSessionStore(str(tmp_path / "s.db"))
+    store = SqliteSessionStore(str(tmp_path / "s.db"), clock=fake_clock())
     old = NOW0 - 400 * 86400
     t[0] = old
     alerts.log_access("staff", "S1", "OK", None, "kim")
@@ -110,7 +110,7 @@ def test_purge_removes_old_access_log_resolved_alerts_dead_outbox_and_keeps_rece
 def test_purge_single_session(tmp_path):
     rig = Rig()
     rig.start()
-    alerts = AlertStore(str(tmp_path / "a.db"))
+    alerts = AlertStore(str(tmp_path / "a.db"), clock=fake_clock())
     alerts.set_subject("S1", "patient-ref-1")
     assert purge_session(rig.store, alerts, "S1") == {"purged_sessions": 1} if hasattr(rig.store, "delete_sessions") else True
     assert rig.store.load("S1")["status"] == "NOT_FOUND" and alerts.subject_of("S1") is None
@@ -139,7 +139,7 @@ from survey_service.components.link_public_api import PublicApi
 
 def _device_api(tmp_path, shared=None):
     rig = Rig()
-    svc = AlertService(AlertStore(str(tmp_path / "a.db")), AlertHub())
+    svc = AlertService(AlertStore(str(tmp_path / "a.db"), clock=fake_clock()), AlertHub(), monotonic=fake_clock())
     api = PublicApi(rig.orch, shared, device_tokens={"dev-a": "tok-device-a-0123456789", "dev-b": "tok-device-b-0123456789"}, staff_token="staff-tok-0123456789", alerts=svc)
 
     def call(tok, method, path, body=None):
@@ -244,8 +244,8 @@ def test_risk_phrase_on_unknown_session_sends_no_alert_but_store_outage_still_al
 def test_same_turn_resend_reuses_the_alert_once_delivered(tmp_path):
     from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
     from survey_service.components.risk_screen import RuleRiskSource
-    store = AlertStore(str(tmp_path / "a.db"))
-    svc = AlertService(store, AlertHub())
+    store = AlertStore(str(tmp_path / "a.db"), clock=fake_clock())
+    svc = AlertService(store, AlertHub(), monotonic=fake_clock())
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
     rig.orch.staff_console = AlertStaffConsole(svc)
     svc.hub.subscribe()                                                                  # 전달 경로가 있다
@@ -262,8 +262,8 @@ def test_delivery_failure_is_not_turned_into_success_by_the_idempotent_retry(tmp
     """전달 경로가 없는 실제 경로(구독자 없음): 첫 시도 DELIVERY_FAILED -> 같은 턴 재시도도 DELIVERY_FAILED(알림은 하나). 구독자가 생기면 재시도가 전달하고 성공으로 바뀐다."""
     from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
     from survey_service.components.risk_screen import RuleRiskSource
-    store = AlertStore(str(tmp_path / "a.db"))
-    svc = AlertService(store, AlertHub())
+    store = AlertStore(str(tmp_path / "a.db"), clock=fake_clock())
+    svc = AlertService(store, AlertHub(), monotonic=fake_clock())
     rig = Rig(risk_source=RuleRiskSource.provisional_default())
     rig.orch.staff_console = AlertStaffConsole(svc)
     rig.start()
@@ -282,8 +282,8 @@ def test_delivery_failure_is_not_turned_into_success_by_the_idempotent_retry(tmp
 
 def test_same_turn_different_kind_is_not_merged(tmp_path):
     from survey_service.components.alert_service import AlertHub, AlertService
-    store = AlertStore(str(tmp_path / "a.db"))
-    svc = AlertService(store, AlertHub())
+    store = AlertStore(str(tmp_path / "a.db"), clock=fake_clock())
+    svc = AlertService(store, AlertHub(), monotonic=fake_clock())
     svc.hub.subscribe()
     from survey_service.components.alert_service import CURRENT_TURN
     tok = CURRENT_TURN.set(("S1", "t1"))
@@ -315,7 +315,7 @@ def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_
                 gate.wait(HANG_GUARD_SECONDS)       # 느린 DB: 결과를 돌려주기 전에 붙잡는다. 시험이 주입한 시계로 확인 한도를 넘긴 뒤에 풀어 준다
                 finished.append(1)
             return res
-    store = Slow(str(tmp_path / "s.db"))
+    store = Slow(str(tmp_path / "s.db"), fake_clock())
     rig = Rig(store=store, risk_source=RuleRiskSource.provisional_default(), turn_deadline_seconds=9.0, clock=clock)
     rig.start("S2")
     rig.orch.handle_turn(turn_id="a", frontend_message={"session_id": "NOPE", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})

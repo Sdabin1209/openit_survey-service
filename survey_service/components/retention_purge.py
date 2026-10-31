@@ -9,7 +9,6 @@
 """
 from __future__ import annotations
 
-from ..config import REAL_WALL_CLOCK
 
 import logging
 from typing import Optional
@@ -19,9 +18,8 @@ log = logging.getLogger("survey_service.retention")
 BATCH = 200
 
 
-def purge(store, alert_store, retention_days: Optional[int], now: Optional[float] = None, *, outbox=None, access_log_days: Optional[int] = None,
-          alert_days: Optional[int] = None, dead_outbox_days: Optional[int] = None, clock=REAL_WALL_CLOCK) -> dict:
-    now = clock() if now is None else now
+def purge(store, alert_store, retention_days: Optional[int], now: float, *, outbox=None, access_log_days: Optional[int] = None,
+          alert_days: Optional[int] = None, dead_outbox_days: Optional[int] = None) -> dict:
     res: dict = {"configured": retention_days is not None, "purged_sessions": 0}
     if retention_days is not None:
         res["retention_days"] = retention_days
