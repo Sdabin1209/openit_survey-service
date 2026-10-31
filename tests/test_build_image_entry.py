@@ -18,7 +18,7 @@ TAG = "openit-survey-service-test:entry-{}"
 
 
 def request(tmp_path, **override):
-    req = {"source_dir": str(ROOT), "revision": "abc1234", "versions": {"boundary": "v3.1.1", "model_runtime": "v0.11.0"},
+    req = {"source_dir": str(ROOT), "revision": "abc1234", "versions": {"boundary": "v3.1.1", "model_runtime": "v0.11.7"},
            "dependency_sources": {"boundary": str(tmp_path), "model_runtime": str(tmp_path)}, "image_tag": TAG.format("x")}
     req.update(override)
     f = tmp_path / "req.json"
@@ -50,7 +50,7 @@ def test_unknown_variant_and_wrong_source_dir_are_rejected(tmp_path):
 
 def test_turn_engine_is_no_longer_a_request_key(tmp_path):
     """계약 3.0.0: BuildImageRequest.versions.turn_engine은 없어졌다(요청 검증이 거부)."""
-    r = run(request(tmp_path, versions={"boundary": "v3.1.1", "model_runtime": "v0.11.0", "turn_engine": "v0.4.3"}))
+    r = run(request(tmp_path, versions={"boundary": "v3.1.1", "model_runtime": "v0.11.7", "turn_engine": "v0.4.3"}))
     assert r.returncode != 0 and "BuildImageRequest" in r.stderr
 
 
@@ -62,32 +62,32 @@ def _tree(path, name, version):
 
 def test_label_honesty_requested_version_that_differs_from_the_tree_fails_without_building(tmp_path):
     """U50: 라벨은 실제로 설치할 소스 트리의 버전에서 찍는다. 요청 버전과 다르면 이미지를 만들지 않고 분명한 메시지로 실패한다(docker를 부르지 않는다)."""
-    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "9.9.9"), _tree(tmp_path / "mr", "model-runtime", "0.11.0")
+    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "9.9.9"), _tree(tmp_path / "mr", "model-runtime", "0.11.7")
     r = run(request(tmp_path, dependency_sources={"boundary": bc, "model_runtime": mr}))                 # 요청은 boundary v3.1.1
     assert r.returncode != 0 and "요청 versions.boundary(v3.1.1)" in r.stderr and "실제 버전(v9.9.9)" in r.stderr and "라벨이 거짓" in r.stderr
     bc, mr = _tree(tmp_path / "bc2", "boundary-contracts", "3.1.1"), _tree(tmp_path / "mr2", "model-runtime", "0.10.0")
     r = run(request(tmp_path, dependency_sources={"boundary": bc, "model_runtime": mr}))
-    assert r.returncode != 0 and "요청 versions.model_runtime(v0.11.0)" in r.stderr and "실제 버전(v0.10.0)" in r.stderr
+    assert r.returncode != 0 and "요청 versions.model_runtime(v0.11.7)" in r.stderr and "실제 버전(v0.10.0)" in r.stderr
 
 
 def test_label_honesty_requested_survey_schema_version_that_differs_from_the_repo_schema_fails(tmp_path):
     """U50 구멍: 이 이미지가 실제로 쓰는 문진 스키마는 리포의 schema/다. 요청 versions.survey_schema가 그 버전과 다르면 라벨을 찍지 않고 실패한다."""
     actual = "v" + re.search(r'^version = "(.*)"', (ROOT / "schema/pyproject.toml").read_text(), re.M).group(1)
-    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "3.1.1"), _tree(tmp_path / "mr", "model-runtime", "0.11.0")
-    r = run(request(tmp_path, versions={"boundary": "v3.1.1", "model_runtime": "v0.11.0", "survey_schema": "v1.3.0"}, dependency_sources={"boundary": bc, "model_runtime": mr}))
+    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "3.1.1"), _tree(tmp_path / "mr", "model-runtime", "0.11.7")
+    r = run(request(tmp_path, versions={"boundary": "v3.1.1", "model_runtime": "v0.11.7", "survey_schema": "v1.3.0"}, dependency_sources={"boundary": bc, "model_runtime": mr}))
     assert r.returncode != 0 and "요청 versions.survey_schema(v1.3.0)" in r.stderr and f"실제 버전({actual})" in r.stderr and "라벨이 거짓" in r.stderr
-    r = run(request(tmp_path, versions={"boundary": "v3.1.1", "model_runtime": "v0.11.0", "survey_schema": actual}, dependency_sources={"boundary": bc, "model_runtime": mr}))
+    r = run(request(tmp_path, versions={"boundary": "v3.1.1", "model_runtime": "v0.11.7", "survey_schema": actual}, dependency_sources={"boundary": bc, "model_runtime": mr}))
     assert "라벨이 거짓" not in r.stderr and "build-image: openit-survey-service-test" in r.stderr          # 같으면 통과해 docker 단계(false)까지 간다
 
 
 def test_label_honesty_a_tree_of_another_package_is_not_accepted(tmp_path):
-    bc, mr = _tree(tmp_path / "bc", "something-else", "3.1.1"), _tree(tmp_path / "mr", "model-runtime", "0.11.0")
+    bc, mr = _tree(tmp_path / "bc", "something-else", "3.1.1"), _tree(tmp_path / "mr", "model-runtime", "0.11.7")
     r = run(request(tmp_path, dependency_sources={"boundary": bc, "model_runtime": mr}))
     assert r.returncode != 0 and "boundary-contracts 의 소스 트리가 아니거나" in r.stderr
 
 
 def test_label_honesty_matching_versions_pass_the_check_and_reach_docker(tmp_path):
-    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "3.1.1"), _tree(tmp_path / "mr", "model-runtime", "0.11.0")
+    bc, mr = _tree(tmp_path / "bc", "boundary-contracts", "3.1.1"), _tree(tmp_path / "mr", "model-runtime", "0.11.7")
     r = run(request(tmp_path, dependency_sources={"boundary": bc, "model_runtime": mr}))                  # DOCKER=false라 docker 단계에서 멈춘다
     assert "라벨이 거짓" not in r.stderr and "build-image: openit-survey-service-test" in r.stderr
 

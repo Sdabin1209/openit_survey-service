@@ -85,8 +85,8 @@
       "user_header": "set",
       "streaming": true,
       "timeouts_ms": {
-        "dial": 2000,
-        "response_header": 10000,
+        "dial": 1000,
+        "response_header": 9500,
         "read": 3600000
       }
     },
@@ -109,8 +109,8 @@
       "user_header": "set",
       "streaming": true,
       "timeouts_ms": {
-        "dial": 2000,
-        "response_header": 10000,
+        "dial": 1000,
+        "response_header": 9500,
         "read": 3600000
       }
     },
@@ -131,8 +131,8 @@
       "user_header": "set",
       "streaming": true,
       "timeouts_ms": {
-        "dial": 2000,
-        "response_header": 10000,
+        "dial": 1000,
+        "response_header": 9500,
         "read": 3600000
       }
     },

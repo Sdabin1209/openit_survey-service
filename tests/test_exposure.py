@@ -107,3 +107,19 @@ def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
             assert t["response_header"] / 1000 >= s.readyz_db_timeout_seconds, (r["paths"], t)       # /readyz: DB 확인 상한(2.0초)보다 짧으면 게이트웨이가 먼저 끊는다
         checked += 1
     assert checked >= 6
+
+
+def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_fit_it():
+    """직원 경로의 노출 선언(dial 1000 + response_header 9500 = 10.5초, 시간 사슬)과 서버 쪽 시한을 설정 값으로 대조한다(실제 시간을 재지 않는다).
+    - 개입(intervention)은 턴 처리라 턴 마감(9.0)이 응답 머리글까지의 상한이다: 9.0 < 9.5.
+    - DB를 한 번 읽는 경로는 접속(connect_timeout) + 문장(statement_timeout) + 강제 끊기 여유(1.0)가 최악이다: 5.0 < 9.5.
+    알려진 한계: 알림 목록·직원 세션 보기처럼 한 요청이 DB를 여러 번 읽는 경로에는 요청 단위 마감이 없어, 최악 시간이 문장 수 x 위 값이다(2문장이면 10.0 > 9.5). 이 사실은 보고했다."""
+    from survey_service.settings import Settings
+    s = Settings()
+    staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms")]
+    assert staff, "직원 경로 선언이 없다"
+    for r in staff:
+        assert r["timeouts_ms"] == {"dial": 1000, "response_header": 9500, "read": 3600000}, r["paths"]
+    header = staff[0]["timeouts_ms"]["response_header"] / 1000
+    assert s.turn_deadline_seconds < header
+    assert s.db_connect_timeout_seconds + s.db_statement_timeout_seconds + 1.0 < header
