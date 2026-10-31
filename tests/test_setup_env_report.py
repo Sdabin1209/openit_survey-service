@@ -24,7 +24,7 @@ def mini_repo(tmp_path_factory):
 
 
 def run(repo):
-    return subprocess.run(["bash", "scripts/setup-env.sh"], cwd=repo, capture_output=True, text=True, timeout=600,
+    return subprocess.run(["bash", "scripts/setup-env.sh"], cwd=repo, capture_output=True, text=True, timeout=HANG_GUARD_SECONDS,
                           env={k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"})
 
 
@@ -62,5 +62,5 @@ def test_declared_test_command_runs_the_area_tests_from_the_repo_root():
     if not venv.exists():
         pytest.skip(".venv가 없다(setup-env.sh를 먼저 실행)")
     r = subprocess.run([".venv/bin/python", "-m", "pytest", "--collect-only", "-p", "no:cacheprovider", "tests/test_version_pins_and_labels.py"],
-                       cwd=ROOT, capture_output=True, text=True, timeout=120)
+                       cwd=ROOT, capture_output=True, text=True, timeout=HANG_GUARD_SECONDS)
     assert r.returncode == 0, r.stdout[-300:] + r.stderr[-300:]

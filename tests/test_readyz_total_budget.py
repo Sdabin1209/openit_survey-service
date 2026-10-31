@@ -1,73 +1,52 @@
-"""/readyz 한 번의 응답 전체가 계약 FAULT_POLICY 5의 2초(`SURVEY_READYZ_DB_TIMEOUT_SECONDS`) 안에 끝난다.
+"""/readyz는 의존이 응답하지 않아도(확인이 영영 끝나지 않아도, 주 연결의 보조 수치 읽기가 매달려도) 마감 뒤 사유와 함께 돌아온다. 계약 FAULT_POLICY 5.
 
-기대값의 출처: 계약 FAULT_POLICY 5(의존이 응답하지 않으면 /readyz는 2초 안에 503, E2E 단언 허용 2.5초). 이전 구현은 DB 확인(총 2초)이 끝난 뒤
-보조 수치 읽기(주 연결, 1초)를 **이어서** 기다려 최악 3초였다. 네트워크 분리 직후에는 확인용 새 연결은 아직 통과했는데 주 연결 읽기가 매달리는
-요청이 생길 수 있고(이 경우 200), 그다음 요청이 확인에서 2초를 쓰므로 분리 시점부터 503까지 약 3초가 된다(gpu-dev E2E 5pn 2.8초 관찰과 맞는 경로).
+실제 시간을 기다리지 않는다(U422): App이 시계를 주입받으므로(ADR-0050) 막힌 확인이 시작된 뒤 시험이 가짜 시계를 흘려 마감을 넘긴다. 판정은 돌아온 결과(사유, 오래된 수치 표시)다.
+마감 값(2초)이 설정에서 오는지는 tests/test_readyz_db_outage.py::test_readyz_db_timeout_setting이, 확인 뒤 유예(STATS_GRACE_S) 값은 아래 마지막 시험이 본다.
 """
-import time
+import threading
 
-from .test_readyz_db_outage import _app
-
-BUDGET = 2.0
-from .timing import slack
-
-SLACK = slack(0.25)      # 스레드 시작·직렬화 여유 0.25초(측정 아님, 이 PC) + 지금 부하의 스레드 깨어남 지연 x 20(tests/timing.py)
+from .test_readyz_db_outage import _app, hanging, ready_after_deadline
+from .timing import FakeClock
 
 
-def _slow(seconds):
-    def f(*a, **k):
-        time.sleep(seconds)
-    return f
-
-
-def _timed(app):
-    t = time.monotonic()
-    ok, body = app.readiness()
-    return ok, body, time.monotonic() - t
-
-
-def test_slow_but_ok_checks_plus_hanging_stats_stay_within_the_total_budget(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch)
+def test_ok_checks_plus_hanging_stats_return_ok_with_stale_stats(tmp_path, monkeypatch):
+    clock = FakeClock()
+    app = _app(tmp_path, monkeypatch, clock=clock)
+    gate, entered = threading.Event(), threading.Event()
     try:
-        for s in (app.store, app.outbox, app.alert_store):
-            monkeypatch.setattr(s, "ping", _slow(1.5))                  # 확인은 늦지만 통과
-        monkeypatch.setattr(app.exporter, "stats", _slow(10.0))         # 주 연결 읽기가 매달림
-        ok, body, el = _timed(app)
-        assert el <= BUDGET + SLACK, el
-        assert body["db_stats_stale"] is True
+        monkeypatch.setattr(app.exporter, "stats", hanging(gate, entered))         # 주 연결 읽기가 매달림
+        ok, body = ready_after_deadline(app, clock, [entered])
+        assert ok and body["db_stats_stale"] is True
     finally:
-        app.stop()
+        gate.set(); app.stop()
 
 
-def test_hanging_checks_and_hanging_stats_stay_within_the_total_budget(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch)
+def test_hanging_checks_and_hanging_stats_return_the_reasons(tmp_path, monkeypatch):
+    clock = FakeClock()
+    app = _app(tmp_path, monkeypatch, clock=clock)
+    gate = threading.Event()
     try:
-        for s in (app.store, app.outbox, app.alert_store):
-            monkeypatch.setattr(s, "ping", _slow(10.0))
-        monkeypatch.setattr(app.exporter, "stats", _slow(10.0))
-        ok, body, el = _timed(app)
-        assert not ok and el <= BUDGET + SLACK, el
+        ents = [threading.Event() for _ in range(4)]
+        for s, ev in zip((app.store, app.outbox, app.alert_store), ents):
+            monkeypatch.setattr(s, "ping", hanging(gate, ev))
+        monkeypatch.setattr(app.exporter, "stats", hanging(gate, ents[3]))
+        ok, body = ready_after_deadline(app, clock, ents)
+        assert not ok
         assert set(body["problems"]) >= {"session_db", "outbox_db", "alert_db"}
     finally:
-        app.stop()
+        gate.set(); app.stop()
 
 
 def test_healthy_readyz_still_reads_fresh_stats(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch)
     try:
-        ok, body, el = _timed(app)
-        assert ok and body["db_stats_stale"] is False and body["trace_outbox"] is not None and el < 1.0 + SLACK
+        ok, body = app.readiness()
+        assert ok and body["db_stats_stale"] is False and body["trace_outbox"] is not None
     finally:
         app.stop()
 
 
-def test_ok_checks_do_not_wait_for_hanging_stats_beyond_a_short_grace(tmp_path, monkeypatch):
-    """분리 직후(확인은 통과, 주 연결은 매달림)의 200 응답이 마감을 다 쓰면 다음 요청의 503이 늦는다. 확인 뒤에는 짧은 유예만 기다린다."""
+def test_the_grace_for_hanging_stats_after_ok_checks_is_short():
+    """분리 직후(확인은 통과, 주 연결은 매달림)의 200 응답이 마감을 다 쓰면 다음 요청의 503이 늦는다. 확인 뒤에는 짧은 유예만 기다린다: 유예 값을 직접 확인한다."""
     from survey_service.wiring.app import STATS_GRACE_S
-    app = _app(tmp_path, monkeypatch)
-    try:
-        monkeypatch.setattr(app.exporter, "stats", _slow(10.0))
-        ok, body, el = _timed(app)
-        assert ok and body["db_stats_stale"] is True and el <= STATS_GRACE_S + SLACK, el
-    finally:
-        app.stop()
+    assert 0 < STATS_GRACE_S <= 0.5

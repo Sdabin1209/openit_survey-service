@@ -9,6 +9,7 @@ import urllib.request
 
 import pytest
 
+from .timing import HANG_GUARD_SECONDS
 from .test_staff_alerts import AlertRig, http_call, live  # noqa: F401  (live: 실제 HTTP 서버 fixture)
 
 EP = "https://push.example/secret-endpoint-token-123"
@@ -70,6 +71,6 @@ def test_204_over_http_has_no_body(live):  # noqa: F811
     http_call(port, "POST", "/v1/staff/push-subscriptions", SUB)
     req = urllib.request.Request(f"http://127.0.0.1:{port}{UNSUB}", method="POST", data=b'{"endpoint": "%s"}' % EP.encode(),
                                  headers={"Authorization": "Bearer test-staff-token", "X-Openit-User": "staff-1"})
-    with urllib.request.urlopen(req, timeout=5) as r:
+    with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
         assert r.status == 204 and r.read() == b"" and r.headers.get("Content-Length") in (None, "0")
     assert app.alert_store.count_subscriptions() == 0

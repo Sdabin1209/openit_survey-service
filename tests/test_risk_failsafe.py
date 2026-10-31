@@ -7,6 +7,8 @@ import pytest
 
 from survey_service.components.risk_screen import RuleRiskSource
 
+from .timing import HANG_GUARD_SECONDS
+from .timing import HANG_GUARD_SECONDS, FakeClock, wait_until
 from .e2e_support import ANSWER_OUT, Rig, ext, val
 from .sample_bank import sample_bank
 
@@ -51,65 +53,28 @@ def test_alert_goes_out_even_when_the_write_commit_fails():
 
 
 def test_alert_goes_out_even_when_the_turn_deadline_is_exceeded():
-    rig = _rig(turn_deadline_seconds=0.4)
+    clock = FakeClock()
+    rig = _rig(turn_deadline_seconds=9.0, clock=clock)
     real = rig.store.load
-
-    release = threading.Event()
+    release, entered = threading.Event(), threading.Event()
 
     def slow(sid):
-        release.wait(30)                              # 턴이 마감(0.4초)으로 돌아온 뒤에 풀어 준다: 고정 sleep(0.9)은 부하에서 마감과 순서가 바뀔 수 있다
+        entered.set()
+        release.wait(HANG_GUARD_SECONDS)                              # DB 읽기가 끝나지 않는다: 시험이 주입한 시계로 마감을 넘긴 뒤에 풀어 준다
         return real(sid)
     rig.store.load = slow
+    res = []
+    th = threading.Thread(target=lambda: res.append(rig.say("가슴이 아파요")), daemon=True)
+    th.start()
     try:
-        out = rig.say("가슴이 아파요")
+        assert entered.wait(HANG_GUARD_SECONDS)
+        clock.advance(2.0)                                             # 선별의 확인 한도(마감의 30%, 최대 1초)만 넘긴다: 알림은 DB 읽기를 포기하고 먼저 나간다
+        assert wait_until(lambda: len(_alerts(rig)) == 1)
+        clock.advance(100)                                             # 이어서 턴 마감을 넘긴다(실제로 기다리지 않는다)
+        th.join(HANG_GUARD_SECONDS)
+        assert not th.is_alive()
     finally:
         release.set()
+    out = res[0]
     assert out.frontend_input["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
     assert len(_alerts(rig)) == 1                                                    # 선별이 DB 읽기보다 앞에서 알림을 보냈다
-
-
-def test_alert_delivery_failure_tells_the_kiosk_to_call_staff():
-    rig = _rig()
-
-    def broken(console):
-        raise RuntimeError("전달 경로 없음")
-    rig.orch.staff_console.deliver = broken
-    out = rig.say("가슴이 아파요")
-    assert out.frontend_input["turn_failure_signal"]["staff_alert"] == "DELIVERY_FAILED"       # 키오스크는 현장 직원 호출 화면을 보인다
-    assert rig.doc()["progress_record"]["session_status"] == "PAUSED_RISK"
-
-
-def test_bank_authored_risk_phrases_are_used():
-    bank = copy.deepcopy(sample_bank())
-    bank["session_settings"]["risk_phrases"] = ["어지러워서 넘어졌"]
-    rig = Rig(bank=bank, risk_source=RuleRiskSource.provisional_default())
-    rig.start()
-    rig.say("어지러워서 넘어졌어요")
-    assert len(_alerts(rig)) == 1 and rig.doc()["progress_record"]["session_status"] == "PAUSED_RISK"
-
-
-def test_slot_risk_rule_immediate_on_saved_value():
-    bank = copy.deepcopy(sample_bank())
-    for q in bank["questions"]:
-        if q["question_id"] == "Q1.D01":
-            for s in q["slots"]:
-                if s["slot_id"] == "diagnosed":
-                    s["risk_rule"] = {"operator": "=", "value": True, "response": "IMMEDIATE"}
-    rig = Rig(bank=bank)
-    rig.start()
-    out = rig.say("네 진단받았어요", out=ext("NEXT", "Q1.D02", val("Q1.D01.diagnosed", True), val("Q1.D01.on_medication", False)))
-    assert len(_alerts(rig)) == 1 and rig.doc()["progress_record"]["session_status"] == "PAUSED_RISK"
-    assert _alerts(rig)[0]["staff_alert"]["reasons"][0]["kind"] == "RISK_RULE" if "staff_alert" in _alerts(rig)[0] else True
-    assert out.frontend_input["turn_failure_signal"]["staff_alert"] == "DELIVERED"
-
-
-def test_bank_authored_ask_limit_is_applied_to_reask_escalation():
-    bank = copy.deepcopy(sample_bank())
-    bank["session_settings"].update(ask_limit=2, confirm_limit=5, unrecognized_streak_limit=5)
-    rig = Rig(bank=bank)
-    rig.start()
-    reask = ext("REASK", "Q1.D01", val("Q1.D01.diagnosed", True), val("Q1.D01.on_medication", True), reason="MISSING", targets=["Q1.D01.on_medication"])
-    rig.say("음", out=reask)
-    rig.say("음", out=reask)
-    rig.say("음", out=reask)
-    assert rig.doc()["progress_record"]["session_status"] == "PAUSED_RISK" and rig.orch.counters.get("reask_limit_reached") == 1

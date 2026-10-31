@@ -8,6 +8,7 @@ from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
 from survey_service.components.link_inference import RemoteInference
 
+from .timing import HANG_GUARD_SECONDS
 from .fakes import FakeReleaseReader
 from .http_support import TOK, publish
 from .runtime_support import FlakyRuntime
@@ -57,7 +58,7 @@ def test_http_question_bank_endpoint_is_used_with_remote_inference(tmp_path):
     try:
         with ReferenceServer(TOK) as srv:
             publish(srv, tmp_path, "rel-1")
-            client = RemoteInference(rt.url, TOKEN, 2.0, load_timeout=5.0, poll_interval=0.05)
+            client = RemoteInference(rt.url, TOKEN, HANG_GUARD_SECONDS, load_timeout=HANG_GUARD_SECONDS, poll_interval=0.05)
             loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), ReleaseRegistry(), client, workdir=tmp_path / "work",
                                    installed_versions=INSTALLED, retry_base_seconds=0)
             assert loader.poll_once().action == "LOADED"

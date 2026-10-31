@@ -162,7 +162,7 @@ def test_result_list_filters_pagination_and_cursor(env):
             break
     assert seen == ["K1", "K2", "K3"]
 
-    future = datetime.fromtimestamp(time.time() + 3600, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    future = "2099-01-01T00:00:00Z"      # 고정된 먼 미래 시각(입력 값. 실제 시계를 읽지 않는다)
     assert get(f"?updated_after={future}")[1]["items"] == []
     for bad in ("?limit=0", "?limit=201", "?limit=x", "?status=NOPE", "?updated_after=yesterday", "?cursor=zz", "?subject_ref=a%20b"):
         assert get(bad)[0] == 400, bad

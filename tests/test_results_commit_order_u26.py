@@ -10,6 +10,7 @@ from survey_service.components import session_store as effects
 from survey_service.components.session_store import PgSessionStore
 from survey_service.components.session_store import SqliteSessionStore
 
+from .timing import HANG_GUARD_SECONDS
 from .pg_support import pg_url
 from .sample_bank import sample_bank
 
@@ -23,7 +24,7 @@ class PauseAtCommit:
     def execute(self, sql, *a, **kw):
         if sql.strip().upper() == "COMMIT":
             self.reached.set()
-            assert self.go.wait(20)
+            assert self.go.wait(HANG_GUARD_SECONDS)
         return self.inner.execute(sql, *a, **kw)
 
     def __getattr__(self, name):
@@ -45,12 +46,12 @@ def _scenario(store_a, store_b):
     ta = threading.Thread(target=lambda: (store_a.append_dispatch("SA", {"succeeded": True}), done.append("A")))
     tb = threading.Thread(target=lambda: (store_b.append_dispatch("SB", {"succeeded": True}), done.append("B")))
     ta.start()
-    assert pause.reached.wait(10)                     # A는 번호를 받았고 아직 커밋하지 않았다
+    assert pause.reached.wait(HANG_GUARD_SECONDS)                     # A는 번호를 받았고 아직 커밋하지 않았다
     tb.start()
-    tb.join(1.0)                                      # 직렬화되어 있으면 B는 A가 커밋할 때까지 기다린다
+    assert tb.is_alive()                              # 직렬화되어 있으면 B는 A가 커밋할 때까지 끝나지 못한다(기다리지 않고 지금 본다. 아직 락에 닿기 전이어도 같은 결과라 거짓 통과만 가능)
     pause.go.set()
-    ta.join(20)
-    tb.join(20)
+    ta.join(HANG_GUARD_SECONDS)
+    tb.join(HANG_GUARD_SECONDS)
     store_a._db = pause.inner
     seq = _seqs(store_b)
     return done, seq

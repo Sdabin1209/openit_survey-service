@@ -13,7 +13,7 @@ import collections
 import logging
 import threading
 import time
-from typing import Mapping, Optional
+from typing import Callable, Mapping, Optional
 
 from boundary_contracts import BoundaryError
 from openit_link.clients import HttpModelRuntime, RuntimeResult, is_output_invalid
@@ -95,7 +95,9 @@ class RemoteModelSession:
     accepts_deadline = True      # graph가 턴 마감(time.monotonic 기준)을 넘겨 준다: 재시도 판단에 쓴다
 
     def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None,
-                 op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None) -> None:
+                 op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None,
+                 monotonic: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> None:
+        self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050): 재시도 예산과 백오프 대기를 시험이 가짜 시계로 흘린다. 기본은 실제 시계
         self._rt, self.release_id, self.retries, self.backoff = runtime, release_id, retries, backoff
         self._ops = dict(op_runtimes or {})      # 호출 종류별 클라이언트(호출별 상한이 다르다). 없으면 runtime 하나를 쓴다
         self.stats = stats or Stats()
@@ -124,18 +126,18 @@ class RemoteModelSession:
         limit = self._op_rt(op)._timeout
         attempt = 0
         while True:
-            t0 = time.monotonic()
+            t0 = self._now()
             try:
                 res = self._call_once(op, request, flow, fields)
-                self.stats.record_call(op, attempt + 1, time.monotonic() - t0, True, False)
+                self.stats.record_call(op, attempt + 1, self._now() - t0, True, False)
                 break
             except BoundaryError as e:
                 if is_output_invalid(e):
-                    self.stats.record_call(op, attempt + 1, time.monotonic() - t0, False, False)
+                    self.stats.record_call(op, attempt + 1, self._now() - t0, False, False)
                     self.stats.add("output_invalid")
                     self.stats.add("failures")
                     raise
-                elapsed = time.monotonic() - t0
+                elapsed = self._now() - t0
                 timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, limit)
                 self.stats.record_call(op, attempt + 1, elapsed, False, timed_out)
                 log.warning("추론 호출 실패 op=%s %s elapsed=%.2fs read_timeout=%.1fs classified=%s attempt=%d", op, _failure_info(e),
@@ -145,14 +147,14 @@ class RemoteModelSession:
                 # 왜: 재시도는 남은 턴 예산이 이 호출의 상한 이상일 때만 한다(계약 CONVENTIONS 2.2.0). 모자라면 재시도하지 않고 실패로 둔다.
                 #     백오프 대기도 예산에서 쓴다. deadline이 없으면(턴 마감을 끈 구성) 횟수 제한만 본다.
                 if deadline is not None and e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries and \
-                        deadline - time.monotonic() - self.backoff * (attempt + 1) < limit:
+                        deadline - self._now() - self.backoff * (attempt + 1) < limit:
                     self.stats.add("retry_skipped_budget")
                     self.stats.add("failures")
                     raise
                 if e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries:
                     attempt += 1
                     self.stats.add("retries")
-                    time.sleep(self.backoff * attempt)
+                    self._sleep(self.backoff * attempt)
                     continue
                 self.stats.add("failures")
                 raise
@@ -175,7 +177,9 @@ class RemoteInference:
     needs_adapters = False     # 어댑터는 추론 서버(model-runtime)가 직접 받는다. 서비스는 문항 세트만 받는다 (ADR-0040)
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
-                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 5.0) -> None:
+                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 5.0,
+                 monotonic: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> None:
+        self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050)
         self.backend = "remote"
         self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
         # 환자 턴의 호출은 종류마다 상한이 다르다(extract 3.0초, respond 2.0초: 계약 CONVENTIONS 2.2.0 배분, 측정 안 함, ADR-0026)
@@ -187,16 +191,16 @@ class RemoteInference:
 
     def load(self, manifest: Mapping, adapters, *, contract_version=None) -> RemoteModelSession:
         rid = manifest["release_id"]
-        deadline = time.monotonic() + self.load_timeout
+        deadline = self._now() + self.load_timeout
         try:
             rec = self._rt.load_release(rid)
             while rec["state"] != "LOADED":
                 if rec["state"] == "FAILED":
                     code = str((rec.get("error") or {}).get("code", "FAILED_PRECONDITION"))
                     raise InferenceLoadError("REMOTE_" + code, "추론 서버가 릴리스 적재에 실패했다", retryable=code == "UNAVAILABLE")
-                if time.monotonic() > deadline:   # 서버가 계속 적재 중이다: 일시적이다(같은 PUT은 멱등이라 나중에 다시 하면 된다)
+                if self._now() > deadline:   # 서버가 계속 적재 중이다: 일시적이다(같은 PUT은 멱등이라 나중에 다시 하면 된다)
                     raise InferenceLoadError("REMOTE_TIMEOUT", "추론 서버의 릴리스 적재가 시간 안에 끝나지 않았다", retryable=True)
-                time.sleep(self.poll_interval)
+                self._sleep(self.poll_interval)
                 rec = self._rt.get_release_state(rid)
         except InferenceLoadError:
             raise
@@ -205,7 +209,7 @@ class RemoteInference:
             # 412·422·403·404 등 결정적 거부는 다시 시도해도 같다.
             raise InferenceLoadError("REMOTE_" + e.code, "추론 서버가 릴리스 적재를 거부했거나 부를 수 없다",
                                      retryable=e.code == "UNAVAILABLE") from e
-        return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, op_runtimes=self._op_rts)
+        return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, op_runtimes=self._op_rts, monotonic=self._now, sleep=self._sleep)
 
     def ready(self) -> bool:
         import urllib.request

@@ -13,6 +13,7 @@ from survey_service.components.release_registry import ReleaseRegistry
 from survey_service.components.link_inference import RemoteInference, Stats
 from survey_service.components.session_store import MemorySessionStore
 
+from .timing import FakeClock, HANG_GUARD_SECONDS, wait_until
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .runtime_support import FlakyRuntime, raw_response, redirect_extraction
 from .sample_bank import sample_bank
@@ -22,7 +23,7 @@ TOKEN = "inf-tok"
 
 
 class Env:
-    def __init__(self, tmp, *, timeout=5.0, retries=1, load_timeout=5.0, **srv_kw):
+    def __init__(self, tmp, *, timeout=HANG_GUARD_SECONDS, retries=1, load_timeout=HANG_GUARD_SECONDS, clock=None, **srv_kw):
         self.reader = FakeReleaseReader(tmp / "gate")
         self.reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"],
                                 model_runtime_version=INSTALLED["model_runtime_version"])
@@ -31,7 +32,8 @@ class Env:
         self.url = self.srv.url
         self.registry = ReleaseRegistry()
         self.client = RemoteInference(self.url, TOKEN, timeout, load_timeout=load_timeout, retries=retries, poll_interval=0.05, backoff=0.01,
-                                     extract_timeout=timeout, respond_timeout=timeout)   # 이 시험들은 호출 상한을 하나로 줄여 시간을 짧게 한다
+                                     **({"monotonic": clock, "sleep": clock.sleep} if clock else {}),
+                                     extract_timeout=timeout, respond_timeout=timeout)   # 호출 상한은 이 시험들의 주제가 아니다: 가짜 서버가 즉시 답하므로 시한이 결과를 바꾸지 않는다(매달림 감시 값). 시한 처리는 아래 '시간 초과' 시험이 즉시 던지는 오류로 본다
         self.loader = ReleaseLoader(self.reader, self.registry, self.client, workdir=tmp / "svc-work", installed_versions=INSTALLED, retry_base_seconds=0)
         self.orch = Orchestrator(MemorySessionStore(), self.registry, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
         self.n = 0
@@ -57,15 +59,6 @@ def env(tmp_path):
     e.close()
 
 
-@pytest.fixture
-def slow_env(tmp_path):
-    """호출 상한 0.5초: 타임아웃으로 끊기는 것을 보는 시험 전용(서버가 2초 걸리게 만들어 항상 끊긴다)."""
-    e = Env(tmp_path, timeout=0.5)
-    assert e.loader.poll_once().action == "LOADED"
-    yield e
-    e.close()
-
-
 def failed(o):
     tr = o.orchestrator_output["log_entry"]["turn_result"]
     return tr["failed_steps"] if isinstance(tr, dict) else []
@@ -83,34 +76,33 @@ def test_normal_turn_and_stats(env):
     assert env.srv.calls == ["respond", "extract", "respond"]
 
 
-def test_slow_but_within_timeout_is_fine(env):
-    env.srv.delay = 0.2
-    o = env.start()
-    assert o.frontend_input["response_text"] and o.orchestrator_output["turn_failure_signal"] is None
+def _timeout_error():
+    # 계약 클라이언트가 읽기 시한을 넘기면 내는 오류의 모양(reason에 Timeout). 시간 초과 자체는 클라이언트·라이브러리의 몫이라 즉시 던진다
+    return BoundaryError("UNAVAILABLE", "추론 호출이 시간 안에 끝나지 않았다", {"reason": "TimeoutError"})
 
 
-def test_slow_extract_beyond_timeout_fails_the_step_without_retry(slow_env):
-    env = slow_env
+def test_extract_timeout_fails_the_step_without_retry(env):
+    """extract가 시간 초과로 실패하면 그 단계를 실패시키고 다시 시도하지 않는다. 시한 값(3.0초)은 test_inference_time_budget.py가 설정에서 확인한다."""
     env.start()
-    env.srv.delay = 2.0
+
+    def boom(*a, **k):
+        raise _timeout_error()
+    env.registry.active().session._ops["extract"].extract = boom
     o = env.turn()
     cs = [c for c in env.client.stats.calls() if c["op"] == "extract"]
-    assert len(cs) == 1 and cs[0]["timed_out"] and cs[0]["elapsed"] >= 0.4, cs      # 타임아웃(0.5s)에서 끊고 다시 시도하지 않는다(벽시계가 아니라 호출 경과로 잰다: 부하에 흔들린다)
+    assert len(cs) == 1 and cs[0]["timed_out"] and not cs[0]["ok"], cs
     assert failed(o) == LORA_A_FAIL
     assert o.orchestrator_output["turn_failure_signal"] == {"session_id": "S1", "write_committed": "NOT_COMMITTED", "staff_alert": "NONE"}
     s = env.client.stats.snapshot()
     assert s["timeouts"] == 1 and s["retries"] == 0 and s["failures"] == 1
 
 
-def test_slow_respond_fails_after_commit_state_is_kept(slow_env):
-    env = slow_env
+def test_respond_timeout_fails_after_commit_state_is_kept(env):
     env.start()
-    real = env.registry.active().session.respond
 
-    def slow_respond(req):
-        env.srv.delay = 2.0
-        return real(req)
-    env.registry.active().session.respond = slow_respond
+    def boom(*a, **k):
+        raise _timeout_error()
+    env.registry.active().session._ops["respond"].respond = boom      # respond가 시간 초과(즉시 던진다)
     from survey_service.components.session_store import answers_by_key
     env.srv.extract_fn = lambda req: {"action": "NEXT", "next_item": "Q1.D02", "values": [
         {"key": "Q1.D01.diagnosed", "value": True, "precision": "exact", "status": "ANSWERED", "save": True}]}
@@ -244,10 +236,8 @@ def test_forgotten_release_with_slow_reload_fails_the_turn_instead_of_waiting(tm
 
 
 def test_async_load_is_polled_until_loaded(tmp_path):
-    gate = threading.Event()
-    e = Env(tmp_path, load_gate=gate)
+    e = Env(tmp_path, load_polls=3)                                    # 적재 상태를 세 번 물은 뒤에야 LOADED
     try:
-        threading.Timer(0.3, gate.set).start()                         # 적재 신호 뒤 잠깐 LOADING이었다가 끝난다
         assert e.loader.poll_once().action == "LOADED"                 # 끝까지 폴링했다(시간 하한은 단언하지 않는다)
         assert e.registry.active_id() == "rel-1"
     finally:
@@ -255,7 +245,7 @@ def test_async_load_is_polled_until_loaded(tmp_path):
 
 
 def test_load_wait_timeout_is_transient_not_a_rejection(tmp_path):
-    e = Env(tmp_path, load_gate=threading.Event(), load_timeout=0.3)      # 게이트가 꺼져 있어 항상 LOADING(시간과 무관)
+    e = Env(tmp_path, load_gate=threading.Event(), load_timeout=1.0, clock=FakeClock())      # 게이트가 꺼져 있어 항상 LOADING. 가짜 시계가 폴링 대기를 흘려 실제로 기다리지 않고 한도를 넘긴다
     try:
         r = e.loader.poll_once()           # 서버가 아직 적재 중이다: 영구 거부가 아니라 재시도(tests/test_loader_retry.py)
         assert r.action == "RETRY_LATER" and r.code == "REMOTE_TIMEOUT" and e.registry.active() is None and not e.loader.status.rejections
@@ -273,19 +263,26 @@ def test_server_side_load_failure_is_a_rejection(tmp_path):
 
 
 def test_other_sessions_are_not_blocked_by_slow_inference(tmp_path):
-    e = Env(tmp_path, timeout=3.0)
+    """느린 추론 하나가 다른 세션의 호출을 막지 않는다. 시간을 재지 않는다: 서버가 응답을 Event로 붙잡고 있는 동안 네 세션의 호출이 모두 서버에 도착했는지 본다(직렬이면 하나만 도착한다)."""
+    e = Env(tmp_path)
+    gate, lock, arrived = threading.Event(), threading.Lock(), []
     try:
         e.loader.poll_once()
-        e.srv.delay = 0.3
-        t0 = time.monotonic()
+
+        def respond(req):
+            with lock:
+                arrived.append(1)
+            gate.wait(HANG_GUARD_SECONDS)       # 매달림 감시: 아래에서 네 호출이 모두 도착한 뒤 푼다
+            return ("응답입니다.", "ok")
+        e.srv.respond_fn = respond
         ts = [threading.Thread(target=lambda i=i: e.orch.handle_turn(turn_id="a", frontend_message={"session_id": f"P{i}", "kind": "SESSION_START"}))
               for i in range(4)]
-        [t.start() for t in ts]; [t.join() for t in ts]
-        wall = time.monotonic() - t0
-        cs = e.client.stats.calls()
-        assert len(cs) >= 4 and wall < 0.9 * sum(c["elapsed"] for c in cs), (wall, cs)      # 병렬이면 벽시계가 호출 경과의 합보다 짧다(직렬이면 같다). 절대 시간이 아니라 상대 비교라 부하에 안 흔들린다
+        [t.start() for t in ts]
+        assert wait_until(lambda: len(arrived) >= 4)      # 매달림 감시
+        gate.set()
+        [t.join(HANG_GUARD_SECONDS) for t in ts]
     finally:
-        e.close()
+        gate.set(); e.close()
 
 
 def test_server_side_output_protection_is_visible_and_turn_continues(tmp_path):

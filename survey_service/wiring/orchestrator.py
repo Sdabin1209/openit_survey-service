@@ -12,7 +12,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Mapping, Optional
+from typing import Callable, Mapping, Optional
 
 from boundary_contracts import canonical
 
@@ -26,6 +26,7 @@ import survey_schema
 
 from ..components.flow_table import Flow, load_flow
 from . import checked
+from .clock import join_until
 from .ports import (FrontendSink, ReleaseProvider, ResultDispatcher, RiskSource, StaffConsole, TraceSink, UnattachedDispatcher,
                     UnconfiguredStaffConsole)
 from ..components.response_request import ResponseTables
@@ -74,7 +75,9 @@ class Orchestrator:
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
-                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0) -> None:
+                 max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.clock = clock                       # 단조 시계(주입, ADR-0050): 턴 마감을 이 시계로 센다. wiring(App)이 실제 시계를, 시험이 가짜 시계를 넣는다
         self.store = store
         self.releases = releases
         self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
@@ -120,12 +123,12 @@ class Orchestrator:
                 raise TurnInProgress(f"같은 턴 ID가 처리 중이다 (turn={turn_id})")
             self._inflight.add(key)
         try:
-            ctx = TurnCtx()
+            ctx = TurnCtx(self.clock)
             if self.turn_deadline_seconds <= 0:
                 return self._handle_locked(sid, turn_id, frontend_message, intervention_decision, input_hash, staff_id, ctx)
             # 턴 전체(세션 락 대기, 멱등 확인, 모델 호출 재시도, DB 대기, 쓰기 확정)에 총 마감을 건다(FAULT_POLICY 3).
             # 처리는 데몬 스레드에서 돌고, 마감을 넘기면 ctx.cancelled로 표시해 늦게 끝난 작업이 확정(commit)하지 않게 한다.
-            ctx.deadline = (started if started is not None else time.monotonic()) + self.turn_deadline_seconds
+            ctx.deadline = (started if started is not None else self.clock()) + self.turn_deadline_seconds
             box: dict = {}
 
             def work() -> None:
@@ -135,7 +138,7 @@ class Orchestrator:
                     box["err"] = e
             t = threading.Thread(target=work, name=f"turn-{turn_id}", daemon=True)
             t.start()
-            t.join(max(0.05, ctx.deadline - time.monotonic()))
+            join_until(t, ctx.deadline, self.clock)
             if t.is_alive():
                 ctx.cancelled.set()
                 self._count("turn_deadline_exceeded")

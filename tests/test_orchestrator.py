@@ -13,6 +13,7 @@ from survey_service.wiring.ports import LoadedRelease
 from survey_service.components.session_store import MemorySessionStore
 from survey_service.components.session_store import SqliteSessionStore
 
+from .timing import HANG_GUARD_SECONDS
 from .e2e_support import Rig, ScriptedModel, ScriptedRisk, ext, make_session, val
 from .fakes import FaultyStore, RecordingSink
 from .sample_bank import sample_bank
@@ -486,19 +487,33 @@ def test_same_session_turns_are_serialized():
     lock = threading.Lock()
     real = rig.session.extract
 
+    entered, release = threading.Event(), threading.Event()
+    first = []
+
     def slow(req, **kw):
         with lock:
             active[0] += 1
             peak[0] = max(peak[0], active[0])
-        import time
-        time.sleep(0.02)
+            mine = not first
+            first.append(1)
+        if mine:                                   # 첫 호출만 붙잡는다: 나머지 다섯이 세션 락 앞에 모인 뒤에 풀어, 겹치면 peak가 올라간다
+            entered.set()
+            release.wait(HANG_GUARD_SECONDS)
         with lock:
             active[0] -= 1
         return real(req, **kw)
     rig.session.extract = slow
-    ts = [threading.Thread(target=lambda i=i: rig.orch.handle_turn(turn_id=f"c{i}", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": f"x{i}"})) for i in range(6)]
+    started = [threading.Event() for _ in range(6)]
+
+    def run(i):
+        started[i].set()
+        rig.orch.handle_turn(turn_id=f"c{i}", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": f"x{i}"})
+    ts = [threading.Thread(target=run, args=(i,)) for i in range(6)]
     [t.start() for t in ts]
-    [t.join() for t in ts]
+    assert entered.wait(HANG_GUARD_SECONDS)
+    assert all(s.wait(HANG_GUARD_SECONDS) for s in started)      # 나머지도 모두 호출을 시작했다(락 앞에서 기다리는 중이다)
+    release.set()
+    [t.join(HANG_GUARD_SECONDS) for t in ts]
     assert peak[0] == 1 and len(rig.doc()["dialogue_log"]) == 7
 
 

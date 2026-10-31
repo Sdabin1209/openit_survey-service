@@ -5,6 +5,7 @@ from survey_service.components.link_inference import InferenceServer
 from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
 
+from .timing import HANG_GUARD_SECONDS, FakeClock
 from .http_server_support import stop_server
 from .e2e_support import ANSWER_OUT, Rig
 from .fakes import FakeReleaseReader
@@ -56,7 +57,10 @@ def test_release_with_blank_fixed_sentence_is_rejected(tmp_path):
 
 
 # ---------------------------------------------------------------- 보존(D88 U4)과 접근 기록의 개인 ID(U7)
+import threading
 import time
+
+NOW0 = 1_700_000_000.0      # 주입한 시계의 고정 시작값(실제 시계를 읽지 않는다)
 
 import pytest
 
@@ -80,22 +84,22 @@ def test_retention_defaults_are_finite_and_unlimited_is_rejected():
 
 
 def test_purge_removes_old_access_log_resolved_alerts_dead_outbox_and_keeps_recent_and_open(tmp_path):
-    t = [time.time()]
+    t = [NOW0]
     alerts = AlertStore(str(tmp_path / "a.db"), clock=lambda: t[0])
     ob = Outbox(str(tmp_path / "o.db"))
     store = SqliteSessionStore(str(tmp_path / "s.db"))
-    old = time.time() - 400 * 86400
+    old = NOW0 - 400 * 86400
     t[0] = old
     alerts.log_access("staff", "S1", "OK", None, "kim")
     a_old = alerts.create("S1", "RISK_STOP", None)["alert"]["alert_id"]
     alerts.resolve("S1", "RESUME", "kim")
-    t[0] = time.time()
+    t[0] = NOW0
     alerts.log_access("staff", "S2", "OK", None, "lee")
     alerts.create("S2", "RISK_STOP", None)                                        # 열린 알림
     ob.enqueue({"session_id": "s", "turn_id": "t1"}, old)
     ob.mark_dead(1, old, "PERMISSION_DENIED: x")
-    ob.enqueue({"session_id": "s", "turn_id": "t2"}, time.time())
-    ob.mark_dead(2, time.time(), "PERMISSION_DENIED: x")
+    ob.enqueue({"session_id": "s", "turn_id": "t2"}, NOW0)
+    ob.mark_dead(2, NOW0, "PERMISSION_DENIED: x")
     res = purge(store, alerts, 90, outbox=ob, access_log_days=365, alert_days=365, dead_outbox_days=30)
     assert res["purged_access_log"] == 1 and res["purged_alerts"] == 1 and res["purged_dead_outbox"] == 1
     assert [r["session_id"] for r in alerts.access_log()] == ["S2"] and alerts.access_log()[0]["user_id"] == "lee"
@@ -298,21 +302,31 @@ def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_
     from survey_service.components.risk_screen import RuleRiskSource
     from survey_service.components.session_store import SqliteSessionStore
 
+    clock = FakeClock()
+    entered, gate = threading.Event(), threading.Event()
+
     class Slow(SqliteSessionStore):
-        delay = 0.0
+        blocked = False
 
         def load(self, sid):
-            _t.sleep(self.delay)
+            if self.blocked:
+                entered.set()
+                gate.wait(HANG_GUARD_SECONDS)       # 느린 DB: 시험이 주입한 시계로 확인 한도를 넘긴 뒤에 풀어 준다
             return super().load(sid)
     store = Slow(str(tmp_path / "s.db"))
-    rig = Rig(store=store, risk_source=RuleRiskSource.provisional_default(), turn_deadline_seconds=3)
+    rig = Rig(store=store, risk_source=RuleRiskSource.provisional_default(), turn_deadline_seconds=9.0, clock=clock)
     rig.start("S2")
     rig.orch.handle_turn(turn_id="a", frontend_message={"session_id": "NOPE", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
     assert not [c for c in rig.console.inputs if c.get("staff_alert")] and rig.orch.counters.get("risk_prescreen_unknown_session") == 1                    # NOT_FOUND: 알림 없음
-    store.delay = 5                                                                                                          # 느림: 확인 한도(마감의 30%, 최대 1초)를 넘긴다
-    rig.orch.handle_turn(turn_id="b", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "가슴이 아파요"})
+    store.blocked = True                                                                                                     # 느림: 확인 한도(마감의 30%, 최대 1초)를 넘긴다
+    th = threading.Thread(target=lambda: rig.orch.handle_turn(turn_id="b", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "가슴이 아파요"}), daemon=True)
+    th.start()
+    assert entered.wait(HANG_GUARD_SECONDS)
+    clock.advance(100)
+    th.join(HANG_GUARD_SECONDS)
+    gate.set()
     assert len([c for c in rig.console.inputs if c.get("staff_alert")]) == 1
-    store.delay = 0
+    store.blocked = False
     store._db.close()                                                                                                        # 장애: 닫힌 DB는 DB_ERROR
     try:
         rig.orch.handle_turn(turn_id="c", frontend_message={"session_id": "S2", "kind": "UTTERANCE", "utterance": "숨이 안 쉬어져요"})

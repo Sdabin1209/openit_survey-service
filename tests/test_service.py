@@ -11,6 +11,7 @@ from survey_service.settings import ConfigError, Settings, load_factory
 from survey_service.wiring.app import App
 from survey_service.server import serve
 
+from .timing import HANG_GUARD_SECONDS, wait_until
 from .http_server_support import server_port, start_server, stop_server
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
@@ -27,7 +28,7 @@ def settings(tmp_path, **kw):
 def get(port, path, method="GET"):
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=b"{}" if method == "POST" else None)
     try:
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read())
@@ -54,9 +55,7 @@ def test_healthz_is_always_ok_and_readyz_waits_for_release(running):
     reader.add_release("rel-1", sample_bank())
     reader.set_pointer("rel-1")
     app.start()
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline and get(port, "/readyz")[0] != 200:
-        time.sleep(0.05)
+    wait_until(lambda: get(port, "/readyz")[0] == 200)
     code, body = get(port, "/readyz")
     assert code == 200 and body["ready"] and body["active_release"] == "rel-1" and body["contract_version"] == 1
     assert body["model_backend"] == "fake" and body["model_backend_production_safe"] is False
@@ -87,9 +86,7 @@ def test_turn_through_app_reaches_ingest(running):
     app.start()
     out = app.orchestrator.handle_turn(turn_id="a1", frontend_message={"session_id": "S1", "kind": "SESSION_START"})
     assert out.release_id == "rel-1"
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline and ("S1", "a1") not in ingest.received:
-        time.sleep(0.05)
+    wait_until(lambda: ("S1", "a1") in ingest.received)
     env = ingest.received[("S1", "a1")]
     assert env["release_id"] == "rel-1" and env["runtime_contract_version"] == 1
 

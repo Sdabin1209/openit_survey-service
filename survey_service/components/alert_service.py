@@ -18,7 +18,7 @@ import queue
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Mapping, Optional, Protocol
+from typing import Callable, Mapping, Optional, Protocol
 
 from boundary_contracts import BoundaryError
 
@@ -117,7 +117,9 @@ class PushSender(Protocol):
 class AlertService:
     def __init__(self, store, hub: Optional[AlertHub] = None, push: Optional[PushSender] = None,
                  push_timeout: float = 3.0, retry_min_interval_s: int = DEFAULT_RETRY_MIN_INTERVAL_S,
-                 retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None) -> None:
+                 retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None,
+                 monotonic: Callable[[], float] = time.monotonic) -> None:
+        self._now = monotonic      # 시계 주입(ADR-0050)
         self.endpoint_check = endpoint_check
         self.store, self.hub, self.push, self.push_timeout = store, hub or AlertHub(), push, push_timeout
         self.retry_min_interval_s, self.retry_max_per_session = max(0, int(retry_min_interval_s)), max(0, int(retry_max_per_session))
@@ -207,9 +209,9 @@ class AlertService:
                     pass
         threads = [threading.Thread(target=one, args=(s,), daemon=True) for s in subs]
         [t.start() for t in threads]
-        deadline = time.monotonic() + self.push_timeout
+        deadline = self._now() + self.push_timeout
         for t in threads:
-            t.join(max(0.0, deadline - time.monotonic()))
+            t.join(max(0.0, deadline - self._now()))
         with lock:
             done = list(results)
         for r, key in (("ACCEPTED", "push_accepted"), ("GONE", "push_gone"), ("FAILED", "push_failed")):

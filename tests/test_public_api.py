@@ -18,6 +18,7 @@ from survey_service.server import serve
 from survey_service.settings import Settings
 from survey_service.components.session_store import MemorySessionStore
 
+from .timing import HANG_GUARD_SECONDS, wait_until
 from .http_server_support import start_server, server_port, stop_server
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
@@ -171,12 +172,12 @@ def test_too_many_in_flight_is_429():
     real = rig.release.session.extract
 
     def slow(inp, **kw):
-        entered.set(); gate.wait(5)
+        entered.set(); gate.wait(HANG_GUARD_SECONDS)
         return real(inp, **kw)
     rig.release.session.extract = slow
     t = threading.Thread(target=lambda: say(api, "느린 말", "t-slow"))
     t.start()
-    assert entered.wait(5)
+    assert entered.wait(HANG_GUARD_SECONDS)
     code, body, hdr = say(api, "다른 말", "t-2", sid="K1")
     assert code == 429 and hdr["Retry-After"] == "1"
     gate.set(); t.join()
@@ -254,7 +255,7 @@ def test_over_http_with_app(tmp_path):
                                      data=json.dumps(body).encode() if body is not None else None,
                                      headers={"Authorization": f"Bearer {token}"} if token else {})
         try:
-            with urllib.request.urlopen(req, timeout=5) as r:
+            with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
@@ -269,9 +270,7 @@ def test_over_http_with_app(tmp_path):
         assert http("POST", "/v1/sessions/ZZ/turns", dict(turn, session_id="ZZ"))[0] == 404
         assert http("POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})[0] == 200
         assert http("GET", "/healthz")[0] == 200 and http("GET", "/readyz", token=None)[0] == 200
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and len(ing.received) < 3:
-            time.sleep(0.05)
+        wait_until(lambda: len(ing.received) >= 3)
         assert {k[1] for k in ing.received} == {"start", "t-1", "end"}          # 턴마다 Trace 한 건(재시도 응답은 다시 보내지 않는다)
     finally:
         stop_server(httpd); app.stop()

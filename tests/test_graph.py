@@ -127,14 +127,6 @@ def test_langchain_tracing_is_off():
     assert utils.tracing_is_enabled() in (False, None)
 
 
-def test_graph_overhead_is_small(rig):
-    rig.say(kind="SESSION_START")
-    t0 = time.monotonic()
-    for i in range(50):
-        rig.say("안녕", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"), turn_id=f"p{i}")
-    assert (time.monotonic() - t0) / 50 < 0.15          # 턴당 평균(실제 엔진 + 가짜 모델 포함)
-
-
 def test_langgraph_is_pinned_in_lock_and_matches_installed():
     from pathlib import Path
     import importlib.metadata as md

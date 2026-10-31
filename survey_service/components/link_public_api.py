@@ -110,6 +110,7 @@ class PublicApi:
                  max_utterance_chars: int = 1000, alerts=None, max_subscriptions: int = 100,
                  retry_after_seconds: int = 1, push_allow_private: bool = False, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
                  risk_token: Optional[str] = None, require_subject_ref: bool = False, device_tokens: Optional[dict] = None) -> None:
+        self._now = getattr(orchestrator, "clock", time.monotonic)        # 주입한 단조 시계(ADR-0050): 오케스트레이터와 같은 시계로 턴 마감·상태 조회 간격을 센다
         self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 2.x 호환. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
         token = token or None                                  # 키오스크 토큰은 2.x 호환이다. 없어도 된다: 기기 인증은 게이트웨이 mTLS가 넘기는 X-Openit-Device다 (ADR-0031)
         if staff_token is not None and (not staff_token or (token is not None and hmac.compare_digest(staff_token.encode(), token.encode()))):
@@ -199,7 +200,7 @@ class PublicApi:
     # ------------------------------------------------------------------ 진입 (시험·직접 호출용 어댑터와 서버 진입)
     def dispatch(self, environ: dict, link: LinkApp) -> tuple:
         """/v1/ 요청 하나를 라이브러리 앱으로 처리한다 -> (상태, 머리글, 본문). 요청 단위 카운터·거절 로그·기본 Retry-After를 여기서 붙인다."""
-        self._tl.t0 = time.monotonic()                      # 턴 총 마감은 요청을 받은 때부터 센다
+        self._tl.t0 = self._now()                      # 턴 총 마감은 요청을 받은 때부터 센다
         method = environ.get("REQUEST_METHOD", "GET").upper()
         path = environ.get("PATH_INFO", "/")
         user = (environ.get("HTTP_X_OPENIT_USER") or "").strip()
@@ -423,7 +424,7 @@ class PublicApi:
         sid = req.params["sid"]
         _sid(sid)
         if self.state_poll_min_interval > 0:                  # 폴링 빈도 상한(세션마다)
-            now = time.monotonic()
+            now = self._now()
             with self._poll_lock:
                 last = self._polls.get(sid)
                 if last is not None and now - last < self.state_poll_min_interval:

@@ -20,6 +20,7 @@ from survey_service.components.trace_outbox import Outbox
 from survey_service.components.trace_envelope import OutboxTraceSink, envelope_id
 from survey_service.components.link_trace_export import TraceExporter
 
+from .timing import wait_until
 from .fakes import FakeReleaseReader, RecordingConsole, RecordingDispatcher
 from .http_support import TOK, publish
 from conformance.servers import ReferenceServer
@@ -111,7 +112,7 @@ def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
     loader = ReleaseLoader(HttpReleaseReader(srv.url, "r-tok", 5), reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0)
     loader.poll_once()
     ob = Outbox(str(tmp_path / "ob.db"))
-    now = [time.time()]
+    now = [1_700_000_000.0]      # 주입한 시계의 시작값(고정)
     clock = lambda: now[0]
     ex = TraceExporter(ob, HttpTraceIngest(srv.url, "w-tok", 5), base_delay=2, max_delay=8, clock=clock)
     orch = Orchestrator(MemorySessionStore(), reg, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher(),
@@ -163,10 +164,7 @@ def test_app_with_http_factories_end_to_end(srv, tmp_path, monkeypatch):
         app.start()
         assert app.readiness()[0] and app.registry.active_id() == "rel-1"
         app.orchestrator.handle_turn(turn_id="a1", frontend_message={"session_id": "S1", "kind": "SESSION_START"})
-        for _ in range(100):
-            if ("S1", "a1") in srv.traces:
-                break
-            time.sleep(0.05)
+        wait_until(lambda: ("S1", "a1") in srv.traces)
         assert ("S1", "a1") in srv.traces
     finally:
         app.stop()

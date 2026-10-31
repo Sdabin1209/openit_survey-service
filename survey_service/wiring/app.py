@@ -7,6 +7,7 @@ import re
 import sys
 import threading
 import time
+from typing import Callable
 from pathlib import Path
 
 import model_runtime
@@ -21,6 +22,7 @@ from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
 from .. import types
 from . import checked
+from .clock import join_until
 from .checked import effective_reask_cap
 from .orchestrator import Orchestrator
 from ..components.field_specs import invalid_field_specs
@@ -76,7 +78,9 @@ def _secret(name: str, what: str):
 class App:
     """저장소·릴리스 로더·Trace 내보내기·Orchestrator를 조립한다. reader/ingest를 주면 팩토리 설정을 쓰지 않는다(시험)."""
 
-    def __init__(self, settings: Settings, *, reader=None, ingest=None, staff_console=None, dispatcher=None, risk_source=None) -> None:
+    def __init__(self, settings: Settings, *, reader=None, ingest=None, staff_console=None, dispatcher=None, risk_source=None,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.clock = clock          # 주입한 단조 시계(ADR-0050): 턴 마감·/readyz 마감·추론 재시도 예산을 이 시계로 센다. 기본은 실제 시계
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
         self.store, self.outbox, self.alert_store, self.db_kind = open_stores(settings)
@@ -101,7 +105,7 @@ class App:
             self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds,
                                          load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries,
                                          extract_timeout=settings.inference_extract_timeout_seconds,
-                                         respond_timeout=settings.inference_respond_timeout_seconds)
+                                         respond_timeout=settings.inference_respond_timeout_seconds, monotonic=clock)
         else:
             self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
@@ -132,7 +136,7 @@ class App:
         self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask,
-                                         turn_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars)
+                                         turn_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
         staff_token = _secret(settings.staff_api_token_env, "직원 개입 토큰")
@@ -252,12 +256,12 @@ class App:
                 out[name] = ("ok", fn())
             except Exception:
                 out[name] = ("error", None)
+        end = self.clock() + budget          # 마감은 스레드를 시작하기 전에 정한다
         ts = [threading.Thread(target=run, args=(n, f), name="readyz-" + n, daemon=True) for n, f in fns.items()]
         for t in ts:
             t.start()
-        end = time.monotonic() + budget
         for t in ts:
-            t.join(max(0.0, end - time.monotonic()))
+            join_until(t, end, self.clock)
         return dict(out)
 
     def _db_check(self) -> tuple[list, dict]:
@@ -276,15 +280,15 @@ class App:
                 out[name] = ("error", None)
         fns = {"session_db": self.store.ping, "outbox_db": self.outbox.ping, "alert_db": self.alert_store.ping,
                "stats": lambda: {"trace_outbox": self.exporter.stats(), "staff_alerts": self.alerts.status()}}
+        end = self.clock() + self.settings.readyz_db_timeout_seconds          # 마감은 스레드를 시작하기 전에 정한다
         ts = {n: threading.Thread(target=run, args=(n, f), name="readyz-" + n, daemon=True) for n, f in fns.items()}
         for th in ts.values():
             th.start()
-        end = time.monotonic() + self.settings.readyz_db_timeout_seconds
         for n in ("session_db", "outbox_db", "alert_db"):
-            ts[n].join(max(0.0, end - time.monotonic()))
+            join_until(ts[n], end, self.clock)
         # 왜: 확인이 끝난 뒤 보조 수치를 마감까지 기다리면, 분리 직후(새 연결은 통과, 주 연결은 매달림) 200 응답이 2초를 다 쓰고 다음 요청의 503이 그만큼 늦는다.
         #     확인 뒤에는 STATS_GRACE_S만 더 기다린다(총 마감 안). 값은 측정하지 않았다(ADR-0027): 정상 보조 수치는 로컬 질의 몇 ms라 넉넉하다는 판단이다.
-        ts["stats"].join(max(0.0, min(end, time.monotonic() + STATS_GRACE_S) - time.monotonic()))
+        join_until(ts["stats"], min(end, self.clock() + STATS_GRACE_S), self.clock)
         res = dict(out)
         problems = [n for n in ("session_db", "outbox_db", "alert_db") if res.get(n, ("error",))[0] != "ok"]
         if not problems and res.get("stats", ("error",))[0] == "ok":

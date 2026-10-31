@@ -23,11 +23,13 @@ def pg_url(request) -> str:
 
 def kill_connection(conn) -> None:
     """서버 쪽에서 그 연결(PgConn)의 세션을 끊는다(서버 재시작과 같은 결과)."""
-    import time
     import psycopg
+    from .timing import wait_until
+    pid = conn.kill_backend_pid()
     with psycopg.connect(os.environ["TEST_DATABASE_URL"], autocommit=True) as c:
-        c.execute("SELECT pg_terminate_backend(%s)", (conn.kill_backend_pid(),))
-    time.sleep(0.2)
+        c.execute("SELECT pg_terminate_backend(%s)", (pid,))
+        # 서버가 그 세션을 실제로 내릴 때까지 기다린다(고정 sleep으로 추측하지 않는다): pg_stat_activity에서 사라지면 끝난 것이다
+        assert wait_until(lambda: c.execute("SELECT count(*) FROM pg_stat_activity WHERE pid=%s", (pid,)).fetchone()[0] == 0)
 
 
 def pg_link() -> dict:

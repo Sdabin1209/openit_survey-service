@@ -1,5 +1,5 @@
 """공개 API 보완(D66): 세션 상태, 푸시 설정, 오류 표, Retry-After, turn_id 봉투, 응답 스키마 검증."""
-from .timing import wait_until
+from .timing import HANG_GUARD_SECONDS, wait_until
 import json
 import re
 import threading
@@ -142,11 +142,11 @@ def test_inflight_overflow_is_429_unavailable_with_retry_after():
     gate, entered = threading.Event(), threading.Event()
     real = rig.release.session.extract
     def slow(inp, **kw):
-        entered.set(); gate.wait(5); return real(inp, **kw)
+        entered.set(); gate.wait(HANG_GUARD_SECONDS); return real(inp, **kw)
     rig.release.session.extract = slow
     body = json.dumps({"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "t1"}).encode()
     t = threading.Thread(target=lambda: api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body)); t.start()
-    assert entered.wait(5)
+    assert entered.wait(HANG_GUARD_SECONDS)
     s, b, h = api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body.replace(b"t1", b"t2"))
     gate.set(); t.join()
     assert (s, b["code"], b["retryable"], h["Retry-After"]) == (429, "UNAVAILABLE", True, "3")

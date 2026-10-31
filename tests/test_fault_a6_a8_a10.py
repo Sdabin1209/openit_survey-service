@@ -1,5 +1,5 @@
 """FAULT_MATRIX A6(Trace outbox -> 수집: 멈춤·5xx·깨진 응답, 큐 상한), A8(릴리스 사본 볼륨: 쓰기 불가), A10(직원 SSE: 이어 받기·DB 오류·연결 누수)."""
-from .timing import wait_until
+from .timing import HANG_GUARD_SECONDS, wait_until
 import json
 import threading
 import time
@@ -29,7 +29,7 @@ from .test_trace_export import run_turns
 
 # ---------------------------------------------------------------- A6
 class StubIngest:
-    """수집 서버 대역. mode: hang(응답 없음), 500, garbage(200인데 JSON 아님), html503(503인데 BoundaryError 본문 아님)."""
+    """수집 서버 대역. mode: 500, garbage(200인데 JSON 아님), html503(503인데 BoundaryError 본문 아님). 응답 없음(hang)은 클라이언트 라이브러리의 시한 몫이라 아래 가짜 수집기(Timeout)로 시험한다."""
     def __init__(self, mode):
         self.mode, self.calls = mode, 0
         outer = self
@@ -38,9 +38,6 @@ class StubIngest:
             def do_POST(self):
                 outer.calls += 1
                 self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                if outer.mode == "hang":
-                    time.sleep(3)
-                    return
                 code, body = {"500": (500, b"boom"), "garbage": (200, b"<html>proxy error</html>"), "html503": (503, b"<html>bad gateway</html>")}[outer.mode]
                 self.send_response(code)
                 self.send_header("Content-Length", str(len(body)))
@@ -72,19 +69,35 @@ def stub(request):
         s.close()
 
 
-@pytest.mark.parametrize("mode", ["hang", "500", "garbage", "html503"])
+@pytest.mark.parametrize("mode", ["500", "garbage", "html503"])
 def test_ingest_stuck_or_broken_keeps_rows_pending_and_never_fails_turns(stub, tmp_path, mode):
     """F2 멈춤 / F5 5xx / F6 깨진 응답: 보낸 것으로 치지 않고(PENDING 유지, 유실 없음) 턴은 영향이 없다."""
     s = stub(mode)
     ob = Outbox(str(tmp_path / "ob.db"))
-    ex = TraceExporter(ob, HttpTraceIngest(s.url, "w-tok", 0.5), base_delay=1.0, clock=lambda: 1000.0)
-    t = time.monotonic()
-    run_turns(OutboxTraceSink(ob, lambda: 1000.0))             # 전송은 턴 경로 밖이다
-    assert time.monotonic() - t < 5 and ob.counts()["PENDING"] == 3
+    ex = TraceExporter(ob, HttpTraceIngest(s.url, "w-tok", 60), base_delay=1.0, clock=lambda: 1000.0)      # 클라이언트 시한은 이 시험의 주제가 아니다(서버가 즉시 답한다)
+    run_turns(OutboxTraceSink(ob, lambda: 1000.0))             # 전송은 턴 경로 밖이다(전송이 없으니 턴은 영향이 없다)
+    assert ob.counts()["PENDING"] == 3
     res = ex.flush_once()
     assert ob.counts() == {"PENDING": 3, "SENT": 0, "DEAD": 0} and (res.retried + res.paused) >= 1
     st = ex.stats()
     assert st["sent"] == 0 and st["dead"] == 0 and st["last_error"] == "UNAVAILABLE"
+    ob.close()
+
+
+def test_ingest_timeout_keeps_rows_pending_and_never_fails_turns(tmp_path):
+    """F2 멈춤: 수집이 응답하지 않아 클라이언트가 시간 초과(UNAVAILABLE)를 내면 보낸 것으로 치지 않는다. 시간 초과 자체는 계약 클라이언트·라이브러리의 몫이라 가짜 수집기가 즉시 그 오류를 던진다."""
+    from boundary_contracts import BoundaryError
+
+    class Timeout:
+        def send(self, env):
+            raise BoundaryError("UNAVAILABLE", "수집이 응답하지 않는다", {"reason": "TimeoutError"})
+    ob = Outbox(str(tmp_path / "ob.db"))
+    ex = TraceExporter(ob, Timeout(), base_delay=1.0, clock=lambda: 1000.0)
+    run_turns(OutboxTraceSink(ob, lambda: 1000.0))
+    assert ob.counts()["PENDING"] == 3
+    res = ex.flush_once()
+    assert ob.counts() == {"PENDING": 3, "SENT": 0, "DEAD": 0} and (res.retried + res.paused) >= 1
+    assert ex.stats()["sent"] == 0 and ex.stats()["last_error"] == "UNAVAILABLE"
     ob.close()
 
 
@@ -167,7 +180,7 @@ def test_sse_tells_client_to_resync_when_events_were_trimmed(tmp_path, monkeypat
             assert start_and_risk(port, f"K{i}", f"t-{i}")[0] == 200
         assert app.alert_store.trim_events(keep=1) >= 1
         sse = Sse(port, last_id=0)                              # 지워진 구간을 건너뛴 재연결
-        ev = sse.events.get(timeout=5)
+        ev = sse.events.get(timeout=HANG_GUARD_SECONDS)
         assert ev["event"] == "resync" and json.loads(ev["data"])["reason"] == "EVENTS_NOT_RESUMABLE"
         sse.close()
         code, body = http_call(port, "GET", "/v1/staff/alerts?status=OPEN")           # 목록 API로 따라잡는다
@@ -190,7 +203,7 @@ def test_sse_returns_503_when_alert_db_is_down_and_stream_ends_cleanly(tmp_path,
         app.alert_store.latest_event_id = down
         req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream", headers={"Authorization": "Bearer test-staff-token"})
         with pytest.raises(urllib.error.HTTPError) as e:
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS)
         assert e.value.code == 503 and e.value.headers.get("Retry-After") and json.loads(e.value.read())["code"] == "UNAVAILABLE"
         assert app.alerts.hub.count() == 0                      # 구독이 남지 않는다
         app.alert_store.latest_event_id = real
@@ -206,9 +219,7 @@ def test_dropped_sse_clients_do_not_leak_subscriptions_or_threads(tmp_path, monk
         assert wait_until(lambda: app.alerts.hub.count() == 8)
         for c in clients:
             c.close()                                           # 클라이언트가 말없이 떠난다
-        end = time.monotonic() + 5
-        while time.monotonic() < end and (app.alerts.hub.count() or threading.active_count() > base + 1):
-            time.sleep(0.1)
+        wait_until(lambda: not app.alerts.hub.count() and threading.active_count() <= base + 1)      # 매달림 감시: 끊김을 서버가 다음 하트비트에서 알면 풀린다
         assert app.alerts.hub.count() == 0 and threading.active_count() <= base + 1
     finally:
         app.draining.set(); stop_server(httpd); app.stop()
@@ -219,9 +230,7 @@ def test_named_heartbeat_event_keeps_flowing_when_alert_db_dies_after_connect(tm
     app, httpd, port = make_app(tmp_path, monkeypatch, hb="0.3")
     try:
         sse = Sse(port)
-        end = time.monotonic() + 3
-        while not sse.heartbeats and time.monotonic() < end:
-            time.sleep(0.05)
+        assert wait_until(lambda: sse.heartbeats)      # 매달림 감시
         first = sse.heartbeats[0]
         assert "ts" in json.loads(first["data"]) and "id" not in first          # 연결 직후 한 번, id가 없어 Last-Event-ID를 바꾸지 않는다
 
@@ -231,9 +240,7 @@ def test_named_heartbeat_event_keeps_flowing_when_alert_db_dies_after_connect(tm
             setattr(app.alert_store, name, down)
         n0 = len(sse.heartbeats)
         with app.alert_store._lock:                           # DB 연결의 락을 다른 쪽이 쥐고 있어도
-            end = time.monotonic() + 4
-            while len(sse.heartbeats) < n0 + 3 and time.monotonic() < end:
-                time.sleep(0.05)
+            assert wait_until(lambda: len(sse.heartbeats) >= n0 + 3)      # 매달림 감시: 하트비트(0.3초 설정)가 세 번 더 올 때까지
         assert len(sse.heartbeats) >= n0 + 3 and any("ping" in c for c in sse.comments)      # 기존 주석 줄도 유지
         sse.close()
     finally:

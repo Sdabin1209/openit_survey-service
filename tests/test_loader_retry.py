@@ -19,6 +19,7 @@ from survey_service.wiring.app import App
 from survey_service.server import serve
 from survey_service.settings import Settings
 
+from .timing import FakeClock, HANG_GUARD_SECONDS, wait_until
 from .http_server_support import start_server, server_port, stop_server
 from .fakes import FakeReleaseReader, FakeTraceIngest, RecordingConsole, RecordingDispatcher
 from .sample_bank import sample_bank
@@ -44,7 +45,7 @@ def with_clock(e, **kw):
 
 @pytest.fixture
 def e(tmp_path):
-    env = Env(tmp_path, timeout=1.0)
+    env = Env(tmp_path)
     yield env
     env.close()
 
@@ -133,7 +134,7 @@ def test_new_pointer_that_is_also_failing_restarts_the_retry_count(e):
 
 def test_slow_load_that_outlasts_the_wait_succeeds_on_a_later_try(tmp_path):
     gate = threading.Event()
-    e = Env(tmp_path, load_gate=gate, load_timeout=0.25)
+    e = Env(tmp_path, load_gate=gate, load_timeout=1.0, clock=FakeClock())      # 가짜 시계: 폴링 대기가 시계를 흘려 실제로 기다리지 않고 한도(1.0)를 넘긴다
     try:
         clock = with_clock(e)
         r = e.loader.poll_once()
@@ -147,11 +148,9 @@ def test_slow_load_that_outlasts_the_wait_succeeds_on_a_later_try(tmp_path):
 
 
 def test_slow_load_within_the_wait_is_just_waited_for(tmp_path):
-    gate = threading.Event()
-    e = Env(tmp_path, load_gate=gate, load_timeout=30)
+    e = Env(tmp_path, load_polls=3, load_timeout=30, clock=FakeClock())                                             # 적재 상태를 세 번 물은 뒤에야 LOADED(시간이 아니라 횟수)
     try:
         with_clock(e)
-        threading.Timer(0.3, gate.set).start()                                                   # 적재 신호 뒤 잠깐 LOADING이었다가 끝난다
         assert e.loader.poll_once().action == "LOADED" and e.loader.status.retry is None          # 끝까지 기다렸다(시간 하한은 단언하지 않는다: LOADING 뒤 LOADED라는 순서가 증거)
     finally:
         e.close()
@@ -162,7 +161,7 @@ def test_server_failed_state_that_is_transient_retries_and_deterministic_does_no
     try:
         clock = with_clock(e)
         assert e.loader.poll_once().action == "RETRY_LATER"
-        e.srv.load_error = None; e.srv.load_delay = 0; e.srv._load_started.clear(); clock.t += 5          # 서버가 회복했다
+        e.srv.load_error = None; e.srv.load_polls = 0; e.srv._load_started.clear(); clock.t += 5          # 서버가 회복했다
         assert e.loader.poll_once().action == "LOADED"
     finally:
         e.close()
@@ -176,7 +175,7 @@ def test_server_failed_state_that_is_transient_retries_and_deterministic_does_no
 
 
 def test_connection_refused_is_transient_until_the_server_comes_up(tmp_path):
-    e = Env(tmp_path, timeout=0.5)
+    e = Env(tmp_path)
     port = e.srv._server.server_address[1]
     e.srv.stop()                                                                                # 추론 서버가 아직 안 떴다
     clock = with_clock(e)
@@ -223,7 +222,7 @@ def test_give_up_limit_turns_into_a_recorded_rejection(e):
 # ---------------------------------------------------------------- 서비스 수준: /readyz, /healthz
 def http(port, path):
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as r:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=HANG_GUARD_SECONDS) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as ex:
         return ex.code, json.loads(ex.read())
@@ -257,9 +256,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
     fport = server_port(front)
     started = False
     try:
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and not (app.loader.retry_info() or {}).get("attempts", 0) >= 2:
-            time.sleep(0.05)
+        assert wait_until(lambda: (app.loader.retry_info() or {}).get("attempts", 0) >= 2)
         code, body = http(fport, "/readyz")
         assert code == 503 and body["problems"] == ["no_active_release", "release_loading"]
         rl = body["release_loader"]
@@ -268,9 +265,7 @@ def test_service_stays_alive_and_becomes_ready_when_the_inference_server_finishe
         assert http(fport, "/healthz")[0] == 200                                                # 서비스는 살아 있다
         inf.put_fail_next = [UNAVAILABLE]                                                       # 서버가 뜨는 중: 첫 PUT은 503
         inf.start(port); started = True
-        deadline = time.monotonic() + 8
-        while time.monotonic() < deadline and http(fport, "/readyz")[0] != 200:
-            time.sleep(0.1)
+        assert wait_until(lambda: http(fport, "/readyz")[0] == 200)
         code, body = http(fport, "/readyz")
         assert code == 200 and body["active_release"] == "rel-1" and body["problems"] == []
         assert body["release_loader"]["retrying"] is None and body["release_loader"]["rejections"] == []
@@ -286,7 +281,7 @@ def test_previous_release_keeps_serving_while_a_new_one_is_retrying(tmp_path, mo
         gate.add_release(f"rel-{i}", sample_bank(i), action_rules_version=INSTALLED["action_rules_version"],
                          model_runtime_version=INSTALLED["model_runtime_version"])
     gate.set_pointer("rel-1")
-    e = Env(tmp_path / "e", timeout=0.5)
+    e = Env(tmp_path / "e")
     e.srv.available["rel-2"] = "ok"
     try:
         clock = with_clock(e)
@@ -326,9 +321,7 @@ def test_start_does_not_block_healthz_while_the_model_is_loading(tmp_path, monke
         assert http(port, "/healthz")[0] == 200
         assert http(port, "/readyz")[0] == 503
         gate_ev.set()                                                                                # 서버가 다 올렸다
-        deadline = time.monotonic() + 30      # 바깥 한도(판정은 /readyz 200)
-        while time.monotonic() < deadline and http(port, "/readyz")[0] != 200:
-            time.sleep(0.1)
+        assert wait_until(lambda: http(port, "/readyz")[0] == 200)      # 판정은 /readyz 200
         assert http(port, "/readyz")[0] == 200
     finally:
         if front:

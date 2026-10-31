@@ -5,6 +5,7 @@ import time
 from survey_service.components.reask_cap import effective_reask_cap
 from tests.sample_bank import sample_bank
 
+from .timing import wait_until
 from .test_service import get, running  # noqa: F401  (픽스처 running)
 
 
@@ -12,9 +13,7 @@ def _ready(app, reader, port, bank):
     reader.add_release("rel-1", bank)
     reader.set_pointer("rel-1")
     app.start()
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline and get(port, "/readyz")[0] != 200:
-        time.sleep(0.05)
+    wait_until(lambda: get(port, "/readyz")[0] == 200)
     return get(port, "/readyz")[1]["reask_limit"]
 
 

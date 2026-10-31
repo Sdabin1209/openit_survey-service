@@ -30,6 +30,7 @@ from ..components import session_store as effects
 from ..components.reask_cap import effective_reask_cap  # noqa: F401 (재노출)
 from ..components.field_specs import build_field_specs
 from . import checked
+from .clock import join_until
 from .checked import column_of
 from .errors import ReleaseUnavailable, StoreError
 from .ports import LoadedRelease
@@ -112,14 +113,15 @@ class TurnState(TypedDict, total=False):
 
 class TurnCtx:
     """호출마다 노드에 건네는 자원(직렬화하지 않는다): 이 세션이 쓰는 릴리스와 문항 세트 보조 객체."""
-    def __init__(self) -> None:
+    def __init__(self, clock=time.monotonic) -> None:
+        self.clock = clock                              # 주입한 단조 시계(ADR-0050)
         self.release: Optional[LoadedRelease] = None
         self.bank: Optional[assembly.Bank] = None
         self.deadline: Optional[float] = None          # time.monotonic() 기준 턴 마감. None이면 마감 없음
         self.cancelled = threading.Event()             # 마감을 넘겨 호출자가 NOT_COMMITTED로 끝냈다: 늦게 끝난 작업이 확정하지 않게 한다
 
     def expired(self) -> bool:
-        return self.cancelled.is_set() or (self.deadline is not None and time.monotonic() >= self.deadline)
+        return self.cancelled.is_set() or (self.deadline is not None and self.clock() >= self.deadline)
 
 
 def _model_call(ctx, op: str, request, flow=None, fields=None):
@@ -270,7 +272,7 @@ class TurnGraph:
         sid = st["session_id"]
         # 없는 세션 ID(잘못된 요청)로 허위 알림이 나가지 않게 존재를 확인한다. 저장소가 장애이거나 느리면(짧은 한도 안에 못 끝나면) 확인을 건너뛰고 알림은 보낸다(fail-safe)
         ctx = _ctx(config)
-        budget = min(1.0, max(0.1, (ctx.deadline - time.monotonic()) * 0.3)) if ctx.deadline is not None else 1.0
+        budget = min(1.0, max(0.1, (ctx.deadline - ctx.clock()) * 0.3)) if ctx.deadline is not None else 1.0
         box: dict = {}
 
         def probe() -> None:
@@ -278,9 +280,10 @@ class TurnGraph:
                 box["s"] = checked.store_load(self.o.store, sid)["status"]
             except Exception:
                 box["s"] = "DB_ERROR"
+        until = ctx.clock() + budget          # 마감 시각은 스레드를 시작하기 전에 정한다(시작 뒤에 정하면 시계가 그 사이 흘러 마감이 밀린다)
         th = threading.Thread(target=probe, daemon=True)
         th.start()
-        th.join(budget)
+        join_until(th, until, ctx.clock)
         known = box.get("s", "DB_ERROR")
         if known == "NOT_FOUND":
             self.o._count("risk_prescreen_unknown_session")

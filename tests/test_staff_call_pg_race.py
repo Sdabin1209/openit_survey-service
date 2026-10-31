@@ -7,6 +7,7 @@ import pytest
 from survey_service.components.alert_book import PgAlertStore
 from survey_service.wiring.errors import StaffCallRejected
 
+from .timing import HANG_GUARD_SECONDS
 from . import pg_container
 from .pg_support import pg_link
 
@@ -64,7 +65,7 @@ def test_concurrent_retry_and_resolve_never_emit_alert_event_after_resolved(url)
             for t in ts:
                 t.start()
             for t in ts:
-                t.join(30)
+                t.join(HANG_GUARD_SECONDS)
         evs = a.events_after(0, limit=100000)
         resolved_id = {e["alert"]["alert_id"]: e["id"] for e in evs if e["type"] == "resolved" and e["alert"]["session_id"] in ns}
         assert len(resolved_id) == len(sessions)

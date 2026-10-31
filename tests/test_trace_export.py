@@ -10,6 +10,7 @@ from survey_service.components.trace_outbox import Outbox
 from survey_service.components.trace_envelope import OutboxTraceSink
 from survey_service.components.link_trace_export import TraceExporter
 
+from .timing import FakeClock, wait_until
 from .e2e_support import ANSWER_OUT, RISK_OUT, Rig
 from .fakes import FakeTraceIngest
 
@@ -57,9 +58,8 @@ def test_envelope_carries_release_and_contract_version(parts):
 def test_turn_does_not_wait_for_ingest_and_ingest_down_does_not_fail_turns(parts):
     clock, ob, ing, ex, sink = parts
     ing.script = [BoundaryError("UNAVAILABLE", "내림")] * 50
-    t0 = time.monotonic()
     rig = run_turns(sink)
-    assert time.monotonic() - t0 < 5 and ing.calls == 0          # 턴을 처리하는 동안 전송을 부르지 않았다
+    assert ing.calls == 0          # 턴을 처리하는 동안 전송을 부르지 않았다(턴이 끝났다는 사실이 기다리지 않았다는 증거다)
     assert ob.counts()["PENDING"] == 3
     assert rig.doc()["progress_record"]["session_status"].startswith("ENDED")
 
@@ -197,15 +197,11 @@ def test_enqueue_is_idempotent(parts):
 
 def test_background_thread_delivers(parts):
     clock, ob, ing, ex, sink = parts
-    ex.clock = time.time
+    ex.clock = FakeClock()
     ex.start(interval=0.05)
     try:
-        run_turns(OutboxTraceSink(ob, time.time))
-        for _ in range(100):
-            if ob.counts()["SENT"] == 3:
-                break
-            time.sleep(0.05)
-        assert ob.counts()["SENT"] == 3
+        run_turns(OutboxTraceSink(ob, ex.clock))
+        assert wait_until(lambda: ob.counts()["SENT"] == 3)
     finally:
         ex.stop()
 

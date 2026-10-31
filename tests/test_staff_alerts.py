@@ -1,5 +1,5 @@
 """직원 알림(D64): 영속 저장, 목록, SSE(이어 받기), 웹 푸시 구독, 해결 표시, 권한, 전달 판정."""
-from .timing import wait_until
+from .timing import HANG_GUARD_SECONDS, wait_until
 import base64
 import http.server
 import json
@@ -47,7 +47,7 @@ class AlertRig:
         self.rig = Rig(risk=True)
         self.store = AlertStore(str(tmp_path / db))
         self.hub = AlertHub()
-        self.service = AlertService(self.store, self.hub, push, push_timeout=2.0)
+        self.service = AlertService(self.store, self.hub, push, push_timeout=HANG_GUARD_SECONDS)
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
         self.api = PublicApi(self.rig.orch, "tok", staff_token="stok", alerts=self.service)
 
@@ -355,7 +355,7 @@ class PushService:
 def test_webpush_sender_against_local_push_service(status, expected):
     ps = PushService(status)
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=60, allow_private_hosts=True)      # 시간을 보는 시험이 아니다: 부하로 3초를 넘기면 GONE이 FAILED로 바뀌어 흔들렸다(410 단독 재실행은 통과). 60초는 바깥 한도일 뿐
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None, allow_private_hosts=True)      # 시간은 이 시험의 주제가 아니다: 시한 없음을 주입한다(로컬 푸시 서비스가 즉시 답한다). 3초 시한이 부하로 GONE을 FAILED로 바꿨었다
         payload = json.dumps({"alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
         assert sender.send({"endpoint": ps.url, "keys": _client_keys()}, payload) == expected
         hdr, body = ps.requests[0]
@@ -404,7 +404,7 @@ def http_call(port, method, path, body=None, token="test-staff-token", headers=N
     h.update(headers or {})
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=json.dumps(body).encode() if body is not None else None, headers=h)
     try:
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
             return r.status, json.loads(r.read() or b"null")
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read() or b"null")
@@ -416,7 +416,7 @@ class Sse:
         h = {"Authorization": f"Bearer {token}"}
         if last_id is not None:
             h["Last-Event-ID"] = str(last_id)
-        self.resp = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream", headers=h), timeout=10)
+        self.resp = urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream", headers=h), timeout=HANG_GUARD_SECONDS)
         self.events, self.comments, self.heartbeats = queue.Queue(), [], []
         threading.Thread(target=self._read, daemon=True).start()
 
@@ -439,7 +439,7 @@ class Sse:
         except Exception:
             pass
 
-    def next(self, timeout=5):
+    def next(self):      # 매달림 감시(정상은 수 ms)
         ev = self.events.get(timeout=timeout)
         return int(ev["id"]), ev["event"], json.loads(ev["data"])
 
@@ -518,7 +518,7 @@ def test_sse_and_list_over_http_need_staff_token(live):
     for token, code in [("test-api-token-0123", 403), ("nope", 401), (None, 401)]:
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream",
-                                                          headers={"Authorization": f"Bearer {token}"} if token else {}), timeout=5)
+                                                          headers={"Authorization": f"Bearer {token}"} if token else {}), timeout=HANG_GUARD_SECONDS)
         assert e.value.code == code
         assert http_call(port, "GET", "/v1/staff/alerts", token=token)[0] == code
 
