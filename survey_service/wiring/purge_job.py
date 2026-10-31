@@ -2,6 +2,8 @@
 import json
 import sys
 
+from boundary_contracts import validator
+
 from ..config import REAL_WALL_CLOCK
 from ..settings import ConfigError, Settings
 from ..components.retention_purge import purge, purge_session
@@ -30,5 +32,10 @@ def run_purge(env=None, argv=None) -> int:
         store.close()
         outbox.close()
         alert_store.close()
-    print(json.dumps({"event": "session_purge", **res}, ensure_ascii=False))
+    out = {"event": "session_purge", **res}
+    errs = [e.message[:200] for e in validator("SurveyPurgeOutput").iter_errors(out)]
+    if errs:                  # R7: 내보내는 쪽이 계약으로 검증한다. 어기면 표준 출력에 아무것도 내지 않고 표준 오류와 종료 코드로 알린다(값은 싣지 않는다)
+        print("보존 정리 출력이 계약 SurveyPurgeOutput을 어긴다: " + "; ".join(errs[:3]), file=sys.stderr)
+        return 4
+    print(json.dumps(out, ensure_ascii=False))
     return 0

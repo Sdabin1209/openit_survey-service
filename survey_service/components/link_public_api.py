@@ -53,26 +53,27 @@ SESSION_STATUSES = ("IN_PROGRESS", "PAUSED_RISK", "ENDED_COMPLETE", "ENDED_STAFF
 START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID = "start", "end", "idle-expire"   # turn_id가 없는 동작의 고정 ID(CR-009)
 STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
 
-# 경로 표(이 컴포넌트가 내는 공개 API 전부, 스트림 포함): (이름, 메서드, 경로, 역할, 사람 머리글 필요, 요청 계약 이름, 알림 서비스 필요)
+# 경로 표(이 컴포넌트가 내는 공개 API 전부, 스트림 포함): (이름, 메서드, 경로, 역할, 사람 머리글 필요, 요청 계약 이름, 알림 서비스 필요, 응답 계약 이름)
+# 응답 계약 이름은 R7(생산자 검증): 내보내기 전에 openit_link.App이 이 계약으로 검증하고, 어기면 503(서버 결함)이다. FrontendInput·SessionResult·StaffSessionView·위험 신호 응답은 문진 스키마(계약이 아니다)라 None이다(계약 SignalsResponse는 question-authoring의 신호 응답으로 이름만 비슷하다).
 # 역할은 kiosk / staff / result-reader / risk-source. 결과·위험 신호 역할은 그 토큰을 설정하지 않으면 경로가 없다(기능 꺼짐).
 _SPEC = (
-    ("start", "POST", "/v1/sessions", "kiosk", False, None, False),
-    ("turn", "POST", "/v1/sessions/{sid}/turns", "kiosk", False, None, False),
-    ("end", "POST", "/v1/sessions/{sid}/end", "kiosk", False, None, False),
-    ("state", "GET", "/v1/sessions/{sid}/state", "kiosk", False, None, False),
-    ("staff_retry", "POST", "/v1/sessions/{sid}/staff-call/retry", "kiosk", False, "StaffCallRetryRequest", True),
-    ("staff_report", "POST", "/v1/sessions/{sid}/staff-call/report", "kiosk", False, "StaffCallReport", True),
-    ("intervention", "POST", "/v1/sessions/{sid}/intervention", "staff", True, None, False),
-    ("alerts", "GET", "/v1/staff/alerts", "staff", False, None, True),
-    ("stream", "GET", "/v1/staff/alerts/stream", "staff", False, None, True),
-    ("staff_session", "GET", "/v1/staff/sessions/{sid}", "staff", False, None, True),
-    ("push_config", "GET", "/v1/staff/push-config", "staff", False, None, True),
-    ("push_add", "POST", "/v1/staff/push-subscriptions", "staff", False, None, True),
-    ("push_unsub", "POST", "/v1/staff/push-subscriptions/unsubscribe", "staff", False, None, True),
-    ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
-    ("result", "GET", "/v1/results/{sid}", "result-reader", False, None, True),
-    ("results", "GET", "/v1/results", "result-reader", False, None, True),
-    ("risk_signal", "POST", "/v1/sessions/{sid}/risk-signals", "risk-source", False, None, True),
+    ("start", "POST", "/v1/sessions", "kiosk", False, None, False, None),
+    ("turn", "POST", "/v1/sessions/{sid}/turns", "kiosk", False, None, False, None),
+    ("end", "POST", "/v1/sessions/{sid}/end", "kiosk", False, None, False, None),
+    ("state", "GET", "/v1/sessions/{sid}/state", "kiosk", False, None, False, "SessionState"),
+    ("staff_retry", "POST", "/v1/sessions/{sid}/staff-call/retry", "kiosk", False, "StaffCallRetryRequest", True, "StaffCallRetryResult"),
+    ("staff_report", "POST", "/v1/sessions/{sid}/staff-call/report", "kiosk", False, "StaffCallReport", True, "StaffAlert"),
+    ("intervention", "POST", "/v1/sessions/{sid}/intervention", "staff", True, None, False, None),
+    ("alerts", "GET", "/v1/staff/alerts", "staff", False, None, True, "StaffAlertPage"),
+    ("stream", "GET", "/v1/staff/alerts/stream", "staff", False, None, True, None),
+    ("staff_session", "GET", "/v1/staff/sessions/{sid}", "staff", False, None, True, None),
+    ("push_config", "GET", "/v1/staff/push-config", "staff", False, None, True, "PushConfig"),
+    ("push_add", "POST", "/v1/staff/push-subscriptions", "staff", False, None, True, None),
+    ("push_unsub", "POST", "/v1/staff/push-subscriptions/unsubscribe", "staff", False, None, True, None),
+    ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True, None),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
+    ("result", "GET", "/v1/results/{sid}", "result-reader", False, None, True, None),
+    ("results", "GET", "/v1/results", "result-reader", False, None, True, None),
+    ("risk_signal", "POST", "/v1/sessions/{sid}/risk-signals", "risk-source", False, None, True, None),
 )
 _SPEC_RX = [(name, method, re.compile("^" + re.sub(r"\\\{(\w+)\\\}", r"([^/]+)", re.escape(pat)) + "$"), role) for name, method, pat, role, *_ in _SPEC]
 KIOSK_DEVICE_CHECKED = ("state", "turn", "end", "staff_retry", "staff_report")      # 세션을 만든 기기만 접근하는 경로(ADR-0016)
@@ -155,14 +156,14 @@ class PublicApi:
     def routes(self, stream: Optional[Callable[[Request], Response]] = None) -> list:
         """공개 API 경로 목록. stream은 알림 SSE 처리 함수(서버가 허브·저장소를 알고 있으므로 server.py가 건넨다)."""
         out = []
-        for name, method, pattern, role, user, contract, needs_alerts in _SPEC:
+        for name, method, pattern, role, user, contract, needs_alerts, response in _SPEC:
             if (needs_alerts and self.alerts is None) or (role == "result-reader" and self.result_token is None) or (role == "risk-source" and self.risk_token is None):
                 continue      # 알림 서비스가 없거나 그 역할의 토큰을 설정하지 않았으면 기능이 꺼진 것이다
             if name == "stream":
                 handler = stream or self._stream_unwired
             else:
                 handler = self._guarded(name)
-            out.append(Route(method, pattern, handler, frozenset({role}), request_schema=contract, require_user=user, max_body=MAX_BODY))
+            out.append(Route(method, pattern, handler, frozenset({role}), request_schema=contract, response_schema=response, require_user=user, max_body=MAX_BODY))
         return out
 
     @staticmethod
