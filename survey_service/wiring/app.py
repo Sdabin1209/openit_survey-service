@@ -297,7 +297,9 @@ class App:
             self._db_stats_cache = res["stats"][1]
             return problems, dict(self._db_stats_cache, stale=False)
         c = getattr(self, "_db_stats_cache", None)
-        return problems, (dict(c, stale=True) if c else {"trace_outbox": None, "staff_alerts": None, "stale": True})
+        # 보조 수치를 한 번도 읽지 못했다: 계약 SurveyReadyz는 trace_outbox·staff_alerts를 객체로 요구한다(null이면 계약 위반이라 R7 검증이 막는다). 0으로 채우고 db_stats_stale=true로 값이 없음을 알린다
+        empty_outbox = {"pending": 0, "sent": 0, "dead": 0, "dropped_full": 0, "dead_by_code": {}, "oldest_pending_age_seconds": None, "consecutive_unavailable": 0, "last_error": None}
+        return problems, (dict(c, stale=True) if c else {"trace_outbox": empty_outbox, "staff_alerts": {"delivery_failed": 0}, "stale": True})
 
     def _db_problems(self) -> list:
         """세 저장소 확인 결과만(시험·진단용). /readyz는 `_db_check`를 쓴다."""
