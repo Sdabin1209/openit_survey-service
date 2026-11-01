@@ -177,12 +177,12 @@ class RemoteInference:
     needs_adapters = False     # 어댑터는 추론 서버(model-runtime)가 직접 받는다. 서비스는 문항 세트만 받는다 (ADR-0040)
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
-                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 3.0, respond_timeout: float = 5.0,
+                 poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 21.0, respond_timeout: float = 26.0,
                  monotonic: Callable[[], float], sleep: Callable[[float], None]) -> None:
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050)
         self.backend = "remote"
         self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
-        # 환자 턴의 호출은 종류마다 상한이 다르다(extract 3.0초, respond 2.0초: 계약 CONVENTIONS 2.2.0 배분, 측정 안 함, ADR-0026)
+        # 환자 턴의 호출은 종류마다 상한이 다르다(extract 21초, respond 26초: 서버 상한 20/25보다 1초 길다. D125, ADR-0052, 측정 안 함)
         self._op_rts = {"extract": HttpModelRuntime(base_url, token, extract_timeout), "respond": HttpModelRuntime(base_url, token, respond_timeout)}
         self._base = base_url.rstrip("/")
         self._timeout = timeout

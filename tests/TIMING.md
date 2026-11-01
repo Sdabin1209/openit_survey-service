@@ -18,7 +18,7 @@
 | test_inference_client | server_down_fails_fast_after_one_retry | 연결 거부면 한 번 재시도 뒤 단계 실패 | 3(시간 단언 삭제) | 같은 이름 |
 | test_inference_client | other_sessions_are_not_blocked | 느린 추론이 다른 세션을 막지 않는다 | 사건(서버가 응답을 붙잡은 채 네 호출이 모두 도착) | 같은 이름 |
 | test_inference_client | 적재 지연 시험 5곳(load_delay) | 적재가 LOADING이면 기다리거나 재시도로 처리 | 시간 대신 질의 횟수(load_polls)·게이트 Event, 가짜 시계 | test_async_load_is_polled_until_loaded 외 |
-| test_inference_time_budget | extract 3.0초·respond 5.0초에 끊긴다, 두 호출 합이 마감 안 | 시한 값이 맞다 | 지움(2, 소켓 시한은 라이브러리) | test_default_settings_carry_the_contract_budget, test_the_app_passes_the_per_call_limits_from_settings_to_the_inference_client |
+| test_inference_time_budget | extract 21초·respond 26초에 끊긴다, 서버 상한 합이 마감 안 | 시한 값이 맞다 | 지움(2, 소켓 시한은 라이브러리) | test_default_settings_carry_the_contract_budget, test_the_app_passes_the_per_call_limits_from_settings_to_the_inference_client |
 | test_inference_time_budget | 재시도 예산 2개 | 남은 예산 >= 호출 상한일 때만 재시도 | 1(주입한 시계) | test_no_retry_when_remaining..., test_retry_happens_when... |
 | test_public_api, test_public_api_v132 | 429 동시 처리 상한 | 상한을 넘으면 429 | 매달림 감시 | 같은 이름 |
 | test_readyz_db_outage | unreachable_then_recovers | DB 연결 거부면 503, 돌아오면 200 | 3 + 2(즉시 거부하는 닫힌 포트) | test_readyz_503_when_db_unreachable_then_recovers |
@@ -49,4 +49,4 @@
 ## 영역 시험에서 지운 것 중 smoke·E2E가 봐야 할 것 (헤드 판단)
 - 실제 waitress가 반쯤 열린 연결·유휴 연결을 정해진 시각에 정리하는가, 접속 상한을 넘으면 새 연결을 받지 않는가.
 - PostgreSQL이 얼었을 때(docker pause) 턴이 마감 안에 NOT_COMMITTED로 끝나고 풀린 뒤 복구되는가, 접속·문장 시한이 실제로 자르는가.
-- 추론 서버가 실제로 3.0초·5.0초에 읽기를 끊는가.
+- 추론 서버가 실제로 21초·26초에 읽기를 끊는가.

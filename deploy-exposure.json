@@ -46,7 +46,7 @@
       "user_header": "strip",
       "timeouts_ms": {
         "dial": 1000,
-        "response_header": 9500
+        "response_header": 55000
       }
     },
     {
@@ -62,7 +62,7 @@
       "user_header": "strip",
       "timeouts_ms": {
         "dial": 1000,
-        "response_header": 9500
+        "response_header": 55000
       }
     },
     {
@@ -86,7 +86,7 @@
       "streaming": true,
       "timeouts_ms": {
         "dial": 1000,
-        "response_header": 9500,
+        "response_header": 55000,
         "read": 3600000
       }
     },
@@ -110,7 +110,7 @@
       "streaming": true,
       "timeouts_ms": {
         "dial": 1000,
-        "response_header": 9500,
+        "response_header": 55000,
         "read": 3600000
       }
     },
@@ -132,7 +132,7 @@
       "streaming": true,
       "timeouts_ms": {
         "dial": 1000,
-        "response_header": 9500,
+        "response_header": 55000,
         "read": 3600000
       }
     },

@@ -88,11 +88,11 @@ def test_label_is_added_by_build_image_and_matches_the_file():
 
 
 def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
-    """시간 상한 사슬(ADR-0049): 서버 턴 마감 9.0 < gateway(dial + response_header = 10.5) < 키오스크 대기 12. 같은 리포의 두 값을 대조한다(이웃을 읽지 않는다).
+    """시간 상한 사슬(ADR-0049): 서버 턴 마감 50 < gateway(dial + response_header = 56) < 키오스크 대기 60. 같은 리포의 두 값을 대조한다(이웃을 읽지 않는다).
     키오스크 경로(device-token)는 사슬 안이고, 직원 경로(account)는 턴 마감보다 길기만 하면 되며, /readyz는 자기 확인 예산보다 길어야 한다."""
     from survey_service.settings import Settings
     s = Settings()
-    deadline, kiosk_wait = s.turn_deadline_seconds, 12.0      # 12는 ADR-0049의 사슬 값(사용자 결정 2026-10-30): 키오스크 쪽 상수이므로 여기에 근거만 적는다
+    deadline, kiosk_wait = s.turn_deadline_seconds, 60.0      # 60은 D125 사슬 값(프록시·LB 표준 60초, 사용자 결정 2026-11-02): 키오스크 쪽 상수이므로 여기에 근거만 적는다
     checked = 0
     for r in TABLE["routes"]:
         t = r.get("timeouts_ms")
@@ -100,7 +100,7 @@ def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
             continue
         gateway = (t.get("dial", 0) + t["response_header"]) / 1000
         if r["auth"]["kind"] == "device-token":
-            assert deadline + 1.5 <= gateway < kiosk_wait, (r["paths"], gateway, deadline)      # 사슬의 간격: 9.0 + 1.5 = 10.5 (ADR-0049). 턴 마감 직전에 끝난 응답이 게이트웨이 상한 안에 도착해야 한다
+            assert deadline + 1.5 <= gateway < kiosk_wait, (r["paths"], gateway, deadline)      # 사슬의 간격: 50 + 1.5 <= 56 (D125, ADR-0052). 턴 마감 직전에 끝난 응답이 게이트웨이 상한 안에 도착해야 한다
         elif r["auth"]["kind"] == "account":
             assert t["response_header"] / 1000 > deadline, (r["paths"], t)
         else:
@@ -110,9 +110,9 @@ def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
 
 
 def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_fit_it():
-    """직원 경로의 노출 선언(dial 1000 + response_header 9500 = 10.5초, 시간 사슬)과 서버 쪽 시한을 설정 값으로 대조한다(실제 시간을 재지 않는다).
-    - 개입(intervention)은 턴 처리라 턴 마감(9.0)이 응답 머리글까지의 상한이다: 9.0 < 9.5.
-    - DB를 한 번 읽는 경로는 접속(connect_timeout) + 문장(statement_timeout) + 강제 끊기 여유(1.0)가 최악이다: 5.0 < 9.5.
+    """직원 경로의 노출 선언(dial 1000 + response_header 55000 = 56초, 시간 사슬 D125)과 서버 쪽 시한을 설정 값으로 대조한다(실제 시간을 재지 않는다).
+    - 개입(intervention)은 턴 처리라 턴 마감(50)이 응답 머리글까지의 상한이다: 50 < 55.
+    - DB를 한 번 읽는 경로는 접속(connect_timeout) + 문장(statement_timeout) + 강제 끊기 여유(1.0)가 최악이다: 5.0 < 55.
     여러 DB 문장을 읽는 직원 경로(알림 목록, 직원 세션 보기, 푸시 구독 등록)는 요청 전체 마감을 주입 시계로 센다(Orchestrator.bounded).
     """
     from survey_service.settings import Settings
@@ -120,11 +120,11 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
     staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms")]
     assert staff, "직원 경로 선언이 없다"
     for r in staff:
-        assert r["timeouts_ms"] == {"dial": 1000, "response_header": 9500, "read": 3600000}, r["paths"]
+        assert r["timeouts_ms"] == {"dial": 1000, "response_header": 55000, "read": 3600000}, r["paths"]
     header = staff[0]["timeouts_ms"]["response_header"] / 1000
     # 요청 전체 마감(D120)이 응답 머리글 상한보다 짧다: 여러 문장을 읽는 직원 GET도 마감 안에 응답하거나 503을 낸다(tests/test_request_deadline.py).
     assert s.turn_deadline_seconds < header      # 요청 전체 마감은 턴 마감과 같은 설정 값을 쓴다(ADR-0051)
-    assert s.turn_deadline_seconds < header      # 개입(intervention)은 턴 마감 9.0이 상한이다
+    assert s.turn_deadline_seconds < header      # 개입(intervention)은 턴 마감 50이 상한이다
 
 
 def test_deploy_jobs_declaration_validates_against_the_contract_and_build_image_labels_it():

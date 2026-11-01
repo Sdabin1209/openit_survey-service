@@ -38,8 +38,8 @@ def _turn(api, tid):
 
 def test_defaults_keep_the_timeout_ordering():
     s = Settings.from_env(BASE)
-    # 키오스크 12 > gateway 10.5(연결 1 + 헤더 9.5) > 서버 마감 9(ADR-0049). 마감 직전에 시작한 접속 시도(connect)가 끝나는 시간도 gateway 상한 안에 든다
-    assert s.turn_deadline_seconds + 0.5 <= 9.5 and s.turn_deadline_seconds <= 9
+    # 키오스크 60 > gateway 56(연결 1 + 헤더 55) > 서버 마감 50(D125, ADR-0052). 마감 직전에 시작한 접속 시도(connect)가 끝나는 시간도 gateway 상한 안에 든다
+    assert s.turn_deadline_seconds + 1.5 <= 56 and s.turn_deadline_seconds <= 50
     assert s.db_connect_timeout_seconds + s.db_statement_timeout_seconds + 1 < s.turn_deadline_seconds + 1
 
 

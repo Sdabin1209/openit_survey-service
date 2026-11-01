@@ -114,7 +114,7 @@ class Settings:
     retention_interval_seconds: int = 3600                         # 서비스 안에서 보존 정리를 도는 주기(초). 0이면 서비스는 돌리지 않는다(deploy의 purge 잡만)
     risk_default_rules: bool = True  # 규칙 파일·입력원이 없으면 임시 기본 목록(임상 검토 전)을 쓴다. SURVEY_RISK_DEFAULT_RULES=off로 끈다 (ADR-0013)
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
-    turn_deadline_seconds: float = 9.0            # 서버 턴 총 마감(초). 넘으면 NOT_COMMITTED(FAULT_POLICY 3). 시간 상한 사슬: extract 3.0 + respond 5.0 = 8.0, 여유 1.0 -> 9.0 < gateway 10.5 < 키오스크 12 [근거: 사용자 결정 2026-10-30, 계약 CONVENTIONS 시간 상한 사슬, ADR-0049(ADR-0008의 6초를 대체). 측정하지 않았다]
+    turn_deadline_seconds: float = 50.0           # 서버 턴 총 마감(초). 넘으면 NOT_COMMITTED(FAULT_POLICY 3). 2초는 목표(지표로 경보)이지 실패 판정이 아니다. 실패 판정 상한은 표준(프록시·LB 60초)에서: model-runtime 서버측 호출 상한 합 20+25=45 + 여유 5 = 50 < gateway 56 < 키오스크 60 [근거: D125(2026-11-02), 계약 CONVENTIONS 시간 상한 사슬, ADR-0052(ADR-0049를 대체). 측정하지 않았다]
     db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초  [근거: ADR-0011]
     db_statement_timeout_seconds: float = 2.0     # 문장 하나의 상한(초). 서버 statement_timeout + 클라이언트 강제 끊기  [근거: ADR-0011]
     db_reconnect_backoff_seconds: float = 1.0     # 접속 실패 뒤 이 시간 동안은 재접속을 시도하지 않고 바로 실패(빠른 실패)  [근거: ADR-0011]
@@ -154,8 +154,8 @@ class Settings:
     inference_url: str = ""
     inference_token_env: str = "SURVEY_INFERENCE_TOKEN"
     inference_timeout_seconds: float = 4.0      # 추론 서버 제어 호출(릴리스 적재 확인, /readyz)의 타임아웃. 환자 턴의 extract·respond에는 쓰지 않는다 (ADR-0026)
-    inference_extract_timeout_seconds: float = 3.0   # 환자 턴 extract 한 번의 상한. 계약 CONVENTIONS 2.2.0 표의 배분값, 측정하지 않았다 (ADR-0026)
-    inference_respond_timeout_seconds: float = 5.0   # 환자 턴 respond 한 번의 상한. 2.0 -> 5.0은 사용자 결정(2026-10-30), 계약 CONVENTIONS 시간 상한 사슬. 측정하지 않았다 (ADR-0049, ADR-0026을 대체)
+    inference_extract_timeout_seconds: float = 21.0  # extract 한 번의 클라이언트 읽기 상한. model-runtime 서버 상한 20초보다 1초 길다(서버가 먼저 503을 내게). 첫 호출 JIT가 3.0초를 넘겨 턴이 실패해 올렸다 [D125, ADR-0052, 측정하지 않았다]
+    inference_respond_timeout_seconds: float = 26.0  # respond 한 번의 클라이언트 읽기 상한. 서버 상한 25초보다 1초 길다(서버가 먼저 503을 내게) [D125, ADR-0052, 측정하지 않았다]
     inference_load_timeout_seconds: float = 600.0   # 릴리스 적재(모델 로딩)를 기다리는 시간
     inference_retries: int = 1
     staff_call_retry_min_interval_seconds: int = 30   # 직원 호출 재알림 최소 간격(CR-H001). 계약 기본 권고. 측정하지 않았다 (ADR-0021)
@@ -214,13 +214,13 @@ class Settings:
             inference_url=env.get("SURVEY_INFERENCE_URL", ""),
             inference_token_env=env.get("SURVEY_INFERENCE_TOKEN_ENV", "SURVEY_INFERENCE_TOKEN"),
             inference_timeout_seconds=_float(env, "SURVEY_INFERENCE_TIMEOUT_SECONDS", 4.0),
-            inference_extract_timeout_seconds=_float(env, "SURVEY_INFERENCE_EXTRACT_TIMEOUT_SECONDS", 3.0),
-            inference_respond_timeout_seconds=_float(env, "SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS", 5.0),
+            inference_extract_timeout_seconds=_float(env, "SURVEY_INFERENCE_EXTRACT_TIMEOUT_SECONDS", 21.0),
+            inference_respond_timeout_seconds=_float(env, "SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS", 26.0),
             inference_load_timeout_seconds=_float(env, "SURVEY_INFERENCE_LOAD_TIMEOUT_SECONDS", 600.0),
             inference_retries=_int(env, "SURVEY_INFERENCE_RETRIES", 1, 0),
             http_timeout_seconds=_float(env, "SURVEY_HTTP_TIMEOUT_SECONDS", 10.0),
             startup_wait_seconds=_float(env, "SURVEY_STARTUP_WAIT_SECONDS", 5.0),
-            turn_deadline_seconds=_float(env, "SURVEY_TURN_DEADLINE_SECONDS", 9.0),
+            turn_deadline_seconds=_float(env, "SURVEY_TURN_DEADLINE_SECONDS", 50.0),
             db_connect_timeout_seconds=_float(env, "SURVEY_DB_CONNECT_TIMEOUT_SECONDS", 2.0),
             db_statement_timeout_seconds=_float(env, "SURVEY_DB_STATEMENT_TIMEOUT_SECONDS", 2.0),
             db_reconnect_backoff_seconds=_float(env, "SURVEY_DB_RECONNECT_BACKOFF_SECONDS", 1.0),

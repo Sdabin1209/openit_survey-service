@@ -1,9 +1,9 @@
-"""단계 B (3): 모델 호출 시간 상한 사슬 — extract 3.0초, respond 5.0초, 턴 총 마감 9.0초(ADR-0049). 재시도는 남은 턴 예산이 그 호출 상한 이상일 때만 한다.
+"""단계 B (3): 모델 호출 시간 상한 사슬 — extract 21초, respond 26초, 턴 총 마감 50초(D125, ADR-0052). 재시도는 남은 턴 예산이 그 호출 상한 이상일 때만 한다.
 
-이 파일은 시간을 재지 않는다(U421). 소켓 읽기 시한이 실제로 3.0초·5.0초에 호출을 자르는가는 계약 클라이언트·라이브러리의 몫이다. 이 영역의 책임은 둘이다:
+이 파일은 시간을 재지 않는다(U421). 소켓 읽기 시한이 실제로 21초·26초에 호출을 자르는가는 계약 클라이언트·라이브러리의 몫이다. 이 영역의 책임은 둘이다:
 1. 올바른 값을 넘겼는가 → 설정 기본값과 App이 클라이언트에 넘긴 값을 직접 확인한다.
 2. 시간 초과가 났을 때 맞게 처리하는가 → tests/test_inference_client.py가 클라이언트가 즉시 던지는 시간 초과 오류로 본다(단계 실패, 재시도 없음).
-재시도 판단은 우리 코드(남은 예산과 호출 상한의 비교)라 시계를 주입해 결정적으로 본다: 마감 9.0초(주입한 시계)면 재시도하고 호출 상한(3.0)보다 작은 2.0초면 재시도하지 않는다.
+재시도 판단은 우리 코드(남은 예산과 호출 상한의 비교)라 시계를 주입해 결정적으로 본다: 마감 50초(주입한 시계)면 재시도하고 호출 상한(21)보다 작은 2.0초면 재시도하지 않는다.
 """
 import pytest
 from boundary_contracts import BoundaryError
@@ -18,8 +18,8 @@ from .timing import FakeClock, HANG_GUARD_SECONDS
 
 
 class BudgetEnv(Env):
-    """Env와 같으나 추론 클라이언트는 서비스 기본 호출 상한(extract 3.0, respond 5.0)을 쓰고 턴 마감은 인자로 준다. 가짜 서버가 즉시 답하므로 상한이 결과를 바꾸지 않는다."""
-    def __init__(self, tmp, turn_deadline=9.0):
+    """Env와 같으나 추론 클라이언트는 서비스 기본 호출 상한(extract 21, respond 26)을 쓰고 턴 마감은 인자로 준다. 가짜 서버가 즉시 답하므로 상한이 결과를 바꾸지 않는다."""
+    def __init__(self, tmp, turn_deadline=50.0):
         super().__init__(tmp)
         s = Settings()
         self.clock = FakeClock()          # 주입한 시계(ADR-0050): 재시도 예산과 백오프 대기가 실제 시간을 쓰지 않는다
@@ -42,9 +42,10 @@ def be(tmp_path):
 
 def test_default_settings_carry_the_contract_budget():
     s = Settings()
-    assert s.inference_extract_timeout_seconds == 3.0 and s.inference_respond_timeout_seconds == 5.0
-    assert s.turn_deadline_seconds == 9.0
-    assert s.inference_extract_timeout_seconds + s.inference_respond_timeout_seconds + 1.0 == s.turn_deadline_seconds      # 합 8.0 + 여유 1.0 = 9.0
+    assert s.inference_extract_timeout_seconds == 21.0 and s.inference_respond_timeout_seconds == 26.0
+    assert s.turn_deadline_seconds == 50.0
+    # 서버(model-runtime) 상한 20/25보다 1초 길다(서버가 먼저 503). 서버 상한 합 45 + 여유 5 = 턴 마감 50
+    assert (s.inference_extract_timeout_seconds - 1.0) + (s.inference_respond_timeout_seconds - 1.0) + 5.0 == s.turn_deadline_seconds
 
 
 def test_the_app_passes_the_per_call_limits_from_settings_to_the_inference_client(tmp_path, monkeypatch):
@@ -63,7 +64,7 @@ def test_the_app_passes_the_per_call_limits_from_settings_to_the_inference_clien
 
 
 def test_no_retry_when_remaining_turn_budget_is_below_the_call_limit(tmp_path):
-    e = BudgetEnv(tmp_path, turn_deadline=2.0)    # 남은 예산 2.0초(주입한 시계는 시험이 흘릴 때만 간다) < extract 상한 3.0초
+    e = BudgetEnv(tmp_path, turn_deadline=2.0)    # 남은 예산 2.0초(주입한 시계는 시험이 흘릴 때만 간다) < extract 상한 21초
     try:
         assert e.loader.poll_once().action == "LOADED"
         e.start()
@@ -77,7 +78,7 @@ def test_no_retry_when_remaining_turn_budget_is_below_the_call_limit(tmp_path):
 
 
 def test_retry_happens_when_remaining_turn_budget_covers_the_call_limit(tmp_path):
-    e = BudgetEnv(tmp_path, turn_deadline=9.0)      # 남은 예산 9.0초 >= extract 상한 3.0초
+    e = BudgetEnv(tmp_path, turn_deadline=50.0)      # 남은 예산 50초 >= extract 상한 21초
     try:
         assert e.loader.poll_once().action == "LOADED"
         e.start()

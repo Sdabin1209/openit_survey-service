@@ -48,3 +48,4 @@
 - [ADR-0044](ADR-0044.md) 문진 스키마 2.0.0: SessionResult.skipped 폐지 (정수 CONTRACT_VERSION은 그대로)
 - [ADR-0049](ADR-0049.md) 시간 상한 사슬 extract 3.0 / respond 5.0 / 턴 마감 9.0 (ADR-0008·0026의 값을 대체)
 - [ADR-0051](ADR-0051.md) 직원 경로 요청 전체 마감 9.0초(주입 시계, 문장마다 남은 시간이 상한)
+- [ADR-0052](ADR-0052.md) 시간 상한은 실패 판정 기준: extract 21 / respond 26 / 턴 마감 50 (ADR-0049를 대체)
