@@ -8,14 +8,8 @@ from typing import Any
 from typing_extensions import NotRequired, TypedDict
 
 
-class QuestionSet(TypedDict, closed=True):
-    id: str
-    version: str
-    content_hash: str
-
-
 class TraceEnvelopeSource(TypedDict, closed=True):
     release_id: str
     trace: dict[str, Any]
     now: float
-    question_set: NotRequired[QuestionSet]
+    question_set_id: NotRequired[str]

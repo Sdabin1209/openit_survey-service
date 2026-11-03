@@ -330,24 +330,21 @@ class Orchestrator:
         """같은 DB 모드일 때 TraceEnvelope. 아니면 None(기존 경로: _submit_trace)."""
         if not self.atomic_trace() or release_id is None or not trace:
             return None
-        return checked.envelope(self.trace_sink, release_id, trace, self._set_ref(release_id, trace))
+        return checked.envelope(self.trace_sink, release_id, trace, self._set_id(trace))
 
-    def _set_ref(self, release_id, trace) -> Optional[dict]:
-        """이 턴 세션의 문진표를 ArtifactRef(id·version·content_hash)로: 세션 행의 문진표 ID와 릴리스 매니페스트의 question_sets[]에서 찾는다.
-        찾지 못하면 None(봉투에 싣지 않는다: 문진표 없이 만든 옛 세션, 매니페스트 없는 시험 릴리스)."""
+    def _set_id(self, trace) -> Optional[str]:
+        """이 턴 세션의 문진표 ID(세션 행). 문진표 없이 만든 옛 세션이거나 읽지 못하면 None(봉투에 싣지 않는다)."""
         try:
             qs = self.store.question_set_of(trace["session_id"])
-            rel = self.releases.get(release_id)
-            ref = next((r for r in rel.manifest.get("question_sets", ()) if qs and r["id"] == qs[0]), None)
         except Exception:
             return None
-        return {k: ref[k] for k in ("id", "version", "content_hash")} if ref else None
+        return qs[0] if qs else None
 
     def _submit_trace(self, out: TurnOutcome) -> None:
         if self.trace_sink is None or out.release_id is None:
             return
         try:
-            checked.submit(self.trace_sink, out.release_id, out.trace, self._set_ref(out.release_id, out.trace))
+            checked.submit(self.trace_sink, out.release_id, out.trace, self._set_id(out.trace))
         except Exception as e:  # Trace 때문에 턴이 실패하면 안 된다(I6)
             log.error("Trace를 outbox에 넣지 못했다 error=%s", type(e).__name__)
             self._count("trace_enqueue_failed")

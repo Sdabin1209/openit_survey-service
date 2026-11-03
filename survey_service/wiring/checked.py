@@ -133,21 +133,21 @@ def wrap_registry(registry: Any) -> Any:
     return _Checked(registry, "ReleaseEntry", exclude=("register", "gc"))
 
 
-def envelope(sink: Any, release_id: str, trace: Mapping, question_set: Optional[Mapping] = None) -> dict:
+def envelope(sink: Any, release_id: str, trace: Mapping, question_set_id: Optional[str] = None) -> dict:
     """TurnTrace -> TraceEnvelope(trace_envelope 컴포넌트). 입력은 TraceEnvelopeSource, 출력은 outbox가 받기 전에 OutboxEnvelope로 한 번 더 본다(내는 쪽 검증)."""
     import time
     src = {"release_id": release_id, "trace": trace, "now": time.time()}
-    if question_set is not None:
-        src["question_set"] = dict(question_set)
+    if question_set_id is not None:
+        src["question_set_id"] = question_set_id
     types.validate("TraceEnvelopeSource", src)
-    env = sink.envelope(release_id, trace, question_set) if question_set is not None else sink.envelope(release_id, trace)
+    env = sink.envelope(release_id, trace, question_set_id) if question_set_id is not None else sink.envelope(release_id, trace)
     types.validate("OutboxEnvelope", env)
     return env
 
 
-def submit(sink: Any, release_id: str, trace: Mapping, question_set: Optional[Mapping] = None) -> None:
+def submit(sink: Any, release_id: str, trace: Mapping, question_set_id: Optional[str] = None) -> None:
     if hasattr(sink, "envelope"):          # 봉투를 만드는 sink(OutboxTraceSink)만 입력·출력을 본다. 다른 TraceSink 구현(시험 대역 등)은 그대로 넘긴다
-        envelope(sink, release_id, trace, question_set)
-        sink.submit(release_id, trace, question_set) if question_set is not None else sink.submit(release_id, trace)
+        envelope(sink, release_id, trace, question_set_id)
+        sink.submit(release_id, trace, question_set_id) if question_set_id is not None else sink.submit(release_id, trace)
         return
     sink.submit(release_id, trace)

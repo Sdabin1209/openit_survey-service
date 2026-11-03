@@ -142,16 +142,14 @@ def test_bank_with_the_seven_prerequisites_gives_the_same_next_items_as_the_lega
 
 
 # ---------------------------------------------------------------- Trace 봉투의 문진표(FailureCase.question_set의 재료)
-def test_trace_envelope_carries_the_sessions_question_set_ref(env):
+def test_trace_envelope_carries_the_sessions_question_set_id(env):
     from boundary_contracts import validator
     from survey_service.components.trace_envelope import OutboxTraceSink
-    rel = two_sets(env)
-    rel.manifest.update(question_sets=[{"id": q, "version": "1", "content_hash": "sha256:" + str(i) * 64, "title": "t"} for i, q in enumerate(("set-a", "set-b"))])
+    two_sets(env)
     env.start("KB", question_set_id="set-b")
-    ref = env.rig.orch._set_ref("rel-e2e-1", {"session_id": "KB"})
-    assert ref == {"id": "set-b", "version": "1", "content_hash": "sha256:" + "1" * 64}      # 활성 릴리스의 첫 세트가 아니라 이 세션의 세트
-    trace = {"contract_version": 2, "session_id": "KB", "turn_id": "t1"}
-    envl = OutboxTraceSink(None, lambda: 0).envelope("rel-e2e-1", trace, ref)
-    assert envl["ext"] == {"survey-service": {"question_set": ref}}
-    assert envl["trace"] is trace and "ext" not in OutboxTraceSink(None, lambda: 0).envelope("rel-e2e-1", trace)
+    qid = env.rig.orch._set_id({"session_id": "KB"})
+    assert qid == "set-b"                                      # 활성 릴리스의 첫 세트가 아니라 이 세션의 세트
+    trace = {"contract_version": 1, "session_id": "KB", "turn_id": "t1"}
+    envl = OutboxTraceSink(None, lambda: 0).envelope("rel-e2e-1", trace, qid)
+    assert envl["question_set_id"] == "set-b" and "question_set_id" not in OutboxTraceSink(None, lambda: 0).envelope("rel-e2e-1", trace)
     assert list(validator("TraceEnvelope").iter_errors(envl)) == []
