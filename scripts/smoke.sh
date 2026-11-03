@@ -112,9 +112,11 @@ SSE_PID=$!
 sleep 1
 curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer smoke-api-token-0123" "$API/v1/staff/alerts" | grep -q 403 || fail "키오스크 토큰으로 알림 목록이 열린다"
 curl -s -H "Authorization: Bearer smoke-staff-token" "$API/v1/staff/push-config" | grep -q '"vapid_public_key": null' || fail "VAPID 키가 없으면 푸시 설정은 null이어야 한다"
-SUB='{"endpoint":"https://push.example/smoke","keys":{"p256dh":"k","auth":"a"}}'
-[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer smoke-staff-token" -d "$SUB" "$API/v1/staff/push-subscriptions")" = 201 ] || fail "푸시 구독 등록"
-[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer smoke-staff-token" -d "$SUB" "$API/v1/staff/push-subscriptions")" = 201 ] || fail "같은 구독 재등록(멱등)"
+# 구독 등록은 이름을 해석해 공인 주소인지 본다(R3.18): 스모크는 네트워크 없이도 도는 거절 경로를 본다(공인 이름의 성공 경로는 시험이 가짜 DNS로 본다)
+BADSUB='{"endpoint":"https://169.254.169.254/smoke","keys":{"p256dh":"k","auth":"a"}}'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer smoke-staff-token" -d "$BADSUB" "$API/v1/staff/push-subscriptions")" = 400 ] || fail "특수 주소 푸시 구독이 400이 아니다"
+BADSUB2='{"endpoint":"http://push.example.com/smoke","keys":{"p256dh":"k","auth":"a"}}'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer smoke-staff-token" -d "$BADSUB2" "$API/v1/staff/push-subscriptions")" = 400 ] || fail "http 푸시 구독이 400이 아니다"
 [ "$(post /v1/sessions '{"session_id":"smoke-2","kind":"SESSION_START"}' smoke-api-token-0123)" = 200 ] || fail "세션 2 시작"
 [ "$(rk smoke-2 "숨이 안 쉬어져요" r-1)" = 200 ] || fail "위험 발화 턴"
 grep -q '"response_text": "' /tmp/smoke-$$.body || fail "위험 안내 문장이 없다"
