@@ -3,18 +3,6 @@
   "routes": [
     {
       "paths": [
-        "/healthz"
-      ],
-      "methods": [
-        "GET"
-      ],
-      "auth": {
-        "kind": "none"
-      },
-      "user_header": "strip"
-    },
-    {
-      "paths": [
         "/readyz"
       ],
       "methods": [

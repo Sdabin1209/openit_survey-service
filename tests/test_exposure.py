@@ -35,7 +35,7 @@ def test_table_is_a_valid_exposure_for_this_service():
 def test_every_route_the_code_serves_is_declared_with_the_right_kind():
     # 구체 경로로 푼 코드 라우트(api.py의 _route + service.py의 /healthz·/readyz·SSE). 새 라우트를 더하면 이 목록과 표를 함께 고쳐야 한다(아래 시험이 소스에서 놓친 것을 잡는다).
     served = {
-        ("GET", "/healthz"): "none", ("GET", "/readyz"): "none",
+        ("GET", "/readyz"): "none",
         ("POST", "/v1/sessions"): "device-token", ("POST", "/v1/sessions/X/turns"): "device-token", ("POST", "/v1/sessions/X/end"): "device-token",
         ("GET", "/v1/sessions/X/state"): "device-token", ("POST", "/v1/sessions/X/staff-call/retry"): "device-token", ("POST", "/v1/sessions/X/staff-call/report"): "device-token",
         ("POST", "/v1/sessions/X/intervention"): "account",
@@ -49,6 +49,11 @@ def test_every_route_the_code_serves_is_declared_with_the_right_kind():
         assert _declared(method, path) == kind, (method, path, _declared(method, path))
         if path.startswith("/v1/") and path != "/v1/staff/alerts/stream":
             assert PublicApi._route(method, path) is not None, (method, path)         # 코드가 정말 그 경로를 안다
+
+
+def test_healthz_is_not_declared_because_the_gateway_answers_it_itself():
+    """게이트웨이의 /healthz는 상류와 무관하게 게이트웨이가 직접 200을 준다(계약 FAULT_POLICY 5). 이 서비스의 /healthz는 밖에서 닿지 않으므로 선언하지 않는다(다른 영역 선언과 같다)."""
+    assert all(_declared(m, "/healthz") is None for m in METHODS)
 
 
 def test_source_routes_are_all_in_the_served_list():
