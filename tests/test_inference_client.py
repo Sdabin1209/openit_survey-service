@@ -247,7 +247,8 @@ def test_forgotten_release_with_slow_reload_waits_for_loaded_then_calls_once_mor
         waits = []
         sess._sleep = lambda s: (waits.append(s), gate.set())          # 기다리는 동안(첫 대기에서) 서버가 다 올린다
         o = e.turn()
-        assert failed(o) == [] and waits and e.client.stats.snapshot()["reloads"] >= 1      # 기다렸다가 성공했다
+        assert failed(o) == [] and e.client.stats.snapshot()["reloads"] >= 1
+        assert waits and waits[0] == sess.poll_interval           # 첫 대기는 적재 상태를 다시 보는 간격이다(재시도 백오프가 아니다)
     finally:
         e.close()
 
