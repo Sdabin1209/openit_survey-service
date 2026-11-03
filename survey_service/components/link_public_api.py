@@ -114,6 +114,8 @@ class PublicApi:
                  max_utterance_chars: int = 1000, alerts=None, max_subscriptions: int = 100,
                  retry_after_seconds: int = 1, push_allow_private: bool = False, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
                  risk_token: Optional[str] = None, require_subject_ref: bool = False, device_tokens: Optional[dict] = None) -> None:
+        from boundary_contracts import validator as _validator
+        self._push_request_validator = _validator("PushSubscriptionRequest")      # 기동 때 한 번(요청마다 스키마 파일을 다시 읽지 않는다, ADR-0050)
         self._now = orchestrator.clock        # 주입한 단조 시계(ADR-0050): 오케스트레이터와 같은 시계로 턴 마감·상태 조회 간격을 센다
         self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 2.x 호환. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
         token = token or None                                  # 키오스크 토큰은 2.x 호환이다. 없어도 된다: 기기 인증은 게이트웨이 mTLS가 넘기는 X-Openit-Device다 (ADR-0031)
@@ -785,6 +787,9 @@ class PublicApi:
             _check("PushSubscribeBody", {**body, "endpoint": "https://push.example/"})
         else:
             _check("PushSubscribeBody", body)
+            errs = list(self._push_request_validator.iter_errors(body))      # 계약 PushSubscriptionRequest(3.4.4): https·443·IP 리터럴과 localhost 거부, 키 형식
+            if errs:
+                raise _err("INVALID_RECORD", "푸시 구독 본문이 계약 PushSubscriptionRequest를 어긴다")
             why = self.alerts.endpoint_error(body["endpoint"])      # 사설·내부 주소로 서버가 요청을 보내게 하지 못한다(SSRF, 감사 B6). 해석 검사는 보낼 때 한다
             if why:
                 raise _err("INVALID_RECORD", why)

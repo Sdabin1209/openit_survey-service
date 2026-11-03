@@ -186,13 +186,13 @@ class RemoteInference:
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
                  poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 21.0, respond_timeout: float = 26.0,
                  monotonic: Callable[[], float], sleep: Callable[[float], None],
-                 observer: Optional[Callable[[str, str, float], None]] = None) -> None:
+                 observer: Optional[Callable[[str, str, float], None]] = None, egress_proxy: Optional[str] = None) -> None:
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050)
         self.backend = "remote"
-        require_tls_url(base_url)       # /readyz 확인은 urllib을 직접 쓰므로 계약 클라이언트의 거부(U99, loopback 밖 http://)를 여기서도 같은 함수로 건다. 어기면 ValueError(시작을 거부)
-        self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
+        require_tls_url(base_url)       # 영역 사이 호출은 https만(R1.1, loopback만 http 허용). 어기면 ValueError(시작을 거부). 모든 호출은 계약 클라이언트(HttpModelRuntime)를 거친다
+        self._rt = HttpModelRuntime(base_url, token, timeout, egress_proxy=egress_proxy)          # 제어 호출(적재, 상태, readyz)
         # 환자 턴의 호출은 종류마다 상한이 다르다(extract 21초, respond 26초: 서버 상한 20/25보다 1초 길다. D125, ADR-0052, 측정 안 함)
-        self._op_rts = {"extract": HttpModelRuntime(base_url, token, extract_timeout), "respond": HttpModelRuntime(base_url, token, respond_timeout)}
+        self._op_rts = {"extract": HttpModelRuntime(base_url, token, extract_timeout, egress_proxy=egress_proxy), "respond": HttpModelRuntime(base_url, token, respond_timeout, egress_proxy=egress_proxy)}
         self._base = base_url.rstrip("/")
         self._timeout = timeout
         self.load_timeout, self.retries, self.poll_interval, self.backoff = load_timeout, retries, poll_interval, backoff
@@ -219,16 +219,6 @@ class RemoteInference:
             raise InferenceLoadError("REMOTE_" + e.code, "추론 서버가 릴리스 적재를 거부했거나 부를 수 없다",
                                      retryable=e.code == "UNAVAILABLE") from e
         return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, op_runtimes=self._op_rts, monotonic=self._now, sleep=self._sleep)
-
-    def ready(self) -> bool:
-        import urllib.request
-        try:
-            req = urllib.request.Request(self._base + "/readyz")
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(req, timeout=self._timeout) as r:
-                return r.status == 200
-        except Exception:
-            return False
 
 
 # ---------------------------------------------------------------- 서비스 안 적재(개발·스모크 전용)

@@ -109,6 +109,18 @@ class AlertHub:
         return n
 
 
+def _topic_for(body: Mapping) -> str:
+    """Topic 헤더 값(RFC 8030 5.4): 알림 푸시는 알림 ID, 결과 도착 푸시는 세션 ID로 정한다. 같은 것을 다시 보내면 미전달 이전 메시지를 대체한다."""
+    return topic_of(str(body.get("alert_id") or "result:" + str(body.get("session_id", ""))))
+
+
+def topic_of(key: str) -> str:
+    """SHA-256 앞 24바이트의 base64url(패딩 없음), 32자(RFC 8030 5.4)."""
+    import base64
+    import hashlib
+    return base64.urlsafe_b64encode(hashlib.sha256(key.encode("utf-8")).digest()[:24]).decode().rstrip("=")
+
+
 class PushSender(Protocol):
     def send(self, subscription: Mapping, payload: bytes) -> str:
         """푸시 서비스가 접수하면 'ACCEPTED', 구독이 만료됐으면 'GONE', 그 밖의 실패는 'FAILED'."""
@@ -119,6 +131,11 @@ class AlertService:
                  push_timeout: float = 3.0, retry_min_interval_s: int = DEFAULT_RETRY_MIN_INTERVAL_S,
                  retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None,
                  *, monotonic: Callable[[], float], queue=None) -> None:
+        import inspect
+        try:
+            self._send_kwargs = frozenset(inspect.signature(push.send).parameters) if push is not None else frozenset()      # 발송기가 받는 선택 인자(topic, on_first). 시험 대역은 (구독, 본문)만 받는다
+        except (TypeError, ValueError):
+            self._send_kwargs = frozenset()
         self.queue = queue      # 알림 재시도 큐(alert_queue, ADR-0058). 없으면 저장 실패는 전과 같이 예외로만 끝난다
         self._now = monotonic      # 시계 주입(ADR-0050)
         self._push_validator = validator("StaffPushPayload")      # 기동 때 한 번: 푸시마다 만들면 스키마 파일을 매번 다시 읽는다(ADR-0050)
@@ -292,27 +309,55 @@ class AlertService:
         results: list[str] = []
         lock = threading.Lock()
 
-        def one(sub):
+        topic = _topic_for(body)
+        send_kw = self._send_kwargs
+        alert_n = int(body["alert_id"][3:]) if str(body.get("alert_id", "")).startswith("al-") and str(body["alert_id"])[3:].isdigit() else None
+
+        slots: dict = {}
+        state = {"closed": False}
+
+        def one(i, sub):
             # 왜 전부 잡나: 이 스레드는 발송 결과를 모으는 일꾼이다. 예외로 죽으면 결과가 빠져 접수 수가 틀리고 스레드 예외만 남는다(S6). 발송기가 던진 예외는 실패로 센다
+            first: dict = {}
+
+            def on_first(o):
+                first["o"] = o
+                with lock:
+                    slots[i] = "FAILED" if o == "RETRY" else o      # 첫 시도 결과로 전달 여부를 먼저 판단한다(재시도는 뒤에서 계속된다, R3.18)
+            kw = {}
+            if "topic" in send_kw:
+                kw["topic"] = topic
+            if "on_first" in send_kw:
+                kw["on_first"] = on_first
             try:
-                r = self.push.send({k: v for k, v in sub.items() if k != "topics"}, payload)      # 주제는 우리 쪽 표시라 푸시 서비스에는 보내지 않는다
+                r = self.push.send({k: v for k, v in sub.items() if k != "topics"}, payload, **kw)      # 주제는 우리 쪽 표시라 푸시 서비스에는 보내지 않는다
             except Exception as e:
                 log.warning("웹 푸시 발송기가 예외를 던졌다 error=%s", type(e).__name__)
                 r = "FAILED"
             with lock:
-                results.append(r)
+                late = state["closed"]
+                if not late:
+                    slots[i] = r                              # 대기 안에 끝났다: 최종 결과가 이 구독의 결과다
+            if late and first.get("o") == "RETRY" and r == "ACCEPTED":      # 대기가 끝난 뒤 재시도로 접수됐다: 이미 센 실패를 고치고 기록한다(푸시 한 건의 결과 기록)
+                self._count("push_accepted"); self._count("push_failed", -1)
+                if alert_n is not None:
+                    try:
+                        self.store.record_delivery(alert_n, "DELIVERED")
+                    except Exception as _e:
+                        log.warning("재시도 접수를 기록하지 못했다 error=%s", type(_e).__name__)
             if r == "GONE":
                 try:
                     self.store.remove_subscription(sub["endpoint"])
                 except Exception as _e:      # 만료 구독 정리는 다음에 다시 할 수 있다: 저장소 오류든 그 밖의 오류든 스레드를 죽이지 않는다
                     log.warning("만료된 구독을 지우지 못했다 error=%s", type(_e).__name__)
-        threads = [threading.Thread(target=one, args=(s,), daemon=True) for s in subs]
+        threads = [threading.Thread(target=one, args=(i, s), daemon=True) for i, s in enumerate(subs)]
         [t.start() for t in threads]
         deadline = self._now() + self.push_timeout
         for t in threads:
             t.join(max(0.0, deadline - self._now()))
         with lock:
-            done = list(results)
+            state["closed"] = True
+            done = list(slots.values())
         for r, key in (("ACCEPTED", "push_accepted"), ("GONE", "push_gone"), ("FAILED", "push_failed")):
             self._count(key, done.count(r))
         return done.count("ACCEPTED")

@@ -15,3 +15,24 @@ def _injected_clock_and_timer_for_pg():
     from .timing import FakeClock, FakeTimer
     session_store.configure(monotonic=FakeClock(), timer=FakeTimer)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _fake_dns_for_push(monkeypatch):
+    """웹 푸시 endpoint는 등록 때와 발송 때 이름을 해석해 공인 주소인지 본다(R3.18). 시험은 실제 DNS를 쓰지 않는다: 내부 이름은 사설 주소로, 그 밖의 이름은 공인 문서용 주소가 아닌 공인 주소(93.184.216.34)로 해석한다."""
+    import ipaddress
+    import socket
+    from survey_service.components import link_push
+
+    def fake(host, port, *a, **k):
+        try:
+            ipaddress.ip_address(host.split("%")[0])
+            return socket.getaddrinfo(host, port, *a, **k)
+        except ValueError:
+            pass
+        h = host.lower().rstrip(".")
+        if h.endswith(".invalid"):                      # RFC 6761: 해석되지 않는 이름
+            raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        ip = "127.0.0.1" if h == "localhost" else "10.0.0.5" if h.endswith((".internal", ".local", ".lan", ".corp", ".home", ".intranet", ".localdomain")) or h.startswith("private.") else "93.184.216.34"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
+    monkeypatch.setattr(link_push, "_getaddrinfo", fake)

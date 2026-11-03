@@ -98,15 +98,20 @@ def tls_server(tmp_path):
 
 
 def test_https_call_trusts_a_private_root_through_ssl_cert_file_only(tls_server, monkeypatch):
-    """서비스가 추론 서버를 부르는 HTTPS(RemoteInference.ready)가 SSL_CERT_FILE 하나로 사설 루트를 믿는다. 환경 변수가 없으면 믿지 않는다(검증이 켜져 있다는 증거)."""
-    from survey_service.components.link_inference import RemoteInference
+    """서비스가 추론 서버를 부르는 HTTPS(계약 HttpModelRuntime)가 SSL_CERT_FILE 하나로 사설 루트를 믿는다. 환경 변수가 없으면 믿지 않는다(검증이 켜져 있다는 증거)."""
+    from boundary_contracts import BoundaryError
+    from boundary_contracts.clients import HttpModelRuntime
     url, root = tls_server
     for var in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE"):
         monkeypatch.delenv(var, raising=False)
-    mk = lambda: RemoteInference(url, "tok", 3.0, monotonic=lambda: 0.0, sleep=lambda s: None)
-    assert mk().ready() is False                                     # 사설 루트를 모른다: 검증 실패
+    with pytest.raises(BoundaryError) as e:
+        HttpModelRuntime(url, "tok", 3).get_release_state("rel-1")
+    assert e.value.code == "UNAVAILABLE"
     monkeypatch.setenv("SSL_CERT_FILE", str(root))
-    assert mk().ready() is True
+    try:
+        HttpModelRuntime(url, "tok", 3).get_release_state("rel-1")
+    except BoundaryError as e2:
+        assert "CERTIFICATE_VERIFY_FAILED" not in str(e2.details) + e2.message      # TLS는 통과했다(본문 해석에서 거부될 뿐)
 
 
 def test_contract_http_client_trusts_a_private_root_through_ssl_cert_file_only(tls_server, monkeypatch):

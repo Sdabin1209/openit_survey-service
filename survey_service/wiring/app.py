@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import logging
 import re
 import sys
@@ -13,11 +14,12 @@ from pathlib import Path
 import model_runtime
 import survey_schema
 from boundary_contracts import PIPELINE_SCHEMA_VERSION, SecretError, read_secret, secret_source, validator
+from boundary_contracts.clients import egress_proxy_from
 from boundary_contracts.action_rules import load_rules
 
 from .. import SERVICE_VERSION
 from ..components.alert_service import AlertHub, AlertService, AlertStaffConsole
-from ..components.link_push import WebPushSender, endpoint_syntax_error
+from ..components.link_push import WebPushSender, endpoint_error
 from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
 from ..components.metrics_export import Metrics
@@ -131,12 +133,13 @@ class App:
             if not settings.vapid_subject:
                 raise ConfigError("VAPID 비밀키가 있는데 SURVEY_VAPID_SUBJECT(mailto: 또는 https://)가 없다")
             try:
-                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds, allow_private_hosts=settings.push_allow_private_hosts)
+                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds, allow_private_hosts=settings.push_allow_private_hosts,
+                                     egress_proxy=egress_proxy_from(os.environ))      # 바깥 호출은 자기 영역 게이트웨이 출구(OPENIT_EGRESS_PROXY)로만(R1.8, R6.4)
             except ValueError as e:
                 raise ConfigError(str(e)) from None
         self.alerts = checked.wrap_alert_service(AlertService(checked.wrap_alert_store(self.alert_store), AlertHub(), push, settings.push_timeout_seconds,
                                     settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
-                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error, monotonic=clock, queue=self.alert_queue))
+                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_error, monotonic=clock, queue=self.alert_queue))
         self.registry = ReleaseRegistry()
         self.metrics = Metrics()      # 내부망 GET /metrics(server.py). 게이트웨이로 나가지 않는다 (ADR-0055)
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)

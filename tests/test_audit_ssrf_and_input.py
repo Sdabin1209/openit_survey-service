@@ -180,7 +180,7 @@ def test_sse_connection_cap(tmp_path, monkeypatch):
         assert wait_until(lambda: app.alerts.hub.count() >= 1)
         with pytest.raises(urllib.error.HTTPError) as e:
             Sse(port)
-        assert e.value.code == 503 and e.value.headers.get("Retry-After")
+        assert e.value.code == 429 and e.value.headers.get("Retry-After")
         first.close()
     finally:
         _shutdown(app, httpd)
