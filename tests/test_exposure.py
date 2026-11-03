@@ -42,8 +42,8 @@ def test_every_route_the_code_serves_is_declared_with_the_right_kind():
         ("GET", "/v1/staff/alerts"): "account", ("GET", "/v1/staff/alerts/stream"): "account", ("GET", "/v1/staff/sessions/X"): "account",
         ("GET", "/v1/staff/push-config"): "account", ("POST", "/v1/staff/push-subscriptions"): "account",
         ("POST", "/v1/staff/push-subscriptions/unsubscribe"): "account", ("DELETE", "/v1/staff/push-subscriptions"): "account",
-        # 서비스는 결과·위험 신호 경로를 자기 토큰으로 내지만 게이트웨이 밖으로는 내지 않는다
-        ("POST", "/v1/sessions/X/risk-signals"): "denied", ("GET", "/v1/results"): "denied", ("GET", "/v1/results/X"): "denied",
+        # 위험 신호 경로는 게이트웨이 밖으로 내지 않는다. 결과 읽기·확인 표시는 의사 계정(clinician)에게 연다(계약 3.2.0 PUBLIC_API B절, U83, ADR-0056)
+        ("POST", "/v1/sessions/X/risk-signals"): "denied", ("GET", "/v1/results"): "account", ("GET", "/v1/results/X"): "account", ("POST", "/v1/results/X/ack"): "account",
     }
     for (method, path), kind in served.items():
         assert _declared(method, path) == kind, (method, path, _declared(method, path))
@@ -61,7 +61,7 @@ def test_source_routes_are_all_in_the_served_list():
 
 
 def test_denied_paths_are_not_exposed_with_any_method():
-    for path in ("/v1/sessions/X/risk-signals", "/v1/results", "/v1/results/X"):
+    for path in ("/v1/sessions/X/risk-signals", "/metrics"):
         assert {_declared(m, path) for m in METHODS} == {"denied"}
 
 
@@ -117,7 +117,7 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
     """
     from survey_service.settings import Settings
     s = Settings()
-    staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms")]
+    staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms") and r["auth"]["roles"] == ["staff"]]      # 의사 결과 경로(clinician)는 스트림이 아니라 read 상한이 없다
     assert staff, "직원 경로 선언이 없다"
     for r in staff:
         assert r["timeouts_ms"] == {"dial": 1000, "response_header": 55000, "read": 3600000}, r["paths"]
