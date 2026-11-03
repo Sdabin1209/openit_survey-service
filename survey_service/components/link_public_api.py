@@ -67,7 +67,7 @@ _SPEC = (
     ("staff_report", "POST", "/v1/sessions/{sid}/staff-call/report", "kiosk", False, "StaffCallReport", True, "StaffAlert"),
     ("intervention", "POST", "/v1/sessions/{sid}/intervention", "staff", True, None, False, None),
     ("alerts", "GET", "/v1/staff/alerts", "staff", False, None, True, "StaffAlertPage"),
-    ("stream", "GET", "/v1/staff/alerts/stream", "staff", False, None, True, None),
+    ("stream", "GET", "/v1/staff/alerts/stream", ("staff", "result-reader"), False, None, True, None),
     ("staff_session", "GET", "/v1/staff/sessions/{sid}", "staff", False, None, True, None),
     ("push_config", "GET", "/v1/staff/push-config", ("staff", "result-reader"), False, None, True, "PushConfig"),
     ("push_add", "POST", "/v1/staff/push-subscriptions", ("staff", "result-reader"), False, None, True, None),

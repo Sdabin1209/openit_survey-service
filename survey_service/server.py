@@ -43,8 +43,9 @@ def _status_line(code: int) -> str:
 class _SseBody:
     """SSE 응답 본문(WSGI iterable). waitress는 클라이언트가 끊으면 다음 쓰기에서 반복을 멈추고 close()를 부른다: 구독을 거기서 푼다."""
 
-    def __init__(self, app: App, q, sent: int, hub) -> None:
+    def __init__(self, app: App, q, sent: int, hub, allowed=None) -> None:
         self._app, self._q, self._sent, self._hub, self._closed = app, q, sent, hub, False
+        self._allowed = allowed          # 이 연결이 받을 이벤트 이름 집합(X-Openit-Roles로 거른 것, 최소 권한). None이면 모두
 
     def close(self) -> None:
         if not self._closed:
@@ -54,14 +55,20 @@ class _SseBody:
     def __iter__(self):
         app, q, sent = self._app, self._q, self._sent
         try:
-            last_ping = time.monotonic()
-            while not app._stop.is_set() and not app.draining.is_set() and not getattr(q, "overflowed", False):
+            last_ping = started = time.monotonic()
+            max_life = app.settings.sse_max_seconds
+            # 최대 수명(R2.4): 인증 만료·철회 신호를 스트림이 받지 못하므로, 수명이 다하면 서버가 정상 종료한다(클라이언트가 새로 연결하고 인증이 끝났으면 그 연결이 401)
+            while not app._stop.is_set() and not app.draining.is_set() and not getattr(q, "overflowed", False) and time.monotonic() - started < max_life:
                 try:
                     ev = q.get(timeout=min(app.settings.sse_heartbeat_seconds, 0.5))      # 종료 신호를 0.5초 안에 본다(우아한 종료가 스트림을 기다리지 않게)
                 except queue.Empty:
                     if time.monotonic() - last_ping >= app.settings.sse_heartbeat_seconds:
                         yield _heartbeat()
                         last_ping = time.monotonic()
+                    continue
+                if self._allowed is not None and ev["type"] not in self._allowed:
+                    if ev["id"] is not None and ev["id"] > sent:
+                        sent = ev["id"]                      # 거른 이벤트도 순번은 지나간 것으로 센다(이어 받기 때 다시 보내지 않게)
                     continue
                 if ev["id"] is None:                         # result_ready: 저장·순번이 없는 실시간 이벤트(U83, ADR-0056). Last-Event-ID를 바꾸지 않는다
                     yield _sse(ev)
@@ -74,14 +81,49 @@ class _SseBody:
             self.close()
 
 
+_EVENT_SCHEMA = {"alert": "StaffAlert", "resolved": "StaffAlert", "result_ready": "ResultReadyEvent", "heartbeat": "HeartbeatEvent", "resync": "ResyncEvent"}      # data: 의 계약 스키마(PUBLIC_API, 3.4.4)
+_ROLE_EVENTS = {"staff": {"alert", "resolved"}, "clinician": {"result_ready"}}      # 역할이 받는 이벤트(최소 권한). heartbeat·resync는 모두에게
+
+
+def _checked(name: str, data: dict) -> dict:
+    """내보내기 전 생산자 검증(CONVENTIONS 3절): 이벤트 data를 계약 스키마로 본다. 어기면 ValueError(스트림을 끝낸다)."""
+    from boundary_contracts import validator
+    errs = list(_validator(_EVENT_SCHEMA[name]).iter_errors(data))
+    if errs:
+        raise ValueError(f"SSE {name} 이벤트가 계약 {_EVENT_SCHEMA[name]}를 어긴다")
+    return data
+
+
+_validators: dict = {}
+
+
+def _validator(name: str):
+    from boundary_contracts import validator
+    v = _validators.get(name)
+    if v is None:
+        v = _validators[name] = validator(name)
+    return v
+
+
+def _allowed_events(headers) -> Optional[set]:
+    """X-Openit-Roles로 연결이 받을 이벤트 이름을 정한다. 헤더가 없으면(직접 호출·옛 경로) staff 몫. 알려진 역할이 하나도 없으면 heartbeat·resync만."""
+    raw = headers.get("x-openit-roles")
+    roles = {"staff"} if raw is None else {r.strip() for r in raw.split(",")}
+    allowed = {"heartbeat", "resync"}
+    for r in roles:
+        allowed |= _ROLE_EVENTS.get(r, set())
+    return allowed
+
+
 def _heartbeat() -> bytes:
     """주석 줄(`: ping`, 프록시·연결 유지용)과 이름 있는 이벤트 `heartbeat`(브라우저 EventSource가 앱 코드에서 볼 수 있다, id 없음 = Last-Event-ID를 바꾸지 않는다).
     DB를 읽지 않는다: 알림 DB·상류가 느리거나 죽어도 스트림은 하트비트를 계속 보낸다. 기존 클라이언트는 모르는 이벤트 이름을 무시한다(CR-016)."""
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return b": ping\n\nevent: heartbeat\ndata: " + json.dumps({"ts": ts}).encode() + b"\n\n"
+    return b": ping\n\nevent: heartbeat\ndata: " + json.dumps(_checked("heartbeat", {"ts": ts})).encode() + b"\n\n"
 
 
 def _sse(ev: dict) -> bytes:
+    _checked(ev["type"], ev["alert"])
     if ev["id"] is None:
         return f"event: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode()
     return f"id: {ev['id']}\nevent: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode()
@@ -92,7 +134,7 @@ def _stream(app: App, req: Request) -> Response:
     hub, store = app.alerts.hub, app.alert_store
     retry = {"Retry-After": str(app.settings.retry_after_seconds)}
     if hub.count() >= app.settings.max_sse_connections:      # 스트림은 연결마다 작업 스레드를 쥔다: 상한을 넘으면 503
-        raise _err("UNAVAILABLE", "알림 스트림 연결이 너무 많다", 503, retry)
+        raise _err("UNAVAILABLE", "알림 스트림 연결이 너무 많다", 429, retry, details={"reason": "SSE_CONNECTION_LIMIT"})      # 동시 연결 상한 초과는 429(PUBLIC_API): 클라이언트는 Retry-After 뒤 다시 연결한다
     last = req.headers.get("last-event-id", "").strip()
     q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
     try:
@@ -102,14 +144,16 @@ def _stream(app: App, req: Request) -> Response:
         if last.isdigit():                               # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
             sent = int(last)
             if sent > latest or (oldest is not None and sent < oldest - 1):      # 이어 받을 수 없다(오래된 이벤트가 지워졌거나 순번이 앞섰다): 목록 API로 다시 맞추게 알린다
-                first.append(b'event: resync\ndata: {"reason":"EVENTS_NOT_RESUMABLE"}\n\n')
+                first.append(b"event: resync\ndata: " + json.dumps(_checked("resync", {"reason": "EVENTS_NOT_RESUMABLE"})).encode() + b"\n\n")
+            allowed = _allowed_events(req.headers)
             for ev in store.events_after(sent):
-                first.append(_sse(ev))
+                if ev["type"] in allowed:
+                    first.append(_sse(ev))
                 sent = ev["id"]
     except StoreError:                             # 알림 DB가 죽어 있으면 200 스트림을 열지 않고 503(클라이언트는 Retry-After 뒤 Last-Event-ID로 다시 연결한다)
         hub.unsubscribe(q)
         raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다", 503, retry) from None
-    return Response(200, _chain(first, _SseBody(app, q, sent, hub)), {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    return Response(200, _chain(first, _SseBody(app, q, sent, hub, _allowed_events(req.headers))), {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
                     content_type="text/event-stream; charset=utf-8")
 
 

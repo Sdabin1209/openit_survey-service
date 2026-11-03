@@ -161,6 +161,7 @@ class Settings:
     vapid_subject: str = ""                            # mailto:... 또는 https://... (비밀 아님)
     push_allow_private_hosts: bool = False        # 개발·시험 전용: 웹 푸시 endpoint가 사설·내부 주소여도 허용(운영은 false: SSRF 방어)
     push_timeout_seconds: float = 3.0
+    sse_max_seconds: int = 300                    # SSE 스트림 하나의 최대 수명(계약 3.4.4 R2.4, SURVEY_SSE_MAX_SECONDS). 그 시각에 정상 종료한다. platform 세션 갱신 주기 이하(deploy가 준다). 시작값·측정 안 함
     sse_heartbeat_seconds: float = 15.0          # ': ping' 주석을 보내는 간격
     retry_after_seconds: int = 1                 # 429·503 응답의 Retry-After(초)
     state_poll_min_interval_seconds: float = 0.5  # 세션 상태 폴링 빈도 상한(세션마다, 0이면 끔)
@@ -225,7 +226,7 @@ class Settings:
             push_allow_private_hosts=env.get("SURVEY_PUSH_ALLOW_PRIVATE_HOSTS", "").strip().lower() in ("1", "true", "yes", "on"),
             retry_after_seconds=_int(env, "SURVEY_RETRY_AFTER_SECONDS", 1, 1),
             state_poll_min_interval_seconds=float(env.get("SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS", "0.5")),
-            sse_heartbeat_seconds=_float(env, "SURVEY_SSE_HEARTBEAT_SECONDS", 15.0),
+            sse_heartbeat_seconds=_float(env, "SURVEY_SSE_HEARTBEAT_SECONDS", 15.0), sse_max_seconds=_int(env, "SURVEY_SSE_MAX_SECONDS", 300, 1),
             max_push_subscriptions=_int(env, "SURVEY_MAX_PUSH_SUBSCRIPTIONS", 100, 1),
             staff_api_token_env=env.get("SURVEY_STAFF_API_TOKEN_ENV", "SURVEY_STAFF_API_TOKEN"),
             api_max_inflight=_int(env, "SURVEY_API_MAX_INFLIGHT", 32, 1),
