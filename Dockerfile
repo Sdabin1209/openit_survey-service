@@ -28,6 +28,8 @@ LABEL io.openit.service=survey-service \
       io.openit.contracts.survey-schema=$SURVEY_SCHEMA_MAJOR \
       io.openit.model-runtime=$MODEL_RUNTIME_TAG \
       io.openit.langgraph=$LANGGRAPH_VERSION
+# 백업 잡(python -m survey_service backup)이 쓰는 restic: 백업 저장소 프로토콜(restic REST)의 표준 클라이언트(ADR-0060). 배포판 패키지이고 버전은 이미지 빌드 때의 배포판 값이다
+RUN apt-get update && apt-get install -y --no-install-recommends restic ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /install /usr/local
 RUN useradd --system --uid 10001 --no-create-home app && mkdir /data && chown app /data
 USER app

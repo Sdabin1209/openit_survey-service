@@ -36,7 +36,8 @@
         "dial": 1000,
         "response_header": 55000
       },
-      "upstream_token": "survey-api-kiosk"
+      "upstream_token": "survey-api-kiosk",
+      "max_body_bytes": 65536
     },
     {
       "paths": [
@@ -103,7 +104,8 @@
         "dial": 1000,
         "response_header": 55000,
         "read": 3600000
-      }
+      },
+      "max_body_bytes": 65536
     },
     {
       "paths": [
@@ -166,7 +168,8 @@
       "timeouts_ms": {
         "dial": 1000,
         "response_header": 55000
-      }
+      },
+      "max_body_bytes": 65536
     },
     {
       "paths": [
@@ -207,7 +210,8 @@
       "timeouts_ms": {
         "dial": 1000,
         "response_header": 55000
-      }
+      },
+      "max_body_bytes": 65536
     },
     {
       "paths": [
@@ -218,5 +222,12 @@
         "kind": "denied"
       }
     }
+  ],
+  "egress": [
+    "release-gate",
+    "ops-feedback-ingest",
+    "model-serving",
+    "external:web-push",
+    "external:backup"
   ]
 }

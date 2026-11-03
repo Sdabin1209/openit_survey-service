@@ -272,8 +272,11 @@ def main(argv=None) -> int:
     if argv[:1] == ["purge"]:
         from .wiring.purge_job import run_purge
         return run_purge(argv=argv[1:])
+    if argv[:1] == ["backup"]:
+        from .wiring.backup_job import main as backup_main
+        return backup_main()
     if argv:
-        print("알 수 없는 명령: 서버는 인자 없이, 보존 정리는 `purge`", file=sys.stderr)
+        print("알 수 없는 명령: 서버는 인자 없이, 보존 정리는 `purge`, 백업은 `backup`", file=sys.stderr)
         return 2
     try:
         settings = Settings.from_env()
