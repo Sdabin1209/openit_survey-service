@@ -203,6 +203,9 @@ class AlertService:
             return 0
         done = 0
         for q in self.queue.due():
+            if q.kind == "RESULT_READY":
+                done += self._drain_result(q, now, backoff_base, backoff_max)
+                continue
             tok = CURRENT_TURN.set((q.session_id, q.turn_id)) if q.turn_id else None
             try:
                 try:
@@ -222,11 +225,52 @@ class AlertService:
                     CURRENT_TURN.reset(tok)
         return done
 
+    def push_result_ready(self, session_id: str) -> tuple[int, int]:
+        """세션이 끝났음을 results 주제 구독자(clinician)에게 웹 푸시로 알린다(StaffPushPayload{session_id, kind: RESULT_READY}, subject_ref·값 없음).
+        돌려주는 값: (대상 구독 수, 접수 수). 대상이 있는데 접수가 0이면 (일시) 실패라 재시도 큐에 넣는다(기존 알림과 같은 재시도 규칙, ADR-0059)."""
+        if self.push is None:
+            return 0, 0
+        try:
+            subs = [s for s in self.store.subscriptions() if "results" in (s.get("topics") or ["alerts"])]
+        except BoundaryError as _e:
+            if not _is_store_error(_e):
+                raise
+            subs = None
+        if subs is None:                       # 구독을 읽지 못했다: 나중에 다시
+            self._enqueue(session_id, None, "RESULT_READY", None, None)
+            return 0, 0
+        if not subs:
+            return 0, 0
+        ok = self._send_push(subs, {"session_id": session_id, "kind": "RESULT_READY"})
+        if ok == 0:
+            self._enqueue(session_id, None, "RESULT_READY", None, None)
+        return len(subs), ok
+
+    RESULT_PUSH_MAX_ATTEMPTS = 10      # 결과 푸시 재시도 상한. 측정하지 않은 값: 5초 시작 지수 백오프(최대 60초)로 약 8분 안에 포기한다(ADR-0059). 결과는 목록 API로 언제든 맞출 수 있는 파생 정보다
+
+    def _drain_result(self, q, now, backoff_base, backoff_max) -> int:
+        try:
+            subs = [s for s in self.store.subscriptions() if "results" in (s.get("topics") or ["alerts"])]
+            ok = self._send_push(subs, {"session_id": q.session_id, "kind": "RESULT_READY"}) if subs and self.push is not None else 1
+        except BoundaryError as _e:
+            if not _is_store_error(_e):
+                raise
+            ok = 0
+        if ok > 0 or q.attempts + 1 >= self.RESULT_PUSH_MAX_ATTEMPTS:
+            if ok == 0:
+                log.warning("결과 도착 푸시를 끝내 보내지 못했다(재시도 상한)")
+            self.queue.done(q.id)
+            self._count("queue_drained")
+            return 1
+        self._count("queue_retry_failed")
+        self.queue.failed(q.id, now + min(backoff_max, backoff_base * 2 ** min(q.attempts, 10)), "PUSH_FAILED")
+        return 0
+
     def _push(self, event: dict) -> int:
         if self.push is None:
             return 0
         try:
-            subs = self.store.subscriptions()
+            subs = [s for s in self.store.subscriptions() if "alerts" in (s.get("topics") or ["alerts"])]      # 주제가 없는 옛 구독은 alerts
         except BoundaryError as _e:
             if not _is_store_error(_e):
                 raise
@@ -235,6 +279,10 @@ class AlertService:
             return 0
         a = event["alert"]
         body = {"alert_id": a["alert_id"], "session_id": a["session_id"], "kind": a["kind"]}        # 계약 StaffPushPayload의 키만(additionalProperties false). type은 알림 문구에 필요 없다
+        return self._send_push(subs, body)
+
+    def _send_push(self, subs: list, body: dict) -> int:
+        """구독자들에게 계약 StaffPushPayload 본문을 보내고 접수 수를 돌려준다."""
         errs = [e.message[:120] for e in self._push_validator.iter_errors(body)]
         if errs:       # R7: 보내는 쪽(만드는 쪽)이 계약으로 검증한다. 어기면 보내지 않고 실패로 센다(값은 로그에 싣지 않는다)
             log.error("푸시 본문이 계약 StaffPushPayload를 어긴다 errors=%d", len(errs))
@@ -245,7 +293,7 @@ class AlertService:
         lock = threading.Lock()
 
         def one(sub):
-            r = self.push.send(sub, payload)
+            r = self.push.send({k: v for k, v in sub.items() if k != "topics"}, payload)      # 주제는 우리 쪽 표시라 푸시 서비스에는 보내지 않는다
             with lock:
                 results.append(r)
             if r == "GONE":

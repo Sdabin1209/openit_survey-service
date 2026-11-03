@@ -180,6 +180,47 @@
     },
     {
       "paths": [
+        "/v1/staff/push-config"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "auth": {
+        "kind": "account",
+        "roles": [
+          "clinician"
+        ]
+      },
+      "upstream_token": "survey-result-reader",
+      "user_header": "set",
+      "timeouts_ms": {
+        "dial": 1000,
+        "response_header": 55000
+      }
+    },
+    {
+      "paths": [
+        "/v1/staff/push-subscriptions",
+        "/v1/staff/push-subscriptions/unsubscribe"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "auth": {
+        "kind": "account",
+        "roles": [
+          "clinician"
+        ]
+      },
+      "upstream_token": "survey-result-reader",
+      "user_header": "set",
+      "timeouts_ms": {
+        "dial": 1000,
+        "response_header": 55000
+      }
+    },
+    {
+      "paths": [
         "/v1/sessions/*/risk-signals",
         "/metrics"
       ],

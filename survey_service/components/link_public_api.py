@@ -69,9 +69,9 @@ _SPEC = (
     ("alerts", "GET", "/v1/staff/alerts", "staff", False, None, True, "StaffAlertPage"),
     ("stream", "GET", "/v1/staff/alerts/stream", "staff", False, None, True, None),
     ("staff_session", "GET", "/v1/staff/sessions/{sid}", "staff", False, None, True, None),
-    ("push_config", "GET", "/v1/staff/push-config", "staff", False, None, True, "PushConfig"),
-    ("push_add", "POST", "/v1/staff/push-subscriptions", "staff", False, None, True, None),
-    ("push_unsub", "POST", "/v1/staff/push-subscriptions/unsubscribe", "staff", False, None, True, None),
+    ("push_config", "GET", "/v1/staff/push-config", ("staff", "result-reader"), False, None, True, "PushConfig"),
+    ("push_add", "POST", "/v1/staff/push-subscriptions", ("staff", "result-reader"), False, None, True, None),
+    ("push_unsub", "POST", "/v1/staff/push-subscriptions/unsubscribe", ("staff", "result-reader"), False, None, True, None),
     ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True, None),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
     ("result", "GET", "/v1/results/{sid}", "result-reader", False, None, True, None),
     ("results", "GET", "/v1/results", "result-reader", False, None, True, None),
@@ -160,13 +160,15 @@ class PublicApi:
         """공개 API 경로 목록. stream은 알림 SSE 처리 함수(서버가 허브·저장소를 알고 있으므로 server.py가 건넨다)."""
         out = []
         for name, method, pattern, role, user, contract, needs_alerts, response in _SPEC:
-            if (needs_alerts and self.alerts is None) or (role == "result-reader" and self.result_token is None) or (role == "risk-source" and self.risk_token is None):
+            roles = (role,) if isinstance(role, str) else tuple(role)
+            roles = tuple(r for r in roles if not (r == "result-reader" and self.result_token is None))      # 토큰이 없는 역할은 빼고, 남는 역할이 없으면 경로가 없다
+            if (needs_alerts and self.alerts is None) or not roles or (role == "risk-source" and self.risk_token is None):
                 continue      # 알림 서비스가 없거나 그 역할의 토큰을 설정하지 않았으면 기능이 꺼진 것이다
             if name == "stream":
                 handler = stream or self._stream_unwired
             else:
                 handler = self._guarded(name)
-            out.append(Route(method, pattern, handler, frozenset({role}), request_schema=contract, response_schema=response, require_user=user, max_body=MAX_BODY))
+            out.append(Route(method, pattern, handler, frozenset(roles), request_schema=contract, response_schema=response, require_user=user, max_body=MAX_BODY))
         return out
 
     @staticmethod
@@ -759,7 +761,12 @@ class PublicApi:
             if why:
                 raise _err("INVALID_RECORD", why)
         ep, keys = body["endpoint"], body["keys"]
-        sub = {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}}
+        topics = body.get("topics") or ["alerts"]
+        # 3.4.0: alerts는 staff 역할, results는 clinician(result-reader 토큰) 역할만 등록한다. 다른 역할이면 403. 한 요청에 둘이면 역할 하나가 둘 다 가질 수 없으므로 항상 403
+        want = {"alerts": "staff", "results": "result-reader"}
+        if any(want[t] != req.role for t in topics):
+            raise _err("PERMISSION_DENIED", "이 역할은 그 주제를 구독할 수 없다")
+        sub = {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}, "topics": sorted(set(topics))}
         try:
             until = self.orch.request_until()
             if self.orch.bounded(self.alerts.store.count_subscriptions, until) >= self.max_subscriptions and not any(

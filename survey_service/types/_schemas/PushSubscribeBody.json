@@ -44,6 +44,18 @@
         }
       }
     },
-    "expirationTime": {}
+    "expirationTime": {},
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "alerts",
+          "results"
+        ]
+      },
+      "description": "구독 주제(계약 3.4.0). alerts=직원 알림(staff 역할), results=결과 도착(clinician 역할=result-reader 토큰). 없으면 [\"alerts\"]. 역할 확인은 서비스가 한다."
+    }
   }
 }

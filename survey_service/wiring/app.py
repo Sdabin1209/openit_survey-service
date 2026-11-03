@@ -339,9 +339,16 @@ class App:
 
     def _result_ready(self, session_id: str, status: str) -> None:
         """세션이 끝났음을 직원·의사 콘솔 SSE로 알린다(U83, PUBLIC_API B절). 본문은 session_id·status·ended_at뿐이고 subject_ref는 넣지 않는다.
-        저장하지 않는 실시간 이벤트다(id 없음): 놓친 콘솔은 결과 목록 API로 맞춘다. 웹 푸시로는 보내지 않는다."""
+        저장하지 않는 실시간 이벤트다(id 없음): 놓친 콘솔은 결과 목록 API로 맞춘다. 3.4.0부터 results 주제 푸시 구독자(clinician)에게는 웹 푸시도 보낸다(턴을 막지 않도록 별도 스레드, ADR-0059)."""
         ended = datetime.fromtimestamp(REAL_WALL_CLOCK(), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         self.alerts.hub.publish({"type": "result_ready", "id": None, "alert": {"session_id": session_id, "status": status, "ended_at": ended}})
+        threading.Thread(target=self._result_push, args=(session_id,), name="result-push", daemon=True).start()
+
+    def _result_push(self, session_id: str) -> None:
+        try:
+            self.alerts.push_result_ready(session_id)
+        except Exception as e:
+            log.error("결과 도착 푸시 실패 error=%s", type(e).__name__)
 
     def _warnings(self) -> list:
         """/readyz의 경고(준비 조건은 아니다). 위험 감지가 꺼진 채 운영 중임을 숨기지 않는다(사용자 결정 L11, ADR-0053)."""

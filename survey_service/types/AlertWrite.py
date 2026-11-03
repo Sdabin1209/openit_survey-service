@@ -133,6 +133,7 @@ class Sub(TypedDict, closed=True):
     endpoint: Endpoint
     keys: Keys
     expirationTime: NotRequired[Any]
+    topics: NotRequired[list[Literal['alerts', 'results']]]
 
 
 class AlertWrite16(TypedDict, closed=True):

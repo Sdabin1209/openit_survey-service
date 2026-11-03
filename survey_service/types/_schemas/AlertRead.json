@@ -648,7 +648,19 @@
                   }
                 }
               },
-              "expirationTime": {}
+              "expirationTime": {},
+              "topics": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "alerts",
+                    "results"
+                  ]
+                },
+                "description": "구독 주제(계약 3.4.0). 없으면 alerts."
+              }
             }
           }
         }

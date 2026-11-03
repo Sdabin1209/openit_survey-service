@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -19,3 +19,4 @@ class PushSubscribeBody(TypedDict, closed=True):
     endpoint: Endpoint
     keys: Keys
     expirationTime: NotRequired[Any]
+    topics: NotRequired[list[Literal['alerts', 'results']]]

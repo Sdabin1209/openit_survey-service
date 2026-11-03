@@ -179,6 +179,7 @@ class ResultItem2(TypedDict, closed=True):
     endpoint: Endpoint
     keys: Keys
     expirationTime: NotRequired[Any]
+    topics: NotRequired[list[Literal['alerts', 'results']]]
 
 
 class AlertRead25(TypedDict, closed=True):
