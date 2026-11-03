@@ -82,6 +82,10 @@ def tls_server(tmp_path):
         def do_GET(self):
             self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
 
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self.send_response(201); self.send_header("Content-Length", "0"); self.end_headers()
+
         def log_message(self, *a):
             pass
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
@@ -140,4 +144,4 @@ def test_web_push_verifies_with_system_roots_not_the_internal_root(tls_server, m
     url, root = tls_server
     monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(root)); monkeypatch.setenv("SSL_CERT_FILE", str(root))
     sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, allow_private_hosts=True)
-    assert sender.send({"endpoint": url + "/push", "keys": _client_keys()}, b"{}") == "FAILED"
+    assert sender.send({"endpoint": url + "/push", "keys": _client_keys()}, b"{}") == "FAILED"      # 서버는 POST에 201을 준다: 검증이 막아서만 FAILED다
