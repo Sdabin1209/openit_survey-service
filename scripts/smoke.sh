@@ -20,7 +20,22 @@ MODEL_RUNTIME_TAG=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]
 SURVEY_SCHEMA_MAJOR=$(sed -n 's/^version = "\([0-9]*\)\..*/\1/p' schema/pyproject.toml | head -1)
 LANGGRAPH_VERSION=$(sed -n 's/^langgraph==//p' requirements.lock | head -1)
 echo "$RESULT" | python3 -c 'import json,sys;r=json.loads(sys.stdin.read());assert r["image_id"].startswith("sha256:") and r["labels"]["io.openit.service"]=="survey-service"' || { echo "SMOKE FAIL: 빌드 결과(BuildImageResult)가 올바르지 않다: $RESULT"; exit 1; }
-trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true' EXIT
+# 왜 정리 전에 출력하나: 실패했을 때 컨테이너가 이미 지워져 원인을 볼 수 없었다. 종료 코드가 0이 아니면 컨테이너(앱, 앱-pg, compose가 띄운 DB)를 지우기 전에
+# 상태(State만: status, ExitCode, OOMKilled, Error, StartedAt, FinishedAt)와 로그 마지막 100줄을 표준 오류로 낸다. 전체 inspect는 환경 변수가 섞이므로 쓰지 않는다. 정상 경로와 종료 코드는 그대로다.
+diag() {
+  local rc=$1 c ids
+  [ "$rc" -ne 0 ] || return 0
+  ids="$NAME $NAME-pg"
+  [ -z "${PROJ:-}" ] || ids="$ids $($DOCKER ps -aq --filter "label=com.docker.compose.project=$PROJ" 2>/dev/null | tr '\n' ' ')"
+  for c in $ids; do
+    if $DOCKER inspect "$c" >/dev/null 2>&1; then
+      echo "=== 실패(종료 코드 $rc): 컨테이너 $c 진단 ===" >&2
+      $DOCKER inspect -f 'status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Error={{.State.Error}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}}' "$c" >&2 2>&1 || true
+      $DOCKER logs --tail 100 "$c" >&2 2>&1 || true
+    fi
+  done
+}
+trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true' EXIT
 
 fail() { echo "SMOKE FAIL: $1"; $DOCKER logs "$NAME" 2>&1 | tail -20; exit 1; }
 
@@ -31,7 +46,7 @@ code=$($DOCKER run --rm "$IMG" python -m survey_service >/dev/null 2>&1; echo $?
 # 비밀은 파일로 받는다(D84): 직원 토큰은 NAME_FILE(읽기 전용 마운트), 키오스크 토큰은 개발용 환경 변수. 이미지 사용자(비root)가 읽을 수 있게 644
 SECRET_DIR=$(mktemp -d)
 printf 'smoke-staff-token\n' > "$SECRET_DIR/staff_token"; chmod 755 "$SECRET_DIR"; chmod 644 "$SECRET_DIR/staff_token"
-trap '$DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"' EXIT
+trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"' EXIT
 
 # 이웃(I4, I6)은 시험용 대역 팩토리로 꽂는다. 대역은 이미지에 없고 tests/ 를 읽기 전용으로 붙인다.
 $DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
@@ -158,7 +173,7 @@ start=$(date +%s); $DOCKER stop -t 10 "$NAME" >/dev/null; el=$(( $(date +%s) - s
 if [ "${SMOKE_PG:-0}" = 1 ]; then
   PROJ="openit-survey-service-smokepg-$$"      # 프로젝트 이름에 리포 이름을 넣어 다른 영역과 겹치지 않게 한다
   DC() { $DOCKER compose -p "$PROJ" -f compose.dev.yaml "$@"; }
-  trap '$DOCKER rm -f "$NAME" "$NAME-pg" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"; DC down -v >/dev/null 2>&1 || true' EXIT
+  trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" "$NAME-pg" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"; DC down -v >/dev/null 2>&1 || true' EXIT
   DC up -d --wait >/dev/null 2>&1 || fail "compose.dev.yaml의 PostgreSQL을 띄우지 못했다"
   # 앱 컨테이너는 compose가 만든 네트워크에 붙어 서비스 이름(postgres)으로 접속한다(호스트 루프백 포트는 컨테이너에서 보이지 않는다)
   PGNET="${PROJ}_default"

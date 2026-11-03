@@ -32,7 +32,18 @@ for n in inference_token gate_read_token gate_write_token api_token staff_api_to
   python3 -c 'import secrets;print("smoke-"+secrets.token_hex(16))' > "$SMOKE_SECRETS_DIR/$n"; chmod 644 "$SMOKE_SECRETS_DIR/$n"
 done
 API_TOKEN=$(cat "$SMOKE_SECRETS_DIR/api_token")
-cleanup() { rm -rf "$SMOKE_SECRETS_DIR"; $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true; $DOCKER rmi -f "$SERVICE_IMAGE" "$FAKE_IMAGE" >/dev/null 2>&1 || true; rm -f /tmp/smoke-compose-$$.body; }
+# 왜 정리 전에 출력하나: 실패했을 때 컨테이너가 이미 지워져 원인을 볼 수 없었다. 종료 코드가 0이 아니면 compose 컨테이너(서비스, 추론, 게이트, DB)를 내리기 전에
+# State만(status, ExitCode, OOMKilled, Error, StartedAt, FinishedAt; 전체 inspect는 환경 변수가 섞인다)과 로그 마지막 100줄을 표준 오류로 낸다.
+diag() {
+  local rc=$1 c
+  [ "$rc" -ne 0 ] || return 0
+  for c in $($COMPOSE ps -aq 2>/dev/null); do
+    echo "=== 실패(종료 코드 $rc): 컨테이너 $($DOCKER inspect -f '{{.Name}}' "$c" 2>/dev/null) 진단 ===" >&2
+    $DOCKER inspect -f 'status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Error={{.State.Error}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}}' "$c" >&2 2>&1 || true
+    $DOCKER logs --tail 100 "$c" >&2 2>&1 || true
+  done
+}
+cleanup() { local rc=$?; diag $rc; rm -rf "$SMOKE_SECRETS_DIR"; $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true; $DOCKER rmi -f "$SERVICE_IMAGE" "$FAKE_IMAGE" >/dev/null 2>&1 || true; rm -f /tmp/smoke-compose-$$.body; }
 trap cleanup EXIT
 fail() { echo "SMOKE(compose) FAIL: $1"; $COMPOSE logs --tail 15 2>&1 | tail -40; exit 1; }
 
