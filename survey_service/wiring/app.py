@@ -53,7 +53,42 @@ class JsonFormatter(logging.Formatter):
         rid = getattr(_REQ, "rid", None)
         if rid:
             d["request_id"] = rid
+        if record.exc_info and record.exc_info[1] is not None:
+            d["exc"] = _exc_summary(record.exc_info[1])
         return json.dumps(d, ensure_ascii=False)
+
+
+_FRAME_LIMIT = 16
+
+
+def _exc_summary(exc: BaseException) -> dict:
+    """예외 트레이스를 남기되 값은 남기지 않는다(원인을 볼 수 없던 503 결함의 수정, E2E 5단계).
+    남기는 것: 예외 종류의 연쇄(원인·문맥 포함), 마지막 프레임 16개의 (파일, 줄, 함수), 계약 BoundaryError의 코드와 details.reason.
+    남기지 않는 것: 예외 메시지(환자 발화·접속 문자열·토큰이 섞일 수 있다), 소스 줄, 지역 변수. 왜 메시지를 빼나: psycopg·검증 오류 메시지는 값을 담을 수 있다(워크스페이스 규칙: 비밀·환자 정보는 로그에 넣지 않는다)."""
+    chain, seen, e = [], set(), exc
+    while e is not None and id(e) not in seen:
+        seen.add(id(e))
+        chain.append(f"{type(e).__module__}.{type(e).__qualname__}")
+        e = e.__cause__ or e.__context__
+    out: dict = {"types": chain}
+    code = getattr(exc, "code", None)
+    if isinstance(code, str):
+        out["code"] = code
+        reason = (getattr(exc, "details", None) or {}).get("reason") if isinstance(getattr(exc, "details", None), dict) else None
+        if isinstance(reason, str):
+            out["reason"] = reason
+    import traceback
+    frames = traceback.extract_tb(exc.__traceback__)[-_FRAME_LIMIT:]
+    out["frames"] = [[_short(f.filename), f.lineno, f.name] for f in frames]
+    return out
+
+
+def _short(path: str) -> str:
+    for marker in ("site-packages/", "survey_service/"):
+        i = path.rfind(marker)
+        if i >= 0:
+            return path[i + (0 if marker == "survey_service/" else len(marker)):]
+    return path.rsplit("/", 1)[-1]
 
 
 def configure_logging(level: str = "INFO") -> None:

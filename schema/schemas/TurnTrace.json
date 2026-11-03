@@ -304,6 +304,11 @@
               "type": "null"
             }
           ]
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "description": "세션 시작(POST /v1/sessions) 응답에서 서버가 session_id를 발급했을 때만 있다(2.2.0). 이후 경로의 {session_id}에 쓴다. 다른 응답과 프론트가 ID를 정해 보낸 시작 응답에는 없다. PUBLIC_API.md"
         }
       },
       "required": [
@@ -318,14 +323,24 @@
           "type": "object",
           "properties": {
             "session_id": {
-              "$ref": "#/$defs/SessionId"
+              "$ref": "#/$defs/SessionId",
+              "description": "선택(2.2.0): 생략하면 서버가 발급해 응답의 session_id로 돌려준다. 프론트가 정해 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식(3.0.0 제거). PUBLIC_API.md"
             },
             "kind": {
               "const": "SESSION_START"
+            },
+            "subject_ref": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$",
+              "description": "선택. 병원이 정한 불투명 환자·방문 참조(PUBLIC_API.md A절). 서비스는 세션 메타로만 저장하고 세션 문서·Trace·로그에는 넣지 않는다."
+            },
+            "question_set_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "description": "선택(survey-schema 4.0.0): 문진할 문진표 ID. 활성 문진표가 하나면 생략할 수 있고 둘 이상이면 필수다(검사는 서비스). 목록에 없으면 VALIDATION_ERROR."
             }
           },
           "required": [
-            "session_id",
             "kind"
           ],
           "additionalProperties": false
