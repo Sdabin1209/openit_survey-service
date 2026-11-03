@@ -81,20 +81,35 @@ def _timeout_error():
     return BoundaryError("UNAVAILABLE", "추론 호출이 시간 안에 끝나지 않았다", {"reason": "TimeoutError"})
 
 
-def test_extract_timeout_fails_the_step_without_retry(env):
-    """extract가 시간 초과로 실패하면 그 단계를 실패시키고 다시 시도하지 않는다. 시한 값(3.0초)은 test_inference_time_budget.py가 설정에서 확인한다."""
+def test_extract_timeout_is_retried_once_when_the_budget_allows_and_then_fails_the_step(env):
+    """HTTP.md I9 호출자 규칙 (3): 읽기 시간 초과도 그 밖의 UNAVAILABLE처럼 남은 예산이 호출 상한 이상일 때만 다시 보낸다(턴 마감이 꺼진 이 구성은 횟수만 본다). 끝내 안 되면 그 단계 실패, 세션 상태는 그대로."""
     env.start()
+    calls = []
 
     def boom(*a, **k):
+        calls.append(1)
         raise _timeout_error()
     env.registry.active().session._ops["extract"].extract = boom
     o = env.turn()
-    cs = [c for c in env.client.stats.calls() if c["op"] == "extract"]
-    assert len(cs) == 1 and cs[0]["timed_out"] and not cs[0]["ok"], cs
-    assert failed(o) == LORA_A_FAIL
+    assert len(calls) == 2 and failed(o) == LORA_A_FAIL
     assert o.orchestrator_output["turn_failure_signal"] == {"session_id": "S1", "write_committed": "NOT_COMMITTED", "staff_alert": "NONE"}
     s = env.client.stats.snapshot()
-    assert s["timeouts"] == 1 and s["retries"] == 0 and s["failures"] == 1
+    assert s["timeouts"] == 2 and s["retries"] == 1 and s["failures"] == 1
+
+
+def test_unavailable_is_not_retried_when_the_remaining_turn_budget_is_below_the_call_limit(env):
+    env.start()
+    sess = env.registry.active().session
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise _timeout_error()
+    sess._ops["extract"].extract = boom
+    limit = sess._ops["extract"]._timeout
+    with pytest.raises(BoundaryError):
+        sess.extract({"x": 1}, deadline=sess._now() + limit / 2, flow={"order": []}, fields={"fields": []})      # 남은 예산이 호출 상한의 절반
+    assert len(calls) == 1 and env.client.stats.snapshot()["retry_skipped_budget"] == 1
 
 
 def test_respond_timeout_fails_after_commit_state_is_kept(env):
@@ -218,18 +233,43 @@ def test_forgotten_release_is_reloaded_once(env):
     assert failed(o) == [] and env.client.stats.snapshot()["reloads"] == 1
 
 
-def test_forgotten_release_with_slow_reload_fails_the_turn_instead_of_waiting(tmp_path):
+def test_forgotten_release_with_slow_reload_waits_for_loaded_then_calls_once_more(tmp_path):
+    """HTTP.md I9 호출자 규칙 (1): 404면 같은 턴 안에서 PUT으로 적재를 요청하고, LOADING인 동안 GET으로 LOADED를 기다린 뒤 한 번 다시 부른다."""
     gate = threading.Event()
-    gate.set()                                                         # 처음 적재는 바로 끝난다
+    gate.set()
     e = Env(tmp_path, load_gate=gate)
     try:
-        assert e.loader.poll_once().action == "LOADED"                 # 적재 신호 뒤 끝날 때까지 기다린다
+        assert e.loader.poll_once().action == "LOADED"
         e.start()
-        gate.clear()                                                   # 서버가 릴리스를 잊고 다시 적재하는 동안 LOADING이다(시간과 무관)
+        gate.clear()                                                   # 서버가 릴리스를 잊고 다시 적재하는 동안 LOADING이다
         e.srv.forget()
+        sess = e.registry.active().session
+        waits = []
+        sess._sleep = lambda s: (waits.append(s), gate.set())          # 기다리는 동안(첫 대기에서) 서버가 다 올린다
         o = e.turn()
-        assert failed(o) == LORA_A_FAIL and e.client.stats.snapshot()["reloads"] >= 1      # 적재를 기다리지 않고 이 턴을 실패시켰다(기다렸다면 게이트가 켜지기 전에는 끝나지 않는다)
-        gate.set()                                                     # 서버가 다 올리면 다음 턴은 성공
+        assert failed(o) == [] and waits and e.client.stats.snapshot()["reloads"] >= 1      # 기다렸다가 성공했다
+    finally:
+        e.close()
+
+
+def test_forgotten_release_that_never_loads_fails_when_the_turn_budget_is_spent(tmp_path):
+    gate = threading.Event()
+    gate.set()
+    e = Env(tmp_path, load_gate=gate)
+    try:
+        assert e.loader.poll_once().action == "LOADED"
+        e.start()
+        gate.clear()
+        e.srv.forget()
+        sess = e.registry.active().session
+        t = [0.0]
+        sess._now = lambda: t[0]
+        sess._sleep = lambda s: t.__setitem__(0, t[0] + s)             # 가짜 시계: 기다릴 때마다 흐른다(실제 시간을 재지 않는다)
+        o = e.turn()
+        assert failed(o) == LORA_A_FAIL and t[0] >= sess._ops["extract"]._timeout      # 마감(호출 한도)까지 기다렸다가 실패
+        gate.set()
+        sess._now = time.monotonic
+        sess._sleep = time.sleep
         assert failed(e.turn()) == []
     finally:
         e.close()

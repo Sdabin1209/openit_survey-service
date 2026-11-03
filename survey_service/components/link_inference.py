@@ -103,7 +103,8 @@ class RemoteModelSession:
 
     def __init__(self, runtime: HttpModelRuntime, release_id: str, *, retries: int = 1, backoff: float = 0.2, stats: Optional[Stats] = None,
                  op_runtimes: Optional[Mapping[str, HttpModelRuntime]] = None,
-                 monotonic: Callable[[], float], sleep: Callable[[float], None]) -> None:
+                 monotonic: Callable[[], float], sleep: Callable[[float], None], poll_interval: float = 0.5) -> None:
+        self.poll_interval = poll_interval      # 적재 상태를 다시 보는 간격(재적재 대기)
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050): 재시도 예산과 백오프 대기를 시험이 가짜 시계로 흘린다. 기본은 실제 시계
         self._rt, self.release_id, self.retries, self.backoff = runtime, release_id, retries, backoff
         self._ops = dict(op_runtimes or {})      # 호출 종류별 클라이언트(호출별 상한이 다르다). 없으면 runtime 하나를 쓴다
@@ -112,7 +113,8 @@ class RemoteModelSession:
     def _op_rt(self, op: str) -> HttpModelRuntime:
         return self._ops.get(op, self._rt)
 
-    def _call_once(self, op: str, request: Mapping, flow: Optional[Mapping] = None, fields: Optional[Mapping] = None) -> RuntimeResult:
+    def _call_once(self, op: str, request: Mapping, flow: Optional[Mapping] = None, fields: Optional[Mapping] = None,
+                   deadline: Optional[float] = None) -> RuntimeResult:
         fn = getattr(self._op_rt(op), op)
         kw = {"flow": dict(flow), "fields": dict(fields)} if op == "extract" else {}      # extract는 항상 flow·fields와 부른다(계약 3.0.0: ExtractRequest{input, flow, fields}만)
         try:
@@ -120,11 +122,15 @@ class RemoteModelSession:
         except BoundaryError as e:
             if e.code != "NOT_FOUND":
                 raise
-        # 추론 서버가 릴리스를 잊었다(재시작): 한 번 다시 적재를 요청한다. 오래 걸리면(LOADING) 이 턴은 기다리지 않고 실패시킨다.
+        # 추론 서버가 릴리스를 잊었다(재시작, HTTP.md I9 호출자 규칙 (1)): 같은 턴 안에서 PUT으로 적재를 요청하고, LOADING인 동안 턴 마감까지 GET으로 LOADED를 기다린 뒤 한 번 다시 부른다.
         self.stats.add("reloads")
         st = self._rt.load_release(self.release_id)
+        until = deadline if deadline is not None else self._now() + self._op_rt(op)._timeout      # 턴 마감이 꺼진 구성은 이 호출의 시간 한도만큼만 기다린다
+        while st["state"] == "LOADING" and self._now() < until:
+            self._sleep(self.poll_interval)
+            st = self._rt.get_release_state(self.release_id)
         if st["state"] != "LOADED":
-            raise BoundaryError("UNAVAILABLE", "추론 서버가 릴리스를 다시 적재하는 중이다", {"reason": "RELOADING"})
+            raise BoundaryError("UNAVAILABLE", "추론 서버가 릴리스를 다시 적재하는 중이거나 적재하지 못했다", {"reason": "RELOADING"})
         return fn(self.release_id, dict(request), **kw)
 
     def _call(self, op: str, request: Mapping, deadline: Optional[float] = None, flow: Optional[Mapping] = None,
@@ -135,7 +141,7 @@ class RemoteModelSession:
         while True:
             t0 = self._now()
             try:
-                res = self._call_once(op, request, flow, fields)
+                res = self._call_once(op, request, flow, fields, deadline)
                 self.stats.record_call(op, attempt + 1, self._now() - t0, True, False)
                 break
             except BoundaryError as e:
@@ -145,7 +151,7 @@ class RemoteModelSession:
                     self.stats.add("failures")
                     raise
                 elapsed = self._now() - t0
-                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, limit)
+                timed_out = e.code == "UNAVAILABLE" and _timed_out(e, elapsed, limit)      # 지표용 분류만이다: 재시도 판단은 시간 초과도 다른 UNAVAILABLE과 같다
                 self.stats.record_call(op, attempt + 1, elapsed, False, timed_out)
                 log.warning("추론 호출 실패 op=%s %s elapsed=%.2fs read_timeout=%.1fs classified=%s attempt=%d", op, _failure_info(e),
                             elapsed, limit, "timeout" if timed_out else "not_timeout", attempt + 1)
@@ -153,12 +159,12 @@ class RemoteModelSession:
                     self.stats.add("timeouts")
                 # 왜: 재시도는 남은 턴 예산이 이 호출의 상한 이상일 때만 한다(계약 CONVENTIONS 2.2.0). 모자라면 재시도하지 않고 실패로 둔다.
                 #     백오프 대기도 예산에서 쓴다. deadline이 없으면(턴 마감을 끈 구성) 횟수 제한만 본다.
-                if deadline is not None and e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries and \
+                if deadline is not None and e.code == "UNAVAILABLE" and attempt < self.retries and \
                         deadline - self._now() - self.backoff * (attempt + 1) < limit:
                     self.stats.add("retry_skipped_budget")
                     self.stats.add("failures")
                     raise
-                if e.code == "UNAVAILABLE" and not timed_out and attempt < self.retries:
+                if e.code == "UNAVAILABLE" and attempt < self.retries:      # 그 밖의 UNAVAILABLE(연결 실패·읽기 시간 초과 포함)은 남은 예산이 호출 상한 이상일 때만 다시 보낸다(위)
                     attempt += 1
                     self.stats.add("retries")
                     self._sleep(self.backoff * attempt)
@@ -218,7 +224,8 @@ class RemoteInference:
             # 412·422·403·404 등 결정적 거부는 다시 시도해도 같다.
             raise InferenceLoadError("REMOTE_" + e.code, "추론 서버가 릴리스 적재를 거부했거나 부를 수 없다",
                                      retryable=e.code == "UNAVAILABLE") from e
-        return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, op_runtimes=self._op_rts, monotonic=self._now, sleep=self._sleep)
+        return RemoteModelSession(self._rt, rid, retries=self.retries, backoff=self.backoff, stats=self.stats, op_runtimes=self._op_rts, monotonic=self._now, sleep=self._sleep,
+                                  poll_interval=self.poll_interval)
 
 
 # ---------------------------------------------------------------- 서비스 안 적재(개발·스모크 전용)
