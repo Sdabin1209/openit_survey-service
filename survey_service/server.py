@@ -205,6 +205,14 @@ def close_server(server, wait_seconds: float) -> None:
     wasyncore.close_all(server._map)
 
 
+def _close_logged(server, wait_seconds: float) -> None:
+    """SIGTERM 처리 스레드의 일꾼: close_server의 예외를 기록하고 삼킨다(스레드 예외로 남기지 않는다, S6). 닫기에 실패해도 주 스레드의 finally가 다시 닫는다."""
+    try:
+        close_server(server, wait_seconds)
+    except Exception as e:
+        log.error("우아한 종료 중 오류 error=%s", type(e).__name__)
+
+
 def run_server(server) -> None:
     """서버 루프를 돈다. close_server가 다른 스레드에서 소켓을 닫으면 waitress의 select가 EBADF(OSError)로 깨어난다: 닫기를 요청한 뒤라면 정상 종료이므로 삼키고,
     닫기를 요청하지 않았는데 난 OSError는 그대로 올린다. 왜: 정상 종료(SIGTERM)가 추적 로그와 종료 코드 1로 끝나던 결함(smoke 진단 출력으로 발견, S5)."""
@@ -239,7 +247,7 @@ def main(argv=None) -> int:
     log.info("시작 port=%s version=%s", settings.port, SERVICE_VERSION)
     def on_term(*_):
         app.draining.set()                      # /readyz가 먼저 503이 되어 로드 밸런서가 새 요청을 보내지 않게 한다
-        threading.Thread(target=close_server, args=(httpd, settings.turn_deadline_seconds + 1.0), daemon=True).start()
+        threading.Thread(target=_close_logged, args=(httpd, settings.turn_deadline_seconds + 1.0), daemon=True).start()
     signal.signal(signal.SIGTERM, on_term)
     try:
         run_server(httpd)

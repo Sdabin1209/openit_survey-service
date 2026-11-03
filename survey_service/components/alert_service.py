@@ -293,16 +293,19 @@ class AlertService:
         lock = threading.Lock()
 
         def one(sub):
-            r = self.push.send({k: v for k, v in sub.items() if k != "topics"}, payload)      # 주제는 우리 쪽 표시라 푸시 서비스에는 보내지 않는다
+            # 왜 전부 잡나: 이 스레드는 발송 결과를 모으는 일꾼이다. 예외로 죽으면 결과가 빠져 접수 수가 틀리고 스레드 예외만 남는다(S6). 발송기가 던진 예외는 실패로 센다
+            try:
+                r = self.push.send({k: v for k, v in sub.items() if k != "topics"}, payload)      # 주제는 우리 쪽 표시라 푸시 서비스에는 보내지 않는다
+            except Exception as e:
+                log.warning("웹 푸시 발송기가 예외를 던졌다 error=%s", type(e).__name__)
+                r = "FAILED"
             with lock:
                 results.append(r)
             if r == "GONE":
                 try:
                     self.store.remove_subscription(sub["endpoint"])
-                except BoundaryError as _e:
-                    if not _is_store_error(_e):
-                        raise
-                    pass
+                except Exception as _e:      # 만료 구독 정리는 다음에 다시 할 수 있다: 저장소 오류든 그 밖의 오류든 스레드를 죽이지 않는다
+                    log.warning("만료된 구독을 지우지 못했다 error=%s", type(_e).__name__)
         threads = [threading.Thread(target=one, args=(s,), daemon=True) for s in subs]
         [t.start() for t in threads]
         deadline = self._now() + self.push_timeout
