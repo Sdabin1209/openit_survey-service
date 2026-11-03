@@ -110,3 +110,49 @@ def test_app_result_ready_also_triggers_the_result_push(running, monkeypatch):
     app.alerts.push_result_ready = lambda sid: (got.append(sid), done.set())
     app._result_ready("K1", "ENDED_COMPLETE")
     assert done.wait(5) and got == ["K1"]
+
+
+# ---------------------------------------------------------------- S7: X-Openit-Roles (계약 3.4.0 CONVENTIONS 6절)
+def add_roles(env, body, auth, roles):
+    return env.api.handle("POST", "/v1/staff/push-subscriptions", auth, json.dumps(body).encode(), user="u1", roles=roles)
+
+
+def test_account_with_staff_and_clinician_roles_can_subscribe_both_topics_with_one_token(rig):
+    env, svc, _ = rig
+    for tok in (STAFF, RESULT):                     # 게이트웨이는 토큰 하나만 붙인다: 어느 토큰이어도 된다
+        assert add_roles(env, sub(f"both{tok[-1]}", topics=["alerts", "results"]), tok, "staff,clinician")[0] == 201
+    assert add_roles(env, sub("r", topics=["results"]), STAFF, "staff, clinician")[0] == 201
+    assert sorted(s["topics"] for s in svc.store.subscriptions())[0] == ["alerts", "results"]
+
+
+def test_clinician_only_account_cannot_subscribe_alerts_and_staff_only_cannot_results(rig):
+    env, _, _ = rig
+    assert add_roles(env, sub("a"), RESULT, "clinician")[0] == 403                          # 기본 alerts
+    assert add_roles(env, sub("b", topics=["alerts"]), STAFF, "clinician")[0] == 403       # 토큰이 staff여도 역할이 우선
+    assert add_roles(env, sub("c", topics=["results"]), RESULT, "staff")[0] == 403
+    assert add_roles(env, sub("d", topics=["results"]), RESULT, "clinician")[0] == 201
+    assert add_roles(env, sub("e", topics=["alerts", "results"]), STAFF, "clinician")[0] == 403
+    assert add_roles(env, sub("f"), STAFF, "nonsense,admin")[0] == 403                     # 고정 목록 밖 이름은 무시, 역할 없음
+
+
+def test_without_the_header_the_token_kind_decides_as_before(rig):
+    env, _, _ = rig
+    assert add(env, sub("x", topics=["results"]), RESULT)[0] == 201 and add(env, sub("y"), STAFF)[0] == 201
+    assert add(env, sub("z", topics=["results"]), STAFF)[0] == 403
+
+
+def test_forged_roles_header_on_a_non_gateway_token_is_ignored(rig):
+    env, _, _ = rig
+    # 키오스크 토큰은 push 경로의 역할이 아니다: 헤더가 clinician이어도 거절된다
+    st, _, _ = add_roles(env, sub("k", topics=["results"]), AUTH, "clinician,staff")
+    assert st in (401, 403)
+    assert env.api.handle("GET", "/v1/staff/push-config", AUTH, b"", user="u1", roles="staff")[0] in (401, 403)
+    assert env.service.store.count_subscriptions() == 0
+
+
+def test_push_config_and_unsubscribe_accept_both_gateway_tokens(rig):
+    env, _, _ = rig
+    for tok in (STAFF, RESULT):
+        assert env.call("GET", "/v1/staff/push-config", auth=tok)[0] == 200
+    add(env, sub("u", topics=["results"]), RESULT)
+    assert env.call("POST", "/v1/staff/push-subscriptions/unsubscribe", {"endpoint": sub("u")["endpoint"]}, auth=RESULT)[0] == 204

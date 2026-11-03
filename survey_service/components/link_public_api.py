@@ -237,13 +237,13 @@ class PublicApi:
         except ValueError:
             return None
 
-    def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None, device: Optional[str] = None) -> tuple[int, dict, dict]:
+    def handle(self, method: str, path: str, auth: str, raw: bytes, user: Optional[str] = None, device: Optional[str] = None, roles: Optional[str] = None) -> tuple[int, dict, dict]:
         """(상태 코드, 본문, 추가 헤더). 시험·직접 호출용 어댑터: 인자를 WSGI environ으로 만들어 라이브러리 앱에 넘긴다.
-        user는 게이트웨이가 인증한 계정 ID(X-Openit-User), device는 게이트웨이가 mTLS로 확인한 기기 ID(X-Openit-Device)."""
+        user는 게이트웨이가 인증한 계정 ID(X-Openit-User), roles는 게이트웨이가 붙인 역할 목록(X-Openit-Roles), device는 게이트웨이가 mTLS로 확인한 기기 ID(X-Openit-Device)."""
         p, _, qs = path.partition("?")
         environ = {"REQUEST_METHOD": method, "PATH_INFO": p, "REQUEST_URI": path, "QUERY_STRING": qs,
                    "CONTENT_LENGTH": str(len(raw)), "wsgi.input": io.BytesIO(raw)}
-        for key, val in (("HTTP_AUTHORIZATION", auth), ("HTTP_X_OPENIT_USER", user), ("HTTP_X_OPENIT_DEVICE", device)):
+        for key, val in (("HTTP_AUTHORIZATION", auth), ("HTTP_X_OPENIT_USER", user), ("HTTP_X_OPENIT_DEVICE", device), ("HTTP_X_OPENIT_ROLES", roles)):
             if val:
                 environ[key] = val
         if "default" not in self._links:
@@ -748,6 +748,21 @@ class PublicApi:
     def _push_config(self, _req: Request):
         return 200, {"vapid_public_key": self.alerts.public_key()}, {}
 
+    _ROLE_NAMES = frozenset({"staff", "operator", "release-approver", "reviewer", "author", "clinical-reviewer", "clinician", "admin"})      # 계약 CONVENTIONS 6절의 고정 목록
+
+    def _may_subscribe(self, req: Request, topics) -> bool:
+        """topics 허용 판단(계약 3.4.0 CONVENTIONS 6절). 이 경로는 게이트웨이 토큰(staff 또는 result-reader 역할의 토큰)으로 들어온 요청만 도달하므로(경로의 역할 표), 그 요청의 `X-Openit-Roles`는
+        게이트웨이가 붙인 것이다(클라이언트가 보낸 같은 이름의 헤더는 게이트웨이가 지운다). 헤더가 있으면 alerts는 역할 staff, results는 역할 clinician이 있어야 한다.
+        헤더가 없으면(직접 호출, 옛 경로) 토큰 종류로 판단한다: alerts는 staff 토큰, results는 result-reader 토큰. 왜 둘 다인가: 한 사람이 staff와 clinician을 모두 가지면 게이트웨이는 토큰을 하나만 붙일 수 있다.
+        게이트웨이 토큰이 아닌 요청(키오스크 등)은 이 경로에 올 수 없어 헤더를 읽을 일이 없다."""
+        raw = req.headers.get("x-openit-roles")
+        if req.role in ("staff", "result-reader") and raw is not None:
+            roles = {r.strip() for r in raw.split(",") if r.strip() in self._ROLE_NAMES}
+            need = {"alerts": "staff", "results": "clinician"}
+            return all(need[t] in roles for t in topics)
+        want = {"alerts": "staff", "results": "result-reader"}
+        return all(want[t] == req.role for t in topics)
+
     def _push_add(self, req: Request):
         body = req.body
         if self.push_allow_private and isinstance(body, dict) and isinstance(body.get("endpoint"), str):
@@ -764,8 +779,7 @@ class PublicApi:
         ep, keys = body["endpoint"], body["keys"]
         topics = body.get("topics") or ["alerts"]
         # 3.4.0: alerts는 staff 역할, results는 clinician(result-reader 토큰) 역할만 등록한다. 다른 역할이면 403. 한 요청에 둘이면 역할 하나가 둘 다 가질 수 없으므로 항상 403
-        want = {"alerts": "staff", "results": "result-reader"}
-        if any(want[t] != req.role for t in topics):
+        if not self._may_subscribe(req, topics):
             raise _err("PERMISSION_DENIED", "이 역할은 그 주제를 구독할 수 없다")
         sub = {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}, "topics": sorted(set(topics))}
         try:
