@@ -636,7 +636,8 @@ class PublicApi:
         prog = doc["progress_record"]
         log_ = doc["dialogue_log"]
         ended = prog["session_status"].startswith("ENDED")
-        return {"session_id": sid, "subject_ref": subject, "status": prog["session_status"],
+        pr = {"pause_reason": self._pause_reason(sid, doc)} if prog["session_status"] == "PAUSED_RISK" else {}      # 정지 중인 부분 결과에만(SessionState와 같은 값, survey-schema 4.1.0)
+        return {"session_id": sid, "subject_ref": subject, "status": prog["session_status"], **pr,
                 "started_at": (times.get(-1) or {}).get("at"),
                 "ended_at": (times.get(len(log_) - 1) or {}).get("at") if ended and log_ else None,
                 "release_id": self.orch.store.release_id_of(sid),

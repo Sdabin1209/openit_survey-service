@@ -195,6 +195,14 @@
         "acknowledged_at": {
           "$ref": "#/$defs/Timestamp",
           "description": "확인한 시각(UTC). 두 번째 확인은 처음 값을 바꾸지 않는다."
+        },
+        "pause_reason": {
+          "description": "정지 사유(4.1.0, SessionState.pause_reason과 같은 열거). 상태가 PAUSED_RISK인 결과에만 채운다. 위험 신호/위험 규칙은 RISK, 되묻기 한도 초과는 REASK_LIMIT(폐기 예정 표기), 그 밖은 OTHER. 선택: 정지가 아니면 없다. 읽는 쪽은 모르는 값을 OTHER로 취급한다.",
+          "enum": [
+            "RISK",
+            "REASK_LIMIT",
+            "OTHER"
+          ]
         }
       },
       "required": [
