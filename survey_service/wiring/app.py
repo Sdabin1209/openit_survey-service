@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import os
 import logging
+import logging.handlers
+import queue
 import re
 import sys
 import threading
@@ -52,10 +54,12 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         d = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)) + "Z", "level": record.levelname,
              "logger": record.name, "msg": record.getMessage()}
-        rid = getattr(_REQ, "rid", None)
+        rid = getattr(record, "request_id", None) or getattr(_REQ, "rid", None)      # 큐를 거친 줄은 요청 스레드에서 붙여 둔 값
         if rid:
             d["request_id"] = rid
-        if record.exc_info and record.exc_info[1] is not None:
+        if getattr(record, "exc_summary", None) is not None:
+            d["exc"] = record.exc_summary
+        elif record.exc_info and record.exc_info[1] is not None:
             d["exc"] = _exc_summary(record.exc_info[1])
         return json.dumps(d, ensure_ascii=False)
 
@@ -93,11 +97,51 @@ def _short(path: str) -> str:
     return path.rsplit("/", 1)[-1]
 
 
-def configure_logging(level: str = "INFO") -> None:
-    h = logging.StreamHandler(sys.stdout)
-    h.setFormatter(JsonFormatter())
+class _NeverFail(logging.StreamHandler):
+    """표준 출력 쓰기가 실패해도(막힘·닫힘) 예외를 올리지 않는다: 로그 때문에 요청이 실패하면 안 된다(RUNTIME R10.5, 12-Factor XI)."""
+
+    def handleError(self, record) -> None:      # 기본 구현은 stderr에 쓰는데 그것도 막혔을 수 있다
+        return None
+
+
+class _DropWhenFull(logging.handlers.QueueHandler):
+    """요청 스레드는 로그를 큐에 넣기만 한다(막히지 않는다). 큐가 가득 차면(출력이 오래 막힘) 그 줄은 버린다: 요청을 느리게 하거나 실패시키지 않는다."""
+
+    def prepare(self, record):
+        """요청 스레드에서 값을 확정한다: 요청 ID(스레드 로컬)와 예외 요약은 쓰기 스레드에서는 알 수 없다. 큐에는 문자열과 요약만 간다(예외 객체·지역 변수를 붙들지 않는다)."""
+        import copy
+        rec = copy.copy(record)
+        rec.request_id = getattr(_REQ, "rid", None)
+        rec.exc_summary = _exc_summary(record.exc_info[1]) if record.exc_info and record.exc_info[1] is not None else None
+        rec.msg, rec.args, rec.exc_info, rec.exc_text, rec.stack_info = record.getMessage(), None, None, None, None
+        return rec
+
+    def enqueue(self, record) -> None:
+        try:
+            self.queue.put_nowait(record)
+        except queue.Full:
+            pass
+
+    def handleError(self, record) -> None:
+        return None
+
+
+_LOG_QUEUE_MAX = 10000      # 시작값·측정 안 함: 로그 줄 하나는 수백 바이트라 수 MB. 출력이 막혀도 이 만큼까지 버티고 그 뒤는 버린다
+_listener = None
+
+
+def configure_logging(level: str = "INFO", stream=None) -> None:
+    """로그를 표준 출력으로(JSON 한 줄). 쓰기는 별도 스레드가 하고 요청 스레드는 큐에 넣기만 한다(R10.5)."""
+    global _listener
+    if _listener is not None:
+        _listener.stop()
+    out = _NeverFail(stream if stream is not None else sys.stdout)
+    out.setFormatter(JsonFormatter())
+    q: queue.Queue = queue.Queue(maxsize=_LOG_QUEUE_MAX)
+    _listener = logging.handlers.QueueListener(q, out, respect_handler_level=False)
+    _listener.start()
     root = logging.getLogger()
-    root.handlers[:] = [h]
+    root.handlers[:] = [_DropWhenFull(q)]
     root.setLevel(level)
 
 
