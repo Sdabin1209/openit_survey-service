@@ -79,8 +79,9 @@ def host_is_public(url: str) -> bool:
 def _system_ca_bundle() -> str:
     """시스템 CA 묶음 경로(OS 신뢰 저장소 파일). 없으면 certifi의 묶음."""
     import ssl
-    cafile = ssl.get_default_verify_paths().cafile
-    if cafile:
+    import os
+    cafile = ssl.get_default_verify_paths().openssl_cafile      # 컴파일된 기본 경로: SSL_CERT_FILE 환경 변수(내부 루트)를 따르는 `cafile`이 아니다
+    if cafile and os.path.exists(cafile):
         return cafile
     import certifi
     return certifi.where()
