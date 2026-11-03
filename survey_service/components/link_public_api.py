@@ -695,7 +695,10 @@ class PublicApi:
         if status is None:
             raise _err("NOT_FOUND", "모르는 세션이다")
         try:
+            first = self.alerts.store.ack_of(sid) is None
             self.alerts.store.acknowledge(sid, user)
+            if first:
+                self.orch.store.touch(sid)      # 확인 표시도 결과의 바뀜이다: updated_after는 결과가 마지막으로 바뀐 시각(PUBLIC_API 3.4.4). 두 번째 확인은 처음 값을 지키므로 바뀌지 않는다
             body = self._result_of(sid, r["state"], self.alerts.store.subject_of(sid), self.alerts.store.timeline(sid))
         except self.orch.errors.StoreError:
             raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다") from None

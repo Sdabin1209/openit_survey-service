@@ -184,6 +184,9 @@ class SessionStorePort(Protocol):
     def release_id_of(self, session_id: str) -> Optional[str]:
         """세션이 묶인 릴리스 ID."""
 
+    def touch(self, session_id: str) -> None:
+        """결과가 바뀌었다고 표시한다(updated_at·update_seq만 올린다, 문서와 revision은 그대로). 확인 표시(ack)처럼 세션 문서 밖에서 결과가 바뀔 때 쓴다(PUBLIC_API updated_after 뜻). 세션이 없으면 StoreError."""
+
     def question_set_of(self, session_id: str) -> Optional[tuple]:
         """세션이 문진하는 문진표 (ID, 제목). 세션이 없거나 문진표 없이 만든 세션이면 None."""
 
@@ -349,6 +352,22 @@ class SqliteSessionStore:
                 except self._ERRORS:
                     pass
                 raise StoreError(f"기록을 덧붙일 수 없다: {type(e).__name__}") from e
+
+    def touch(self, session_id: str) -> None:
+        with self._lock:
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                self._number_lock()
+                n = self._db.execute(f"UPDATE sessions SET updated_at=?, update_seq={self._NEXT_SEQ} WHERE session_id=?", (self._clock(), session_id)).rowcount
+                self._db.execute("COMMIT")
+            except self._ERRORS as e:
+                try:
+                    self._db.execute("ROLLBACK")
+                except self._ERRORS:
+                    pass
+                raise StoreError(f"세션을 갱신할 수 없다: {type(e).__name__}") from e
+        if n == 0:
+            raise StoreError("세션이 없다")
 
     def append_log(self, session_id: str, entry: dict) -> None:
         self._append(session_id, "dialogue_log", entry)
@@ -735,6 +754,14 @@ class MemorySessionStore:
                 raise StoreError("세션이 없다")
             s["doc"][key].append(copy.deepcopy(item))
             s["revision"] += 1
+            s["updated_at"] = self._clock()
+            s["update_seq"] = self._next_seq()
+
+    def touch(self, session_id: str) -> None:
+        with self._lock:
+            s = self._sessions.get(session_id)
+            if s is None:
+                raise StoreError("세션이 없다")
             s["updated_at"] = self._clock()
             s["update_seq"] = self._next_seq()
 

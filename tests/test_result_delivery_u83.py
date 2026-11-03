@@ -91,3 +91,20 @@ def test_session_result_example_with_ack_fields_is_valid_and_bad_ack_is_rejected
     ex = json.loads((ROOT / "schema/schemas/examples/SessionResult.valid.json").read_text(encoding="utf-8"))
     assert ex["acknowledged_by"] and RESULT_V.is_valid(ex)
     assert not RESULT_V.is_valid({**ex, "acknowledged_at": "yesterday"}) and not RESULT_V.is_valid({**ex, "acknowledged_by": ""})
+
+
+def test_updated_after_means_the_last_change_of_the_result_including_the_acknowledgement(env):
+    """PUBLIC_API(3.4.4): updated_after는 세션 결과가 마지막으로 바뀐 시각(상태 변경·답 확정·확인 표시 포함)이 그 값보다 뒤인 결과만 뜻한다."""
+    import time
+    env.start("K1")
+    items = lambda after: [i["session_id"] for i in env.call("GET", f"/v1/results?updated_after={after}", auth=RESULT)[1]["items"]]
+    cur0 = env.call("GET", "/v1/results", auth=RESULT)[1]["items"]
+    assert [i["session_id"] for i in cur0] == ["K1"]
+    far = "2999-01-01T00:00:00Z"
+    assert items(far) == []
+    seq_before = env.rig.store.list_sessions()[0][3]
+    assert ack(env)[0] == 200
+    assert env.rig.store.list_sessions()[0][3] > seq_before         # 확인 표시가 결과를 바꿨다(update_seq가 올랐다)
+    seq_after = env.rig.store.list_sessions()[0][3]
+    assert ack(env, user="dr.lee")[0] == 200
+    assert env.rig.store.list_sessions()[0][3] == seq_after         # 두 번째 확인은 처음 값을 지켜 바뀌지 않는다
