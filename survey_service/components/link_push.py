@@ -113,6 +113,8 @@ class WebPushSender:
             import requests
             session = requests.Session()
             session.verify = _system_ca_bundle()      # R3.18: 공개 푸시 서비스는 시스템(공개) 루트로 검증한다. 내부 루트(SSL_CERT_FILE·REQUESTS_CA_BUNDLE)와 섞지 않는다: 세션에 경로를 명시하면 requests는 환경 변수를 쓰지 않는다
+            session.trust_env = False                  # REQUESTS_CA_BUNDLE·CURL_CA_BUNDLE가 verify를 덮어쓰므로 환경 신뢰를 끄고, 프록시 환경 변수만 직접 넘긴다
+            session.proxies = requests.utils.getproxies()
             session.max_redirects = 0                              # 리다이렉트를 따르지 않는다(다른 내부 주소로 돌려지는 것을 막는다)
             webpush(subscription_info=dict(subscription), data=payload.decode("utf-8"), vapid_private_key=self._vapid,
                     vapid_claims={"sub": self._subject}, timeout=self._timeout, ttl=self._ttl,
