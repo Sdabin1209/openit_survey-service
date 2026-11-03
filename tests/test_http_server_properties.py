@@ -66,3 +66,28 @@ def test_run_server_swallows_the_ebadf_of_a_requested_close_and_raises_otherwise
     run_server(S(True))
     with pytest.raises(OSError):
         run_server(S(False))
+
+
+def test_server_binds_only_to_the_configured_host(tmp_path, monkeypatch):
+    """SURVEY_HOST=127.0.0.1이면 그 주소에만 붙는다(다른 인터페이스 주소로는 닿지 않는다). 기본은 모든 인터페이스."""
+    import socket
+    from survey_service.server import serve
+    from survey_service.settings import Settings
+    seen = {}
+    import survey_service.server as srv
+    monkeypatch.setattr(srv, "create_server", lambda *a, **k: seen.update(k) or object())
+    monkeypatch.setattr(srv, "make_wsgi", lambda app: None)
+    base = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
+    for env, want in (({**base, "SURVEY_HOST": "127.0.0.1"}, "127.0.0.1"), (base, "0.0.0.0")):
+        serve(type("A", (), {"settings": Settings.from_env(env)})(), 0)
+        assert seen["host"] == want
+    # 실제 소켓: 127.0.0.1에 붙은 waitress는 이 PC의 다른 주소로는 연결을 받지 않는다
+    from waitress import create_server
+    h = create_server(lambda e, s: (s("200 OK", []), [b"x"])[1], host="127.0.0.1", port=0)
+    other = [a[4][0] for a in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET) if not a[4][0].startswith("127.")]
+    try:
+        for ip in other[:1]:
+            with pytest.raises(OSError):
+                socket.create_connection((ip, h.effective_port), timeout=1).close()
+    finally:
+        h.close()

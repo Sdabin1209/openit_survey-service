@@ -96,3 +96,14 @@ def test_startup_succeeds_to_the_app_with_remote_inference_only(monkeypatch, tmp
         monkeypatch.setenv(k, v)
     s = Settings.from_env()
     assert s.inference_url
+
+
+# ---------------------------------------------------------------- SURVEY_HOST (계약 3.4.2, U99)
+def test_survey_host_defaults_to_all_interfaces_and_rejects_non_addresses():
+    assert Settings.from_env(dict(REMOTE_ONLY)).host == "0.0.0.0"
+    assert Settings.from_env({**REMOTE_ONLY, "SURVEY_HOST": "127.0.0.1"}).host == "127.0.0.1"
+    assert Settings.from_env({**REMOTE_ONLY, "SURVEY_HOST": "::1"}).host == "::1"
+    assert Settings.from_env({**REMOTE_ONLY, "SURVEY_HOST": "survey.internal"}).host == "survey.internal"
+    for bad in ("http://127.0.0.1", "127.0.0.1:8080", "a b", "-x", "bad_name"):
+        with pytest.raises(ConfigError):
+            Settings.from_env({**REMOTE_ONLY, "SURVEY_HOST": bad})

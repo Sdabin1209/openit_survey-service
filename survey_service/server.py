@@ -186,7 +186,7 @@ def serve(app: App, port: int):
     연결 상한·읽기 시간 제한은 기존 설정을 그대로(측정 안 함), backlog는 이전 값 128(부하 측정 N=50 근거)."""
     st = app.settings
     return create_server(
-        make_wsgi(app), host="0.0.0.0", port=port, ident="survey-service", threads=st.api_max_inflight + st.max_sse_connections + 4,
+        make_wsgi(app), host=st.host, port=port, ident="survey-service", threads=st.api_max_inflight + st.max_sse_connections + 4,
         connection_limit=st.max_connections + _WAITRESS_INTERNAL_FDS, channel_timeout=max(1, math.ceil(st.socket_timeout_seconds)), cleanup_interval=1,
         max_request_body_size=_BODY_LIMIT, backlog=128, expose_tracebacks=False)
 

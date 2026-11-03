@@ -64,6 +64,25 @@ def _float(env: Mapping, key: str, default: float) -> float:
     return v
 
 
+_HOSTNAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
+
+
+def _host(env: Mapping) -> str:
+    """SURVEY_HOST: IP 주소(IPv4·IPv6) 또는 호스트 이름. 없거나 비면 0.0.0.0. 공백·URL 모양·포트가 붙은 값은 시작 때 거부한다(소켓 바인드가 늦게 모호한 오류를 내지 않게)."""
+    import ipaddress
+    raw = (env.get("SURVEY_HOST") or "").strip()
+    if not raw:
+        return "0.0.0.0"
+    try:
+        ipaddress.ip_address(raw)
+        return raw
+    except ValueError:
+        pass
+    if len(raw) > 253 or not _HOSTNAME.match(raw):
+        raise ConfigError("SURVEY_HOST는 IP 주소 또는 호스트 이름이어야 한다")
+    return raw
+
+
 def validate_env(env: Mapping[str, str]) -> None:
     """환경 변수를 계약 SurveyServiceEnv 스키마로 검증한다(U44, ADR-0038): 필수 이름, 값 형식, 그리고 알려지지 않은 SURVEY_* 이름(오타)을 시작 때 거부한다.
     오류 문구에는 이름만 싣고 값은 싣지 않는다(값이 비밀일 수 있다)."""
@@ -95,6 +114,7 @@ def validate_env(env: Mapping[str, str]) -> None:
 @dataclass(frozen=True)
 class Settings:
     port: int = 8080
+    host: str = "0.0.0.0"                             # 바인드 주소(계약 3.4.2 SURVEY_HOST, U99). TLS 사이드카 뒤에서는 127.0.0.1, 사이드카 없는 단독 실행은 기본 0.0.0.0
     session_db: str = "/data/sessions.db"
     outbox_db: str = "/data/outbox.db"
     work_dir: str = "/data/releases"
@@ -178,7 +198,7 @@ class Settings:
         env = os.environ if env is None else env
         validate_env(env)
         s = cls(
-            port=_int(env, "SURVEY_PORT", 8080, 1), session_db=env.get("SURVEY_SESSION_DB", cls.session_db),
+            port=_int(env, "SURVEY_PORT", 8080, 1), host=_host(env), session_db=env.get("SURVEY_SESSION_DB", cls.session_db),
             outbox_db=env.get("SURVEY_OUTBOX_DB", cls.outbox_db), work_dir=env.get("SURVEY_WORK_DIR", cls.work_dir),
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
