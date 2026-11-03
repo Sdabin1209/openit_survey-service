@@ -142,12 +142,12 @@ def main() -> int:
         return 2
     import logging
     logging.disable(logging.WARNING)
-    from survey_service.server import close_server, serve
+    from survey_service.server import close_server, run_server, serve
     with tempfile.TemporaryDirectory() as td:
         app = build_app(args, Path(td))
         httpd = serve(app, 0)
         port = httpd.effective_port
-        threading.Thread(target=httpd.run, daemon=True).start()
+        threading.Thread(target=run_server, args=(httpd,), daemon=True).start()      # 닫기 경쟁의 EBADF를 삼킨다(S6)
         print(f"# max_inflight={args.max_inflight} model_delay={args.model_delay}s deadline={args.deadline}s turns/session={args.turns} cpus={os.cpu_count()}")
         print("| N | 요청 | 200 | p50 s | p95 s | max s | 상태 코드별 | PG 연결 최대 | 스레드 시작→최대 | RSS MB 시작→최대 | 처리량 req/s |")
         print("|---|---|---|---|---|---|---|---|---|---|---|")

@@ -32,8 +32,9 @@ waitress의 작업 스레드(요청 처리)는 라이브러리 소유이고, 핸
 | `serve_forever` 데몬 | `runtime_support.py`, `test_audit_ssrf_and_input.py` x2, `test_fault_a6_a8_a10.py`, `test_staff_alerts.py`(PushService) | 표준 라이브러리 `serve_forever`는 `shutdown()`을 받아 정상 종료한다(`close`가 `shutdown`+`server_close`). 핸들러 예외는 서버의 `handle_error`로 가고 스레드 예외가 아니다 |
 | SSE 읽기 | `test_staff_alerts.py` Sse._read | 본문이 `try/except Exception`으로 끝난다 |
 | 동시 호출 | `test_store.py`, `test_staff_call*.py`, `test_results_commit_order_u26.py`, `test_orchestrator.py`, `test_inference_client.py`, `test_turn_idempotency_deadline.py`, `test_public_api*.py`, `test_request_deadline.py`, `test_risk_failsafe.py`, `test_readyz_db_outage.py`, `test_audit_fixes.py`, `test_http_server_properties.py` | 모두 호출 결과를 변수에 모아 단언한다. 호출은 위 제품 코드의 예외 처리(턴 `BaseException` 전달, API의 오류 변환)를 거친다 |
-| 스크립트 | `scripts/load_test.py`(시험 밖, 수동) | 이 목록의 범위 밖. `httpd.run` 스레드는 같은 경쟁이 가능하나 부하 시험 도구라 `run_server`로 바꾸지 않았다 |
+| 스크립트 | `scripts/load_test.py`(시험 밖, 수동) | **고침**: 서버 스레드가 `run_server`를 쓴다. 도구를 짧은 부하로 1회 실행해 종료 때 추적이 없음을 확인했다 |
 
 ## 증명
 - 결정적 시험 `tests/test_thread_exception_s6.py`: select를 가짜로 바꿔 EBADF를 항상 일으키고(타이밍 무관), 별도 pytest 프로세스에서 `-W error::pytest.PytestUnhandledThreadExceptionWarning`로 돌린다. 옛 경로(waitress `run`을 그대로 스레드로)는 경고로 실패하고 `Bad file descriptor`가 출력에 나오며, `run_server` 경로는 통과한다.
+- 부하 도구도 같은 경쟁을 고쳤다(위 표).
 - 한계: 처음 본 경고가 이 경쟁이었는지는 출력을 잃어 확증하지 못했다. 위 목록의 다른 곳은 코드 근거로 예외가 처리됨을 적었다. 그 밖의 곳에서 다시 나오면 `-rw`로 전체 메시지를 남겨 이 표에 더한다.
