@@ -290,6 +290,20 @@ class AlertStore:
         self._txn(lambda: self._db.execute("INSERT INTO session_meta(session_id, subject_ref, created_at, device_id) VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
                                            (session_id, subject_ref, _iso(self._clock()), device_id)))
 
+    def acknowledge(self, session_id: str, user_id: str) -> None:
+        """결과 확인 표시(U83): 처음 한 번만 (계정, 시각)을 남기고 이후 호출은 처음 값을 지킨다. 세션 메타가 없으면 만든 뒤 표시한다."""
+        now = _iso(self._clock())
+
+        def fn():
+            self._db.execute("INSERT INTO session_meta(session_id, subject_ref, created_at, device_id) VALUES (?,?,?,?) ON CONFLICT DO NOTHING", (session_id, None, now, None))
+            self._db.execute("UPDATE session_meta SET acknowledged_by=?, acknowledged_at=? WHERE session_id=? AND acknowledged_at IS NULL", (user_id, now, session_id))
+        self._txn(fn)
+
+    def ack_of(self, session_id: str) -> Optional[dict]:
+        """{acknowledged_by, acknowledged_at} 또는 None(아직 확인 전)."""
+        rows = self._read("SELECT acknowledged_by, acknowledged_at FROM session_meta WHERE session_id=?", (session_id,))
+        return {"acknowledged_by": rows[0][0], "acknowledged_at": rows[0][1]} if rows and rows[0][1] else None
+
     def device_of(self, session_id: str) -> Optional[str]:
         rows = self._read("SELECT device_id FROM session_meta WHERE session_id=?", (session_id,))
         return rows[0][0] if rows else None

@@ -22,6 +22,7 @@ from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
 from ..components.metrics_export import Metrics
 from .. import types
+from datetime import datetime, timezone
 from ..config import REAL_SLEEP, REAL_WALL_CLOCK, real_wait
 from . import checked
 from .clock import join_until
@@ -141,7 +142,7 @@ class App:
             log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
         self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox, REAL_WALL_CLOCK), timeline=self.alert_store,
-                                         max_consecutive_reask=settings.max_consecutive_reask, turn_observer=self.metrics.observe_turn,
+                                         max_consecutive_reask=settings.max_consecutive_reask, turn_observer=self.metrics.observe_turn, result_observer=self._result_ready,
                                          turn_deadline_seconds=settings.turn_deadline_seconds, request_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
@@ -316,6 +317,12 @@ class App:
         rel = self.registry.active()
         cap = effective_reask_cap(mx, rel.bank.get("session_settings") if rel else None) if rel else None
         return {"active": (cap if cap is not None else mx) > 0, "max_consecutive": mx, "effective": cap or None}
+
+    def _result_ready(self, session_id: str, status: str) -> None:
+        """세션이 끝났음을 직원·의사 콘솔 SSE로 알린다(U83, PUBLIC_API B절). 본문은 session_id·status·ended_at뿐이고 subject_ref는 넣지 않는다.
+        저장하지 않는 실시간 이벤트다(id 없음): 놓친 콘솔은 결과 목록 API로 맞춘다. 웹 푸시로는 보내지 않는다."""
+        ended = datetime.fromtimestamp(REAL_WALL_CLOCK(), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.alerts.hub.publish({"type": "result_ready", "id": None, "alert": {"session_id": session_id, "status": status, "ended_at": ended}})
 
     def _warnings(self) -> list:
         """/readyz의 경고(준비 조건은 아니다). 위험 감지가 꺼진 채 운영 중임을 숨기지 않는다(사용자 결정 L11, ADR-0053)."""

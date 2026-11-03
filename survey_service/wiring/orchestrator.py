@@ -77,7 +77,9 @@ class Orchestrator:
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
                  max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0, request_deadline_seconds: float = 0.0,
-                 clock: Callable[[], float] = time.monotonic, turn_observer: Optional[Callable[[str, float], None]] = None) -> None:
+                 clock: Callable[[], float] = time.monotonic, turn_observer: Optional[Callable[[str, float], None]] = None,
+                 result_observer: Optional[Callable[[str, str], None]] = None) -> None:
+        self.result_observer = result_observer   # 세션이 ENDED_*로 확정될 때 (session_id, 상태)를 받는 쪽(result_ready 알림, U83). 없으면 알리지 않는다
         self.turn_observer = turn_observer       # 턴 하나가 끝날 때 (결과 이름, 경과 초)를 받는 쪽(지표 내보내기, ADR-0055). 없으면 지표를 모으지 않는다
         self.clock = clock                       # 단조 시계(주입, ADR-0050): 턴 마감을 이 시계로 센다. wiring(App)이 실제 시계를, 시험이 가짜 시계를 넣는다
         self.store = store

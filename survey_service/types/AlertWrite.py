@@ -242,6 +242,17 @@ class AlertWrite35(TypedDict, closed=True):
     signal_id: str
 
 
+class AlertWrite36(TypedDict, closed=True):
+    op: Literal['acknowledge']
+    session_id: str
+    user_id: str
+
+
+class AlertWrite37(TypedDict, closed=True):
+    op: Literal['ack_of']
+    session_id: str
+
+
 AlertWrite: TypeAlias = (
     AlertWrite1
     | AlertWrite2
@@ -278,4 +289,6 @@ AlertWrite: TypeAlias = (
     | AlertWrite33
     | AlertWrite34
     | AlertWrite35
+    | AlertWrite36
+    | AlertWrite37
 )

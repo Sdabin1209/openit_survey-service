@@ -63,7 +63,9 @@ class _SseBody:
                         yield _heartbeat()
                         last_ping = time.monotonic()
                     continue
-                if ev["id"] > sent:                          # 이어 받기 구간과 겹치는 이벤트는 건너뛴다
+                if ev["id"] is None:                         # result_ready: 저장·순번이 없는 실시간 이벤트(U83, ADR-0056). Last-Event-ID를 바꾸지 않는다
+                    yield _sse(ev)
+                elif ev["id"] > sent:                        # 이어 받기 구간과 겹치는 이벤트는 건너뛴다
                     yield _sse(ev)
                     sent = ev["id"]
         except StoreError:                                 # 알림 DB 오류: 스트림을 끝낸다(클라이언트는 Last-Event-ID로 다시 연결한다)
@@ -80,6 +82,8 @@ def _heartbeat() -> bytes:
 
 
 def _sse(ev: dict) -> bytes:
+    if ev["id"] is None:
+        return f"event: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode()
     return f"id: {ev['id']}\nevent: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode()
 
 

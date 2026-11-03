@@ -73,6 +73,7 @@ _SPEC = (
     ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True, None),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
     ("result", "GET", "/v1/results/{sid}", "result-reader", False, None, True, None),
     ("results", "GET", "/v1/results", "result-reader", False, None, True, None),
+    ("ack", "POST", "/v1/results/{sid}/ack", "result-reader", True, None, True, None),      # 확인 표시(U83): 계정(X-Openit-User)이 필요하다
     ("risk_signal", "POST", "/v1/sessions/{sid}/risk-signals", "risk-source", False, None, True, None),
 )
 _SPEC_RX = [(name, method, re.compile("^" + re.sub(r"\\\{(\w+)\\\}", r"([^/]+)", re.escape(pat)) + "$"), role) for name, method, pat, role, *_ in _SPEC]
@@ -615,7 +616,8 @@ class PublicApi:
                 "ended_at": (times.get(len(log_) - 1) or {}).get("at") if ended and log_ else None,
                 "release_id": self.orch.store.release_id_of(sid),
                 "question_bank_version": str(doc["session_info"]["question_bank_version"]),
-                "answers": self._values(doc), "skipped_details": self.orch.blank_details(doc)}
+                "answers": self._values(doc), "skipped_details": self.orch.blank_details(doc),
+                **(self.alerts.store.ack_of(sid) or {})}      # acknowledged_by·acknowledged_at은 확인된 뒤에만 나온다(선택 필드, U83)
 
     def _result(self, req: Request):
         """SessionResult(발화·대화 로그 없음, 부분 결과도 상태와 함께). 접근 기록 fail-closed."""
@@ -629,6 +631,30 @@ class PublicApi:
         if status is None:
             raise _err("NOT_FOUND", "모르는 세션이다")
         try:
+            body = self._result_of(sid, r["state"], self.alerts.store.subject_of(sid), self.alerts.store.timeline(sid))
+        except self.orch.errors.StoreError:
+            raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다") from None
+        return 200, body, {}
+
+    def _ack(self, req: Request):
+        """POST /v1/results/{sid}/ack 본문 {} -> 갱신된 SessionResult. 확인 계정은 게이트웨이가 인증해 붙인 X-Openit-User다(본문은 믿지 않는다).
+        읽기와 같이 접근 기록(outcome ACK, 계정 포함)을 남기고 못 남기면 아무것도 바꾸지 않는다(fail-closed). 두 번째 호출은 처음 값을 지킨다."""
+        sid, role = req.params["sid"], req.role
+        _sid(sid)
+        if req.body not in ({}, None):
+            raise _err("INVALID_RECORD", "본문은 {} 여야 한다")
+        user = req.user
+        if not isinstance(user, str) or not USER_ID.match(user):
+            raise _err("INVALID_RECORD", "X-Openit-User 형식이 아니다")
+        status, r = self._state_of(sid)
+        if status == "ERROR":
+            raise _err("UNAVAILABLE", "지금은 처리할 수 없다")
+        if not self._audit(role, [sid], "ACK" if status is not None else "NOT_FOUND"):
+            raise _err(*self._NO_AUDIT)
+        if status is None:
+            raise _err("NOT_FOUND", "모르는 세션이다")
+        try:
+            self.alerts.store.acknowledge(sid, user)
             body = self._result_of(sid, r["state"], self.alerts.store.subject_of(sid), self.alerts.store.timeline(sid))
         except self.orch.errors.StoreError:
             raise _err("UNAVAILABLE", "알림 저장소를 읽을 수 없다") from None

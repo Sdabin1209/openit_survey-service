@@ -704,6 +704,12 @@ class TurnGraph:
         res = checked.store_commit(self.o.store, req, turn_id=st["turn_id"], input_hash=st["input_hash"], **kw)
         tr = {"persistence_commit_request": copy.deepcopy(req), "persistence_commit_result": copy.deepcopy(res)}
         if res["status"] == "OK":
+            end = (writes.get("progress_record_update") or {}).get("session_status")
+            if end and end.startswith("ENDED") and self.o.result_observer is not None:      # 확정된 턴만, 세션당 종료는 한 번이라 알림도 한 번이다
+                try:
+                    self.o.result_observer(st["session_id"], end)
+                except Exception:      # 알림 때문에 확정된 턴이 실패하면 안 된다
+                    log.exception("result_ready 알림에 실패했다")
             return {"committed": True, "revision": res["revision"], "post_doc": effects.apply_writes(doc, writes), "trace": tr}
         self.o._count("commit_failed." + res["status"])
         return {"failed": _step_failed(("BEFORE_COMMIT", "COMMIT")), "commit_unknown": res.get("write_outcome") == "UNKNOWN", "trace": tr}

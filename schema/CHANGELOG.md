@@ -26,5 +26,6 @@
 | 날짜 | 변경 | 읽는 쪽 영향 |
 | --- | --- | --- |
 | 2026-11-03 | `SessionResult.skipped_details[].reason`에 `REASK_LIMIT` 추가(되묻기 한도로 빈칸). `SessionStore`·`TurnTrace`·`DispatchInput`의 `SkipReason`에 `REASK_LIMIT` 추가(진행 기록의 건너뛴 문항 사유) | enum 값 추가. 닫힌 enum으로 검증하는 읽는 쪽(ops-feedback의 TurnTrace 읽기, 병원 시스템의 결과 읽기)은 새 값을 받아들여야 한다. 헤드가 해당 영역에 알린다. 근거 docs/adr/ADR-0054.md |
+| 2026-11-03 | `SessionResult`에 선택 필드 `acknowledged_by`(문자열), `acknowledged_at`(UTC 시각) 추가(결과 확인 표시, U83). 확인 전에는 없다 | 선택 필드 추가라 영향 없음. 근거 docs/adr/ADR-0056.md |
 
 위 표의 2.0.0·2.1.0·3.0.0 행의 날짜와 세부는 `docs/adr/`와 `docs/change-requests/`가 정본이다. 이 표는 그 요약이며, 읽지 못한 이력이 있으면 빠졌을 수 있다(추정).

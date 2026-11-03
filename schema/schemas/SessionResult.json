@@ -162,6 +162,15 @@
             ],
             "additionalProperties": false
           }
+        },
+        "acknowledged_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "결과를 확인한 계정 ID(게이트웨이가 인증해 넘긴 X-Openit-User). 확인 전에는 없다. 정수 버전 1 안의 선택 필드 추가(U83)."
+        },
+        "acknowledged_at": {
+          "$ref": "#/$defs/Timestamp",
+          "description": "확인한 시각(UTC). 두 번째 확인은 처음 값을 바꾸지 않는다."
         }
       },
       "required": [

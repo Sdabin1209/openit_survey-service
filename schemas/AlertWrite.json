@@ -967,6 +967,45 @@
           "pattern": "^[A-Za-z0-9._:-]{1,64}$(?![\\s\\S])"
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id",
+        "user_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "acknowledge"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        },
+        "user_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,128}$(?![\\s\\S])"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "session_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "ack_of"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+        }
+      }
     }
   ]
 }
