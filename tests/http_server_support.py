@@ -1,11 +1,11 @@
 """HTTP 서버(survey_service.server.serve가 돌려주는 waitress 서버)를 시작·종료·조회하는 시험 보조."""
 import threading
 
-from survey_service.server import close_server
+from survey_service.server import close_server, run_server
 
 
 def start_server(h) -> None:
-    threading.Thread(target=h.run, daemon=True).start()
+    threading.Thread(target=run_server, args=(h,), daemon=True).start()
 
 
 def server_port(h) -> int:

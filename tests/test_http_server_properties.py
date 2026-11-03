@@ -50,3 +50,19 @@ def test_in_flight_request_gets_its_response_when_shutdown_is_requested(tmp_path
     finally:
         gate.set()
         app.draining.set(); app.stop()
+
+
+def test_run_server_swallows_the_ebadf_of_a_requested_close_and_raises_otherwise():
+    """close_server가 다른 스레드에서 소켓을 닫으면 waitress 루프의 select가 EBADF(OSError)로 깨어난다. 닫기를 요청한 뒤면 정상 종료, 아니면 그대로 올린다(S5)."""
+    import pytest
+    from survey_service.server import run_server
+
+    class S:
+        def __init__(self, closed):
+            self._survey_closed = closed
+
+        def run(self):
+            raise OSError(9, "Bad file descriptor")
+    run_server(S(True))
+    with pytest.raises(OSError):
+        run_server(S(False))

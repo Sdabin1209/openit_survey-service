@@ -205,6 +205,16 @@ def close_server(server, wait_seconds: float) -> None:
     wasyncore.close_all(server._map)
 
 
+def run_server(server) -> None:
+    """서버 루프를 돈다. close_server가 다른 스레드에서 소켓을 닫으면 waitress의 select가 EBADF(OSError)로 깨어난다: 닫기를 요청한 뒤라면 정상 종료이므로 삼키고,
+    닫기를 요청하지 않았는데 난 OSError는 그대로 올린다. 왜: 정상 종료(SIGTERM)가 추적 로그와 종료 코드 1로 끝나던 결함(smoke 진단 출력으로 발견, S5)."""
+    try:
+        server.run()
+    except OSError:
+        if not getattr(server, "_survey_closed", False):
+            raise
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["purge"]:
@@ -232,7 +242,7 @@ def main(argv=None) -> int:
         threading.Thread(target=close_server, args=(httpd, settings.turn_deadline_seconds + 1.0), daemon=True).start()
     signal.signal(signal.SIGTERM, on_term)
     try:
-        httpd.run()
+        run_server(httpd)
     except KeyboardInterrupt:
         pass
     finally:
