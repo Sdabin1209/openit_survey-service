@@ -34,3 +34,45 @@ def test_job_subcommands_exist_in_the_entry_point(capsys):
     from survey_service.server import main
     assert main(["no-such-job"]) == 2
     assert "backup" in capsys.readouterr().err
+
+
+def test_every_neighbour_client_is_built_with_the_egress_proxy_from_the_environment(monkeypatch, tmp_path):
+    """CONVENTIONS 13절: 계약 클라이언트를 만드는 모든 곳에서 egress_proxy_from(environ)을 넘긴다(I4·I6·I9). 환경에 출구가 있으면 세 클라이언트 모두 그 터널을 쓴다."""
+    from survey_service.components.link_boundary_clients import http_release_reader, http_trace_ingest
+    from survey_service.components.link_inference import RemoteInference
+    proxy = "http://127.0.0.1:3128"
+    env = {"OPENIT_EGRESS_PROXY": proxy, "SURVEY_RELEASE_READER_URL": "https://release-gate", "SURVEY_RELEASE_READER_TOKEN": "t-0123456789abcdef",
+           "SURVEY_TRACE_INGEST_URL": "https://ops-feedback-ingest", "SURVEY_TRACE_INGEST_TOKEN": "t-0123456789abcdef"}
+    import urllib.request
+
+    def tunnel(client):      # 계약 클라이언트의 열린 연결기에서 CONNECT 출구를 읽는다
+        return next((h.proxies for h in client._opener.handlers if isinstance(h, urllib.request.ProxyHandler)), {}).get("https")
+    rr, ti = http_release_reader(env), http_trace_ingest(env)
+    assert tunnel(rr._reader) == proxy and tunnel(rr._bundle) == proxy and tunnel(ti) == proxy
+    ri = RemoteInference("https://model-serving", "tok", 3.0, monotonic=lambda: 0.0, sleep=lambda s: None, egress_proxy=proxy)
+    assert tunnel(ri._rt) == proxy and all(tunnel(rt) == proxy for rt in ri._op_rts.values())
+    env.pop("OPENIT_EGRESS_PROXY")
+    assert tunnel(http_trace_ingest(env)) is None
+
+
+def test_app_wiring_passes_the_egress_proxy_to_the_inference_client_and_the_web_push_sender(tmp_path, monkeypatch):
+    """배선(App)이 환경의 OPENIT_EGRESS_PROXY를 추론 클라이언트와 웹 푸시 발송기에 넘긴다(R1.8, R6.4)."""
+    import urllib.request
+    from survey_service.settings import Settings
+    from survey_service.wiring.app import App
+    from .fakes import FakeReleaseReader, FakeTraceIngest
+    from .test_staff_alerts import _vapid_key_pem
+    proxy = "http://127.0.0.1:3128"
+    monkeypatch.setenv("OPENIT_EGRESS_PROXY", proxy)
+    monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", "inf-token-0123456789")
+    monkeypatch.setenv("SURVEY_VAPID_PRIVATE_KEY", _vapid_key_pem())
+    monkeypatch.delenv("SURVEY_DATABASE_URL", raising=False)
+    s = Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": "https://model-serving", "SURVEY_WORK_DIR": str(tmp_path / "w"),
+                           "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_VAPID_SUBJECT": "mailto:ops@example.com"})
+    app = App(s, reader=FakeReleaseReader(tmp_path / "g"), ingest=FakeTraceIngest())
+    try:
+        rt = app.inference._rt
+        assert next((h.proxies for h in rt._opener.handlers if isinstance(h, urllib.request.ProxyHandler)), {}).get("https") == proxy
+        assert app.alerts.push._egress == proxy
+    finally:
+        app.stop()

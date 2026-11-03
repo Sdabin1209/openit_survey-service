@@ -193,7 +193,8 @@ class App:
                                          load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries,
                                          extract_timeout=settings.inference_extract_timeout_seconds,
                                          respond_timeout=settings.inference_respond_timeout_seconds, monotonic=clock, sleep=REAL_SLEEP,
-                                         observer=self.metrics.observe_model_call)
+                                         observer=self.metrics.observe_model_call,
+                                         egress_proxy=egress_proxy_from(os.environ))      # 영역 밖 호출은 자기 영역 게이트웨이의 출구로만(R1.8)
         else:
             self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
