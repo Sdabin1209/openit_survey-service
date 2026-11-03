@@ -361,7 +361,8 @@ def test_webpush_sender_against_local_push_service(status, expected):
         hdr, body = ps.requests[0]
         hdr = {k.lower(): v for k, v in hdr.items()}
         assert hdr["authorization"].lower().startswith("vapid t=") and hdr["content-encoding"] == "aes128gcm" and hdr["urgency"] == "high"
-        assert SECRET_TEXT.encode() not in body and b"K1" not in body                      # 본문은 암호화되어 나간다
+        # 본문은 암호화되어 나간다. 평문의 짧은 조각(예: 세션 ID "K1" 두 바이트)은 암호문에서 우연히 나타난다(약 240바이트 본문에서 0.37%): 우연히 나올 수 없는 긴 조각만 본다
+        assert SECRET_TEXT.encode() not in body and payload not in body and b'"session_id"' not in body and b"RISK_STOP" not in body
     finally:
         ps.close()
 
