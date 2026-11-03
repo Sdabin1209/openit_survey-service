@@ -29,6 +29,16 @@ class FlowTable:
     def is_skipped(self, item: str, saved: Mapping[str, Any]) -> bool:
         return any(r["skip_item"] == item and r["slot"] in saved and _same(saved[r["slot"]], r["value"]) for r in self.skips)
 
+    def next_after(self, item: str, saved: Mapping[str, Any]) -> str | None:
+        """`item` 다음에 물을 문항(건너뛰기 표로 빠지는 문항은 뺀다). 마지막이면 "END". 순서표에 없는 문항이면 None(다음을 알 수 없다)."""
+        i = self.index(item)
+        if i is None:
+            return None
+        for j in range(i + 1, len(self.order)):
+            if not self.is_skipped(self.order[j], saved):
+                return self.order[j]
+        return "END"
+
     def wire(self) -> dict:
         """계약 QuestionFlowTable(JSON)."""
         return {"order": list(self.order), "skips": [dict(r) for r in self.skips]}

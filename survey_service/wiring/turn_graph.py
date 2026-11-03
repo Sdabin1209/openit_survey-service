@@ -84,9 +84,8 @@ class TurnState(TypedDict, total=False):
     flow_end: bool
     resp: Optional[dict]            # 응답 계획 {kind: model_start | model | fixed | none, text?}
     alert: Optional[dict]           # 직원 알림(RiskSource가 낸 것). 입력원이 없으면 항상 None
-    fail_escalation: bool           # 추출·검증 실패가 연속 상한에 닿아 직원 호출로 바뀐 턴(U34, ADR-0032): 합성 REASK로 같은 직원 호출 경로를 탄다
+    fail_escalation: bool           # 추출·검증 실패가 연속 상한에 닿은 턴(U34, ADR-0032): 합성 REASK로 같은 한도 경로(빈칸으로 두고 다음 문항, ADR-0054)를 탄다
     prescreen_hit: bool             # 모델 추출 전에 발화 원문에서 위험이 걸렸다(D88 U1, ADR-0013)
-    pause_reason: Optional[str]     # 이 턴이 낳은 정지의 사유 REASK_LIMIT(되묻기 한도). 위험 매처는 alert.kind RISK로 도출한다(CR-H002, ADR-0022)
     alert_sent: bool                # 직원 알림을 이미 전달했다(prescreen이 쓰기 확정과 분리해 먼저 보낸다)
     # 쓰기 확정과 그 뒤
     committed: bool
@@ -304,10 +303,8 @@ class TurnGraph:
 
     @staticmethod
     def _pause_reason(st) -> Optional[str]:
-        """이 턴의 정지 사유(CR-H002), 알림 행에 남길 값. 되묻기 한도는 그 경로가 표시한 값, 위험 신호·위험 규칙(kind RISK)은 RISK, 정지가 아니면 None.
+        """이 턴의 정지 사유(CR-H002), 알림 행에 남길 값. 위험 신호·위험 규칙(kind RISK)은 RISK, 정지가 아니면 None(되묻기 한도는 더 이상 정지하지 않는다, ADR-0054).
         정본은 세션 문서의 PAUSE 기록(같은 값을 쓴다). 턴 신호에는 세션이 실제로 정지됐을 때만 싣는다(finalize가 committed를 본다)."""
-        if st.get("pause_reason"):
-            return st["pause_reason"]
         a = st.get("alert")
         return "RISK" if a is not None and a.get("kind") == "RISK" else None
 
@@ -553,12 +550,12 @@ class TurnGraph:
                 upd["resp"] = self._fixed(ctx, "RISK_NOTICE")
                 self.o._count("risk_rule_hit")
         if "alert" not in upd:
-            esc = self._reask_escalation(st, ctx, out)
-            if esc is not None:
-                upd.update(esc)
-                pu = writes["progress_record_update"]
-                pu["session_status"] = "PAUSED_RISK"           # 기존 직원 호출 경로: 정지 + CALL_STAFF 알림 + 문항 세트의 고정 문장
-                pu["pause_history_add"] = [{"kind": "PAUSE", "reasons": [], "pause_reason": "REASK_LIMIT"}]      # 사유는 정지 기록(세션 문서)에 함께 남긴다: 상태·신호·알림이 같은 값을 본다 (ADR-0022)
+            skip_out = self._reask_blank(st, ctx, out, doc)
+            if skip_out is not None:                          # 되묻기 한도: 직원을 부르지 않고 그 문항의 빈 칸을 빈칸으로 두고 다음 문항으로 간다 (사용자 결정 U36·G12·U35, ADR-0054)
+                writes = checked.plan_writes(doc, skip_out)
+                for e in writes["progress_record_update"]["skipped_add"]:
+                    e["reason"] = "REASK_LIMIT"               # 빈칸 사유는 A의 SKIP 사유가 아니라 한도에 닿았다는 사실이다
+                upd.update(writes=writes, extract_out=skip_out, flow_end=skip_out["next_item"] == "END")
         return upd
 
     @staticmethod
@@ -591,16 +588,29 @@ class TurnGraph:
                 return {"kind": "RISK", "reasons": [{"kind": "RISK_RULE", "target": [{"slot": ref}]}]}
         return None
 
-    def _reask_escalation(self, st, ctx, out) -> Optional[dict]:
-        """G12: A가 REASK·CONFIRM을 연달아 내는 횟수를 대화 로그에서 센다(세션 문서에서 계산하므로 재시작·재전송에도 같다).
-        상한(SURVEY_MAX_CONSECUTIVE_REASK, 0이면 끔)을 넘는 REASK·CONFIRM이 나오면 되묻는 대신 직원을 부른다."""
+    def _reask_blank(self, st, ctx, out, doc) -> Optional[dict]:
+        """G12·U36: A가 REASK·CONFIRM·REDIRECT를 연달아 내는 횟수를 대화 로그에서 센다(세션 문서에서 계산하므로 재시작·재전송에도 같다).
+        상한(SURVEY_MAX_CONSECUTIVE_REASK, 0이면 끔)에 닿은 뒤에도 같은 action이 나오면 되묻는 대신 이 문항을 건너뛴 것으로 바꾼 합성 출력(SKIP)을 돌려준다.
+        다음 문항은 문항 순서표와 건너뛰기 표로 서비스가 정한다(서버가 정하는 next_item은 REASK에서 현재 문항이다). 순서표에 없는 문항이면 None(되묻기를 그대로 둔다)."""
         cap = self._reask_cap(ctx)
-        if cap <= 0 or out["action"] not in STREAK_ACTIONS:
+        if cap <= 0 or out["action"] not in STREAK_ACTIONS or self._streak(st) < cap:
             return None
-        if self._streak(st) < cap:
+        cur = doc["progress_record"]["current_question_id"]
+        post = effects.apply_writes(doc, checked.plan_writes(doc, out))      # 이번 턴에 저장되는 값까지 보고 건너뛸 문항을 정한다
+        saved: dict = {}
+        for r in post["answer_records"]:
+            cv = r["current_value"]
+            if isinstance(cv, dict) and "answer" in cv:
+                saved[f"{r['slot']['question_id']}.{r['slot']['slot_id']}"] = cv["answer"]
+        nxt = self.o.flow.table.next_after(cur, saved)
+        if nxt is None:
             return None
-        self.o._count("reask_limit_reached")
-        return {"alert": {"kind": "CALL_STAFF", "reasons": []}, "resp": self._fixed(ctx, "CALL_STAFF"), "pause_reason": "REASK_LIMIT"}
+        targets = list(out.get("targets") or [])
+        if not targets:                                    # REDIRECT·합성 출력: 현재 문항의 첫 칸
+            q = ctx.bank.by_id.get(cur) if ctx.bank else None
+            targets = [f"{cur}.{q['slots'][0]['slot_id'] if q and q.get('slots') else 'x'}"]
+        self.o._count("reask_limit_blank")
+        return {"action": "SKIP", "reason": "REQUEST_SKIP", "next_item": nxt, "targets": targets, "values": copy.deepcopy(out["values"])}
 
     def _reask_cap(self, ctx) -> int:
         settings = ctx.bank.settings if ctx.bank else None
@@ -637,8 +647,8 @@ class TurnGraph:
         return n
 
     def _escalate_failure(self, st, ctx, res: dict) -> dict:
-        """추출·검증이 끝내 실패한 턴(res가 종료 노드로 간다)이 연속 상한에 닿았으면, 실패로 끝내지 않고 합성 REASK로 plan_writes에 보내 같은 직원 호출 경로
-        (정지 + CALL_STAFF 알림 + 고정 문장)를 탄다. 턴 마감을 이미 넘겼으면 확정할 시간이 없어 그대로 실패로 둔다(이 턴은 다음 연속에 센다)."""
+        """추출·검증이 끝내 실패한 턴(res가 종료 노드로 간다)이 연속 상한에 닿았으면, 실패로 끝내지 않고 합성 REASK로 plan_writes에 보내 같은 한도 경로
+        (그 문항을 빈칸으로 두고 다음 문항, ADR-0054)를 탄다. 턴 마감을 이미 넘겼으면 확정할 시간이 없어 그대로 실패로 둔다(이 턴은 다음 연속에 센다)."""
         cap = self._reask_cap(ctx)
         if cap <= 0 or res.get("extract_next") != "finalize" or not res.get("failed") or ctx.expired() or st["state_doc"]["progress_record"]["session_status"] != "IN_PROGRESS":
             return res
@@ -647,7 +657,7 @@ class TurnGraph:
         cur = st["state_doc"]["progress_record"]["current_question_id"]
         q = ctx.bank.by_id.get(cur) if ctx.bank else None
         slot = q["slots"][0]["slot_id"] if q and q.get("slots") else "x"
-        # 계약 ActionExtraction은 REASK에 reason과 targets(1개 이상)를 요구한다: 현재 문항의 첫 칸을 대상으로 한다(저장·응답에는 쓰이지 않는다: 같은 직원 호출 경로가 고정 문장을 낸다)
+        # 계약 ActionExtraction은 REASK에 reason과 targets(1개 이상)를 요구한다: 현재 문항의 첫 칸을 대상으로 한다(저장·응답에는 쓰이지 않는다: 한도 경로가 이를 SKIP으로 바꾼다)
         synthetic = {"action": "REASK", "next_item": cur, "reason": "MISSING", "targets": [f"{cur}.{slot}"], "values": []}
         return {**res, "extract_next": "plan", "failed": [], "extract_out": synthetic, "fail_escalation": True}
 

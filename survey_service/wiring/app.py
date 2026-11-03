@@ -20,6 +20,7 @@ from ..components.alert_service import AlertHub, AlertService, AlertStaffConsole
 from ..components.link_push import WebPushSender, endpoint_syntax_error
 from ..components.link_public_api import PublicApi
 from ..components.link_inference import InferenceServer, RemoteInference
+from ..components.metrics_export import Metrics
 from .. import types
 from ..config import REAL_SLEEP, REAL_WALL_CLOCK, real_wait
 from . import checked
@@ -100,6 +101,7 @@ class App:
                                     settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
                                     settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error, monotonic=clock))
         self.registry = ReleaseRegistry()
+        self.metrics = Metrics()      # 내부망 GET /metrics(server.py). 게이트웨이로 나가지 않는다 (ADR-0055)
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
             tok = _secret(settings.inference_token_env, "추론 서버 토큰")
             if not tok:
@@ -107,7 +109,8 @@ class App:
             self.inference = RemoteInference(settings.inference_url, tok, settings.inference_timeout_seconds,
                                          load_timeout=settings.inference_load_timeout_seconds, retries=settings.inference_retries,
                                          extract_timeout=settings.inference_extract_timeout_seconds,
-                                         respond_timeout=settings.inference_respond_timeout_seconds, monotonic=clock, sleep=REAL_SLEEP)
+                                         respond_timeout=settings.inference_respond_timeout_seconds, monotonic=clock, sleep=REAL_SLEEP,
+                                         observer=self.metrics.observe_model_call)
         else:
             self.inference = InferenceServer(settings.model_backend)
         self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
@@ -138,7 +141,7 @@ class App:
             log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
         self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox, REAL_WALL_CLOCK), timeline=self.alert_store,
-                                         max_consecutive_reask=settings.max_consecutive_reask,
+                                         max_consecutive_reask=settings.max_consecutive_reask, turn_observer=self.metrics.observe_turn,
                                          turn_deadline_seconds=settings.turn_deadline_seconds, request_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
         device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
@@ -314,6 +317,13 @@ class App:
         cap = effective_reask_cap(mx, rel.bank.get("session_settings") if rel else None) if rel else None
         return {"active": (cap if cap is not None else mx) > 0, "max_consecutive": mx, "effective": cap or None}
 
+    def _warnings(self) -> list:
+        """/readyz의 경고(준비 조건은 아니다). 위험 감지가 꺼진 채 운영 중임을 숨기지 않는다(사용자 결정 L11, ADR-0053)."""
+        out = []
+        if self.orchestrator.risk_source is None:
+            out.append("risk_detection_disabled")
+        return out
+
     def readiness(self) -> tuple[bool, dict]:
         problems, dbs = self._db_check()
         if self.draining.is_set():
@@ -330,6 +340,7 @@ class App:
             "active_release": active, "contract_version": survey_schema.current_version(),
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION,
             "staff_alerts": dbs["staff_alerts"],
+            "warnings": self._warnings(),
             "secrets": self._secret_sources(),
             # 입력원이 없으면(기본 임시 목록을 SURVEY_RISK_DEFAULT_RULES=off로 끈 경우만) 조용히 끄지 않고 여기에 active=false로 드러낸다(ADR-0013, CR-012).
             "staff_alert_source": ((self.orchestrator.risk_source.describe() if hasattr(self.orchestrator.risk_source, "describe")

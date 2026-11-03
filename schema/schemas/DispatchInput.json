@@ -277,6 +277,9 @@
         },
         {
           "const": "UNCERTAIN"
+        },
+        {
+          "const": "REASK_LIMIT"
         }
       ]
     },

@@ -149,6 +149,9 @@ def make_wsgi(app: App):
             return finish(*_order(app.api.dispatch(environ, link)))
         if path in ("/healthz", "/readyz"):
             return finish(*_order(link.handle(environ)))
+        if path == "/metrics" and method == "GET":      # 내부망 전용(Prometheus가 직접 긁는다). deploy-exposure.json에서 denied라 gateway로 나가지 않는다 (ADR-0055)
+            body, ctype = app.metrics.render()
+            return finish(200, {"Content-Type": ctype, "Cache-Control": "no-store"}, body)
         return respond(404, {"error": "not found"})            # 공개 API 밖의 경로·메서드는 없다
 
     return application

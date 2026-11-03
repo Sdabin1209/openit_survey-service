@@ -140,7 +140,8 @@
       "paths": [
         "/v1/sessions/*/risk-signals",
         "/v1/results",
-        "/v1/results/*"
+        "/v1/results/*",
+        "/metrics"
       ],
       "auth": {
         "kind": "denied"

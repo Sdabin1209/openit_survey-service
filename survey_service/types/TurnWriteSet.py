@@ -28,7 +28,7 @@ class OpenSlot(TypedDict, closed=True):
 
 class SkippedAddItem(TypedDict, closed=True):
     question_id: str
-    reason: Literal['REQUEST_SKIP', 'REFUSED', 'UNCERTAIN']
+    reason: Literal['REQUEST_SKIP', 'REFUSED', 'UNCERTAIN', 'REASK_LIMIT']
 
 
 SkippedRemoveItem: TypeAlias = str

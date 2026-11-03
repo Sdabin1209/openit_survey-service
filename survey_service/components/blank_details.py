@@ -4,6 +4,7 @@
 - UNKNOWN  = status UNKNOWN (HOLD / reason UNCERTAIN: 환자가 모른다고 함)
 - REJECTED = status REJECTED (SKIP / reason REFUSED·REQUEST_SKIP: 거절하거나 나중에 하겠다고 함)
 - UNCLEAR  = status UNCLEAR (REASK / OUT_OF_RANGE, UNKNOWN_UNIT, VAGUE_QUANTITY, OTHER_BEVERAGE, RANGE_SPANS_OPTIONS: 불분명하거나 범위 밖이라 값이 정해지지 않음)
+- REASK_LIMIT = 같은 문항을 되묻기 한도만큼 되물어도 끝내 정해지지 않아 서비스가 빈칸으로 두고 다음 문항으로 간 문항(진행 기록의 건너뛴 문항 reason). 그 문항의 빈칸은 UNCLEAR 대신 이 코드를 쓴다(ADR-0054)
 status MISSING(아직 못 받음)과 CONFLICT(확인 중)은 원인이 정해진 빈칸이 아니므로 올리지 않는다. 환자 발화 원문은 쓰지 않는다(감사 C2).
 """
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import Mapping
 
 
 CAUSE_OF_STATUS = {"UNKNOWN": "UNKNOWN", "REJECTED": "REJECTED", "UNCLEAR": "UNCLEAR"}
-CAUSE_OF_SKIP_REASON = {"UNCERTAIN": "UNKNOWN", "REFUSED": "REJECTED", "REQUEST_SKIP": "REJECTED"}      # 칸 정보가 없는 건너뛴 문항의 대응
+CAUSE_OF_SKIP_REASON = {"UNCERTAIN": "UNKNOWN", "REFUSED": "REJECTED", "REQUEST_SKIP": "REJECTED", "REASK_LIMIT": "REASK_LIMIT"}      # 칸 정보가 없는 건너뛴 문항의 대응
 
 
 def item_of(key: str) -> str:
@@ -35,7 +36,8 @@ def blank_details(doc: Mapping) -> list[dict]:
             elif v["status"] in CAUSE_OF_STATUS:
                 blanks.pop(key, None)
                 blanks[key] = CAUSE_OF_STATUS[v["status"]]
-    out = [{"item": item_of(k), "slot": k, "reason": r} for k, r in blanks.items()]
+    limit_items = {s["question_id"] for s in doc["progress_record"]["skipped"] if s["reason"] == "REASK_LIMIT"}
+    out = [{"item": item_of(k), "slot": k, "reason": "REASK_LIMIT" if item_of(k) in limit_items else r} for k, r in blanks.items()]
     covered = {d["item"] for d in out}
     for s in doc["progress_record"]["skipped"]:
         if s["question_id"] not in covered:

@@ -16,7 +16,7 @@ def _kinds(rig):
     return [c["staff_alert"]["staff_alert"]["kind"] for c in rig.console.inputs if c.get("staff_alert")]
 
 
-def test_default_is_off_and_never_escalates():
+def test_zero_default_is_not_the_service_default_and_cap_off_never_skips():
     base = {"SURVEY_RELEASE_READER": "tests.fakes:release_reader", "SURVEY_TRACE_INGEST": "tests.fakes:trace_ingest", "SURVEY_MODEL_BACKEND": "fake"}
     assert Settings().max_consecutive_reask == 3 and Settings.from_env(base).max_consecutive_reask == 3         # 기본 3(D88 U10), 끄려면 0을 명시한다
     assert Settings.from_env({**base, "SURVEY_MAX_CONSECUTIVE_REASK": "0"}).max_consecutive_reask == 0
@@ -31,7 +31,8 @@ def test_default_is_off_and_never_escalates():
     assert rig.doc()["progress_record"]["session_status"] == "IN_PROGRESS" and _kinds(rig) == []
 
 
-def test_escalates_to_existing_staff_call_path_after_cap():
+def test_blanks_the_item_and_moves_on_after_cap():
+    """사용자 결정(U36·G12·U35): 한도에 닿으면 직원을 부르지 않고 그 문항을 빈칸으로 두고 다음 문항으로 간다(ADR-0054)."""
     rig = Rig(max_consecutive_reask=2)
     rig.start()
     first = ext("REASK", "Q1.D01", val("Q1.D01.diagnosed", True), val("Q1.D01.on_medication", True), reason="MISSING", targets=["Q1.D01.on_medication"])
@@ -39,18 +40,27 @@ def test_escalates_to_existing_staff_call_path_after_cap():
     for out in (first, confirm):                                 # 상한까지는 되묻는다(REASK와 CONFIRM이 함께 센다)
         o = rig.say("음", out=out)
         assert o.frontend_input["response_text"] != SENT
-    assert _kinds(rig) == []
-    o = rig.say("음", out=REASK)
-    assert o.frontend_input["response_text"] == SENT              # 기존 문항 세트 고정 문장
-    assert _kinds(rig) == ["CALL_STAFF"]                          # 기존 직원 알림 경로
-    doc = rig.doc()
-    assert doc["progress_record"]["session_status"] == "PAUSED_RISK"      # 기존 정지 신호(키오스크 state=PAUSED_RISK)
-    assert rig.orch.counters["reask_limit_reached"] == 1
-    rig.say(decision="RESUME")                                   # 직원이 풀면 다시 진행, 연속 횟수는 다시 센다
-    assert rig.doc()["progress_record"]["session_status"] == "IN_PROGRESS"
-    for _ in range(2):
-        assert rig.say("음", out=REASK).frontend_input["response_text"] != SENT
-    assert _kinds(rig) == ["CALL_STAFF"]
+    assert rig.doc()["progress_record"]["current_question_id"] == "Q1.D01"
+    o = rig.say("음", out=REASK)                                 # 한도 뒤의 같은 되묻기 -> 빈칸으로 두고 다음 문항
+    prog = rig.doc()["progress_record"]
+    assert o.frontend_input["response_text"] != SENT and o.frontend_input["turn_failure_signal"] is None
+    assert prog["session_status"] == "IN_PROGRESS" and prog["current_question_id"] == "Q1.D02"
+    assert {"question_id": "Q1.D01", "reason": "REASK_LIMIT"} in prog["skipped"]
+    assert _kinds(rig) == [] and rig.orch.counters["reask_limit_blank"] == 1 and "reask_limit_reached" not in rig.orch.counters      # 직원 호출 경로는 없다
+    assert rig.orch.blank_details(rig.doc()) == [{"item": "Q1.D01", "reason": "REASK_LIMIT"}]      # 칸 원인이 정해진 값(UNCLEAR 등)이 없었으므로 문항만 적는다
+    for _ in range(2):                                           # 다음 문항에서 연속은 다시 센다(SKIP이 연속을 끊었다)
+        assert rig.say("음", out=ext("REASK", "Q1.D02", val("Q1.D02.on_medication", None, "MISSING"), reason="MISSING", targets=["Q1.D02.on_medication"])).frontend_input["turn_failure_signal"] is None
+    assert rig.doc()["progress_record"]["current_question_id"] == "Q1.D02"
+
+
+def test_the_last_item_blank_ends_the_survey_without_staff():
+    rig = Rig(max_consecutive_reask=1)
+    rig.start()
+    rig.say("음", out=ext("NEXT", "Q10", val("Q9_2.duration_minutes", 5)))
+    rig.say("음", out=ext("REASK", "Q10", val("Q10.days", None, "MISSING"), reason="MISSING", targets=["Q10.days"]))
+    rig.say("음", out=ext("REASK", "Q10", val("Q10.days", None, "MISSING"), reason="MISSING", targets=["Q10.days"]))
+    prog = rig.doc()["progress_record"]
+    assert prog["current_question_id"] == "END" and prog["session_status"] == "ENDED_COMPLETE" and _kinds(rig) == []
 
 
 def test_other_action_breaks_the_streak():
@@ -70,8 +80,8 @@ def test_streak_is_counted_from_session_state_so_it_survives_restart():
     # 새 Orchestrator, 같은 저장소: 카운터는 세션 문서에서 나온다
     rig2 = Rig(store=rig.store, max_consecutive_reask=2)
     rig2.model.queue.append(REASK)
-    o = rig2.orch.handle_turn(turn_id="x1", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "음"})
-    assert o.frontend_input["response_text"] == SENT
+    rig2.orch.handle_turn(turn_id="x1", frontend_message={"session_id": "S1", "kind": "UTTERANCE", "utterance": "음"})
+    assert rig2.doc()["progress_record"]["current_question_id"] == "Q1.D02"
 
 
 def _bank_without_authored_limits():
@@ -81,16 +91,16 @@ def _bank_without_authored_limits():
     return bank
 
 
-def test_default_cap_3_allows_three_then_calls_staff_on_the_fourth():
+def test_default_cap_3_allows_three_then_blanks_the_item_on_the_fourth():
     cap = Settings().max_consecutive_reask
     assert cap == 3
     rig = Rig(bank=_bank_without_authored_limits(), max_consecutive_reask=cap)
     rig.start()
     for _ in range(3):                                           # N번째까지는 정상으로 되묻는다
         assert rig.say("음", out=REASK).frontend_input["response_text"] != SENT
-    assert _kinds(rig) == [] and rig.doc()["progress_record"]["session_status"] == "IN_PROGRESS"
-    assert rig.say("음", out=REASK).frontend_input["response_text"] == SENT      # N+1번째에 직원 호출
-    assert _kinds(rig) == ["CALL_STAFF"] and rig.doc()["progress_record"]["session_status"] == "PAUSED_RISK"
+    assert _kinds(rig) == [] and rig.doc()["progress_record"]["current_question_id"] == "Q1.D01"
+    rig.say("음", out=REASK)                                     # N+1번째에 빈칸 + 다음 문항
+    assert _kinds(rig) == [] and rig.doc()["progress_record"]["current_question_id"] == "Q1.D02" and rig.doc()["progress_record"]["session_status"] == "IN_PROGRESS"
 
 
 def test_other_action_resets_the_counter_for_cap_3():

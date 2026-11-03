@@ -25,9 +25,10 @@
         "enum": [
           "UNKNOWN",
           "REJECTED",
-          "UNCLEAR"
+          "UNCLEAR",
+          "REASK_LIMIT"
         ],
-        "description": "UNKNOWN 모름 / REJECTED 거절·나중에 / UNCLEAR 불분명·범위 밖"
+        "description": "UNKNOWN 모름 / REJECTED 거절·나중에 / UNCLEAR 불분명·범위 밖 / REASK_LIMIT 되묻기 한도로 빈칸"
       }
     }
   }

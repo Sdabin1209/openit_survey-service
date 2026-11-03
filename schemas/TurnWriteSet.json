@@ -126,7 +126,8 @@
                 "enum": [
                   "REQUEST_SKIP",
                   "REFUSED",
-                  "UNCERTAIN"
+                  "UNCERTAIN",
+                  "REASK_LIMIT"
                 ]
               }
             }

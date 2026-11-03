@@ -302,19 +302,15 @@ def test_pause_reason_risk_in_state_signal_alert_and_staff_view(mk):
     assert st["state"] == "ACTIVE" and "pause_reason" not in st       # 정지가 아니면 생략
 
 
-def test_pause_reason_reask_limit_and_external_call_staff(mk):
+def test_reask_limit_no_longer_pauses_and_external_call_staff_is_other(mk):
     r = mk(risk=False, max_consecutive_reask=2)
-    for i in range(3):
+    for i in range(3):                                  # 되묻기 한도는 정지하지 않는다: 그 문항을 빈칸으로 두고 다음 문항(ADR-0054)
         r.rig.model.queue.append(REASK)
         code, fi, _ = r.call("POST", "/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "음", "turn_id": f"t{i}"})
-    sig = fi["turn_failure_signal"]
-    assert sig["pause_reason"] == "REASK_LIMIT" and sig["staff_alert"] == "DELIVERY_FAILED"
+    assert fi["turn_failure_signal"] is None
     st = r.state()[1]
-    assert st["state"] == "PAUSED_RISK" and st["pause_reason"] == "REASK_LIMIT"       # PAUSED_RISK 이름 유지, 사유로 구분
-    a = r.store.list(None, 10, None)[0][0]
-    assert a["kind"] == "CALL_STAFF" and a["pause_reason"] == "REASK_LIMIT"
-    assert r.call("GET", "/v1/staff/sessions/K1", auth=STAFF)[1]["pause_reason"] == "REASK_LIMIT"
-    r.call("POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, auth=STAFF)
+    assert st["state"] == "ACTIVE" and "pause_reason" not in st
+    assert r.store.list(None, 10, None)[0] == []
     # 외부 감지기의 CALL_STAFF 신호는 위험 판정이 아니라 호출이므로 OTHER
     code, res, _ = r.call("POST", "/v1/sessions/K1/risk-signals", {"signal_id": "s1", "source": "vitals", "code": "HR", "severity": "CALL_STAFF"}, auth="Bearer risk-tok-0123456789")
     assert code in (200, 201), res
@@ -324,8 +320,8 @@ def test_pause_reason_reask_limit_and_external_call_staff(mk):
     assert r.state()[1]["pause_reason"] == "RISK"
 
 
-def test_pause_reason_comes_from_current_pause_even_when_alert_store_write_fails(mk, monkeypatch):
-    """M-2: RISK 정지 -> RESUME -> 알림 저장 실패 상태에서 되묻기 한도 정지. 이전 정지의 RISK가 남지 않고, 상태·직원 조회·턴 신호가 일치한다."""
+def test_reask_limit_after_a_risk_pause_leaves_no_stale_pause_reason(mk, monkeypatch):
+    """M-2(개정): RISK 정지 -> RESUME -> 알림 저장 실패 상태에서 되묻기 한도에 닿아도 정지하지 않는다. 이전 정지의 RISK 사유가 남지 않는다."""
     r = mk(risk=True, max_consecutive_reask=2)
     failed_risk(r)
     r.call("POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, auth=STAFF)
@@ -333,9 +329,8 @@ def test_pause_reason_comes_from_current_pause_even_when_alert_store_write_fails
     for i in range(3):
         r.rig.model.queue.append(REASK)
         code, fi, _ = r.call("POST", "/v1/sessions/K1/turns", {"session_id": "K1", "kind": "UTTERANCE", "utterance": "음 잘 모르겠어요", "turn_id": f"q{i}"})
-    assert fi["turn_failure_signal"]["pause_reason"] == "REASK_LIMIT"
-    assert r.state()[1]["pause_reason"] == "REASK_LIMIT"
-    assert r.call("GET", "/v1/staff/sessions/K1", auth=STAFF)[1]["pause_reason"] == "REASK_LIMIT"
+    assert fi["turn_failure_signal"] is None
+    assert "pause_reason" not in r.state()[1] and "pause_reason" not in r.call("GET", "/v1/staff/sessions/K1", auth=STAFF)[1]
 
 
 def test_all_four_surfaces_agree_on_pause_reason(mk):

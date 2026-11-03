@@ -22,6 +22,7 @@ from types import SimpleNamespace
 from .errors import SessionEnded, SessionNotFound, StaffCallRejected, StoreError, TurnIdConflict, TurnInProgress
 from .turn_graph import SCHEMA_CONTRACT_VERSION, TRACE_KEYS, TurnCtx, TurnGraph, initial_state, _pause_reasons  # noqa: F401 (재노출)
 from ..components.turn_route import Route, route  # noqa: F401 (재노출)
+from ..components.metrics_export import turn_outcome
 import survey_schema
 
 from ..components.flow_table import Flow, load_flow
@@ -76,7 +77,8 @@ class Orchestrator:
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
                  max_consecutive_reask: int = 0, timeline=None, turn_deadline_seconds: float = 0.0, extract_input_max_chars: int = 0, request_deadline_seconds: float = 0.0,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, turn_observer: Optional[Callable[[str, float], None]] = None) -> None:
+        self.turn_observer = turn_observer       # 턴 하나가 끝날 때 (결과 이름, 경과 초)를 받는 쪽(지표 내보내기, ADR-0055). 없으면 지표를 모으지 않는다
         self.clock = clock                       # 단조 시계(주입, ADR-0050): 턴 마감을 이 시계로 센다. wiring(App)이 실제 시계를, 시험이 가짜 시계를 넣는다
         self.store = store
         self.releases = releases
@@ -133,6 +135,19 @@ class Orchestrator:
     def handle_turn(self, *, turn_id: str, frontend_message: Optional[Mapping] = None,
                     intervention_decision: Optional[Mapping] = None, staff_id: Optional[str] = None,
                     started: Optional[float] = None) -> TurnOutcome:
+        """한 턴을 처리하고 걸린 시간을 지표로 남긴다(저장된 결과를 재생한 턴은 처리 시간이 아니므로 세지 않는다). 처리 규칙은 `_handle_turn`."""
+        t0 = started if started is not None else self.clock()
+        out = self._handle_turn(turn_id=turn_id, frontend_message=frontend_message, intervention_decision=intervention_decision, staff_id=staff_id, started=started)
+        if self.turn_observer is not None and not out.replayed:
+            try:
+                self.turn_observer(turn_outcome(out.frontend_input), self.clock() - t0)
+            except Exception:      # 지표 때문에 턴이 실패하면 안 된다
+                log.exception("턴 지표를 기록하지 못했다")
+        return out
+
+    def _handle_turn(self, *, turn_id: str, frontend_message: Optional[Mapping] = None,
+                     intervention_decision: Optional[Mapping] = None, staff_id: Optional[str] = None,
+                     started: Optional[float] = None) -> TurnOutcome:
         """한 턴을 처리한다. 같은 (세션, 턴 ID)는 저장한 결과를 그대로 돌려준다(이중 저장 없음).
 
         frontend_message(FrontendMessage)와 intervention_decision(InterventionDecision) 중 정확히 하나를 준다.

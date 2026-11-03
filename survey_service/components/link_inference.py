@@ -61,15 +61,21 @@ def _failure_info(e: BoundaryError) -> str:
 
 class Stats:
     """호출 통계(원문 없음). /readyz에 낸다."""
-    def __init__(self) -> None:
+    def __init__(self, observer: Optional[Callable[[str, str, float], None]] = None) -> None:
+        self._observer = observer      # 호출 하나가 끝날 때마다 (op, outcome, 경과 초)를 받는 쪽(지표 내보내기). 호출 쪽은 무엇을 하는지 모른다
         self._lock = threading.Lock()
         self.data = {"calls": 0, "failures": 0, "retries": 0, "retry_skipped_budget": 0, "timeouts": 0, "output_invalid": 0, "reloads": 0, "outcome_fallback": 0}
         self.protections: dict[str, int] = {}      # 출력 보호 규칙 코드별 건수(G0, G5 ...). 원문 없음
         self._calls: "collections.deque[dict]" = collections.deque(maxlen=64)      # 최근 호출 기록(호출 하나의 경과, 원문 없음): 시험이 '끊긴 시점'을 턴 전체 벽시계가 아니라 호출 경과로 잰다
 
-    def record_call(self, op: str, attempt: int, elapsed: float, ok: bool, timed_out: bool) -> None:
+    def record_call(self, op: str, attempt: int, elapsed: float, ok: bool, timed_out: bool, outcome: Optional[str] = None) -> None:
         with self._lock:
             self._calls.append({"op": op, "attempt": attempt, "elapsed": elapsed, "ok": ok, "timed_out": timed_out})
+        if self._observer is not None:
+            try:
+                self._observer(op, outcome or ("ok" if ok else "timeout" if timed_out else "unavailable"), elapsed)
+            except Exception:      # 지표 때문에 모델 호출이 실패하면 안 된다
+                log.exception("모델 호출 지표를 기록하지 못했다")
 
     def calls(self) -> list:
         with self._lock:
@@ -133,7 +139,7 @@ class RemoteModelSession:
                 break
             except BoundaryError as e:
                 if is_output_invalid(e):
-                    self.stats.record_call(op, attempt + 1, self._now() - t0, False, False)
+                    self.stats.record_call(op, attempt + 1, self._now() - t0, False, False, "invalid")
                     self.stats.add("output_invalid")
                     self.stats.add("failures")
                     raise
@@ -178,7 +184,8 @@ class RemoteInference:
 
     def __init__(self, base_url: str, token: str, timeout: float = 4.0, *, load_timeout: float = 600.0, retries: int = 1,
                  poll_interval: float = 0.5, backoff: float = 0.2, extract_timeout: float = 21.0, respond_timeout: float = 26.0,
-                 monotonic: Callable[[], float], sleep: Callable[[float], None]) -> None:
+                 monotonic: Callable[[], float], sleep: Callable[[float], None],
+                 observer: Optional[Callable[[str, str, float], None]] = None) -> None:
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050)
         self.backend = "remote"
         self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
@@ -187,7 +194,7 @@ class RemoteInference:
         self._base = base_url.rstrip("/")
         self._timeout = timeout
         self.load_timeout, self.retries, self.poll_interval, self.backoff = load_timeout, retries, poll_interval, backoff
-        self.stats = Stats()
+        self.stats = Stats(observer)
 
     def load(self, manifest: Mapping, adapters, *, contract_version=None) -> RemoteModelSession:
         rid = manifest["release_id"]

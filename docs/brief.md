@@ -1,6 +1,6 @@
 # 영역 브리프: 문진 서비스 (survey-service)
 
-> **계약 상태.** 영역 사이 계약은 `../boundary-contracts`(헤드 소유)에 있고, 이 브리프의 계약 이름은 `head/docs/STRUCTURE.md`의 제안이다. 초안이 있는 것은 ReleaseManifest, GateDecision, TraceEnvelope뿐이고 나머지 필드는 헤드가 사용자와 논의해 확정 중이다. 확정 전에는 **계약에 의존하지 않는 부분**(내부 설계, 도메인 모델, 테스트 틀)만 진행한다. 계약이 부족하다고 느끼면 임의로 가정하지 말고 `docs/change-requests/`에 쓴다.
+> **계약 상태.** 영역 사이 계약은 `../boundary-contracts`(헤드 소유)에 있고, 이 브리프의 계약 이름은 `head/docs/STRUCTURE.md`의 제안이다. 계약은 이제 `boundary-contracts` 패키지(태그 설치)가 정본이고, 이 영역이 소비하는 버전은 `requirements.txt`의 태그와 docs/boundary.md §3이 말한다. 계약이 부족하다고 느끼면 임의로 가정하지 말고 `docs/change-requests/`에 쓴다.
 > **읽기.** `../boundary-contracts`는 읽기 전용이다. `schema/`는 이 영역이 소유하는 문진 스키마(스키마만 남긴 최소 구성)이며 구현이 가져가는 계약은 `schema/schemas/<계약명>.json`, 컴포넌트별 입출력 대응은 `schema/COMPONENTS.yaml`, 정수 버전은 `schema/CONTRACT_VERSION`이다.
 > **버전(D14, D19).** 문진 스키마는 정수 버전(`CONTRACT_VERSION`, 현재 1)에 정확히 일치해야 한다. 경계 계약은 `MAJOR.MINOR`이며 값은 `boundary-contracts`가 정한다. 불변 산출물은 `ArtifactRef`(id, version, content_hash)로 가리킨다.
 > **업무 규칙.** 이 영역이 구현하거나 의존하는 업무 요구는 `docs/rules/`에 있다(헤드가 전달, 출처는 `docs/rules/SOURCE.md`). 규칙 문서에 없는 정책은 임의로 만들지 말고 `docs/change-requests/`에 쓴다.
@@ -9,7 +9,7 @@
 
 - 목적: 문진 대상의 발화 한 턴을 정형 문진 값으로 바꾸고, 다음 행동에 맞는 응답 문장을 돌려준다.
 - 하는 일: 세션 시작·발화 처리·종료, 한 턴의 순서 관리(Orchestrator), 릴리스 묶음 적재(릴리스 로더), 턴 단위 Trace 내보내기, 추론 서버 운영.
-- 하지 않는 일: 판단 로직 구현(turn-engine의 몫), 모델 로딩·프롬프트·디코딩(model-runtime의 몫), 문항·모델 승인(게이트의 몫), Frontend 화면(다른 팀).
+- 하지 않는 일: 판단 로직 구현(값의 정규화·절차 판단은 추론 서버의 모델과 서버 쪽 규칙이 한다. turn-engine은 퇴역, D109), 모델 로딩·프롬프트·디코딩(model-runtime의 몫), 문항·모델 승인(게이트의 몫), Frontend 화면(다른 팀).
 
 ## 2. 소유하는 것
 
@@ -22,7 +22,7 @@
 ## 3. 소비하는 것
 
 - 소비하는 계약: 런타임 계약 전부(기존 12개 컴포넌트), `ReleaseManifest`, `GateDecision`.
-- 소비하는 SDK 인터페이스: 릴리스 읽기 SDK(활성 묶음 조회, release-gate가 배포), TraceIngest(I6, ops-feedback이 배포). 라이브러리로 turn-engine, model-runtime.
+- 소비하는 SDK 인터페이스: 릴리스 읽기 SDK(활성 묶음 조회, release-gate가 배포), TraceIngest(I6, ops-feedback이 배포). 라이브러리로 model-runtime(turn-engine은 퇴역, D109).
 - 지원하는 계약 버전: 문진 스키마 정수 버전 한 값. 지원하지 않는 버전의 묶음은 적재를 거부한다.
 
 ## 3-1. 경계 명세 (블랙박스 기준)
@@ -66,7 +66,7 @@
 
 ## 8. 시드
 
-Frontend 연동 계층, Orchestrator(LangGraph 그래프, `survey_service/graph.py`), 모델 추출 호출(LoRA-A)과 응답 생성 호출(LoRA-B), turn-engine의 `validate_extraction` 호출과 `QuestionFlowTable` 조립, 릴리스 로더, 트레이스 내보내기, 추론 서버 클라이언트. 현행 구조는 `docs/design.md` 16절. 시드는 구속하지 않는다.
+Frontend 연동 계층, Orchestrator(LangGraph 그래프, `survey_service/graph.py`), 모델 추출 호출(LoRA-A)과 응답 생성 호출(LoRA-B), `QuestionFlowTable` 조립(의미 검증은 추론 서버가 보증, ADR-0035), 릴리스 로더, 트레이스 내보내기, 추론 서버 클라이언트. 현행 구조는 `docs/design.md` 16절. 시드는 구속하지 않는다.
 
 ## 9. 요구하는 산출물
 

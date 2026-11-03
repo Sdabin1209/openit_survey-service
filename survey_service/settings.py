@@ -112,7 +112,7 @@ class Settings:
     alert_retention_days: int = 365                                # 해결된 알림 보존(일, 해결 시각 기준). 열린 알림은 지우지 않는다
     dead_outbox_retention_days: int = 30                           # DEAD로 끝난 Trace 행 보존(일)
     retention_interval_seconds: int = 3600                         # 서비스 안에서 보존 정리를 도는 주기(초). 0이면 서비스는 돌리지 않는다(deploy의 purge 잡만)
-    risk_default_rules: bool = True  # 규칙 파일·입력원이 없으면 임시 기본 목록(임상 검토 전)을 쓴다. SURVEY_RISK_DEFAULT_RULES=off로 끈다 (ADR-0013)
+    risk_default_rules: bool = False  # 기본은 끔(사용자 결정 L11: 위험 감지 미사용, 계약 SurveyServiceEnv 기본 'off'). 규칙 파일·입력원이 없을 때 임시 기본 목록(임상 검토 전)을 쓰려면 SURVEY_RISK_DEFAULT_RULES=on (ADR-0013, ADR-0053)
     risk_rules_file: str = ""       # 위험 감지 규칙 파일(JSON, survey_service/risk_rules.py). 없으면 비활성. risk_source와 함께 쓸 수 없다
     turn_deadline_seconds: float = 50.0           # 서버 턴 총 마감(초). 넘으면 NOT_COMMITTED(FAULT_POLICY 3). 2초는 목표(지표로 경보)이지 실패 판정이 아니다. 실패 판정 상한은 표준(프록시·LB 60초)에서: model-runtime 서버측 호출 상한 합 20+25=45 + 여유 5 = 50 < gateway 56 < 키오스크 60 [근거: D125(2026-11-02), 계약 CONVENTIONS 시간 상한 사슬, ADR-0052(ADR-0049를 대체). 측정하지 않았다]
     db_connect_timeout_seconds: float = 2.0       # PostgreSQL 주 연결의 접속 상한(초). 이전 고정값은 10초  [근거: ADR-0011]
@@ -183,7 +183,7 @@ class Settings:
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
             model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
             result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""), risk_source=env.get("SURVEY_RISK_SOURCE", ""),
-            risk_default_rules=env.get("SURVEY_RISK_DEFAULT_RULES", "on").strip().lower() not in ("0", "false", "no", "off"),
+            risk_default_rules=env.get("SURVEY_RISK_DEFAULT_RULES", "off").strip().lower() in ("1", "true", "yes", "on"),
             risk_rules_file=env.get("SURVEY_RISK_RULES_FILE", ""),
             result_reader_token_env=env.get("SURVEY_RESULT_READER_TOKEN_ENV", "SURVEY_RESULT_READER_TOKEN"),
             risk_source_token_env=env.get("SURVEY_RISK_SOURCE_TOKEN_ENV", "SURVEY_RISK_SOURCE_TOKEN"),

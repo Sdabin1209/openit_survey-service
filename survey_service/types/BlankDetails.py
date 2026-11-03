@@ -11,7 +11,7 @@ from typing_extensions import NotRequired, TypedDict
 class BlankDetail(TypedDict, closed=True):
     item: str
     slot: NotRequired[str]
-    reason: Literal['UNKNOWN', 'REJECTED', 'UNCLEAR']
+    reason: Literal['UNKNOWN', 'REJECTED', 'UNCLEAR', 'REASK_LIMIT']
 
 
 BlankDetails: TypeAlias = list[BlankDetail]

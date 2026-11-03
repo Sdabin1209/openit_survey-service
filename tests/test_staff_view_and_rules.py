@@ -236,13 +236,13 @@ def test_readyz_reports_rules_file_and_start_log(tmp_path, caplog):
         app.stop()
 
 
-def test_no_rules_file_means_provisional_default_unless_switched_off(tmp_path):
-    app = _app(tmp_path / "x", SURVEY_RISK_DEFAULT_RULES="off")
+def test_no_rules_file_means_detection_off_unless_switched_on(tmp_path):
+    app = _app(tmp_path / "x")      # 기본은 꺼짐(사용자 결정 L11, ADR-0053)
     try:
         assert app.readiness()[1]["staff_alert_source"]["active"] is False and app.orchestrator.risk_source is None
     finally:
         app.stop()
-    app = _app(tmp_path / "y")
+    app = _app(tmp_path / "y", SURVEY_RISK_DEFAULT_RULES="on")
     try:
         assert app.readiness()[1]["staff_alert_source"]["provisional"] is True
     finally:
