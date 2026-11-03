@@ -1,4 +1,4 @@
-"""D74 순수 로직(survey_service/extraction.py, flow.py, response_tables.py)을 학습 데이터셋 v2 표본으로 확인한다.
+"""규칙 D76 (문항 순서·건너뛰기 표는 문진 스키마에서 만들고 서비스가 소유). D74 순수 로직(survey_service/extraction.py, flow.py, response_tables.py)을 학습 데이터셋 v2 표본으로 확인한다.
 
 tests/fixtures_dataset_v2.json은 학습 서버 val 파일에서 읽은 소량 표본(A 입력·A 출력·B 입력 16건, 환자 말은 합성 데이터)을 인용한 것이다.
 데이터 전체를 가져오지 않는다. 전체 일치율은 `scripts/table_agreement.py`로 학습 서버 파일을 표준출력으로 흘려 이 PC에서 계산한다(docs/design.md 16절)."""

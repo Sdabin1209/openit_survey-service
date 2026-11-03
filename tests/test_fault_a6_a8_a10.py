@@ -1,4 +1,4 @@
-"""FAULT_MATRIX A6(Trace outbox -> 수집: 멈춤·5xx·깨진 응답, 큐 상한), A8(릴리스 사본 볼륨: 쓰기 불가), A10(직원 SSE: 이어 받기·DB 오류·연결 누수)."""
+"""규칙 D87 (직원 알림 SSE heartbeat·resync). FAULT_MATRIX A6(Trace outbox -> 수집: 멈춤·5xx·깨진 응답, 큐 상한), A8(릴리스 사본 볼륨: 쓰기 불가), A10(직원 SSE: 이어 받기·DB 오류·연결 누수)."""
 from .timing import FakeWait, HANG_GUARD_SECONDS, fake_clock, wait_until
 import json
 import threading

@@ -1,4 +1,4 @@
-"""직원 알림(D64): 영속 저장, 목록, SSE(이어 받기), 웹 푸시 구독, 해결 표시, 권한, 전달 판정."""
+"""규칙 D87 (SSE heartbeat 간격·이어 받기). 직원 알림(D64): 영속 저장, 목록, SSE(이어 받기), 웹 푸시 구독, 해결 표시, 권한, 전달 판정."""
 from .timing import HANG_GUARD_SECONDS, fake_clock, wait_until
 import base64
 import http.server

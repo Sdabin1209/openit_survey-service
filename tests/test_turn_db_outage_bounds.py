@@ -1,4 +1,4 @@
-"""환자 턴의 DB 장애 시간 상한(FAULT_POLICY 원칙 1·3·4): 연결 거부는 즉시 503 UNAVAILABLE. 무응답 DB(docker pause)로 접속·문장 시한을 자르는 것은 libpq·서버의 몫이라 시험하지 않는다(U421): 시한 값은 tests/test_readyz_db_outage.py가, 턴 마감 처리는 tests/test_turn_idempotency_deadline.py가 본다. 마감 안에 끝난다.
+"""규칙 D86 (장애 대응 정책: DB 장애 때 턴 거부). 환자 턴의 DB 장애 시간 상한(FAULT_POLICY 원칙 1·3·4): 연결 거부는 즉시 503 UNAVAILABLE. 무응답 DB(docker pause)로 접속·문장 시한을 자르는 것은 libpq·서버의 몫이라 시험하지 않는다(U421): 시한 값은 tests/test_readyz_db_outage.py가, 턴 마감 처리는 tests/test_turn_idempotency_deadline.py가 본다. 마감 안에 끝난다.
 불변식: 키오스크 대기 12초 > gateway 10.5초 > 서버 턴 마감(기본 9초, ADR-0049). TEST_DATABASE_URL이 없으면 SKIP."""
 import json
 import time

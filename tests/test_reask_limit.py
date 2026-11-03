@@ -1,4 +1,4 @@
-"""G12: REASK·CONFIRM(U34부터 REDIRECT와 실패 턴도) 연속 상한(SURVEY_MAX_CONSECUTIVE_REASK, 기본 3, ADR-0020, ADR-0032). 연속은 문항과 무관하게 이어진 턴 수이고 다른 action이 나오면 끊긴다.
+"""규칙 D95 U36 (되묻기 상한 3 뒤 스킵+사유). G12: REASK·CONFIRM(U34부터 REDIRECT와 실패 턴도) 연속 상한(SURVEY_MAX_CONSECUTIVE_REASK, 기본 3, ADR-0020, ADR-0032). 연속은 문항과 무관하게 이어진 턴 수이고 다른 action이 나오면 끊긴다.
 상한 동작 시험은 값 2를, 기본값 N=3의 경계 시험은 3을 쓴다."""
 from survey_service.settings import Settings
 

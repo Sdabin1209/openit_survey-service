@@ -1,4 +1,4 @@
-"""/readyz는 DB가 죽거나 멈춰도 짧은 상한 안에 503(db unavailable)으로 답하고, 복구되면 다시 200이 된다(CR-D23).
+"""규칙 D86 (장애 대응 정책: DB 장애 때 /readyz). /readyz는 DB가 죽거나 멈춰도 짧은 상한 안에 503(db unavailable)으로 답하고, 복구되면 다시 200이 된다(CR-D23).
 PostgreSQL 시험은 TEST_DATABASE_URL이 없으면 SKIP(통과로 세지 않는다). 연결 불가는 응답 없는 주소(10.255.255.1)로 만든다."""
 from .timing import HANG_GUARD_SECONDS, POLL_SECONDS, FakeClock, wait_until
 import json

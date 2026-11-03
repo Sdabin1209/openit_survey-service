@@ -1,4 +1,4 @@
-"""Trace 내보내기: outbox, 최소 1회 전달, UNAVAILABLE일 때만 재시도, 턴 처리와 분리."""
+"""규칙 D16 (Trace 전달 보장: outbox, 유실 없음, 재시도). Trace 내보내기: outbox, 최소 1회 전달, UNAVAILABLE일 때만 재시도, 턴 처리와 분리."""
 import threading
 import time
 

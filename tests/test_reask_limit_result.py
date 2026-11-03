@@ -1,4 +1,4 @@
-"""U36·G12·U35: 되묻기 한도에 닿아 빈칸으로 둔 문항이 결과 조회(SessionResult.skipped_details)에 사유 REASK_LIMIT로 나온다 (ADR-0054)."""
+"""규칙 D95 U36. U36·G12·U35: 되묻기 한도에 닿아 빈칸으로 둔 문항이 결과 조회(SessionResult.skipped_details)에 사유 REASK_LIMIT로 나온다 (ADR-0054)."""
 from .e2e_support import ext, val
 from .test_results_signals_retention import env  # noqa: F401
 from .test_skipped_details_u35 import result, unclear
