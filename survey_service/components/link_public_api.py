@@ -340,7 +340,7 @@ class PublicApi:
         """활성 릴리스의 문진표 목록. 활성 릴리스가 없으면 503(세션을 시작할 수 없는 것과 같다)."""
         rel = self.orch.releases.active()
         if rel is None:
-            raise _err("UNAVAILABLE", "지금은 문진표를 알 수 없다")
+            raise _err("UNAVAILABLE", "활성 릴리스가 없다", 503, details={"reason": "NO_ACTIVE_RELEASE"})      # PUBLIC_API(3.4.4): 빈 목록 200이 아니다. Retry-After는 dispatch가 503에 붙인다
         return 200, {"items": [{"question_set_id": qid, "title": b["title"], "version": str(b["version"])} for qid, b in rel.banks.items()]}, {}
 
     def _check_question_set(self, qsid: Optional[str]) -> None:
@@ -370,8 +370,10 @@ class PublicApi:
         sid, tid = rest["session_id"], tid or START_TURN_ID
         if not self._replayed(sid, tid):
             status, _ = self._state_of(sid)
-            if status == "ERROR" or (status is None and self.orch.releases.active() is None):
+            if status == "ERROR":
                 raise _err("UNAVAILABLE", "지금은 세션을 시작할 수 없다")
+            if status is None and self.orch.releases.active() is None:
+                raise _err("UNAVAILABLE", "활성 릴리스가 없다", 503, details={"reason": "NO_ACTIVE_RELEASE"})
             if status and status.startswith("ENDED"):
                 raise _err("CONFLICT", "이미 끝난 세션이다. 새 세션 ID로 시작해야 한다")
             if status is None:
