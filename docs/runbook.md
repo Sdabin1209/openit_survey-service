@@ -109,3 +109,9 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 - **턴이 `LoRA-A` 또는 `VALIDATE`로 실패한다**: 로그의 `step=`과 Trace의 `extract_status`(`OUTPUT_INVALID` 서버가 형식을 못 지킴, `VIOLATION` 의미 검증 위반, `ERROR` 호출·입력 오류), `validation_violations`의 `code`를 본다(값은 없다). 같은 요청을 한 번 더 보낸 뒤의 실패다. 세션 상태는 그대로이고 사용자는 다시 말하면 된다. 반복되면 모델 패키지(어댑터, 프롬프트)와 문진 스키마 정수 버전, 문항 순서 표(`question_flow`) 일치를 확인한다.
 - **`/readyz`의 `response_tables.counters`의 `ask_fallback`·`phrase_fallback`이 늘어난다**: 데이터셋 담당의 규칙(labels.py)이 예외를 던질 입력이다(표에 없는 문항, 표에 없는 Q3 값 등). 서비스는 문장을 지어내지 않고 `topic`(또는 칸 이름)으로 대신한다. A 출력이 문항 세트와 어긋났다는 신호이므로 모델 패키지와 문항 세트 일치를 확인한다. `ask_generic`(원본의 일반 분기)은 오류가 아니다.
 - 표 일치율 재계산(학습 서버 읽기 전용): `PYTHONPATH=. python scripts/table_agreement.py <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_a_val.jsonl') <(ssh openit 'cat ~/taehyeon/data/dataset_10_14/lora_b_val.jsonl')`. 데이터는 저장되지 않는다.
+
+## TLS와 배치 (U99)
+- 이 서비스는 TLS 서버가 되지 않는다. 들어오는 HTTPS는 배치 쪽 사이드카가 끝는다.
+- 다른 서비스를 부르는 주소(`SURVEY_RELEASE_READER_URL`, `SURVEY_TRACE_INGEST_URL`, `SURVEY_INFERENCE_URL`)는 환경 변수로만 들어오고 기본값이 없다. 코드에 고정된 부르는 주소는 없다(`tests/test_tls_u99.py`가 소스를 훑는다).
+- 바깥으로 나가는 HTTPS는 표준 환경 변수 `SSL_CERT_FILE`(또는 `SSL_CERT_DIR`)만으로 사설 루트를 믿는다. 인증서 검증을 끄는 코드는 없다(시험이 임시 루트·서버 인증서·로컬 TLS 서버로 확인한다). 웹 푸시 발송(requests)은 공개 푸시 서비스로 나가며 `REQUESTS_CA_BUNDLE`을 따른다.
+- 데이터베이스는 접속 문자열(비밀 파일)의 `sslmode`·`sslrootcert` 등을 코드가 덮어쓰지 않고 그대로 넘긴다(psycopg 표준).
