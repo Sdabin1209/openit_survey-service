@@ -48,6 +48,7 @@ class TurnOutcome:
     trace: dict
     release_id: Optional[str]
     replayed: bool = False
+    store_failed: bool = False      # 저장소 실패로 끝난 턴: 공개 API가 503 UNAVAILABLE로 답한다(R3.10)
     cacheable: bool = True      # 쓰기 반영 여부를 알 수 없는 턴(write_outcome UNKNOWN)은 결과를 고정하지 않는다
 
 
@@ -305,7 +306,7 @@ class Orchestrator:
                            dict(decision) if decision is not None else None, staff_id)
         final = self._graph.invoke(st, config={"configurable": {"ctx": ctx}})
         return TurnOutcome(final["orchestrator_output"], final["frontend_input"], final["console_input"], final["trace"],
-                           final["out_release_id"], cacheable=final["cacheable"])
+                           final["out_release_id"], cacheable=final["cacheable"], store_failed=final.get("store_failed", False))
 
     def _active_id(self) -> Optional[str]:
         a = self.releases.active()

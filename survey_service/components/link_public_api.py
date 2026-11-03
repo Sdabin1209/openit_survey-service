@@ -331,7 +331,14 @@ class PublicApi:
             raise _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다") from None
         except self.orch.errors.TurnInProgress:
             raise self._in_progress() from None
+        self._raise_if_store_failed(out)
         return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
+
+    @staticmethod
+    def _raise_if_store_failed(out) -> None:
+        """RUNTIME R3.10: 저장소 실패는 턴을 포함해 503 UNAVAILABLE이다(본문은 BoundaryError, Retry-After는 dispatch가 붙인다). 턴 마감·모델 실패만 200 NOT_COMMITTED다(R3.20)."""
+        if getattr(out, "store_failed", False):
+            raise _err("UNAVAILABLE", "저장소를 쓸 수 없다", 503, details={"reason": "STORE_UNAVAILABLE"})
 
     def _in_progress(self) -> HttpError:
         """같은 turn_id가 처리 중. `code: CONFLICT`(409), `details.reason: TURN_IN_PROGRESS`, `Retry-After` 헤더(HTTP.md의 409 사유 규약, CR-015 처리됨).
@@ -457,6 +464,7 @@ class PublicApi:
             raise _err("CONFLICT", "같은 turn_id에 다른 입력이 왔다") from None
         except self.orch.errors.TurnInProgress:
             raise self._in_progress() from None
+        self._raise_if_store_failed(out)
         self._resolve_if_applied(out, sid, rest["decision"], user)
         return 200, out.frontend_input or {"response_text": None, "turn_failure_signal": None}, {}
 

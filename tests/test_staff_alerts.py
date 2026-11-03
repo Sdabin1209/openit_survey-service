@@ -225,8 +225,8 @@ def test_end_decision_resolves_with_end_and_failed_intervention_does_not(ar):
     assert ar.intervene("END", "i-x", sid="NOPE")[0] == 404                   # 모르는 세션: 해결 안 함
     ar.rig.orch.store = type("S", (), {"__getattr__": lambda s, n: getattr(ar.rig.store, n),
                                        "commit": lambda s, *a, **k: {"session_id": "K1", "status": "DB_ERROR", "write_outcome": "NOT_APPLIED", "revision": None, "detail": "x"}})()
-    code, fi, _ = ar.intervene("END", "i-fail")                               # 쓰기 확정 실패 -> FAILED, 알림은 열린 채
-    assert code == 200 and fi["turn_failure_signal"]["write_committed"] == "NOT_COMMITTED"
+    code, body, hdr = ar.intervene("END", "i-fail")                           # 쓰기 확정 실패(저장소) -> R3.10: 503 UNAVAILABLE, 알림은 열린 채
+    assert code == 503 and body["code"] == "UNAVAILABLE" and hdr.get("Retry-After")
     assert ar.call("GET", "/v1/staff/alerts?status=OPEN")[1]["items"][0]["status"] == "OPEN"
     ar.rig.orch.store = ar.rig.store
     assert ar.intervene("END", "i-ok")[0] == 200

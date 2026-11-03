@@ -108,6 +108,7 @@ class TurnState(TypedDict, total=False):
     console_input: Optional[dict]
     out_release_id: Optional[str]
     cacheable: bool
+    store_failed: bool              # 저장소 실패(조회·세션 생성·쓰기 확정). 응답은 503 UNAVAILABLE이다(RUNTIME R3.10). 턴 마감·모델 실패만 NOT_COMMITTED 200이다(R3.20)
 
 
 class TurnCtx:
@@ -149,7 +150,7 @@ def initial_state(session_id: str, turn_id: str, input_hash: str, message: Optio
     return TurnState(
         session_id=session_id, turn_id=turn_id, input_hash=input_hash, message=copy.deepcopy(message),
         decision=copy.deepcopy(decision), input_kind=input_kind, in_kind=in_kind, utterance=utterance, staff_id=staff_id if decision is not None else None, trace=trace,
-        failed=[], console_calls=[], committed=False, commit_unknown=False, staff_status="NONE", staff_delivery="NOT_APPLICABLE",
+        failed=[], console_calls=[], committed=False, commit_unknown=False, store_failed=False, staff_status="NONE", staff_delivery="NOT_APPLICABLE",
         response_text=None, signal=None, intervention_result=None, dispatch_called=False, console_delivered=False,
         console={"staff_alert": None, "turn_failure_signal": None, "intervention_result": None},
         fatal=None, created=None, extract_in=None, extract_out=None, extract_calls=0, extract_next="validate", violations=None,
@@ -336,7 +337,7 @@ class TurnGraph:
         loaded = checked.store_load(self.o.store, sid)
         tr["persistence_load_result"] = copy.deepcopy(loaded)
         if loaded["status"] == "DB_ERROR":
-            return {"loaded": loaded, "trace": tr, "fatal": "no_route"}
+            return {"loaded": loaded, "trace": tr, "fatal": "no_route", "store_failed": True}
         found = loaded["status"] == "OK"
         status = loaded["state"]["progress_record"]["session_status"] if found else None
         latest = self.o.releases.active()
@@ -442,7 +443,7 @@ class TurnGraph:
             ctx.release = None
             return {"state_doc": loaded["state"], "revision": loaded["revision"], "failed": _step_failed(("BEFORE_COMMIT", "LoRA-A"))}
         except StoreError:
-            return {"fatal": "no_session"}
+            return {"fatal": "no_session", "store_failed": True}
         if ctx.bank is None:
             try:
                 ctx.bank, ctx.flow = self.o.question_set(ctx.release, qsid)
@@ -733,7 +734,8 @@ class TurnGraph:
                     log.exception("result_ready 알림에 실패했다")
             return {"committed": True, "revision": res["revision"], "post_doc": effects.apply_writes(doc, writes), "trace": tr}
         self.o._count("commit_failed." + res["status"])
-        return {"failed": _step_failed(("BEFORE_COMMIT", "COMMIT")), "commit_unknown": res.get("write_outcome") == "UNKNOWN", "trace": tr}
+        return {"failed": _step_failed(("BEFORE_COMMIT", "COMMIT")), "commit_unknown": res.get("write_outcome") == "UNKNOWN", "trace": tr,
+                "store_failed": res["status"] == "DB_ERROR"}      # 저장소가 쓰기를 받지 못했다(REVISION_CONFLICT는 저장소 실패가 아니다)
 
     # ------------------------------------------------------------------ 노드: 쓰기 확정 뒤 (서로의 성패와 무관)
     def n_deliver_staff(self, st, config):
@@ -953,7 +955,7 @@ class TurnGraph:
         sid = st["session_id"]
         rid = ctx.release.release_id if ctx.release else (self.o.store.release_id_of(sid) or self.o._active_id())
         upd = {"orchestrator_output": oo, "frontend_input": fi, "console_input": copy.deepcopy(sc), "out_release_id": rid,
-               "cacheable": not st.get("commit_unknown", False), "trace": tr, "console_calls": calls,
+               "cacheable": not st.get("commit_unknown", False) and not st.get("store_failed", False), "store_failed": bool(st.get("store_failed", False)), "trace": tr, "console_calls": calls,
                "intervention_result": intervention_result, "signal": signal if signal is not None else oo.get("turn_failure_signal")}
         if failed_add:
             upd["failed"] = failed_add
