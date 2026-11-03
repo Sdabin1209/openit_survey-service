@@ -167,8 +167,9 @@ class SessionStorePort(Protocol):
     def load(self, session_id: str) -> dict:
         """SessionLoadResult(OK / NOT_FOUND / DB_ERROR). DB 오류는 예외가 아니라 DB_ERROR 값으로."""
 
-    def create(self, session_id: str, release_id: str, state: dict) -> int:
-        """새 세션을 만든다. 이미 있거나 쓸 수 없으면 StoreError. 만든 revision을 돌려준다."""
+    def create(self, session_id: str, release_id: str, state: dict, question_set: Optional[tuple] = None) -> int:
+        """새 세션을 만든다. 이미 있거나 쓸 수 없으면 StoreError. 만든 revision을 돌려준다.
+        question_set은 (문진표 ID, 제목): 세션이 어느 문진표로 문진하는지다. 만들 때 정해지고 바뀌지 않는다(ADR-0057)."""
 
     def commit(self, request: dict, *, turn_id: str, input_hash: str) -> dict:
         """SessionCommitResult. 쓰기 전체를 한 번에 반영하거나 하나도 반영하지 않는다.
@@ -182,6 +183,9 @@ class SessionStorePort(Protocol):
 
     def release_id_of(self, session_id: str) -> Optional[str]:
         """세션이 묶인 릴리스 ID."""
+
+    def question_set_of(self, session_id: str) -> Optional[tuple]:
+        """세션이 문진하는 문진표 (ID, 제목). 세션이 없거나 문진표 없이 만든 세션이면 None."""
 
     def get_turn(self, session_id: str, turn_id: str) -> Optional[TurnRecord]: ...
 
@@ -264,13 +268,14 @@ class SqliteSessionStore:
         """update_seq를 받는 모든 쓰기 트랜잭션이 BEGIN 직후 부른다. SQLite는 BEGIN IMMEDIATE가 쓰기 잠금을 커밋까지 쥐어 번호 순서가 커밋 순서다.
         PostgreSQL 구현은 트랜잭션 수준 advisory lock으로 번호 부여를 직렬화한다(ADR-0034)."""
 
-    def create(self, session_id: str, release_id: str, state: dict) -> int:
+    def create(self, session_id: str, release_id: str, state: dict, question_set: Optional[tuple] = None) -> int:
+        qs_id, qs_title = question_set if question_set else (None, None)
         with self._lock:
             try:
                 self._db.execute("BEGIN IMMEDIATE")
                 self._number_lock()
-                self._db.execute(f"INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at, update_seq) VALUES (?,?,?,?,?,?,{self._NEXT_SEQ})",
-                                 (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state), self._clock()))
+                self._db.execute(f"INSERT INTO sessions(session_id, revision, release_id, status, doc, updated_at, update_seq, question_set_id, question_set_title) VALUES (?,?,?,?,?,?,{self._NEXT_SEQ},?,?)",
+                                 (session_id, 1, release_id, state["progress_record"]["session_status"], _dump(state), self._clock(), qs_id, qs_title))
                 self._db.execute("COMMIT")
             except self._ERRORS as e:
                 try:
@@ -355,6 +360,14 @@ class SqliteSessionStore:
         with self._lock:
             row = self._db.execute("SELECT release_id FROM sessions WHERE session_id=?", (session_id,)).fetchone()
         return row[0] if row else None
+
+    def question_set_of(self, session_id: str) -> Optional[tuple]:
+        with self._lock:
+            try:
+                row = self._db.execute("SELECT question_set_id, question_set_title FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+            except self._ERRORS as e:
+                raise StoreError(f"세션 DB를 읽을 수 없다: {type(e).__name__}") from None
+        return (row[0], row[1]) if row and row[0] else None
 
     def get_turn(self, session_id: str, turn_id: str) -> Optional[TurnRecord]:
         with self._lock:
@@ -684,11 +697,12 @@ class MemorySessionStore:
                 return {"session_id": session_id, "status": "NOT_FOUND", "revision": None, "state": None}
             return {"session_id": session_id, "status": "OK", "revision": s["revision"], "state": copy.deepcopy(s["doc"])}
 
-    def create(self, session_id: str, release_id: str, state: dict) -> int:
+    def create(self, session_id: str, release_id: str, state: dict, question_set: Optional[tuple] = None) -> int:
         with self._lock:
             if session_id in self._sessions:
                 raise StoreError("세션이 이미 있다")
-            self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id, "updated_at": self._clock(), "update_seq": self._next_seq()}
+            self._sessions[session_id] = {"doc": copy.deepcopy(state), "revision": 1, "release_id": release_id, "updated_at": self._clock(), "update_seq": self._next_seq(),
+                                          "question_set": tuple(question_set) if question_set else None}
             return 1
 
     def commit(self, request: dict, *, turn_id: str, input_hash: str, trace_envelope=None) -> dict:   # trace_envelope: 메모리 구현은 outbox가 없어 무시한다
@@ -734,6 +748,11 @@ class MemorySessionStore:
         with self._lock:
             s = self._sessions.get(session_id)
             return s["release_id"] if s else None
+
+    def question_set_of(self, session_id: str) -> Optional[tuple]:
+        with self._lock:
+            s = self._sessions.get(session_id)
+            return s.get("question_set") if s else None
 
     def get_turn(self, session_id: str, turn_id: str) -> Optional[TurnRecord]:
         with self._lock:

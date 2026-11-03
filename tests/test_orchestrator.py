@@ -522,7 +522,7 @@ def test_new_release_applies_to_new_sessions_only():
     rig = Rig()
     rig.start(sid="OLD")
     new_model = ScriptedModel()
-    rel2 = LoadedRelease("rel-e2e-2", {}, sample_bank(version=2), make_session(new_model))
+    rel2 = LoadedRelease("rel-e2e-2", {}, {"general-intake": sample_bank(version=2)}, make_session(new_model))
     rig.registry.register(rel2, activate=True)
     o_old = rig.start(sid="OLD")                 # 진행 중인 세션은 자기 릴리스로 계속
     assert le(o_old)["question_bank_version"] == 1 and rig.store.release_id_of("OLD") == "rel-e2e-1"

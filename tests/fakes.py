@@ -1,6 +1,7 @@
 """시험용 대역. 이웃 영역(release-gate, ops-feedback)의 실제 구현이 없어 boundary_contracts.sdk의 Protocol을 따라 직접 만든다."""
 from __future__ import annotations
 
+import survey_schema
 import copy
 import shutil
 import threading
@@ -92,7 +93,7 @@ class FakeReleaseReader:
         self.root = Path(root)
         self.manifests: dict[str, dict] = {}
         self.decisions: dict[str, dict] = {}
-        self.banks: dict[str, dict] = {}
+        self.banks: dict[str, dict] = {}           # 릴리스 ID -> {문진표 ID: QuestionBank}
         self.pointer: Optional[dict] = None
         self.errors: dict[str, list] = {}          # 메서드 이름 -> 다음 호출에서 던질 BoundaryError 목록
         self.calls: dict[str, int] = {}
@@ -105,11 +106,14 @@ class FakeReleaseReader:
             if e is not None:
                 raise e
 
-    def add_release(self, release_id: str, bank: dict, *, runtime_contract_version: int = 1, decision_result: str = "PASS",
+    def add_release(self, release_id: str, bank, *, runtime_contract_version: Optional[int] = None, decision_result: str = "PASS",
                     serving_config_b: Optional[dict] = None, action_rules_version: Optional[str] = None, model_runtime_version: Optional[str] = None,
                     decision_subject_swap: bool = False, tamper_bank: bool = False) -> dict:
         from boundary_contracts import canonical
         import model_runtime
+        if runtime_contract_version is None:
+            runtime_contract_version = survey_schema.current_version()       # 시험 릴리스는 설치된 문진 스키마의 현행 정수 버전
+        banks = list(bank) if isinstance(bank, (list, tuple)) else [bank]        # 문진표 하나 또는 여러 개(계약 3.3.0 question_sets)
         action_rules_version = action_rules_version or ACTION_RULES_VERSION
         model_runtime_version = model_runtime_version or model_runtime.RUNTIME_VERSION
         cfg = model_runtime.fake_serving_config()
@@ -126,7 +130,7 @@ class FakeReleaseReader:
         manifest = {
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id, "created_at": "2026-10-15T00:00:00Z",
             "gate_decision_id": f"gd-{release_id}",
-            "question_set": ref("qs-main", str(bank["version"]), canonical.sha256_hash(bank)),
+            "question_sets": [{**ref(b["question_set_id"], str(b["version"]), canonical.sha256_hash(b)), "title": b["title"]} for b in banks],
             "lora_a": ref("lora-a", "1.0.0", zero), "lora_b": ref("lora-b", "1.0.0", zero),
             "runtime_contract_version": runtime_contract_version, "action_rules_version": action_rules_version,
             "model_runtime_version": model_runtime_version,
@@ -138,7 +142,7 @@ class FakeReleaseReader:
                            "serving_config_hash": model_runtime.serving_config_hash(cfg_b),
                            "system_prompt": {"path": "system_prompt.txt", "sha256": canonical.file_hash(dirs["LORA_B"] / "system_prompt.txt")}}}}
         manifest["content_hash"] = canonical.content_hash(manifest)
-        subject = {k: manifest[k] for k in ("question_set", "lora_a", "lora_b")}
+        subject = {"question_sets": [ref(b["question_set_id"], str(b["version"]), canonical.sha256_hash(b)) for b in banks], "lora_a": manifest["lora_a"], "lora_b": manifest["lora_b"]}
         if decision_subject_swap:
             subject = dict(subject, lora_a=ref("other", "9", zero))
         self.decisions[manifest["gate_decision_id"]] = {
@@ -149,9 +153,9 @@ class FakeReleaseReader:
         if decision_result == "REJECT":
             self.decisions[manifest["gate_decision_id"]]["reject_reasons"] = ["시험"]
         self.manifests[release_id] = manifest
-        served = copy.deepcopy(bank)
+        served = {b["question_set_id"]: copy.deepcopy(b) for b in banks}
         if tamper_bank:
-            served["session_settings"]["confirm_limit"] += 1
+            next(iter(served.values()))["session_settings"]["confirm_limit"] += 1
         self.banks[release_id] = served
         return manifest
 
@@ -184,10 +188,11 @@ class FakeReleaseReader:
             out = Path(dest) / release_id / "adapters" / role      # HttpReleaseReader와 같은 배치
             shutil.copytree(self.root / "adapters" / release_id / role, out, dirs_exist_ok=True)
             adapters[role] = out
-        return ReleaseBundle(copy.deepcopy(m), copy.deepcopy(self.banks[release_id]), adapters)
+        return ReleaseBundle(copy.deepcopy(m), copy.deepcopy(next(iter(self.banks[release_id].values()))), adapters)
 
-    def get_release_question_bank(self, release_id: str):
-        """I4(계약 2.7.0): 어댑터 없이 문항 세트만. HttpReleaseReader와 같이 응답의 content_hash는 본문의 해시다(매니페스트와의 결속은 호출자 몫)."""
+    def get_release_question_bank(self, release_id: str, question_set_id: Optional[str] = None):
+        """I4(계약 2.7.0, 3.3.0): 어댑터 없이 문진표 하나만. 매니페스트에 문진표가 둘 이상이면 question_set_id가 필수(없으면 INVALID_RECORD),
+        하나면 생략할 수 있다. HttpReleaseReader와 같이 응답의 content_hash는 본문의 해시다(매니페스트와의 결속은 호출자 몫)."""
         self._maybe_fail("get_release_question_bank")
         from boundary_contracts import canonical
         m = self.manifests.get(release_id)
@@ -195,8 +200,15 @@ class FakeReleaseReader:
             raise BoundaryError("NOT_FOUND", "릴리스가 없다")
         if self.decisions[m["gate_decision_id"]]["result"] != "PASS":
             raise BoundaryError("FAILED_PRECONDITION", "통과하지 않은 릴리스")
-        bank = copy.deepcopy(self.banks[release_id])
-        return {"release_id": release_id, "content_hash": canonical.sha256_hash(bank), "question_bank": bank}
+        sets = self.banks[release_id]
+        if question_set_id is None:
+            if len(sets) > 1:
+                raise BoundaryError("INVALID_RECORD", "문진표가 둘 이상이라 question_set_id가 필요하다")
+            question_set_id = next(iter(sets))
+        if question_set_id not in sets:
+            raise BoundaryError("NOT_FOUND", "그 문진표가 릴리스에 없다")
+        bank = copy.deepcopy(sets[question_set_id])
+        return {"release_id": release_id, "question_set_id": question_set_id, "content_hash": canonical.sha256_hash(bank), "question_bank": bank}
 
     def get_decision(self, decision_id: str):
         self._maybe_fail("get_decision")

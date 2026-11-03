@@ -26,8 +26,8 @@
     },
     "flow": {
       "type": "object",
-      "x-survey-schema": "QuestionFlow",
-      "description": "문항 흐름(선택). 현재 문항에서 next_item까지의 구간을 정상으로 본다."
+      "x-survey-schema": "QuestionBank",
+      "description": "흐름을 만든 원천 문진표(선택). 현재 문항에서 next_item까지의 구간을 정상으로 본다."
     }
   }
 }

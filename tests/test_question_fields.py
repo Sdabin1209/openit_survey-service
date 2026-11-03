@@ -12,7 +12,7 @@ from boundary_contracts import validator
 
 from .timing import clock_kwargs, fake_clock
 from survey_service.components.field_specs import build_field_specs
-from survey_service.components.flow_table import load_flow
+from survey_service.components.flow_table import build_flow
 from survey_service.components.link_inference import RemoteModelSession
 from survey_service.components import session_store as effects
 
@@ -62,7 +62,7 @@ def test_graph_always_sends_flow_and_the_fields_built_from_the_bank():
     rig = Rig()
     rig.start()
     rig.say("음", out=ext("REDIRECT", "Q1.D01", reason="OFF_TOPIC"))
-    assert rig.session.extract_fields == [build_field_specs(rig.bank)] and rig.session.extract_flows == [load_flow().table.wire()]
+    assert rig.session.extract_fields == [build_field_specs(rig.bank)] and rig.session.extract_flows == [build_flow(rig.bank).table.wire()]
 
 
 def test_a_bank_with_a_slot_lacking_its_field_spec_is_rejected_at_load(tmp_path):

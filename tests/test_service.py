@@ -147,7 +147,7 @@ def test_readyz_says_the_staff_alert_source_is_missing_instead_of_silently_disab
     src = body["staff_alert_source"]
     assert src["active"] is False and body["warnings"] == ["risk_detection_disabled"]      # 위험 감지는 기본으로 꺼져 있고 /readyz가 경고로 알린다(사용자 결정 L11, ADR-0053)
     assert "staff_alerts" in body                                              # 저장·전달 경로의 통계는 그대로 있다
-    assert body["response_tables"]["status"] == "DATASET_RULES_UNCONFIRMED" and set(body["response_tables"]["counters"]) == {"ask_fallback", "phrase_fallback", "ask_generic", "phrase_generic"} and body["question_flow"] == {"flow_id": "dataset_v2", "items": 31}
+    assert body["response_tables"]["status"] == "DATASET_RULES_UNCONFIRMED" and set(body["response_tables"]["counters"]) == {"ask_fallback", "phrase_fallback", "ask_generic", "phrase_generic"} and body["question_flow"]["question_sets"] in ({}, {"general-intake": {"items": 31}})      # 문진표 ID별 흐름의 문항 수(릴리스가 아직 적재 전이면 비어 있다)
 
 
 def test_risk_source_factory_setting_activates_the_alert_path(tmp_path):

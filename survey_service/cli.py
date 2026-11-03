@@ -47,7 +47,7 @@ def build(bank: dict, db: str, extraction: dict):
                                              expected_serving_config_hashes={r: model_runtime.serving_config_hash(cfg) for r in ("LORA_A", "LORA_B")},
                                              backend=backend)
     reg = ReleaseRegistry()
-    reg.register(LoadedRelease("rel-dev", {}, bank, LocalModelSession(session)), activate=True)
+    reg.register(LoadedRelease("rel-dev", {}, {bank["question_set_id"]: bank}, LocalModelSession(session)), activate=True)
     return Orchestrator(SqliteSessionStore(db, REAL_WALL_CLOCK), reg, staff_console=_Console(), dispatcher=_Dispatcher())
 
 

@@ -1,7 +1,8 @@
 """공개 API(I10): 키오스크 프론트 <-> 문진 서비스 (boundary-contracts/PUBLIC_API.md, D55, D58, D64, D66).
 
 키오스크(토큰 역할 kiosk)
-  POST /v1/sessions                    세션 시작   본문 {session_id, kind: SESSION_START}
+  GET  /v1/question-sets               문진표 목록 {items: [{question_set_id, title, version}]} (활성 릴리스의 문진표)
+  POST /v1/sessions                    세션 시작   본문 {session_id, kind: SESSION_START, question_set_id}
   POST /v1/sessions/{id}/turns         환자 발화   본문 {session_id, kind: UTTERANCE, utterance} + 봉투 turn_id (멱등)
   POST /v1/sessions/{id}/end           세션 종료   본문 {session_id, kind: SESSION_END}
   GET  /v1/sessions/{id}/state         세션 상태   SessionState (위험 정지 중 폴링, 재개하면 resume_text, 정지면 pause_reason)
@@ -58,6 +59,7 @@ STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
 # 역할은 kiosk / staff / result-reader / risk-source. 결과·위험 신호 역할은 그 토큰을 설정하지 않으면 경로가 없다(기능 꺼짐).
 _SPEC = (
     ("start", "POST", "/v1/sessions", "kiosk", False, None, False, None),
+    ("question_sets", "GET", "/v1/question-sets", "kiosk", False, None, False, None),      # 활성 릴리스의 문진표 목록(키오스크 첫 화면 선택용, 기기 인증은 /v1/sessions와 같다)
     ("turn", "POST", "/v1/sessions/{sid}/turns", "kiosk", False, None, False, None),
     ("end", "POST", "/v1/sessions/{sid}/end", "kiosk", False, None, False, None),
     ("state", "GET", "/v1/sessions/{sid}/state", "kiosk", False, None, False, "SessionState"),
@@ -332,6 +334,25 @@ class PublicApi:
         except Exception:
             return False
 
+    def _question_sets(self, _req: Request):
+        """활성 릴리스의 문진표 목록. 활성 릴리스가 없으면 503(세션을 시작할 수 없는 것과 같다)."""
+        rel = self.orch.releases.active()
+        if rel is None:
+            raise _err("UNAVAILABLE", "지금은 문진표를 알 수 없다")
+        return 200, {"items": [{"question_set_id": qid, "title": b["title"], "version": str(b["version"])} for qid, b in rel.banks.items()]}, {}
+
+    def _check_question_set(self, qsid: Optional[str]) -> None:
+        """세션 시작의 question_set_id: 활성 문진표가 하나면 생략할 수 있고 둘 이상이면 필수, 목록에 없으면 400.
+        코드는 계약 BoundaryError의 400인 INVALID_RECORD이고 details.reason(QUESTION_SET_REQUIRED, UNKNOWN_QUESTION_SET)으로 구분한다(헤드 확인)."""
+        rel = self.orch.releases.active()
+        if rel is None:
+            return                                   # 활성 릴리스가 없으면 호출한 쪽이 UNAVAILABLE로 거절한다
+        if qsid is None:
+            if len(rel.banks) > 1:
+                raise _err("INVALID_RECORD", "활성 문진표가 둘 이상이라 question_set_id가 필요하다", details={"reason": "QUESTION_SET_REQUIRED", "field": "question_set_id"})
+        elif qsid not in rel.banks:
+            raise _err("INVALID_RECORD", "활성 문진표 목록에 없는 question_set_id다", details={"reason": "UNKNOWN_QUESTION_SET", "field": "question_set_id"})
+
     def _start(self, req: Request):
         body = req.body
         _check("SessionStartBody", body)
@@ -351,6 +372,8 @@ class PublicApi:
                 raise _err("UNAVAILABLE", "지금은 세션을 시작할 수 없다")
             if status and status.startswith("ENDED"):
                 raise _err("CONFLICT", "이미 끝난 세션이다. 새 세션 ID로 시작해야 한다")
+            if status is None:
+                self._check_question_set(rest.get("question_set_id"))
             if status is None and subject is None and self.require_subject_ref:
                 raise _err("INVALID_RECORD", "subject_ref가 필요하다")
             if status is None and self.alerts is not None:
@@ -596,7 +619,7 @@ class PublicApi:
             turns.append({"turn_index": i, "turn_id": t.get("turn_id"), "at": t.get("at"), "utterance": e["input"]["utterance"],
                           "response_text": e["response_text"], "action": (e.get("extract_output") or {}).get("action")})
         pr = self._pause_reason(sid, doc) if status == "PAUSED_RISK" else None
-        view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": release_id,
+        view = {"session_id": sid, "subject_ref": subject, "status": status, "release_id": release_id, **self._question_set_fields(sid),
                 "created_at": (times.get(-1) or {}).get("at"), "turns": turns, "values": self._values(doc),
                 "alerts": [{"alert_id": a["alert_id"], "kind": a["kind"], "status": a["status"],
                             "created_at": a["created_at"], "rule_id": a["rule_id"], "resolved_by": a["resolved_by"],
@@ -616,8 +639,14 @@ class PublicApi:
                 "ended_at": (times.get(len(log_) - 1) or {}).get("at") if ended and log_ else None,
                 "release_id": self.orch.store.release_id_of(sid),
                 "question_bank_version": str(doc["session_info"]["question_bank_version"]),
+                **self._question_set_fields(sid),
                 "answers": self._values(doc), "skipped_details": self.orch.blank_details(doc),
                 **(self.alerts.store.ack_of(sid) or {})}      # acknowledged_by·acknowledged_at은 확인된 뒤에만 나온다(선택 필드, U83)
+
+    def _question_set_fields(self, sid: str) -> dict:
+        """결과에 싣는 문진표 ID·제목(문진 스키마 4.0.0). 문진표 없이 만든 옛 세션은 null."""
+        qs = self.orch.store.question_set_of(sid)
+        return {"question_set_id": qs[0] if qs else None, "question_set_title": qs[1] if qs else None}
 
     def _result(self, req: Request):
         """SessionResult(발화·대화 로그 없음, 부분 결과도 상태와 함께). 접근 기록 fail-closed."""

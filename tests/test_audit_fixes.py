@@ -214,9 +214,9 @@ def test_one_utterance_may_answer_several_following_items_up_to_next_item():
     """C1 학습 데이터 대조에서 확인: '운동 안 해요' 한 말이 Q8_1·Q9_1·Q10을 함께 채우고 next_item이 END인 정상 정답이 있다. 현재 문항에서 next_item까지의 문항 저장은 거부하지 않는다."""
     from survey_service.components import extraction_check as extraction
     from survey_service.components.question_bank_view import Bank
-    from survey_service.components.flow_table import load_flow
+    from survey_service.components.flow_table import build_flow
     from .sample_bank import sample_bank
-    flow, bank = load_flow(), Bank(sample_bank())
+    flow, bank = build_flow(sample_bank()), Bank(sample_bank())
     from survey_service.components import session_store as effects
     doc = effects.initial_state("S", bank.raw, "Q8_1")
     out = ext("NEXT", "END", val("Q8_1.days", 0), val("Q9_1.days", 0), val("Q10.days", 0))

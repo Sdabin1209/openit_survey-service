@@ -66,7 +66,7 @@ def test_view_matches_schema_and_content(vr):
     converse(vr)
     st, body, _ = vr.call("GET", "/v1/staff/sessions/K1")
     assert st == 200 and not list(VIEW.iter_errors(body))
-    assert set(body) == {"session_id", "subject_ref", "status", "release_id", "created_at", "turns", "values", "alerts"}
+    assert set(body) == {"session_id", "subject_ref", "status", "release_id", "question_set_id", "question_set_title", "created_at", "turns", "values", "alerts"}
     assert body["session_id"] == "K1" and body["status"] == "IN_PROGRESS" and body["release_id"] == "rel-e2e-1"
     assert body["created_at"].endswith("Z")
     assert [t["turn_index"] for t in body["turns"]] == [0, 1] and [t["turn_id"] for t in body["turns"]] == ["start", "t-1"]

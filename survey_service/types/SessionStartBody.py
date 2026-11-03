@@ -13,3 +13,4 @@ class SessionStartBody(TypedDict, closed=True):
     session_id: NotRequired[str]
     turn_id: NotRequired[str]
     subject_ref: NotRequired[str | None]
+    question_set_id: NotRequired[str]

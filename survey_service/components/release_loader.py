@@ -33,12 +33,19 @@ log = logging.getLogger("survey_service.release")
 
 @dataclass
 class LoadedRelease:
-    """적재된 릴리스. 문항 세트와 모델 세션을 가진다."""
+    """적재된 릴리스. 문진표(문항 세트) 전부와 모델 세션을 가진다. 문진표는 여러 개가 함께 활성이다(ADR-0057)."""
     release_id: str
     manifest: Mapping
-    bank: Mapping
+    banks: Mapping            # 문진표 ID -> QuestionBank. 매니페스트 question_sets의 id마다 하나
     session: Any
     warnings: list = field(default_factory=list)
+
+    @property
+    def bank(self) -> Mapping:
+        """문진표가 하나뿐일 때의 그 문진표(여럿이면 어느 것인지 정할 수 없어 ValueError)."""
+        if len(self.banks) != 1:
+            raise ValueError("문진표가 여러 개라 하나를 고를 수 없다")
+        return next(iter(self.banks.values()))
 
 
 class LoadRejected(Exception):
@@ -73,9 +80,10 @@ class ReleaseLoader:
                  supported_versions: Optional[Iterable[int]] = None, installed_versions: Optional[dict] = None,
                  keep_releases: int = 2, open_release_ids: Callable[[], set] = lambda: set(),
                  retry_base_seconds: float = 5.0, retry_max_seconds: float = 60.0, give_up_seconds: float = 0.0,
-                 clock: Callable[[], float]) -> None:
+                 flow_check: Optional[Callable[[dict], list]] = None, clock: Callable[[], float]) -> None:
         self.reader, self.registry, self.inference = reader, registry, inference
         self.field_check = field_check      # 칸 규격 검사(field_specs.invalid_field_specs). 컴포넌트끼리 import하지 않으므로 wiring이 꽂는다. None이면 이 검사를 하지 않는다
+        self.flow_check = flow_check        # 문진표에서 흐름을 만들 수 있는지(flow_table.flow_problems). 같은 이유로 wiring이 꽂는다. None이면 이 검사를 하지 않는다
         self.workdir = Path(workdir)
         self._bank_validators: dict = {}
         self.supported = set(supported_versions) if supported_versions is not None else {survey_schema.current_version()}
@@ -190,14 +198,16 @@ class ReleaseLoader:
         # 어댑터와 질문지는 번들(또는 문항 세트 호출)이 돌려준 경로·내용을 그대로 쓴다. 로컬 사본은 재사용하지 않고 매번 새로 받아 검증한 뒤 교체한다(손상된 사본은 덮어쓴다).
         try:
             self.workdir.mkdir(parents=True, exist_ok=True)
+            adapters = {}
             if getattr(self.inference, "needs_adapters", True):      # 서비스 안에서 모델을 올리는 백엔드만 어댑터를 쓴다
-                bundle = self.reader.load_bundle(rid, dest=self.workdir)
-                bank, adapters = bundle.question_bank, bundle.adapters
-            else:                                                    # 원격 추론: 어댑터는 model-runtime이 따로 받는다. 문항 세트만 받는다(I4, 계약 2.7.0, ADR-0040)
-                bank, adapters = self.reader.get_release_question_bank(rid)["question_bank"], {}
+                adapters = self.reader.load_bundle(rid, dest=self.workdir).adapters
+            # 문진표는 세트마다 I4 get_release_question_bank(question_set_id)로 받는다(계약 3.3.0): 어댑터 번들과 무관하게 같은 경로다
+            banks = {ref["id"]: self.reader.get_release_question_bank(rid, question_set_id=ref["id"])["question_bank"]
+                     for ref in manifest["question_sets"]}
         except OSError as e:               # 볼륨을 쓸 수 없다(읽기 전용, 가득 참, 권한): 폴링 스레드를 죽이지 않고 일시 실패로 다시 시도한다
             raise LoadRejected("STORAGE_UNAVAILABLE", f"작업 폴더를 쓸 수 없다: {type(e).__name__}", retryable=True) from None
-        self._check_bank(manifest, bank)
+        for ref in manifest["question_sets"]:
+            self._check_bank(manifest, ref, banks[ref["id"]])
         warnings = self._check_library_versions(manifest)
         try:
             session = self.inference.load(manifest, adapters, contract_version=manifest["runtime_contract_version"])
@@ -208,7 +218,7 @@ class ReleaseLoader:
         for w in warnings:
             log.warning("릴리스 경고 release=%s %s", rid, w)
         self.status.warnings = (self.status.warnings + [{"release_id": rid, "warning": w} for w in warnings])[-20:]
-        return LoadedRelease(rid, manifest, bank, session, warnings)
+        return LoadedRelease(rid, manifest, banks, session, warnings)
 
     def _check_manifest(self, manifest: dict, rid: str) -> None:
         errs = list(validator("ReleaseManifest").iter_errors(manifest))
@@ -229,13 +239,19 @@ class ReleaseLoader:
             if e.retryable:
                 raise
             raise LoadRejected("NO_APPROVAL", f"승인 기록을 읽을 수 없다({e.code})") from e
-        subject = {k: manifest[k] for k in ("question_set", "lora_a", "lora_b")}
+        # 승인 대상(subject.question_sets)은 ArtifactRef(id·version·content_hash)이고 매니페스트의 QuestionSetRef는 title이 더 있다. 순서는 뜻이 없어 ID로 정렬해 견준다
+        by_id = lambda refs: sorted(refs, key=lambda r: r["id"])
+        subject = {"question_sets": by_id({k: r[k] for k in ("id", "version", "content_hash")} for r in manifest["question_sets"]),
+                   "lora_a": manifest["lora_a"], "lora_b": manifest["lora_b"]}
+        got = dec.get("subject")
+        if isinstance(got, dict) and isinstance(got.get("question_sets"), list):
+            got = {**got, "question_sets": by_id(got["question_sets"])}
         if dec.get("result") != "PASS":
             raise LoadRejected("NO_APPROVAL", "게이트 판정이 PASS가 아니다")
-        if dec.get("subject") != subject or dec.get("runtime_contract_version") != manifest["runtime_contract_version"]:
+        if got != subject or dec.get("runtime_contract_version") != manifest["runtime_contract_version"]:
             raise LoadRejected("NO_APPROVAL", "승인 기록이 이 조합을 가리키지 않는다")
 
-    def _check_bank(self, manifest: dict, bank: dict) -> None:
+    def _check_bank(self, manifest: dict, ref: dict, bank: dict) -> None:
         ver = manifest["runtime_contract_version"]
         v = self._bank_validators.get(ver)
         if v is None:      # 정수 버전마다 한 번만 만든다(스키마 파일을 매번 다시 읽지 않는다, ADR-0050)
@@ -244,11 +260,16 @@ class ReleaseLoader:
         if errs:         # 필수 고정 문장 4개·칸 자료형·option 선택지·id 문자는 스키마가 표현한다(ADR-0045). 위반 위치와 이유(스키마가 적은 설명)를 알린다
             e = errs[0]
             where = "".join(f"[{x}]" if isinstance(x, int) else f".{x}" for x in e.path) or "(최상위)"
-            raise LoadRejected("INVALID_RECORD", f"문항 세트가 QuestionBank 스키마를 어긴다: {where} {e.schema.get('description') or e.message}"[:300] + (f" (위반 {len(errs)}건)" if len(errs) > 1 else ""))
-        if canonical.sha256_hash(bank) != manifest["question_set"]["content_hash"]:
-            raise LoadRejected("INTEGRITY_ERROR", "문항 세트 해시가 매니페스트와 다르다")
-        if str(bank["version"]) != str(manifest["question_set"]["version"]):
-            raise LoadRejected("INVALID_RECORD", "문항 세트 버전이 ArtifactRef와 다르다")
+            raise LoadRejected("INVALID_RECORD", f"문진표 {ref['id']}가 QuestionBank 스키마를 어긴다: {where} {e.schema.get('description') or e.message}"[:300] + (f" (위반 {len(errs)}건)" if len(errs) > 1 else ""))
+        if canonical.sha256_hash(bank) != ref["content_hash"]:
+            raise LoadRejected("INTEGRITY_ERROR", f"문진표 {ref['id']}의 해시가 매니페스트와 다르다")
+        if str(bank["version"]) != str(ref["version"]):
+            raise LoadRejected("INVALID_RECORD", f"문진표 {ref['id']}의 버전이 ArtifactRef와 다르다")
+        if bank["question_set_id"] != ref["id"]:
+            raise LoadRejected("INVALID_RECORD", f"문진표의 question_set_id({bank['question_set_id']})가 매니페스트의 id({ref['id']})와 다르다")
+        flow_bad = self.flow_check(bank) if self.flow_check else []
+        if flow_bad:       # 순서·건너뛰기를 문진표에서 파생하므로 파생할 수 없는 문진표는 환자 앞에 서기 전에 거부한다(ADR-0057)
+            raise LoadRejected("INVALID_RECORD", f"문진표 {ref['id']}에서 흐름을 만들 수 없다: " + "; ".join(flow_bad[:3]))
         bad = self.field_check(bank) if self.field_check else []
         if bad:          # 스키마로 표현하지 못하는 칸 규격 위반(코드 중복 등)과 계약 QuestionFieldSpec 검증: 그대로 적재하면 extract가 400이 된다
             raise LoadRejected("INVALID_FIELD_SPEC", f"칸 규격이 계약 QuestionFieldSpec을 어긴다({len(bad)}건): " + "; ".join(bad[:3]) + (" ..." if len(bad) > 3 else ""))

@@ -36,7 +36,7 @@
 | turn_route | `components/turn_route.py` | TurnRouteQuery | TurnRoute | 입력 종류와 세션 상태(없음·진행·멈춤·끝남)로 처리 표(9-1)의 칸(턴 종류, 세션 생성 여부, 전체 흐름 여부, 로그 보존)을 고른다 |
 | reask_cap | `components/reask_cap.py` | ReaskCapQuery | ReaskCap | 서비스 상한과 문항 세트가 정한 상한으로 되묻기 연속 상한의 실효 값을 계산한다 |
 | metrics_export | `components/metrics_export.py` | (결과 이름, 경과 초)의 스칼라 쌍: 턴 또는 모델 호출 하나 | Prometheus 텍스트(계약 METRICS.md의 두 지표) | 턴·모델 호출의 소요 시간을 히스토그램으로 모아 내부망 `/metrics`로 낸다. 목표 판정은 하지 않는다(ADR-0055) |
-| flow_table | `components/flow_table.py` | FlowSource(문진: QuestionFlow) | FlowView | 문항 순서·건너뛰기 표를 만들고 건너뛴 문항, 직전 문항, 칸 순서를 묻는 질의에 답한다 |
+| flow_table | `components/flow_table.py` | FlowSource(문진: QuestionBank) | FlowView | 문진표의 order·prerequisite·affected_followups·slots에서 문항 순서·건너뛰기 표를 파생해 만들고(ADR-0057) 건너뛴 문항, 직전 문항, 칸 순서를 묻는 질의에 답한다 |
 | question_bank_view | `components/question_bank_view.py` | QuestionBankDoc(문진: QuestionBank) | BankView | 문항 세트를 order 순으로 정리하고 질문 문장·고정 문장을 찾는다 |
 | field_specs | `components/field_specs.py` | QuestionBankDoc | FieldSpecs(계약: QuestionFieldSpec), FieldSpecIssues | 칸 정의에서 칸 규격을 만들고 계약을 어기는 칸을 가려낸다 |
 | extract_request | `components/extract_request.py` | ExtractRequestSource | ExtractInput(계약: ActionExtractionInput) | 세션 문서·문항 세트·문항 흐름·발화에서 모델 추출 입력(state 포함)을 조립한다 |

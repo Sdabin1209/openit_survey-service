@@ -29,6 +29,7 @@ from .clock import join_until
 from .checked import effective_reask_cap
 from .orchestrator import Orchestrator
 from ..components.field_specs import invalid_field_specs
+from ..components.flow_table import flow_problems
 from ..components.release_loader import ReleaseLoader
 from ..components.release_registry import ReleaseRegistry
 from ..components.risk_screen import RuleRiskSource
@@ -87,7 +88,7 @@ class App:
         self.clock = clock          # 주입한 단조 시계(ADR-0050): 턴 마감·/readyz 마감·추론 재시도 예산을 이 시계로 센다. 기본은 실제 시계
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
-        self.store, self.outbox, self.alert_store, self.db_kind = open_stores(settings)
+        self.store, self.outbox, self.alert_store, self.db_kind = open_stores(settings)[:4]
         self.outbox.max_pending = settings.outbox_max_pending
         push = None
         vapid_key = _secret(settings.vapid_private_key_env, "VAPID 비밀키") or ""
@@ -121,7 +122,7 @@ class App:
             installed_versions={"action_rules_version": load_rules()["rules_version"], "model_runtime_version": model_runtime.RUNTIME_VERSION},
             open_release_ids=self.store.open_release_ids, retry_base_seconds=settings.release_retry_base_seconds,
             retry_max_seconds=settings.release_retry_max_seconds, give_up_seconds=settings.release_retry_give_up_seconds,
-            field_check=invalid_field_specs, clock=REAL_WALL_CLOCK)
+            field_check=invalid_field_specs, flow_check=flow_problems, clock=REAL_WALL_CLOCK)
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,
                                       max_delay=settings.export_backoff_max_seconds, stage_grace=settings.outbox_stage_grace_seconds,
                                       clock=REAL_WALL_CLOCK, wait=real_wait)
@@ -315,8 +316,15 @@ class App:
         (계약: effective는 1 이상 또는 null). 이웃은 규칙을 흉내 내지 않고 이 값만 읽는다(ADR-0046)."""
         mx = self.settings.max_consecutive_reask
         rel = self.registry.active()
-        cap = effective_reask_cap(mx, rel.bank.get("session_settings") if rel else None) if rel else None
+        # 문진표마다 설정이 달라 실제 상한도 문진표마다 다르다. 계약 SurveyReadyz.reask_limit.effective는 하나라서 가장 작은 값(가장 엄격한 문진표)을 낸다
+        caps = [effective_reask_cap(mx, b.get("session_settings")) for b in rel.banks.values()] if rel else []
+        cap = min(caps) if caps else None
         return {"active": (cap if cap is not None else mx) > 0, "max_consecutive": mx, "effective": cap or None}
+
+    def _question_flow(self) -> dict:
+        """문진표마다 흐름의 문항 수(활성 릴리스가 없으면 비어 있다). 흐름은 문진표에서 파생한다(ADR-0057)."""
+        rel = self.registry.active()
+        return {"question_sets": {qid: {"items": len(self.orchestrator.question_set(rel, qid)[1].table.order)} for qid in rel.banks} if rel else {}}
 
     def _result_ready(self, session_id: str, status: str) -> None:
         """세션이 끝났음을 직원·의사 콘솔 SSE로 알린다(U83, PUBLIC_API B절). 본문은 session_id·status·ended_at뿐이고 subject_ref는 넣지 않는다.
@@ -364,7 +372,7 @@ class App:
             "api": {**{"idle_expiry_seconds": self.settings.session_idle_seconds}, **self.api.api_stats()},
             "reask_limit": self._reask_limit(),
             "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
-            "question_flow": {"flow_id": self.orchestrator.flow.flow_id, "items": len(self.orchestrator.flow.table.order)},
+            "question_flow": self._question_flow(),
             "inference": (self.inference.stats.snapshot() if hasattr(self.inference, "stats") else None),
             "model_backend": self.inference.backend, "model_backend_production_safe": self.inference.production_safe,
             "release_loader": {"retrying": retrying, "unavailable_releases": self.loader.status.unavailable_releases,

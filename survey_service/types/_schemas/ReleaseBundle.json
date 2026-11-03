@@ -26,7 +26,7 @@
         "action_rules_version",
         "model_runtime_version",
         "content_hash",
-        "question_set",
+        "question_sets",
         "gate_decision_id"
       ],
       "properties": {
@@ -52,7 +52,7 @@
         "subject": {
           "type": "object",
           "required": [
-            "question_set",
+            "question_sets",
             "lora_a",
             "lora_b"
           ]

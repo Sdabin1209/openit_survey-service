@@ -29,14 +29,19 @@ class OutboxTraceSink:
     def __init__(self, outbox, clock: Callable[[], float]) -> None:
         self.outbox, self.clock = outbox, clock
 
-    def envelope(self, release_id: str, trace: dict) -> dict:
+    def envelope(self, release_id: str, trace: dict, question_set: dict | None = None) -> dict:
         now = self.clock()
-        return {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id,
-                    "runtime_contract_version": trace["contract_version"], "session_id": envelope_id(trace["session_id"]),
-                    "turn_id": envelope_id(trace["turn_id"]), "sent_at": _iso(now), "trace": trace}
+        env = {"pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "release_id": release_id,
+               "runtime_contract_version": trace["contract_version"], "session_id": envelope_id(trace["session_id"]),
+               "turn_id": envelope_id(trace["turn_id"]), "sent_at": _iso(now), "trace": trace}
+        if question_set is not None:
+            # 왜 ext인가: 릴리스에 문진표가 여럿이라 release_id만으로는 이 세션이 어느 문진표였는지 모른다. 수집 영역이 FailureCase.question_set(ArtifactRef 단수)을 채울 재료다.
+            # 계약이 ext를 "영역이 계약을 바꾸지 않고 덧붙이는 부가 정보"로 열어 두었다(키는 영역 이름).
+            env["ext"] = {"survey-service": {"question_set": dict(question_set)}}
+        return env
 
-    def submit(self, release_id: str, trace: dict) -> None:
+    def submit(self, release_id: str, trace: dict, question_set: dict | None = None) -> None:
         """세션 저장소와 outbox가 다른 곳이면(시험, 메모리 저장소) 이 경로로 따로 넣는다. 같은 DB면 Orchestrator가 저장소 트랜잭션에 쓴다."""
-        self.outbox.enqueue(self.envelope(release_id, trace), self.clock())
+        self.outbox.enqueue(self.envelope(release_id, trace, question_set), self.clock())
 
 

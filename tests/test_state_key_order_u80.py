@@ -9,11 +9,11 @@ from pathlib import Path
 import survey_service
 from survey_service.components import extract_request
 from survey_service.components import session_store as effects
-from survey_service.components.flow_table import load_flow
+from survey_service.components.flow_table import build_flow
 
 from .sample_bank import sample_bank
 
-FLOW = load_flow()
+FLOW = build_flow(sample_bank())
 
 
 def _doc():

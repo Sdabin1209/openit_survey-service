@@ -205,11 +205,11 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import survey_schema
     from survey_service.components.question_bank_view import Bank
-    from survey_service.components.flow_table import load_flow
+    from survey_service.components.flow_table import build_flow
     from survey_service.components.response_request import ResponseTables
     from tests.sample_bank import sample_bank
     splits = a.splits.split(",")
-    flow, bank = load_flow(), Bank(sample_bank())
+    flow, bank = build_flow(sample_bank()), Bank(sample_bank())
     tables = ResponseTables(survey_schema.load_data("response_tables"))
     only = a.only.split(",")
     if "4" in only:

@@ -25,7 +25,8 @@ from ..components.turn_route import Route, route  # noqa: F401 (재노출)
 from ..components.metrics_export import turn_outcome
 import survey_schema
 
-from ..components.flow_table import Flow, load_flow
+from ..components.flow_table import build_flow
+from ..components import question_bank_view as assembly
 from . import checked
 from .clock import join_until
 from .ports import (FrontendSink, ReleaseProvider, ResultDispatcher, RiskSource, StaffConsole, TraceSink, UnattachedDispatcher,
@@ -72,7 +73,7 @@ class _SessionLocks:
 
 
 class Orchestrator:
-    def __init__(self, store: SessionStorePort, releases: ReleaseProvider, *, flow: Optional[Flow] = None,
+    def __init__(self, store: SessionStorePort, releases: ReleaseProvider, *,
                  tables: Optional[ResponseTables] = None, risk_source: Optional[RiskSource] = None,
                  staff_console: Optional[StaffConsole] = None, dispatcher: Optional[ResultDispatcher] = None,
                  frontend_sink: Optional[FrontendSink] = None, trace_sink: Optional[TraceSink] = None,
@@ -84,7 +85,8 @@ class Orchestrator:
         self.clock = clock                       # 단조 시계(주입, ADR-0050): 턴 마감을 이 시계로 센다. wiring(App)이 실제 시계를, 시험이 가짜 시계를 넣는다
         self.store = store
         self.releases = releases
-        self.flow = flow or load_flow()                                  # 문진 스키마의 문항 순서·건너뛰기 표(D76)
+        self._sets: dict = {}                                            # (릴리스 ID, 문진표 ID) -> (Bank, Flow). 흐름은 문진표에서 파생한다(D76, ADR-0057)
+        self._sets_lock = threading.Lock()
         self.tables = tables or ResponseTables(survey_schema.load_data("response_tables"))   # 미확정 초안 표
         self.risk_source = risk_source                                   # None이면 직원 알림 입력원이 없다(비활성)
         self.staff_console = staff_console or UnconfiguredStaffConsole()
@@ -108,6 +110,16 @@ class Orchestrator:
         self._graph = TurnGraph(self).build()      # 체크포인터 없이 컴파일
 
     # ------------------------------------------------------------------ 공개
+    def question_set(self, release, question_set_id: str):
+        """(Bank, Flow): 적재된 릴리스의 문진표 하나와 거기서 만든 흐름. 한 번 만들어 둔다(문진표는 적재 뒤 바뀌지 않는다). 없는 문진표면 KeyError."""
+        key = (release.release_id, question_set_id)
+        with self._sets_lock:
+            hit = self._sets.get(key)
+            if hit is None:
+                bank = release.banks[question_set_id]
+                hit = self._sets[key] = (assembly.Bank(bank), build_flow(bank))
+            return hit
+
     def request_until(self) -> Optional[float]:
         """요청 전체 마감 시각(주입 시계 기준). 마감을 쓰지 않으면 None."""
         return None if self.request_deadline_seconds <= 0 else self.clock() + self.request_deadline_seconds
@@ -318,13 +330,24 @@ class Orchestrator:
         """같은 DB 모드일 때 TraceEnvelope. 아니면 None(기존 경로: _submit_trace)."""
         if not self.atomic_trace() or release_id is None or not trace:
             return None
-        return checked.envelope(self.trace_sink, release_id, trace)
+        return checked.envelope(self.trace_sink, release_id, trace, self._set_ref(release_id, trace))
+
+    def _set_ref(self, release_id, trace) -> Optional[dict]:
+        """이 턴 세션의 문진표를 ArtifactRef(id·version·content_hash)로: 세션 행의 문진표 ID와 릴리스 매니페스트의 question_sets[]에서 찾는다.
+        찾지 못하면 None(봉투에 싣지 않는다: 문진표 없이 만든 옛 세션, 매니페스트 없는 시험 릴리스)."""
+        try:
+            qs = self.store.question_set_of(trace["session_id"])
+            rel = self.releases.get(release_id)
+            ref = next((r for r in rel.manifest.get("question_sets", ()) if qs and r["id"] == qs[0]), None)
+        except Exception:
+            return None
+        return {k: ref[k] for k in ("id", "version", "content_hash")} if ref else None
 
     def _submit_trace(self, out: TurnOutcome) -> None:
         if self.trace_sink is None or out.release_id is None:
             return
         try:
-            checked.submit(self.trace_sink, out.release_id, out.trace)
+            checked.submit(self.trace_sink, out.release_id, out.trace, self._set_ref(out.release_id, out.trace))
         except Exception as e:  # Trace 때문에 턴이 실패하면 안 된다(I6)
             log.error("Trace를 outbox에 넣지 못했다 error=%s", type(e).__name__)
             self._count("trace_enqueue_failed")

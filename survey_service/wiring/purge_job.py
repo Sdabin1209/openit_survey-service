@@ -18,7 +18,7 @@ def run_purge(env=None, argv=None) -> int:
         print(f"설정 오류: {e}", file=sys.stderr)
         return 2
     try:
-        store, outbox, alert_store, _kind = open_stores(settings)
+        store, outbox, alert_store, _kind = open_stores(settings)[:4]
     except Exception as e:
         print(f"저장소를 열 수 없다: {type(e).__name__}", file=sys.stderr)
         return 3

@@ -1,6 +1,8 @@
 {
   "kind": "START",
   "bank": {
+    "question_set_id": "general-intake",
+    "title": "일반 문진표",
     "version": 1,
     "questions": [
       {

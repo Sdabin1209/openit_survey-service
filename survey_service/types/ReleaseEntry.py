@@ -26,8 +26,8 @@ Id: TypeAlias = str
 class LoadedRelease(TypedDict, closed=True):
     release_id: Id
     manifest: dict[str, Any]
-    bank: dict[str, Any]
     warnings: NotRequired[list[str]]
+    banks: dict[str, dict[str, Any]]
 
 
 class ReleaseEntry1(TypedDict, closed=True):

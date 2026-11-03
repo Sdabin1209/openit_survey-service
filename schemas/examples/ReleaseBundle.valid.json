@@ -5,11 +5,6 @@
     "release_id": "rel-0001",
     "created_at": "2026-10-14T00:00:00Z",
     "gate_decision_id": "gd-0001",
-    "question_set": {
-      "id": "qs-main",
-      "version": "3",
-      "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    },
     "lora_a": {
       "id": "lora-a",
       "version": "1.2.0",
@@ -47,16 +42,19 @@
           "sha256": "sha256:3def1bd06bba07ed86b77771064fc0dc969cc80f2997f159ee80b3de5b228b93"
         }
       }
-    }
+    },
+    "question_sets": [
+      {
+        "id": "qs-main",
+        "version": "3",
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "title": "일반 문진표"
+      }
+    ]
   },
   "decision": {
     "result": "PASS",
     "subject": {
-      "question_set": {
-        "id": "qs-main",
-        "version": "3",
-        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      },
       "lora_a": {
         "id": "lora-a",
         "version": "1.2.0",
@@ -66,11 +64,20 @@
         "id": "lora-b",
         "version": "1.0.1",
         "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      }
+      },
+      "question_sets": [
+        {
+          "id": "qs-main",
+          "version": "3",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
     },
     "runtime_contract_version": 1
   },
   "question_bank": {
+    "question_set_id": "general-intake",
+    "title": "일반 문진표",
     "version": 1,
     "questions": [
       {

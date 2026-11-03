@@ -14,35 +14,33 @@ import survey_schema
 
 from survey_service.components import extract_request, write_plan, response_request
 from survey_service.components.question_bank_view import Bank
-from survey_service.components.flow_table import build_flow, load_flow
+from survey_service.components.flow_table import build_flow
 from survey_service.components.response_request import ResponseTables, josa
 from survey_service.components import session_store as effects
 
 from .sample_bank import sample_bank
 
 FIX = json.loads((Path(__file__).parent / "fixtures_dataset_v2.json").read_text(encoding="utf-8"))
-FLOW = load_flow()
+FLOW = build_flow(sample_bank())
 TABLES = ResponseTables(survey_schema.load_data("response_tables"))
 BANK = Bank(sample_bank())
 
 
 # ---------------------------------------------------------------- 문항 순서·건너뛰기 표 (D76)
-def test_flow_built_from_survey_schema_is_the_contract_flow_table():
-    data = survey_schema.load_data("question_flow")
-    assert FLOW.table.wire() == {"order": data["order"], "skips": data["skips"]}
+def test_flow_built_from_the_bank_is_the_contract_flow_table():
+    legacy = json.loads((Path(__file__).parent / "fixtures_legacy_question_flow.json").read_text(encoding="utf-8"))      # 삭제된 고정 흐름 파일의 사본(회귀 기준)
+    assert FLOW.table.wire() == {"order": legacy["order"], "skips": legacy["skips"]}
     assert list(validator("QuestionFlowTable").iter_errors(FLOW.table.wire())) == []
     assert FLOW.table.order[0] == "Q1.D01" and len(FLOW.table.order) == 31 and len(FLOW.table.skips) == 7
+    assert {k: list(v) for k, v in FLOW.reference_sources.items()} == legacy["reference_sources"]
+    for item, slots in legacy["slot_order"].items():
+        assert list(FLOW.slot_order[item]) == slots
 
 
-def test_flow_data_validates_against_its_contract_and_has_numeric_condition():
-    data = survey_schema.load_data("question_flow")
-    assert {"slot": "Q8_1.days", "op": "==", "value": 0, "skip_item": "Q8_2"} in data["skips"]
+def test_flow_has_numeric_condition_and_keeps_bool_and_number_apart():
+    assert {"slot": "Q8_1.days", "op": "==", "value": 0, "skip_item": "Q8_2"} in FLOW.table.skips
     assert FLOW.table.is_skipped("Q8_2", {"Q8_1.days": 0}) and not FLOW.table.is_skipped("Q8_2", {"Q8_1.days": 1})
     assert not FLOW.table.is_skipped("Q4_1", {"Q4.answer": 0})                      # bool과 수는 다르다
-    bad = copy.deepcopy(data); bad["skips"][0]["op"] = "<="
-    import jsonschema
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(bad, survey_schema.load_schema("QuestionFlow"))
 
 
 def test_flow_follows_skips_for_next_item():

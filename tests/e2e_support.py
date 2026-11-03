@@ -97,7 +97,7 @@ class Rig:
         self.store = store or MemorySessionStore(clock=fake_clock())
         self.registry = ReleaseRegistry()
         self.session = make_session(self.model)
-        self.release = LoadedRelease("rel-e2e-1", {}, self.bank, self.session)
+        self.release = LoadedRelease("rel-e2e-1", {}, {self.bank["question_set_id"]: self.bank}, self.session)
         self.registry.register(self.release, activate=True)
         self.console = RecordingConsole()
         self.dispatcher = RecordingDispatcher()

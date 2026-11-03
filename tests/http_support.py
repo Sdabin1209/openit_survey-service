@@ -16,10 +16,10 @@ def publish(server, tmp_path, rid, version=1, pointer=True, tamper_bank=False, *
                    model_runtime_version=model_runtime.RUNTIME_VERSION, **kw)
     m = fr.manifests[rid]
     adapters = {r: {f.name: f.read_bytes() for f in sorted((fr.root / "adapters" / rid / r).iterdir())} for r in ("LORA_A", "LORA_B")}
-    bank = fr.banks[rid]
+    banks = fr.banks[rid]            # {문진표 ID: QuestionBank} (계약 3.3.0 conformance.servers의 releases[rid]["banks"])
     if tamper_bank:
-        bank = json.loads(json.dumps(bank)); bank["session_settings"]["confirm_limit"] += 1
-    server.releases[rid] = {"manifest": m, "bank": bank, "adapters": adapters, "pass": fr.decisions[m["gate_decision_id"]]["result"] == "PASS"}
+        banks = json.loads(json.dumps(banks)); next(iter(banks.values()))["session_settings"]["confirm_limit"] += 1
+    server.releases[rid] = {"manifest": m, "banks": banks, "adapters": adapters, "pass": fr.decisions[m["gate_decision_id"]]["result"] == "PASS"}
     server.release_order.append(rid)
     server.decisions.append(fr.decisions[m["gate_decision_id"]])
     if pointer:

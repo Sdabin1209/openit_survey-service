@@ -1,6 +1,6 @@
 """D74 시험용 문항 세트: 학습 데이터셋 v2의 31개 문항 ID와 칸(시험용 값이며 실제 문항이 아니다).
 
-질문 문장은 일부만 학습 데이터 표본에서 인용했고 나머지는 시험용 문장이다. 문항 순서는 문진 스키마의 QuestionFlow와 같다."""
+질문 문장은 일부만 학습 데이터 표본에서 인용했고 나머지는 시험용 문장이다. 문항 순서·건너뛰기(prerequisite)·참조 원천(affected_followups)·칸 순서는 옛 고정 흐름 파일(QuestionFlow, survey-schema 4.0.0에서 삭제)을 문진표로 옮긴 것이다."""
 from __future__ import annotations
 
 import json
@@ -57,17 +57,32 @@ def _slot(qid: str, slot_id: str) -> dict:
     return slot
 
 
-def sample_bank(version: int = 1) -> dict:
-    order = survey_schema.load_data("question_flow")["order"]
+ORDER = ["Q1.D01", "Q1.D02", "Q1.D03", "Q1.D04", "Q1.D05", "Q1.D06", "Q1.D07", "Q1.D08", "Q1.D09", "Q1.D10", "Q1.D11",
+         "Q2.D01", "Q2.D02", "Q2.D03", "Q2.D04", "Q2.D05", "Q3", "Q4", "Q4_1", "Q5", "Q5_1", "Q6", "Q6_1", "Q7", "Q7_1", "Q7_2",
+         "Q8_1", "Q8_2", "Q9_1", "Q9_2", "Q10"]
+# 건너뛰기 7개: 이 칸이 `op value`이면 묻는다(옛 흐름표 skip의 부정). 옛 skips: Q4.answer==false -> Q4_1 건너뜀 등
+PREREQUISITES = {
+    "Q4_1": ("Q4", "answer", "!=", False), "Q5_1": ("Q5", "answer", "!=", False), "Q6_1": ("Q6", "answer", "!=", False),
+    "Q7_1": ("Q7", "does_not_drink", "!=", True), "Q7_2": ("Q7", "does_not_drink", "!=", True),
+    "Q8_2": ("Q8_1", "days", "!=", 0), "Q9_2": ("Q9_1", "days", "!=", 0),
+}
+AFFECTED_FOLLOWUPS = {"Q4": ["Q5"], "Q4_1": ["Q5_1"], "Q5": ["Q6"], "Q8_1": ["Q9_1"], "Q8_2": ["Q9_2"], "Q9_1": ["Q10"]}      # 옛 reference_sources(Q5:[Q4] 등)의 역방향
+
+
+def sample_bank(version: int = 1, *, question_set_id: str = "general-intake", title: str = "일반 문진표", order=None) -> dict:
+    """order: 문항 ID를 묻는 순서(기본 ORDER). 문진표마다 순서가 다르다는 시험이 순서를 바꿔 만든다."""
+    order = list(order or ORDER)
     questions = []
     for i, qid in enumerate(order, start=1):
+        pre = PREREQUISITES.get(qid) if PREREQUISITES.get(qid, (None,))[0] in order else None
         questions.append({
-            "question_id": qid, "name": qid, "order": i, "prerequisite": None,
+            "question_id": qid, "name": qid, "order": i,
+            "prerequisite": {"slot": {"question_id": pre[0], "repeat_key": "", "slot_id": pre[1]}, "op": pre[2], "value": pre[3]} if pre else None,
             "question_sentence": SENTENCES.get(qid, f"{qid} 문항입니다. 알려 주세요."),
-            "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.", "guide_sentences": [], "affected_followups": [],
+            "refusal_explanation": "답하기 어려우시면 넘어가셔도 됩니다.", "guide_sentences": [], "affected_followups": [f for f in AFFECTED_FOLLOWUPS.get(qid, []) if f in order],
             "policy": {"question_limit": 3, "unknown_accept_after": 2, "refusal_accept_after": 2},
             "repeat_keys": BEVERAGES if qid in ("Q7_1", "Q7_2") else [],
             "slots": [_slot(qid, s) for s in _slots(qid)]})
-    return {"version": version, "questions": questions,
+    return {"question_set_id": question_set_id, "title": title, "version": version, "questions": questions,
             "session_settings": {"risk_phrases": [], "confirm_limit": 2, "unrecognized_streak_limit": 2, "ask_limit": 3,
                                  "fixed_sentences": [{"key": k, "sentence": v} for k, v in FIXED.items()], "guide_list": []}}

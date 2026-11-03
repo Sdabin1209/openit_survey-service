@@ -116,6 +116,7 @@ class TurnCtx:
         self.clock = clock                              # 주입한 단조 시계(ADR-0050)
         self.release: Optional[LoadedRelease] = None
         self.bank: Optional[assembly.Bank] = None
+        self.flow = None                                # 이 세션의 문진표에서 만든 Flow(순서·건너뛰기·참조 원천·칸 순서, ADR-0057)
         self.deadline: Optional[float] = None          # time.monotonic() 기준 턴 마감. None이면 마감 없음
         self.cancelled = threading.Event()             # 마감을 넘겨 호출자가 NOT_COMMITTED로 끝냈다: 늦게 끝난 작업이 확정하지 않게 한다
 
@@ -260,7 +261,8 @@ class TurnGraph:
             return {}
         try:
             active = self.o.releases.active()
-            extra = tuple(active.bank["session_settings"].get("risk_phrases") or ()) if active else ()       # 문항 세트에 저작된 위험 문구(U2)
+            # 문진표에 저작된 위험 문구(U2). 선별은 DB 읽기보다 앞이라 세션의 문진표를 아직 모른다: 활성 릴리스의 모든 문진표의 문구를 합친다(fail-safe: 더 많이 거를 뿐 덜 거르지 않는다)
+            extra = tuple(dict.fromkeys(ph for b in active.banks.values() for ph in b["session_settings"].get("risk_phrases") or ())) if active else ()
             alert = checked.screen(src, utt, extra)
         except Exception as e:
             log.warning("위험 선별 오류 session=%s error=%s", st["session_id"], type(e).__name__)
@@ -338,11 +340,13 @@ class TurnGraph:
         found = loaded["status"] == "OK"
         status = loaded["state"]["progress_record"]["session_status"] if found else None
         latest = self.o.releases.active()
+        qs = self.o.store.question_set_of(sid) if found else None          # 세션의 문진표: 같은 문진표의 최신 판과 견준다
+        latest_bank = (latest.banks.get(qs[0]) if qs else None) or (next(iter(latest.banks.values())) if latest and len(latest.banks) == 1 else None) if latest else None
         tr["orchestrator_input"] = {
             "frontend_input": copy.deepcopy(st["message"]), "intervention_decision": copy.deepcopy(st["decision"]),
             "session_found": found,
             "session_question_bank_version": loaded["state"]["session_info"]["question_bank_version"] if found else None,
-            "session_status": status, "latest_question_bank_version": latest.bank["version"] if latest else 0}
+            "session_status": status, "latest_question_bank_version": latest_bank["version"] if latest_bank else 0}
         return {"loaded": loaded, "found": found, "status": status, "trace": tr}
 
     def _column(self, name: str):
@@ -413,14 +417,22 @@ class TurnGraph:
             if found:
                 rid = self.o.store.release_id_of(sid)
                 ctx.release = self.o.releases.get(rid)
+                qs = self.o.store.question_set_of(sid)
+                qsid = qs[0] if qs else self._only_set_id(ctx.release)      # 문진표 없이 만든 옛 세션은 그 릴리스의 유일한 문진표
                 doc, revision, created = loaded["state"], loaded["revision"], None
             else:
                 latest = self.o.releases.active()
                 if latest is None:
                     raise ReleaseUnavailable("활성 릴리스가 없다")
                 ctx.release = latest
-                doc = effects.initial_state(sid, latest.bank, self.o.flow.table.order[0])
-                revision = self.o.store.create(sid, latest.release_id, doc)
+                want = (st["message"] or {}).get("question_set_id")
+                qsid = want if want is not None else self._only_set_id(latest)       # 하나면 생략 가능, 둘 이상이면 필수(API가 먼저 400으로 막는다)
+                if qsid not in latest.banks:
+                    log.warning("세션 시작에 쓸 문진표를 정할 수 없다 session=%s", sid)
+                    return {"fatal": "no_session"}
+                ctx.bank, ctx.flow = self.o.question_set(latest, qsid)
+                doc = effects.initial_state(sid, latest.banks[qsid], ctx.flow.table.order[0])
+                revision = self.o.store.create(sid, latest.release_id, doc, (qsid, latest.banks[qsid]["title"]))
                 created = copy.deepcopy(doc["session_info"])
                 self._timeline(sid, -1, st["turn_id"])
         except ReleaseUnavailable:
@@ -431,9 +443,18 @@ class TurnGraph:
             return {"state_doc": loaded["state"], "revision": loaded["revision"], "failed": _step_failed(("BEFORE_COMMIT", "LoRA-A"))}
         except StoreError:
             return {"fatal": "no_session"}
-        ctx.bank = assembly.Bank(ctx.release.bank)
+        if ctx.bank is None:
+            try:
+                ctx.bank, ctx.flow = self.o.question_set(ctx.release, qsid)
+            except (KeyError, ValueError):                       # 릴리스에 그 문진표가 없다: 릴리스를 쓸 수 없는 것과 같다
+                ctx.release = None
+                return {"state_doc": loaded["state"], "revision": loaded["revision"], "failed": _step_failed(("BEFORE_COMMIT", "LoRA-A"))}
         return {"state_doc": doc, "revision": revision, "created": created, "release_id": ctx.release.release_id,
                 "trace": {"session_before": copy.deepcopy(doc)}}
+
+    @staticmethod
+    def _only_set_id(release) -> Optional[str]:
+        return next(iter(release.banks)) if len(release.banks) == 1 else None
 
     # ------------------------------------------------------------------ 노드: 쓰기 확정까지
     def _fail(self, st, step: str, e: Exception, detail: str = "") -> list:
@@ -460,7 +481,7 @@ class TurnGraph:
         inp = st["extract_in"]
         if inp is None:
             try:
-                inp = checked.build_extract_input(doc, ctx.bank, self.o.flow, st["utterance"])
+                inp = checked.build_extract_input(doc, ctx.bank, ctx.flow, st["utterance"])
             except Exception as e:
                 upd.update(extract_next="finalize", failed=self._fail(st, "LoRA-A", e))
                 tr["extract_status"] = "ERROR"
@@ -473,7 +494,7 @@ class TurnGraph:
             upd["extract_in"] = inp
             tr["extract_input"] = copy.deepcopy(inp)
         try:
-            res = _model_call(ctx, "extract", inp, self.o.flow.table.wire(), build_field_specs(ctx.bank.raw))        # 칸 규격은 적재 때 문항 은행 검증이 보장한다(ADR-0043)
+            res = _model_call(ctx, "extract", inp, ctx.flow.table.wire(), build_field_specs(ctx.bank.raw))        # 칸 규격은 적재 때 문항 은행 검증이 보장한다(ADR-0043)
         except BoundaryError as e:
             invalid = is_output_invalid(e)
             if invalid and calls + 1 < MAX_EXTRACT_CALLS:
@@ -497,7 +518,7 @@ class TurnGraph:
         out = st["extract_out"]
         try:
             viol = checked.check_slots(out, doc)
-            viol += checked.check_current_item(out, doc, self.o.flow)                # 현재 문항 밖 저장(서버가 못 보는 것). 자료형·범위는 서버가 fields로 보증한다 (ADR-0043)
+            viol += checked.check_current_item(out, doc, ctx.flow)                # 현재 문항 밖 저장(서버가 못 보는 것). 자료형·범위는 서버가 fields로 보증한다 (ADR-0043)
         except Exception as e:                               # 서비스 쪽 검사가 입력을 읽지 못했다: 재시도해도 같다
             return {"extract_next": "finalize", "failed": self._fail(st, "VALIDATE", e),
                     "trace": {"extract_status": "ERROR", "validation_ok": False, "validation_violations": None}}
@@ -602,7 +623,7 @@ class TurnGraph:
             cv = r["current_value"]
             if isinstance(cv, dict) and "answer" in cv:
                 saved[f"{r['slot']['question_id']}.{r['slot']['slot_id']}"] = cv["answer"]
-        nxt = self.o.flow.table.next_after(cur, saved)
+        nxt = ctx.flow.table.next_after(cur, saved)
         if nxt is None:
             return None
         targets = list(out.get("targets") or [])
@@ -677,7 +698,7 @@ class TurnGraph:
         writes = {"answer_updates": [], "progress_record_update": None}
         upd: dict = {"writes": writes, "flow_end": False}
         if kind == "SESSION_START":
-            first = self.o.flow.table.order[0]
+            first = ctx.flow.table.order[0]
             upd["resp"] = {"kind": "model_start"} if cur == first else {"kind": "fixed", "key": None, "text": ctx.bank.sentence(cur)}
         elif kind == "RESUME":
             pu.update(session_status="IN_PROGRESS", pause_history_add=[{"kind": "RESUME", "reasons": []}])
@@ -790,7 +811,7 @@ class TurnGraph:
             return {"failed": _step_failed(("AFTER_COMMIT", "LoRA-B")), "trace": tr}
         try:
             if plan["kind"] == "model_start":
-                req = checked.build_start_request(ctx.bank, self.o.tables, self.o.flow.table.order[0])
+                req = checked.build_start_request(ctx.bank, self.o.tables, ctx.flow.table.order[0])
             else:
                 req = checked.build_response_request(st["extract_out"], st["extract_in"], st["post_doc"], ctx.bank, self.o.tables)
             tr["response_input"] = copy.deepcopy(req)
@@ -845,7 +866,7 @@ class TurnGraph:
         fi = {"response_text": fi_text, "turn_failure_signal": fi_signal}
         cons, calls = self._console_final(st, signal=signal, intervention_result=intervention_result)
         doc = st["state_doc"]
-        bank_version = ctx.release.bank["version"] if ctx.release else doc["session_info"]["question_bank_version"]
+        bank_version = ctx.bank.raw["version"] if ctx.bank else doc["session_info"]["question_bank_version"]
         entry = self._log_entry(st, failed=failed, committed=committed, signal=signal, intervention_result=intervention_result,
                                 response_text=st["response_text"], staff_delivery=st["staff_delivery"], bank_version=bank_version,
                                 handled=st["route"]["turn_kind"])

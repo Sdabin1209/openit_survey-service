@@ -32,6 +32,11 @@
           "type": "null"
         }
       ]
+    },
+    "question_set_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+      "description": "문진할 문진표 ID(FrontendMessage SESSION_START와 같다). 활성 문진표가 하나면 생략할 수 있고 둘 이상이면 필수(검사는 서비스)."
     }
   }
 }

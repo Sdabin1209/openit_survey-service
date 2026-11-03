@@ -13,10 +13,10 @@ pytestmark = pytest.mark.skipif(not D or not (Path(D) / "lora_a_val.jsonl").exis
 def parts():
     import survey_schema
     from survey_service.components.question_bank_view import Bank
-    from survey_service.components.flow_table import load_flow
+    from survey_service.components.flow_table import build_flow
     from survey_service.components.response_request import ResponseTables
     from .sample_bank import sample_bank
-    return Path(D), load_flow(), Bank(sample_bank()), ResponseTables(survey_schema.load_data("response_tables"))
+    return Path(D), build_flow(sample_bank()), Bank(sample_bank()), ResponseTables(survey_schema.load_data("response_tables"))
 
 
 def _ra():

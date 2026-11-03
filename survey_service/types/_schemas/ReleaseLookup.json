@@ -15,7 +15,7 @@
       "required": [
         "release_id",
         "manifest",
-        "bank"
+        "banks"
       ],
       "properties": {
         "release_id": {
@@ -25,14 +25,19 @@
           "type": "object",
           "x-contract": "ReleaseManifest"
         },
-        "bank": {
-          "type": "object",
-          "x-survey-schema": "QuestionBank"
-        },
         "warnings": {
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "banks": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "문진표 ID -> 문진표(QuestionBank). 릴리스 매니페스트의 question_sets마다 하나.",
+          "additionalProperties": {
+            "type": "object",
+            "x-survey-schema": "QuestionBank"
           }
         }
       },

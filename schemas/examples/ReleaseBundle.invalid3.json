@@ -6,11 +6,6 @@
   "decision": {
     "result": "PASS",
     "subject": {
-      "question_set": {
-        "id": "qs-main",
-        "version": "3",
-        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      },
       "lora_a": {
         "id": "lora-a",
         "version": "1.2.0",
@@ -20,11 +15,20 @@
         "id": "lora-b",
         "version": "1.0.1",
         "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      }
+      },
+      "question_sets": [
+        {
+          "id": "qs-main",
+          "version": "3",
+          "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
     },
     "runtime_contract_version": 1
   },
   "question_bank": {
+    "question_set_id": "general-intake",
+    "title": "일반 문진표",
     "version": 1,
     "questions": [
       {

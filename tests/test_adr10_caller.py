@@ -22,7 +22,9 @@ def test_extract_request_to_the_server_is_extract_request_with_the_schema_flow(t
         e.start()
         e.turn("안녕하세요")
         body = e.srv.extract_bodies[-1]
-        flow_data = survey_schema.load_data("question_flow")
+        from survey_service.components.flow_table import build_flow
+        from .sample_bank import sample_bank
+        flow_data = build_flow(sample_bank()).table.wire()
         assert list(validator("ExtractRequest").iter_errors(body)) == []
         assert body["flow"] == {"order": flow_data["order"], "skips": flow_data["skips"]}      # 서비스 고유 필드(reference_sources 등)는 싣지 않는다
     finally:

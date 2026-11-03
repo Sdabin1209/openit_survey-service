@@ -35,7 +35,7 @@ def test_local_fake_backend_still_needs_the_adapters_so_it_uses_load_bundle(tmp_
     reg = ReleaseRegistry()
     loader = ReleaseLoader(reader, reg, InferenceServer("fake"), workdir=tmp_path / "w", installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
     assert loader.poll_once().action == "LOADED"
-    assert reader.calls.get("load_bundle") == 1 and reader.calls.get("get_release_question_bank", 0) == 0
+    assert reader.calls.get("load_bundle") == 1 and reader.calls.get("get_release_question_bank") == 1      # 어댑터는 번들, 문진표는 세트마다 get_release_question_bank
 
 
 def test_bank_that_differs_from_the_manifest_is_rejected_on_the_question_bank_path(tmp_path):
@@ -63,7 +63,7 @@ def test_http_question_bank_endpoint_is_used_with_remote_inference(tmp_path):
                                    installed_versions=INSTALLED, retry_base_seconds=0, clock=fake_clock())
             assert loader.poll_once().action == "LOADED"
             paths = [p for _, p, _ in srv.requests]
-            assert any(p.endswith("/question-bank") for p in paths) and not any(p.endswith("/bundle") for p in paths)
+            assert any(p.split("?")[0].endswith("/question-bank") for p in paths) and not any(p.endswith("/bundle") for p in paths)
     finally:
         rt.stop()
 

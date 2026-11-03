@@ -8,7 +8,7 @@
 
 | 방향 | 이웃 | 인터페이스 | 내용 |
 |---|---|---|---|
-| 받음 | Frontend(키오스크) | I10 공개 API: `POST /v1/sessions`, `/v1/sessions/{id}/turns`, `/end`, `GET /v1/sessions/{id}/state` | 세션 시작, 발화, 종료. `turn_id`로 멱등 |
+| 받음 | Frontend(키오스크) | I10 공개 API: `GET /v1/question-sets`, `POST /v1/sessions`(문진표 선택 `question_set_id`), `/v1/sessions/{id}/turns`, `/end`, `GET /v1/sessions/{id}/state` | 세션 시작, 발화, 종료. `turn_id`로 멱등 |
 | 받음 | 직원 콘솔 | I10: `POST /v1/sessions/{id}/intervention`, `GET /v1/staff/alerts`, `/v1/staff/alerts/stream`(SSE), 푸시 구독 | 직원 개입(재개·종료), 알림 조회 |
 | 받음 | release-gate | I4 ReleaseReader(HTTP 클라이언트) | 활성 포인터 폴링, 승인된 릴리스 묶음 적재 |
 | 부름 | 추론 서버(model-runtime) | I9: `PUT /v1/releases/{id}`, `POST .../extract`, `POST .../respond` | LoRA-A 추출, LoRA-B 응답 |

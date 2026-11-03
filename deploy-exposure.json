@@ -51,6 +51,7 @@
     },
     {
       "paths": [
+        "/v1/question-sets",
         "/v1/sessions/*/state"
       ],
       "methods": [
