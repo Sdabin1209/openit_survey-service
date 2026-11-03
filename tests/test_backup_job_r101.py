@@ -9,7 +9,7 @@ import subprocess
 import pytest
 from boundary_contracts import validator
 
-from survey_service.wiring import backup_job
+from survey_service.components import link_backup as backup_job
 
 CRED, REPOPW, DBPW = "backupuser:S3CRET-cred", "S3CRET-repo", "S3CRET-db"
 

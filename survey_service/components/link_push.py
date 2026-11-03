@@ -125,11 +125,10 @@ class WebPushSender:
     바깥으로 나가는 유일한 호출이다(R6.4): egress_proxy(OPENIT_EGRESS_PROXY, 자기 영역 게이트웨이)가 있으면 그 CONNECT 터널로만 나간다(TLS는 푸시 서비스까지 끝까지 유지, 시스템 루트로 검증)."""
 
     def __init__(self, vapid_private_key: str, subject: str, timeout: float = 3.0, ttl: int = 3600,
-                 egress_proxy: str | None = None, sleep=None, monotonic=None) -> None:
-        import time as _time
+                 egress_proxy: str | None = None, *, sleep, monotonic) -> None:
         for noisy in ("urllib3", "requests", "pywebpush"):      # 이 라이브러리들은 DEBUG에서 요청 경로(= 구독 endpoint)와 호스트를 로그에 남긴다: 로그에 endpoint를 남기지 않는다(R3.18, R6.3)
             logging.getLogger(noisy).setLevel(logging.WARNING)
-        self._sleep, self._mono = sleep or _time.sleep, monotonic or _time.monotonic      # 시계 주입: 재시도 시험이 실제 시간을 재지 않게
+        self._sleep, self._mono = sleep, monotonic      # 시계·대기 주입(ADR-0050): 재시도 시험이 실제 시간을 재지 않는다. 컴포넌트는 time을 import하지 않는다
         if egress_proxy is not None:
             from boundary_contracts.clients import require_egress_proxy
             require_egress_proxy(egress_proxy)

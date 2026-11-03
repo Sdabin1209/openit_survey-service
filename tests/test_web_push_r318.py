@@ -157,7 +157,7 @@ def test_push_goes_only_through_the_egress_proxy_tunnel_and_a_refusal_is_not_ret
 
 def test_egress_proxy_must_be_a_loopback_http_address():
     with pytest.raises(ValueError):
-        WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", egress_proxy="http://proxy.example.com:3128")
+        WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", egress_proxy="http://proxy.example.com:3128", sleep=lambda s: None, monotonic=lambda: 0.0)
 
 
 def test_logs_never_contain_the_endpoint_or_keys(ps, caplog, loopback_ok):

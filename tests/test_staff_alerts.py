@@ -355,7 +355,7 @@ class PushService:
 def test_webpush_sender_against_local_push_service(status, expected, loopback_ok):
     ps = PushService(status)
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None)      # 시간은 이 시험의 주제가 아니다: 시한 없음을 주입한다(로컬 푸시 서비스가 즉시 답한다). 3초 시한이 부하로 GONE을 FAILED로 바꿨었다
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None, sleep=lambda s: None, monotonic=lambda: 0.0)      # 시간은 이 시험의 주제가 아니다: 시한 없음을 주입한다(로컬 푸시 서비스가 즉시 답한다). 3초 시한이 부하로 GONE을 FAILED로 바꿨었다
         payload = json.dumps({"alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
         assert sender.send({"endpoint": ps.url, "keys": _client_keys()}, payload) == expected
         hdr, body = ps.requests[0]
@@ -368,15 +368,15 @@ def test_webpush_sender_against_local_push_service(status, expected, loopback_ok
 
 
 def test_webpush_sender_bad_subscription_is_failed_not_crash(loopback_ok):
-    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com")
+    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", sleep=lambda s: None, monotonic=lambda: 0.0)
     assert sender.send({"endpoint": "http://127.0.0.1:1/x", "keys": {"p256dh": "zz", "auth": "zz"}}, b"{}") == "FAILED"
 
 
 def test_vapid_key_validation():
     with pytest.raises(ValueError):
-        WebPushSender("not a key", "mailto:a@b.c")
+        WebPushSender("not a key", "mailto:a@b.c", sleep=lambda s: None, monotonic=lambda: 0.0)
     with pytest.raises(ValueError):
-        WebPushSender(_vapid_key_pem(), "ops@example.com")
+        WebPushSender(_vapid_key_pem(), "ops@example.com", sleep=lambda s: None, monotonic=lambda: 0.0)
 
 
 # ---------------------------------------------------------------- 서비스 조립, HTTP, SSE

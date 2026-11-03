@@ -41,7 +41,7 @@ def test_sender_refuses_internal_endpoint_without_connecting():
     srv = HTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com")            # 기본: 공개 주소만
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", sleep=lambda s: None, monotonic=lambda: 0.0)            # 기본: 공개 주소만
         out = sender.send({"endpoint": f"https://127.0.0.1:{srv.server_address[1]}/x", "keys": _client_keys()}, b"{}")
         assert out == "FAILED" and not hits
     finally:
@@ -66,7 +66,7 @@ def test_sender_does_not_follow_redirects(loopback_ok):
     for s in (tgt, red):
         threading.Thread(target=s.serve_forever, daemon=True).start()
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None)
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None, sleep=lambda s: None, monotonic=lambda: 0.0)
         out = sender.send({"endpoint": f"http://127.0.0.1:{red.server_address[1]}/x", "keys": _client_keys()}, b"{}")
         assert out == "FAILED" and not hits
     finally:

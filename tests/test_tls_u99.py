@@ -148,5 +148,5 @@ def test_web_push_verifies_with_system_roots_not_the_internal_root(tls_server, m
     from tests.test_staff_alerts import _client_keys, _vapid_key_pem
     url, root = tls_server
     monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(root)); monkeypatch.setenv("SSL_CERT_FILE", str(root))
-    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0)
+    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, sleep=lambda s: None, monotonic=lambda: 0.0)
     assert sender.send({"endpoint": url + "/push", "keys": _client_keys()}, b"{}") == "FAILED"      # 서버는 POST에 201을 준다: 검증이 막아서만 FAILED다

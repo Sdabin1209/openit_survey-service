@@ -177,7 +177,7 @@ class App:
             if not settings.vapid_subject:
                 raise ConfigError("VAPID 비밀키가 있는데 SURVEY_VAPID_SUBJECT(mailto: 또는 https://)가 없다")
             try:
-                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds, egress_proxy=egress_proxy_from(os.environ))      # 바깥 호출은 자기 영역 게이트웨이 출구(OPENIT_EGRESS_PROXY)로만(R1.8, R6.4)
+                push = WebPushSender(vapid_key, settings.vapid_subject, settings.push_timeout_seconds, egress_proxy=egress_proxy_from(os.environ), sleep=REAL_SLEEP, monotonic=clock)      # 바깥 호출은 자기 영역 게이트웨이 출구(OPENIT_EGRESS_PROXY)로만(R1.8, R6.4)
             except ValueError as e:
                 raise ConfigError(str(e)) from None
         self.alerts = checked.wrap_alert_service(AlertService(checked.wrap_alert_store(self.alert_store), AlertHub(), push, settings.push_timeout_seconds,

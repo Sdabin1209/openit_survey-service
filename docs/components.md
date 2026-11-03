@@ -70,7 +70,8 @@
 | link_boundary_clients | `components/link_boundary_clients.py` | TraceIngestConfig | (계약 클라이언트 `HttpTraceIngest`) | **보내는 쪽.** 수집 SDK(I6) 클라이언트를 만든다 |
 | link_trace_export | `components/link_trace_export.py` | OutboxEnvelope | FlushResult | **보내는 쪽.** 버퍼의 봉투를 I6으로 보내고 최소 1회 전달, 재시도, DEAD 분류를 한다 |
 | link_inference | `components/link_inference.py` | InferenceCall | InferenceResult(계약: RuntimeResult) | **보내는 쪽.** 추론 서버(I9)에 릴리스를 적재하고 extract·respond를 부른다. 재시도·마감·보호 건수 |
-| link_push | `components/link_push.py` | PushDelivery(계약: StaffPushPayload) | PushOutcome | **보내는 쪽.** 직원 기기에 웹 푸시를 보낸다(SSRF 검사 포함) |
+| link_push | `components/link_push.py` | PushDelivery(계약: StaffPushPayload) | PushOutcome | **보내는 쪽.** 직원 기기에 웹 푸시를 보낸다(SSRF 검사, 재시도 3번·60초, Topic, 출구 터널, R3.18) |
+| link_backup | `components/link_backup.py` | 환경(OPENIT_BACKUP_*, DB 접속 문자열 파일) | BackupJobResult(계약) | **내보내는 쪽.** DB 덤프를 restic REST 백업 저장소로 올린다(잡 `python -m survey_service backup`, 종료 코드 0·75·1, ADR-0060) |
 
 ## 3. 컴포넌트 밖의 것
 
