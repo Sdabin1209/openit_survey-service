@@ -76,6 +76,16 @@ def host_is_public(url: str) -> bool:
     return bool(addrs) and all(_ip_public(a) for a in addrs)
 
 
+def _system_ca_bundle() -> str:
+    """시스템 CA 묶음 경로(OS 신뢰 저장소 파일). 없으면 certifi의 묶음."""
+    import ssl
+    cafile = ssl.get_default_verify_paths().cafile
+    if cafile:
+        return cafile
+    import certifi
+    return certifi.where()
+
+
 class WebPushSender:
     """pywebpush로 보낸다. VAPID 비밀키는 환경 변수에서 받은 값을 생성자에 넘긴다(여기서 환경을 읽지 않는다)."""
 
@@ -102,6 +112,7 @@ class WebPushSender:
         try:
             import requests
             session = requests.Session()
+            session.verify = _system_ca_bundle()      # R3.18: 공개 푸시 서비스는 시스템(공개) 루트로 검증한다. 내부 루트(SSL_CERT_FILE·REQUESTS_CA_BUNDLE)와 섞지 않는다: 세션에 경로를 명시하면 requests는 환경 변수를 쓰지 않는다
             session.max_redirects = 0                              # 리다이렉트를 따르지 않는다(다른 내부 주소로 돌려지는 것을 막는다)
             webpush(subscription_info=dict(subscription), data=payload.decode("utf-8"), vapid_private_key=self._vapid,
                     vapid_claims={"sub": self._subject}, timeout=self._timeout, ttl=self._ttl,
