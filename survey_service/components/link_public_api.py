@@ -147,14 +147,16 @@ class PublicApi:
             t[tok] = {"role": "kiosk", "actor": dev}      # 기기 토큰: 호출자 ID(Request.actor)가 기기 ID다
         return t
 
-    def _device_auth(self, headers: Mapping[str, str]):
-        """토큰이 없을 때만 라이브러리가 부른다. 게이트웨이가 mTLS로 확인한 기기(X-Openit-Device)는 키오스크 경로에서만 힘이 있다 (ADR-0031)."""
-        dev = headers.get("x-openit-device")
-        if dev is None or getattr(self._tl, "route_role", None) != "kiosk":
+    def _gateway_role_of(self, auth: str) -> Optional[str]:
+        """Authorization 헤더의 토큰이 게이트웨이 토큰(deploy-exposure.json의 upstream_token으로 선언된 것: 키오스크 공유 토큰, staff, result-reader)이면 그 역할, 아니면 None.
+        신원 헤더(X-Openit-User·Roles·Device)는 게이트웨이 토큰이 붙은 요청에서만 쓴다(계약 CONVENTIONS 6절). 기기 토큰·위험 신호 토큰·모르는 토큰의 같은 이름 헤더는 무시한다."""
+        scheme, _, tok = (auth or "").partition(" ")
+        if scheme.lower() != "bearer" or not tok:
             return None
-        if not DEVICE_ID.match(dev):
-            raise _err("INVALID_RECORD", "X-Openit-Device 형식이 아니다")
-        return "kiosk", dev
+        for gtok, role in ((self.token, "kiosk"), (self.staff_token, "staff"), (self.result_token, "result-reader")):
+            if gtok is not None and hmac.compare_digest(gtok.encode(), tok.encode()):
+                return role
+        return None
 
     def routes(self, stream: Optional[Callable[[Request], Response]] = None) -> list:
         """공개 API 경로 목록. stream은 알림 SSE 처리 함수(서버가 허브·저장소를 알고 있으므로 server.py가 건넨다)."""
@@ -177,11 +179,18 @@ class PublicApi:
 
     def link_app(self, ready: Optional[Callable[[], tuple]] = None, stream: Optional[Callable[[Request], Response]] = None) -> LinkApp:
         """이 API를 담은 WSGI 앱(/healthz, /readyz 포함). 인증·본문 해석·413·오류 본문은 라이브러리가 한다."""
-        return LinkApp(self.routes(stream), self._tokens(), ready=ready, authenticate=self._device_auth)
+        return LinkApp(self.routes(stream), self._tokens(), ready=ready, authenticate=None)
 
     def _guarded(self, name: str) -> Callable[[Request], Response]:
         def handler(req: Request) -> Response:
-            self._tl.device = req.actor                       # 세션을 만든 기기(기기 토큰 또는 기기 헤더)
+            dev = req.actor                                   # 기기 토큰이면 토큰에 묶인 기기 ID
+            if dev is None and req.role == "kiosk":           # 게이트웨이의 키오스크 토큰이면 게이트웨이가 mTLS로 확인해 붙인 X-Openit-Device(ADR-0031, CONVENTIONS 6절)
+                raw = req.headers.get("x-openit-device")
+                if raw is not None:
+                    if not DEVICE_ID.match(raw):
+                        raise _err("INVALID_RECORD", "X-Openit-Device 형식이 아니다")
+                    dev = raw
+            self._tl.device = dev
             self._tl.user = req.user if isinstance(req.user, str) and USER_ID.match(req.user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
             if not self._slots.acquire(blocking=False):
                 raise _err("UNAVAILABLE", "요청이 너무 많다", 429)
@@ -216,12 +225,10 @@ class PublicApi:
             environ.pop("HTTP_X_OPENIT_USER", None)         # 빈 값은 없는 것과 같다(사람 행위자 필요 경로는 401)
         r = self._route(method, path)
         self._tl.route_role = r[2] if r else None
-        if "HTTP_X_OPENIT_DEVICE" in environ:
+        if self._gateway_role_of(environ.get("HTTP_AUTHORIZATION", "")) is None:      # 게이트웨이 토큰이 아닌 요청의 신원 헤더는 무시한다(CONVENTIONS 6절)
             environ = dict(environ)
-            if self._tl.route_role == "kiosk":
-                environ.pop("HTTP_AUTHORIZATION", None)      # 게이트웨이가 확인한 기기가 토큰보다 우선한다(ADR-0031). 라이브러리는 토큰이 없을 때만 _device_auth를 부른다
-            else:
-                environ.pop("HTTP_X_OPENIT_DEVICE")          # 키오스크 경로 밖에서는 기기 헤더에 힘이 없다
+            for h in ("HTTP_X_OPENIT_USER", "HTTP_X_OPENIT_ROLES", "HTTP_X_OPENIT_DEVICE"):
+                environ.pop(h, None)
         status, headers, data = link.handle(environ)
         if status in (429, 503) and "Retry-After" not in headers and self._reason(data) != "RETRY_LIMIT":      # 상한 초과는 기다려도 풀리지 않는다: 기본 헤더도 붙이지 않는다
             headers = {**headers, "Retry-After": str(self.retry_after)}

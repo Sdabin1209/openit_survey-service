@@ -35,7 +35,8 @@
       "timeouts_ms": {
         "dial": 1000,
         "response_header": 55000
-      }
+      },
+      "upstream_token": "survey-api-kiosk"
     },
     {
       "paths": [
@@ -52,7 +53,8 @@
       "timeouts_ms": {
         "dial": 1000,
         "response_header": 55000
-      }
+      },
+      "upstream_token": "survey-api-kiosk"
     },
     {
       "paths": [
