@@ -58,7 +58,7 @@ class Clock:
 
 
 def sender(clock, **kw):
-    return WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, allow_private_hosts=True, sleep=clock.sleep, monotonic=clock.now, **kw)
+    return WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, sleep=clock.sleep, monotonic=clock.now, **kw)
 
 
 def send(ps, clock, topic=None, **kw):
@@ -76,41 +76,41 @@ def ps():
         p.close()
 
 
-def test_429_with_retry_after_waits_that_long_then_succeeds(ps):
+def test_429_with_retry_after_waits_that_long_then_succeeds(ps, loopback_ok):
     srv, clk = ps([(429, {"Retry-After": "2"}), (201, {})]), Clock()
     assert send(srv, clk) == "ACCEPTED" and len(srv.requests) == 2 and clk.sleeps == [2.0]
 
 
-def test_5xx_without_retry_after_backs_off_1_2_and_gives_up_after_three_attempts(ps):
+def test_5xx_without_retry_after_backs_off_1_2_and_gives_up_after_three_attempts(ps, loopback_ok):
     srv, clk = ps([(503, {}), (500, {}), (502, {}), (201, {})]), Clock()
     assert send(srv, clk) == "FAILED" and len(srv.requests) == 3 and clk.sleeps == [1.0, 2.0]
 
 
-def test_retry_after_beyond_the_sixty_second_budget_stops_retrying(ps):
+def test_retry_after_beyond_the_sixty_second_budget_stops_retrying(ps, loopback_ok):
     srv, clk = ps([(429, {"Retry-After": "120"}), (201, {})]), Clock()
     assert send(srv, clk) == "FAILED" and len(srv.requests) == 1 and clk.sleeps == []
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 413])
-def test_vapid_rejections_and_other_4xx_are_not_retried(ps, status):
+def test_vapid_rejections_and_other_4xx_are_not_retried(ps, status, loopback_ok):
     srv, clk = ps([(status, {}), (201, {})]), Clock()
     assert send(srv, clk) == "FAILED" and len(srv.requests) == 1 and clk.sleeps == []
 
 
 @pytest.mark.parametrize("status", [404, 410])
-def test_404_and_410_mean_gone_without_retry(ps, status):
+def test_404_and_410_mean_gone_without_retry(ps, status, loopback_ok):
     srv, clk = ps([(status, {}), (201, {})]), Clock()
     assert send(srv, clk) == "GONE" and len(srv.requests) == 1
 
 
-def test_unreachable_endpoint_is_retried_within_the_same_limits():
+def test_unreachable_endpoint_is_retried_within_the_same_limits(loopback_ok):
     clk = Clock()
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()      # 닫힌 포트: 연결 거부
     out = sender(clk).send({"endpoint": f"http://127.0.0.1:{port}/x", "keys": _client_keys()}, b"{}")
     assert out == "FAILED" and clk.sleeps == [1.0, 2.0]
 
 
-def test_topic_header_is_sha256_first_24_bytes_base64url_32_chars_and_repeats_on_retry(ps):
+def test_topic_header_is_sha256_first_24_bytes_base64url_32_chars_and_repeats_on_retry(ps, loopback_ok):
     srv, clk = ps([(503, {}), (201, {})]), Clock()
     topic = topic_of("al-7")
     assert topic == base64.urlsafe_b64encode(hashlib.sha256(b"al-7").digest()[:24]).decode() and len(topic) == 32
@@ -120,11 +120,11 @@ def test_topic_header_is_sha256_first_24_bytes_base64url_32_chars_and_repeats_on
 
 def test_name_that_does_not_resolve_is_not_retried_and_nothing_is_sent():
     clk = Clock()
-    s = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, allow_private_hosts=False, sleep=clk.sleep, monotonic=clk.now)
+    s = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, sleep=clk.sleep, monotonic=clk.now)
     assert s.send({"endpoint": "https://no-such-host.invalid/x", "keys": _client_keys()}, b"{}") == "FAILED" and clk.sleeps == []
 
 
-def test_tls_verification_failure_is_not_retried(tls_server):
+def test_tls_verification_failure_is_not_retried(tls_server, loopback_ok):
     url, _root = tls_server
     clk = Clock()
     assert sender(clk).send({"endpoint": url + "/push", "keys": _client_keys()}, b"{}") == "FAILED" and clk.sleeps == []
@@ -146,7 +146,7 @@ def test_push_goes_only_through_the_egress_proxy_tunnel_and_a_refusal_is_not_ret
             c.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n"); c.close()
     threading.Thread(target=serve, daemon=True).start()
     clk = Clock()
-    s = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, allow_private_hosts=False, sleep=clk.sleep, monotonic=clk.now,
+    s = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, sleep=clk.sleep, monotonic=clk.now,
                       egress_proxy=f"http://127.0.0.1:{srv.getsockname()[1]}")
     try:
         assert s.send({"endpoint": "https://fcm.example.com/fcm/send/abc", "keys": _client_keys()}, b"{}") == "FAILED"
@@ -160,7 +160,7 @@ def test_egress_proxy_must_be_a_loopback_http_address():
         WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", egress_proxy="http://proxy.example.com:3128")
 
 
-def test_logs_never_contain_the_endpoint_or_keys(ps, caplog):
+def test_logs_never_contain_the_endpoint_or_keys(ps, caplog, loopback_ok):
     srv, clk = ps([(503, {}), (410, {})]), Clock()
     keys = _client_keys()
     with caplog.at_level(logging.DEBUG):

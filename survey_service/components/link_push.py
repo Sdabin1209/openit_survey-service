@@ -124,7 +124,7 @@ class WebPushSender:
     """pywebpush로 보낸다. VAPID 비밀키는 환경 변수에서 받은 값을 생성자에 넘긴다(여기서 환경을 읽지 않는다).
     바깥으로 나가는 유일한 호출이다(R6.4): egress_proxy(OPENIT_EGRESS_PROXY, 자기 영역 게이트웨이)가 있으면 그 CONNECT 터널로만 나간다(TLS는 푸시 서비스까지 끝까지 유지, 시스템 루트로 검증)."""
 
-    def __init__(self, vapid_private_key: str, subject: str, timeout: float = 3.0, ttl: int = 3600, allow_private_hosts: bool = False,
+    def __init__(self, vapid_private_key: str, subject: str, timeout: float = 3.0, ttl: int = 3600,
                  egress_proxy: str | None = None, sleep=None, monotonic=None) -> None:
         import time as _time
         for noisy in ("urllib3", "requests", "pywebpush"):      # 이 라이브러리들은 DEBUG에서 요청 경로(= 구독 endpoint)와 호스트를 로그에 남긴다: 로그에 endpoint를 남기지 않는다(R3.18, R6.3)
@@ -143,7 +143,6 @@ class WebPushSender:
         if not subject.startswith(("mailto:", "https://")):
             raise ValueError("VAPID subject는 mailto: 또는 https:// 이어야 한다")
         self._vapid, self._subject, self._timeout, self._ttl = vapid, subject, timeout, ttl
-        self._allow_private = allow_private_hosts      # 개발·시험 전용. 운영 기본은 공개 주소만(netguard)
         from cryptography.hazmat.primitives import serialization
         raw = vapid.public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
         self.public_key = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()      # applicationServerKey(공개키, 비밀 아님)
@@ -152,7 +151,7 @@ class WebPushSender:
         """한 번 보낸다 -> (결과, Retry-After 초). 결과: ACCEPTED, GONE(404·410), RETRY(429·5xx·불통·시간 초과·도중 끊김), FAILED(다시 보내지 않는다: 401·403·그 밖 4xx·TLS 검증·이름 해석)."""
         from pywebpush import WebPushException, webpush
         import requests
-        if not self._allow_private and not host_is_public(str(subscription.get("endpoint", ""))):
+        if not host_is_public(str(subscription.get("endpoint", ""))):      # 우회 스위치는 없다(R3.18: 발송 때도 같은 검사). 시험은 이 함수를 대체한다
             log.warning("웹 푸시 대상이 공개 주소가 아니거나 이름을 해석하지 못해 보내지 않는다")      # SSRF 방어(URL은 남기지 않는다). 같은 요청은 같은 결과라 다시 보내지 않는다
             return "FAILED", None
         try:

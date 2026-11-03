@@ -33,13 +33,15 @@ class FakeRestic:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
+    import tempfile
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))      # 덤프 임시 폴더를 시험 폴더로
     db = tmp_path / "sessions.db"
     c = sqlite3.connect(db); c.execute("CREATE TABLE t(x)"); c.execute("INSERT INTO t VALUES (1)"); c.commit(); c.close()
     (tmp_path / "cred").write_text(CRED); (tmp_path / "pw").write_text(REPOPW)
     for k in ("SURVEY_DATABASE_URL", "SURVEY_DATABASE_URL_FILE", "OPENIT_BACKUP_CREDENTIALS", "OPENIT_BACKUP_CREDENTIALS_FILE"):
         monkeypatch.delenv(k, raising=False)
     return {"OPENIT_BACKUP_URL": "https://backup.example:8000/survey-service", "OPENIT_BACKUP_CREDENTIALS_FILE": str(tmp_path / "cred"),
-            "OPENIT_BACKUP_REPO_PASSWORD_FILE": str(tmp_path / "pw"), "SURVEY_SESSION_DB": str(db), "SURVEY_BACKUP_TMP": str(tmp_path),
+            "OPENIT_BACKUP_REPO_PASSWORD_FILE": str(tmp_path / "pw"), "SURVEY_SESSION_DB": str(db),
             "OPENIT_EGRESS_PROXY": "http://127.0.0.1:3128", "PATH": "/usr/bin"}
 
 

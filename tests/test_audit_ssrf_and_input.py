@@ -48,7 +48,7 @@ def test_sender_refuses_internal_endpoint_without_connecting():
         srv.shutdown(); srv.server_close()
 
 
-def test_sender_does_not_follow_redirects():
+def test_sender_does_not_follow_redirects(loopback_ok):
     hits = []
 
     class Target(BaseHTTPRequestHandler):
@@ -66,7 +66,7 @@ def test_sender_does_not_follow_redirects():
     for s in (tgt, red):
         threading.Thread(target=s.serve_forever, daemon=True).start()
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None, allow_private_hosts=True)
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None)
         out = sender.send({"endpoint": f"http://127.0.0.1:{red.server_address[1]}/x", "keys": _client_keys()}, b"{}")
         assert out == "FAILED" and not hits
     finally:

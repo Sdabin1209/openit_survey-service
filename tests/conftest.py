@@ -36,3 +36,12 @@ def _fake_dns_for_push(monkeypatch):
         ip = "127.0.0.1" if h == "localhost" else "10.0.0.5" if h.endswith((".internal", ".local", ".lan", ".corp", ".home", ".intranet", ".localdomain")) or h.startswith("private.") else "93.184.216.34"
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
     monkeypatch.setattr(link_push, "_getaddrinfo", fake)
+
+
+@pytest.fixture
+def loopback_ok(monkeypatch):
+    """웹 푸시 발송기를 로컬 푸시 서비스(127.0.0.1)로 시험하기 위한 시험 대체: 제품에는 사설 주소를 허용하는 스위치가 없다(R3.18). 127.0.0.1 리터럴만 공개로 본다."""
+    from urllib.parse import urlsplit
+    from survey_service.components import link_push
+    orig = link_push.host_is_public
+    monkeypatch.setattr(link_push, "host_is_public", lambda url: True if urlsplit(url).hostname == "127.0.0.1" else orig(url))

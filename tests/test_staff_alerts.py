@@ -352,10 +352,10 @@ class PushService:
 
 
 @pytest.mark.parametrize("status,expected", [(201, "ACCEPTED"), (410, "GONE"), (404, "GONE"), (500, "FAILED")])
-def test_webpush_sender_against_local_push_service(status, expected):
+def test_webpush_sender_against_local_push_service(status, expected, loopback_ok):
     ps = PushService(status)
     try:
-        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None, allow_private_hosts=True)      # 시간은 이 시험의 주제가 아니다: 시한 없음을 주입한다(로컬 푸시 서비스가 즉시 답한다). 3초 시한이 부하로 GONE을 FAILED로 바꿨었다
+        sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=None)      # 시간은 이 시험의 주제가 아니다: 시한 없음을 주입한다(로컬 푸시 서비스가 즉시 답한다). 3초 시한이 부하로 GONE을 FAILED로 바꿨었다
         payload = json.dumps({"alert_id": "al-1", "session_id": "K1", "kind": "RISK_STOP"}).encode()
         assert sender.send({"endpoint": ps.url, "keys": _client_keys()}, payload) == expected
         hdr, body = ps.requests[0]
@@ -367,8 +367,8 @@ def test_webpush_sender_against_local_push_service(status, expected):
         ps.close()
 
 
-def test_webpush_sender_bad_subscription_is_failed_not_crash():
-    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", allow_private_hosts=True)
+def test_webpush_sender_bad_subscription_is_failed_not_crash(loopback_ok):
+    sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com")
     assert sender.send({"endpoint": "http://127.0.0.1:1/x", "keys": {"p256dh": "zz", "auth": "zz"}}, b"{}") == "FAILED"
 
 

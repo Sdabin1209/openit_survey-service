@@ -82,7 +82,7 @@ def run(environ, *, runner: Optional[Callable] = None, now: Callable[[], str] = 
             env["SSL_CERT_FILE"] = environ["SSL_CERT_FILE"]      # 사설 루트를 표준 변수로 믿는다(Go 표준 라이브러리)
         if proxy:
             env["HTTPS_PROXY"] = proxy                            # 자기 영역 게이트웨이의 CONNECT 출구(R1.8). restic은 표준 HTTPS_PROXY를 읽는다
-        stage = Path(tempfile.mkdtemp(prefix=".backup-", dir=environ.get("SURVEY_BACKUP_TMP") or tempfile.gettempdir()))
+        stage = Path(tempfile.mkdtemp(prefix=".backup-"))      # 표준 임시 폴더(TMPDIR). 새 설정 이름을 만들지 않는다
         try:
             if db_url:
                 try:
