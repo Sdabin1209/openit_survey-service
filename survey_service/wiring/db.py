@@ -12,6 +12,7 @@ from ..settings import ConfigError, Settings
 from ..components import session_store
 from ..components.session_store import PgSessionStore, SqliteSessionStore
 from ..components.trace_outbox import Outbox, PgOutbox
+from ..components.alert_queue import AlertQueue, PgAlertQueue
 
 URL_ENV = "SURVEY_DATABASE_URL"
 
@@ -24,7 +25,7 @@ def database_url() -> str:
 
 
 def open_stores(settings: Settings, url: str | None = None):
-    """(세션 저장소, outbox, 알림 저장소, 종류). 종류는 'postgresql' 또는 'sqlite'."""
+    """(세션 저장소, outbox, 알림 저장소, 종류, 알림 재시도 큐). 종류는 'postgresql' 또는 'sqlite'. 큐는 세션 DB에 둔다(알림 DB가 죽어도 쓸 수 있게, ADR-0058)."""
     url = database_url() if url is None else url
     if url:
         session_store.configure(monotonic=REAL_MONOTONIC, timer=real_timer, connect_timeout=settings.db_connect_timeout_seconds, statement_timeout=settings.db_statement_timeout_seconds,
@@ -34,9 +35,9 @@ def open_stores(settings: Settings, url: str | None = None):
         link = {"connect": session_store.PgConn, "driver_errors": session_store.DRIVER_ERRORS}
         store, outbox = PgSessionStore(url, REAL_WALL_CLOCK), PgOutbox(url, **link)
         store.outbox_gate = outbox          # 같은 데이터베이스의 outbox 표를 세션 commit과 같은 트랜잭션에 쓴다 (H02, ADR-0023)
-        return store, outbox, PgAlertStore(url, **link, clock=REAL_WALL_CLOCK), "postgresql"
+        return store, outbox, PgAlertStore(url, **link, clock=REAL_WALL_CLOCK), "postgresql", PgAlertQueue(url, **link, clock=REAL_WALL_CLOCK)
     # 왜: SQLite도 outbox 표를 세션 DB 파일에 둔다. 세션 commit과 같은 트랜잭션에 쓰려면 같은 파일이어야 한다(H02, ADR-0023).
     # settings.outbox_db(SURVEY_OUTBOX_DB)는 더 쓰지 않는다. 그 파일에 남은 미전송 행은 옮기지 않는다(운영은 PostgreSQL, SQLite는 개발·시험).
     store, outbox = SqliteSessionStore(settings.session_db, REAL_WALL_CLOCK), Outbox(settings.session_db)
     store.outbox_gate = outbox
-    return store, outbox, AlertStore(settings.alert_db_path(), REAL_WALL_CLOCK), "sqlite"
+    return store, outbox, AlertStore(settings.alert_db_path(), REAL_WALL_CLOCK), "sqlite", AlertQueue(settings.session_db, clock=REAL_WALL_CLOCK)

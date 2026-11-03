@@ -38,7 +38,7 @@ def opener(request, tmp_path):
 
 def _raw_rows(opener):
     """재시작한 프로세스가 보는 것: (확정된 턴 키 집합, outbox 행 키 집합). 확정 여부는 저장소의 공개 읽기(get_turn)로, outbox 행은 표를 직접 읽는다."""
-    store, outbox, alerts, kind = opener()
+    store, outbox, alerts, kind, *_ = opener()
     try:
         committed = set()
         for sid in ("S1",):
@@ -53,7 +53,7 @@ def _raw_rows(opener):
 
 
 def test_crash_right_after_session_commit_does_not_lose_the_trace(opener):
-    store, outbox, alerts, kind = opener()
+    store, outbox, alerts, kind, *_ = opener()
     real_commit = store.commit
 
     def commit_then_die(request, *, turn_id, **kw):
@@ -74,7 +74,7 @@ def test_crash_right_after_session_commit_does_not_lose_the_trace(opener):
 
 def test_row_left_by_a_crash_is_eventually_visible_not_stuck(opener):
     """크래시로 남은 행은 영원히 보내지 않는 상태로 남지 않는다: 유예 뒤 보내거나(SENT) 보이게 격리한다(DEAD)."""
-    store, outbox, alerts, kind = opener()
+    store, outbox, alerts, kind, *_ = opener()
     real_commit = store.commit
 
     def commit_then_die(request, *, turn_id, **kw):
@@ -87,7 +87,7 @@ def test_row_left_by_a_crash_is_eventually_visible_not_stuck(opener):
         rig.say("안 피움", out=ANSWER_OUT)
     store.close(); outbox.close(); alerts.close()
 
-    store, outbox, alerts, kind = opener()
+    store, outbox, alerts, kind, *_ = opener()
     try:
         clock = [10_000_000_000.0]                       # 한참 뒤(유예 경과)
         ex = TraceExporter(outbox, FakeTraceIngest(), clock=lambda: clock[0], wait=FakeWait())

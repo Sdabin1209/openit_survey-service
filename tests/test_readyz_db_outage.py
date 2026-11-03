@@ -168,6 +168,7 @@ def test_db_timeouts_are_passed_from_settings_to_the_connection(monkeypatch):
     monkeypatch.setattr(db, "PgSessionStore", lambda url, *a, **k: type("S", (), {})())
     monkeypatch.setattr(db, "PgOutbox", lambda url, **k: type("O", (), {})())
     monkeypatch.setattr(db, "PgAlertStore", lambda url, **k: type("A", (), {})())
+    monkeypatch.setattr(db, "PgAlertQueue", lambda url, **k: type("Q", (), {})())
     s = Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
                            "SURVEY_DB_CONNECT_TIMEOUT_SECONDS": "3", "SURVEY_DB_STATEMENT_TIMEOUT_SECONDS": "4", "SURVEY_READYZ_DB_TIMEOUT_SECONDS": "5"})
     db.open_stores(s, url="postgresql://u:p@127.0.0.1:1/d")

@@ -54,3 +54,4 @@
 - [ADR-0055](ADR-0055.md) 운영 소요 시간 지표를 prometheus_client로 기록하고 내부망 GET /metrics로 낸다 (U71)
 - [ADR-0056](ADR-0056.md) 결과 전달: 확인 표시(ack), result_ready 이벤트, 의사 역할 노출 (U83)
 - [ADR-0057](ADR-0057.md) 문진표 여러 개: 흐름을 문진표에서 파생, 고정 흐름 파일 폐기
+- [ADR-0058](ADR-0058.md) 직원 알림 재시도 큐 (L14)

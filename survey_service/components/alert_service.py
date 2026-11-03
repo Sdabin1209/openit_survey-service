@@ -118,7 +118,8 @@ class AlertService:
     def __init__(self, store, hub: Optional[AlertHub] = None, push: Optional[PushSender] = None,
                  push_timeout: float = 3.0, retry_min_interval_s: int = DEFAULT_RETRY_MIN_INTERVAL_S,
                  retry_max_per_session: int = DEFAULT_RETRY_MAX_PER_SESSION, report_max_per_session: int = DEFAULT_REPORT_MAX_PER_SESSION, endpoint_check=None,
-                 *, monotonic: Callable[[], float]) -> None:
+                 *, monotonic: Callable[[], float], queue=None) -> None:
+        self.queue = queue      # 알림 재시도 큐(alert_queue, ADR-0058). 없으면 저장 실패는 전과 같이 예외로만 끝난다
         self._now = monotonic      # 시계 주입(ADR-0050)
         self._push_validator = validator("StaffPushPayload")      # 기동 때 한 번: 푸시마다 만들면 스키마 파일을 매번 다시 읽는다(ADR-0050)
         self.endpoint_check = endpoint_check
@@ -128,7 +129,8 @@ class AlertService:
         self.stats = {"deduplicated": 0, "created": 0, "delivered": 0, "delivery_failed": 0, "push_accepted": 0, "push_failed": 0, "push_gone": 0,
                       "staff_call_retries": 0, "staff_call_retry_delivered": 0, "staff_call_retry_failed": 0, "staff_call_retry_replayed": 0,
                       "staff_call_retry_rejected_interval": 0, "staff_call_retry_rejected_limit": 0, "staff_call_retry_no_open_alert": 0,
-                      "staff_call_reports": 0, "staff_call_reports_not_notified": 0, "staff_call_report_rejected_limit": 0}
+                      "staff_call_reports": 0, "staff_call_reports_not_notified": 0, "staff_call_report_rejected_limit": 0,
+                      "queued": 0, "queue_drained": 0, "queue_retry_failed": 0}
         self._slock = threading.Lock()
         self._locks = [threading.Lock() for _ in range(64)]      # 세션별(해시 줄무늬 64개) 잠금. 한 세션의 재알림·보고·해결을 직렬로 한다(ADR-0021). 서로 다른 세션은 거의 막지 않는다
 
@@ -156,7 +158,12 @@ class AlertService:
                     return event["alert"]
                 redo = True                      # 이전 시도가 전달에 실패했다: 알림은 만들지 않고 전달만 다시 시도한다(실패면 DELIVERY_FAILED를 다시 낸다)
         if event is None:
-            event = self.store.create(session_id, kind, rule_id, turn_id, pause_reason)         # StoreError는 그대로 올라간다(저장 실패 = 전달 실패)
+            try:
+                event = self.store.create(session_id, kind, rule_id, turn_id, pause_reason)         # StoreError는 그대로 올라간다(저장 실패 = 전달 실패)
+            except BoundaryError as _e:
+                if _is_store_error(_e) and self.queue is not None:
+                    self._enqueue(session_id, turn_id, kind, rule_id, pause_reason)      # 알림 DB가 죽어도 알림을 잃지 않는다: 세션 DB에 남겨 복구 뒤 다시 저장·전달한다
+                raise
             self._count("created")
         live = self.hub.publish(event)
         pushed = self._push(event)
@@ -179,6 +186,41 @@ class AlertService:
                 raise
             pass
         return event["alert"]
+
+    def _enqueue(self, session_id, turn_id, kind, rule_id, pause_reason) -> None:
+        try:
+            if self.queue.enqueue(session_id, turn_id, kind, rule_id, pause_reason):
+                self._count("queued")
+        except BoundaryError as _e:
+            if not _is_store_error(_e):
+                raise
+            log.error("알림을 재시도 큐에도 남기지 못했다")      # 세션 DB도 쓸 수 없다: 호출자가 받는 원래 오류가 그대로 올라간다
+
+    def drain_queue(self, now: float, *, backoff_base: float = 5.0, backoff_max: float = 60.0) -> int:
+        """재시도 큐의 알림을 다시 저장·전달한다(서비스의 주기 스레드가 부른다). 저장되면(전달이 닿았든 아니든) 큐에서 지우고, 알림 DB가 아직 안 되면 지수 백오프로 미룬다.
+        처리한 개수를 돌려준다. 같은 (세션, 턴, 종류)는 raise_alert의 멱등 경로가 중복을 막는다."""
+        if self.queue is None:
+            return 0
+        done = 0
+        for q in self.queue.due():
+            tok = CURRENT_TURN.set((q.session_id, q.turn_id)) if q.turn_id else None
+            try:
+                try:
+                    self.raise_alert(q.session_id, q.kind, q.rule_id, q.pause_reason)
+                except DeliveryFailed:
+                    pass                      # 알림은 저장됐다(전달 실패 표시가 직원 콘솔에 남는다): 큐의 일은 끝났다
+                self.queue.done(q.id)
+                self._count("queue_drained")
+                done += 1
+            except BoundaryError as _e:
+                if not _is_store_error(_e):
+                    raise
+                self._count("queue_retry_failed")
+                self.queue.failed(q.id, now + min(backoff_max, backoff_base * 2 ** min(q.attempts, 10)), "STORE_ERROR")
+            finally:
+                if tok is not None:
+                    CURRENT_TURN.reset(tok)
+        return done
 
     def _push(self, event: dict) -> int:
         if self.push is None:
@@ -304,6 +346,8 @@ class AlertService:
         with self._slock:
             s = dict(self.stats)
         s.update(retry_min_interval_s=self.retry_min_interval_s, retry_max_per_session=self.retry_max_per_session, report_max_per_session=self.report_max_per_session)
+        if self.queue is not None:
+            s.update(queue=self.queue.counts())
         s.update(push_enabled=self.push is not None, sse_connections=self.hub.count(), subscriptions=self.store.count_subscriptions())
         return s
 

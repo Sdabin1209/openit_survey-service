@@ -88,7 +88,7 @@ class App:
         self.clock = clock          # 주입한 단조 시계(ADR-0050): 턴 마감·/readyz 마감·추론 재시도 예산을 이 시계로 센다. 기본은 실제 시계
         self.settings = settings
         Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
-        self.store, self.outbox, self.alert_store, self.db_kind = open_stores(settings)[:4]
+        self.store, self.outbox, self.alert_store, self.db_kind, self.alert_queue = open_stores(settings)
         self.outbox.max_pending = settings.outbox_max_pending
         push = None
         vapid_key = _secret(settings.vapid_private_key_env, "VAPID 비밀키") or ""
@@ -101,7 +101,7 @@ class App:
                 raise ConfigError(str(e)) from None
         self.alerts = checked.wrap_alert_service(AlertService(checked.wrap_alert_store(self.alert_store), AlertHub(), push, settings.push_timeout_seconds,
                                     settings.staff_call_retry_min_interval_seconds, settings.staff_call_retry_max_per_session,
-                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error, monotonic=clock))
+                                    settings.staff_call_report_max_per_session, endpoint_check=endpoint_syntax_error, monotonic=clock, queue=self.alert_queue))
         self.registry = ReleaseRegistry()
         self.metrics = Metrics()      # 내부망 GET /metrics(server.py). 게이트웨이로 나가지 않는다 (ADR-0055)
         if settings.inference_url:                        # 모델 런타임을 HTTP 경계 뒤에(추론 컨테이너)
@@ -218,6 +218,16 @@ class App:
             t3 = threading.Thread(target=retention_loop, name="retention", daemon=True)
             t3.start()
             self._threads.append(t3)
+        def drain():
+            # 주기는 Trace 내보내기와 같은 settings.export_interval_seconds: 같은 종류의 outbox 재시도라 새 설정 값을 만들지 않았다(ADR-0058, 측정하지 않았다)
+            while not self._stop.wait(max(1.0, self.settings.export_interval_seconds)):
+                try:
+                    self.alerts.drain_queue(REAL_WALL_CLOCK())
+                except Exception as e:
+                    log.error("알림 재시도 큐 처리 실패 error=%s", type(e).__name__)
+        t4 = threading.Thread(target=drain, name="alert-queue", daemon=True)
+        t4.start()
+        self._threads.append(t4)
         if self.settings.session_idle_seconds > 0:
             idle = self.settings.session_idle_seconds
 
@@ -239,6 +249,7 @@ class App:
         self.store.close()
         self.outbox.close()
         self.alert_store.close()
+        self.alert_queue.close()
 
     # ------------------------------------------------------------------ 상태
     def _secret_sources(self) -> dict:
