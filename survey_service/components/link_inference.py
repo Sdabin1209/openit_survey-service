@@ -16,6 +16,7 @@ import threading
 from typing import Callable, Mapping, Optional
 
 from boundary_contracts import BoundaryError
+from boundary_contracts.clients import require_tls_url
 from openit_link.clients import HttpModelRuntime, RuntimeResult, is_output_invalid
 
 import json
@@ -188,6 +189,7 @@ class RemoteInference:
                  observer: Optional[Callable[[str, str, float], None]] = None) -> None:
         self._now, self._sleep = monotonic, sleep      # 시계 주입(ADR-0050)
         self.backend = "remote"
+        require_tls_url(base_url)       # /readyz 확인은 urllib을 직접 쓰므로 계약 클라이언트의 거부(U99, loopback 밖 http://)를 여기서도 같은 함수로 건다. 어기면 ValueError(시작을 거부)
         self._rt = HttpModelRuntime(base_url, token, timeout)          # 제어 호출(적재, 상태, readyz)
         # 환자 턴의 호출은 종류마다 상한이 다르다(extract 21초, respond 26초: 서버 상한 20/25보다 1초 길다. D125, ADR-0052, 측정 안 함)
         self._op_rts = {"extract": HttpModelRuntime(base_url, token, extract_timeout), "respond": HttpModelRuntime(base_url, token, respond_timeout)}

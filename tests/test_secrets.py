@@ -86,13 +86,13 @@ def test_same_tokens_still_rejected(tmp_path, monkeypatch):
 
 def test_clients_token_env_indirection_with_file(tmp_path):
     tok = _write(tmp_path, "rr", "reader-secret-CCC333")
-    env = {"SURVEY_RELEASE_READER_URL": "http://x", "SURVEY_RELEASE_READER_TOKEN_ENV": "MY_RR", "MY_RR_FILE": tok}
+    env = {"SURVEY_RELEASE_READER_URL": "https://x", "SURVEY_RELEASE_READER_TOKEN_ENV": "MY_RR", "MY_RR_FILE": tok}
     assert http_release_reader(env) is not None
-    env2 = {"SURVEY_TRACE_INGEST_URL": "http://x", "SURVEY_TRACE_INGEST_TOKEN": "t-DDD444"}
+    env2 = {"SURVEY_TRACE_INGEST_URL": "https://x", "SURVEY_TRACE_INGEST_TOKEN": "t-DDD444"}
     assert http_trace_ingest(env2) is not None
     with pytest.raises(ConfigError) as ei:
-        http_trace_ingest({"SURVEY_TRACE_INGEST_URL": "http://x"})
+        http_trace_ingest({"SURVEY_TRACE_INGEST_URL": "https://x"})
     assert "SURVEY_TRACE_INGEST_TOKEN_FILE" in str(ei.value)
     with pytest.raises(ConfigError) as ei:
-        http_release_reader({"SURVEY_RELEASE_READER_URL": "http://x", "SURVEY_RELEASE_READER_TOKEN_FILE": str(tmp_path / "gone")})
+        http_release_reader({"SURVEY_RELEASE_READER_URL": "https://x", "SURVEY_RELEASE_READER_TOKEN_FILE": str(tmp_path / "gone")})
     assert "reader-secret" not in str(ei.value)

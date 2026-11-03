@@ -120,3 +120,14 @@ def test_contract_http_client_trusts_a_private_root_through_ssl_cert_file_only(t
         HttpReleaseReader(url, "tok", 3).get_active_pointer()
     except BoundaryError as e2:                                       # 서버가 빈 200만 준다: TLS는 통과하고 본문 해석에서 거부된다. 연결 실패(UNAVAILABLE+SSL)가 아니면 된다
         assert "CERTIFICATE_VERIFY_FAILED" not in str(e2.details) + e2.message
+
+
+def test_plain_http_outside_loopback_is_refused_for_every_call_path():
+    """loopback 밖 http://는 추론 서버 주소로 받지 않는다: 직접 urllib을 쓰는 /readyz 확인(RemoteInference.ready)도 같은 규칙(require_tls_url)을 거친다."""
+    from survey_service.components.link_inference import RemoteInference
+    mk = lambda u: RemoteInference(u, "tok", 3.0, monotonic=lambda: 0.0, sleep=lambda s: None)
+    for bad in ("http://inference:8080", "http://10.0.0.5:8080", "http://infer.example.com"):
+        with pytest.raises(ValueError):
+            mk(bad)
+    for ok in ("https://inference:8443", "http://127.0.0.1:8080", "http://localhost:8080"):
+        assert mk(ok) is not None

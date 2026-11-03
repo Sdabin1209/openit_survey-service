@@ -172,10 +172,10 @@ def test_app_with_http_factories_end_to_end(srv, tmp_path, monkeypatch):
 
 def test_factories_read_token_only_from_env_and_fail_clearly(monkeypatch):
     with pytest.raises(ConfigError):
-        http_release_reader({"SURVEY_RELEASE_READER_URL": "http://x"})                  # 토큰 환경 변수가 없다
+        http_release_reader({"SURVEY_RELEASE_READER_URL": "https://x"})                  # 토큰 환경 변수가 없다
     with pytest.raises(ConfigError):
         http_trace_ingest({"SURVEY_TRACE_INGEST_TOKEN": "t"})                           # URL이 없다
-    c = http_trace_ingest({"SURVEY_TRACE_INGEST_URL": "http://x", "SURVEY_TRACE_INGEST_TOKEN_ENV": "OPS", "OPS": "tok"})
+    c = http_trace_ingest({"SURVEY_TRACE_INGEST_URL": "https://x", "SURVEY_TRACE_INGEST_TOKEN_ENV": "OPS", "OPS": "tok"})
     assert isinstance(c, HttpTraceIngest) and c._token == "tok"
     assert _spec("http", "release").endswith("http_release_reader") and _spec("a:b", "trace") == "a:b"
     with pytest.raises(ConfigError):
