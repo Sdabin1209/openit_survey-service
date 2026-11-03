@@ -98,6 +98,30 @@
             }
           ]
         },
+        "question_set_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "문진한 문진표 ID(survey-schema 4.0.0)."
+        },
+        "question_set_title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "문진한 문진표 제목(survey-schema 4.0.0)."
+        },
         "answers": {
           "type": "array",
           "items": {
@@ -181,6 +205,8 @@
         "ended_at",
         "release_id",
         "question_bank_version",
+        "question_set_id",
+        "question_set_title",
         "answers",
         "skipped_details"
       ],

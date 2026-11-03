@@ -74,8 +74,8 @@ def load_schema(name: str, version: int = DEFAULT_VERSION) -> dict:
 
 
 def load_data(name: str, version: int = DEFAULT_VERSION) -> dict:
-    """문진 스키마가 담는 데이터 표(예: 'question_flow', 'response_tables')의 JSON. 형식은 같은 이름의 계약
-    (QuestionFlow, ResponseTables)이 정한다."""
+    """문진 스키마가 담는 데이터 표(예: 'response_tables')의 JSON. 형식은 같은 이름의 계약
+    (ResponseTables)이 정한다."""
     path = contract_version_dir(version) / "data" / f"{name}.json"
     if not path.exists():
         raise KeyError(f"알 수 없는 문진 스키마 데이터: {name} (정수 버전 {version})")

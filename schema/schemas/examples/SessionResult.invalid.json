@@ -6,6 +6,8 @@
   "ended_at": "2026-10-30T07:09:28Z",
   "release_id": "rel-e2e-1",
   "question_bank_version": "1",
+  "question_set_id": "general-intake",
+  "question_set_title": "일반 문진표",
   "answers": [
     {
       "key": "Q1.D01.diagnosed",

@@ -20,7 +20,7 @@ def _validator(name):
 
 
 def test_there_are_schemas():
-    assert len(NAMES) == 16
+    assert len(NAMES) == 15
 
 
 @pytest.mark.parametrize("name", NAMES)

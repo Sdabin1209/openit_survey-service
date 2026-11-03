@@ -20,6 +20,7 @@
 | 2.0.0 | `SessionResult.skipped`(문자열 목록) 폐지, `skipped_details`만 남김 | 결과를 읽는 병원 시스템이 `skipped_details`로 옮겨야 한다(키 삭제 = 규칙상 깨지는 변경). 모델이 보지 않는 출력 형식이라 정수를 올리지 않았다 | docs/adr/ADR-0044.md |
 | 2.1.0 | `TurnFailureSignal`·`SessionState`·`StaffSessionView`·`TurnTrace`에 `pause_reason`(선택) 추가 | 추가만. 영향 없음 | CR-H002, docs/adr/ADR-0022.md |
 | 3.0.0 | 계약 3.0.0 전환(`ActionExtraction` 등)에 맞춘 개정 | 위 2.0.0과 같은 묶음 | docs/adr/ADR-0044.md |
+| 4.0.0 | 문진표(문항 세트) 여러 개 동시 활성(사용자 결정 2026-11-03): `QuestionBank`에 필수 `question_set_id`·`title` 추가, `Prerequisite`를 `{slot, op, value}`로 바꿈(op 6개), `SessionResult`·`StaffSessionView`에 필수 `question_set_id`·`question_set_title`(null 가능) 추가, `FrontendMessage` SESSION_START에 선택 `question_set_id`, `QuestionFlow` 스키마와 `data/question_flow.json` 삭제(흐름은 문진표에서 파생) | 정수 1 유지: 모델 입출력 불변(계약 CONVENTIONS 12절 2026-11-03 개정). 문진표 ID 없는 옛 문항 은행은 QuestionBank 검증에서 거부된다 | docs/adr/ADR-0057.md |
 
 ## 같은 정수 버전 1 안의 추가
 

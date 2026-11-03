@@ -186,17 +186,38 @@
     },
     "Prerequisite": {
       "type": "object",
+      "description": "문항을 묻는 조건(survey-schema 4.0.0). 참조 칸의 저장 값이 있고 `저장값 op value`가 거짓이면 이 문항은 묻지 않는다. 저장 값이 없으면 묻는다. 계약 QuestionFlowTable.skips는 이 조건의 부정(op 반전)이다. bool과 수는 다른 값이다.",
       "properties": {
         "slot": {
           "$ref": "#/$defs/SlotRef"
         },
+        "op": {
+          "enum": [
+            "==",
+            "!=",
+            ">",
+            ">=",
+            "<",
+            "<="
+          ]
+        },
         "value": {
-          "type": "string",
-          "minLength": 1
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
         }
       },
       "required": [
         "slot",
+        "op",
         "value"
       ],
       "additionalProperties": false
@@ -204,6 +225,16 @@
     "QuestionBank": {
       "type": "object",
       "properties": {
+        "question_set_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "description": "문진표(문항 세트) ID. 계약 Id 규칙과 같다. 릴리스 매니페스트 question_sets[].id와 같아야 한다(같음은 스키마 밖). survey-schema 4.0.0부터 필수."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "문진표 제목(키오스크 선택 화면·결과에 보인다). survey-schema 4.0.0부터 필수."
+        },
         "version": {
           "type": "integer",
           "minimum": 0
@@ -220,6 +251,8 @@
         }
       },
       "required": [
+        "question_set_id",
+        "title",
         "version",
         "questions",
         "session_settings"
