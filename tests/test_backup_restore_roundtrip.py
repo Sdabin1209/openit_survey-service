@@ -4,6 +4,7 @@ PostgreSQL(TEST_DATABASE_URL)과 docker가 없으면 건너뛴다(통과로 세�
 import base64
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -46,11 +47,14 @@ def rest_url(tmp_path):
     (data / ".htpasswd").write_text(f"{USER}:{{SHA}}{base64.b64encode(hashlib.sha1(PW.encode()).digest()).decode()}\n")      # rest-server의 htpasswd 인증(append-only를 쓰지 않는다: forget --prune이 필요하다)
     (data / ".htpasswd").chmod(0o644)
     name = f"survey-service-restsrv-{uuid.uuid4().hex[:8]}"
-    _docker("run", "-d", "--name", name, "-p", "127.0.0.1::8000", "-v", f"{data}:/data", "--user", "0", "--entrypoint", "rest-server", "restic/rest-server:latest", "--path", "/data")
+    _docker("run", "-d", "--name", name, "-p", "127.0.0.1::8000", "-v", f"{data}:/data", "--user", f"{os.getuid()}:{os.getgid()}", "--entrypoint", "rest-server", "restic/rest-server:latest", "--path", "/data")
     try:
         assert wait_until(lambda: "Authentication enabled" in _docker("logs", name, check=False).stdout + _docker("logs", name, check=False).stderr)
         port = _docker("port", name, "8000/tcp").stdout.split(":")[-1].strip()
         yield f"http://127.0.0.1:{port}/survey-service"      # 평문 http는 loopback에서만 허용된다(R1.1)
+        _docker("stop", "-t", "2", name, check=False)      # 서버가 멈춘 뒤에 본다(쓰는 중인 파일이 없게)
+        foreign = [str(f) for f in [data, *data.rglob("*")] if f.lstat().st_uid != os.getuid()]
+        assert foreign == [], f"컨테이너가 다른 사용자(root) 소유 파일을 남겼다: {foreign[:3]}"      # 남기면 pytest가 임시 폴더를 지우지 못한다(PytestWarning rm_rf가 쌓인다)
     finally:
         _docker("rm", "-f", name, check=False)
 
