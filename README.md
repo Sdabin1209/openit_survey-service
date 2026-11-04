@@ -57,8 +57,6 @@ bash scripts/setup-env.sh
 .venv/bin/python -m pytest
 # 3) 이미지 스모크 (빌드 + /healthz /readyz + 비root + 라벨 + 한 턴)
 bash scripts/smoke.sh
-# 4) 서비스 + 가짜 추론 + 가짜 게이트 compose 스모크
-bash scripts/smoke_compose.sh
 # 5) 실행: 필수 환경 변수 3개(없으면 종료 코드 2)
 SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake python -m survey_service
 ```

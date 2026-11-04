@@ -85,10 +85,10 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 태그는 헤드가 붙인다. 검증: `python -m pytest tests/test_schema_package.py`. 새 정수 버전: `schema/vN/`(schemas, CONTRACT_VERSION)를 만들면 같은 wheel에 함께 들어간다. 계약 버전을 올리는 변경은 반영 전에 헤드에 알린다.
 
 
-## 8. compose 스모크 (서비스 + 추론 + 가짜 게이트)
+## 8. compose 스모크 (없앰)
 
-`bash scripts/smoke_compose.sh`: 서비스 이미지, 가짜 추론 이미지(model-runtime의 FakeModelSession 경로, 모델 없음), 가짜 게이트/수집 서버를 `tests/compose/compose.smoke.yaml`로 같이 띄운다(호스트 포트는 Docker가 배정, `docker compose port`). 공개 API 한 턴이 HTTP 추론 경계를 거치는지, 추론 컨테이너를 멈췄을 때 그 턴만 `NOT_COMMITTED`로 실패하고 서비스는 살아 있는지, 다시 띄우면 복구(404 → 재적재)하는지, 같은 `turn_id` 재시도가 처음 응답을 돌려주는지 확인한다. 실제 서빙 이미지가 나오면 compose의 `inference` 이미지만 바꾼다.
-
+`scripts/smoke_compose.sh`와 `tests/compose/`, 가짜 이웃 서버(`tests/ref_gate_main.py`, `tests/ref_runtime_main.py`)는 지웠다. 이유: 영역 사이 호출이 https만 허용되므로(U99, 계약 `require_tls_url`) 평문 http로 이웃 컨테이너를 잇는 이 구성은 서비스가 시작을 거부해 더는 돌 수 없고(실행하면 `ValueError: 평문 http:// 는 같은 기계 안(loopback)만 허용한다`), 이미지 빌드 방식이 wheel에서 소스 트리 설치로 바뀐 뒤(ADR-0037) `build/wheels`가 없어 이미 실행되지 않고 있었다. 이 스크립트가 확인하던 것은 다른 시험이 같은 코드 경로를 확인한다:
+추론 서버가 없어도 서비스는 살아 있고 `release_loading`(`tests/test_loader_retry.py`), 추론 서버가 죽으면 그 턴만 `NOT_COMMITTED`로 빠르게 실패(`tests/test_inference_client.py::test_server_down_fails_fast_after_one_retry`), https 경계(`tests/test_tls_u99.py`). 컨테이너 단위의 '추론 서버 멈춤 → 복구 → 같은 turn_id 확정'은 deploy E2E 5m 단계(docker pause/unpause, NOT_COMMITTED 뒤 재전송 확정)가 본다. 컨테이너를 서로 이은 구성을 다시 두려면 가짜 이웃도 TLS로 서빙해야 한다(미구현).
 
 ## D74 구조 운영 메모
 
