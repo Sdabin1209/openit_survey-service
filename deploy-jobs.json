@@ -39,6 +39,29 @@
         "OPENIT_EGRESS_PROXY"
       ],
       "timeout_seconds": 1800
+    },
+    {
+      "name": "restore",
+      "argv": [
+        "python",
+        "-m",
+        "survey_service",
+        "restore"
+      ],
+      "idempotent": true,
+      "secret_files": [
+        "SURVEY_DATABASE_URL_FILE",
+        "OPENIT_BACKUP_CREDENTIALS_FILE",
+        "OPENIT_BACKUP_REPO_PASSWORD_FILE"
+      ],
+      "needs": [
+        "postgres"
+      ],
+      "env": [
+        "OPENIT_BACKUP_URL",
+        "OPENIT_EGRESS_PROXY"
+      ],
+      "timeout_seconds": 1800
     }
   ]
 }

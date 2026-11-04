@@ -25,6 +25,8 @@ def test_every_job_has_a_timeout_and_the_backup_job_is_declared_with_its_secrets
     assert list(validator("JobsDeclaration").iter_errors(JOBS)) == []
     jobs = {j["name"]: j for j in JOBS["jobs"]}
     assert all(isinstance(j.get("timeout_seconds"), int) for j in jobs.values())
+    r = jobs["restore"]      # 복구 잡: 주기 없이 선언만(deploy가 사람·복구 절차가 띄운다)
+    assert r["argv"] == ["python", "-m", "survey_service", "restore"] and r["idempotent"] is True and set(r["secret_files"]) == {"SURVEY_DATABASE_URL_FILE", "OPENIT_BACKUP_CREDENTIALS_FILE", "OPENIT_BACKUP_REPO_PASSWORD_FILE"}
     b = jobs["backup"]
     assert b["argv"] == ["python", "-m", "survey_service", "backup"] and b["idempotent"] is True
     assert set(b["secret_files"]) == {"SURVEY_DATABASE_URL_FILE", "OPENIT_BACKUP_CREDENTIALS_FILE", "OPENIT_BACKUP_REPO_PASSWORD_FILE"} and "OPENIT_BACKUP_URL" in b["env"]

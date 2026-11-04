@@ -50,8 +50,10 @@ def test_sqlite_backup_is_one_snapshot_and_result_matches_the_contract(env, tmp_
     out, rc = backup_job.run(env, runner=fake)
     validator("BackupJobResult").validate(out)
     assert rc == 0 and out["status"] == "ok" and out["snapshot_id"] == "abc123" and out["bytes"] == 42
-    cmd, e = fake.calls[-1]
+    cmd, e = next(c for c in fake.calls if c[0][1] == "backup")
     assert cmd[:3] == ["restic", "backup", "--json"] and "/.backup-" in cmd[3]
+    forget = [c for c, _e in fake.calls if c[1] == "forget"]      # 백업 직후 forget --prune: 보존 상한은 세션 데이터 보존 기간 이하(ADR-0062)
+    assert forget == [["restic", "forget", "--prune", "--keep-within", "90d"]] and fake.calls[-1][0][1] == "forget"
     assert e["HTTPS_PROXY"] == "http://127.0.0.1:3128"                      # 자기 영역 게이트웨이 출구로만 나간다
     assert e["RESTIC_REPOSITORY"].startswith("rest:https://") and e["RESTIC_PASSWORD_FILE"] == env["OPENIT_BACKUP_REPO_PASSWORD_FILE"]
     assert not list(tmp_path.glob(".backup-*"))                            # 임시 덤프는 지운다
@@ -73,7 +75,23 @@ def test_dump_contains_the_database_rows(env, tmp_path):
 def test_missing_repository_is_initialised_once_then_backed_up(env):
     fake = FakeRestic(no_repo=True)
     out, rc = backup_job.run(env, runner=fake)
-    assert rc == 0 and [c[0][1] for c in fake.calls] == ["cat", "init", "backup"]
+    assert rc == 0 and [c[0][1] for c in fake.calls] == ["cat", "init", "backup", "forget"]
+
+
+def test_retention_follows_the_session_retention_setting(env):
+    fake = FakeRestic()
+    backup_job.run(dict(env, SURVEY_SESSION_RETENTION_DAYS="30"), runner=fake)
+    assert ["restic", "forget", "--prune", "--keep-within", "30d"] in [c for c, _e in fake.calls]
+
+
+def test_forget_failure_is_a_retryable_failure(env):
+    class F(FakeRestic):
+        def __call__(self, cmd, **kw):
+            if cmd[1] == "forget":
+                return subprocess.CompletedProcess(cmd, 1, "", "")
+            return super().__call__(cmd, **kw)
+    out, rc = backup_job.run(env, runner=F())
+    assert rc == 75 and out["status"] == "failed" and out["error"]["retryable"] is True
 
 
 @pytest.mark.parametrize("kw,code", [({"fail_backup": True}, 75), ({"no_repo": True, "fail_init": True}, 75)])
