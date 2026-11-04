@@ -62,7 +62,7 @@ def _build(tmp_path, tag, declaration, mutate=None):
     subprocess.run([sys.executable, str(ctx / "db" / "gen_accounts.py"), str(ctx / "db" / "database.json"), str(ctx / "db" / "accounts.tsv")], check=True)
     if mutate:
         mutate(ctx / "db" / "initdb.d" / "10-areadb.sh")
-    _docker("build", "-q", "-f", str(ctx / "db" / "Dockerfile"), "-t", tag, "--build-arg", "COMMIT=abcdef1", "--build-arg", "BOUNDARY_TAG=v3.4.12",
+    _docker("build", "-q", "-f", str(ctx / "db" / "Dockerfile"), "-t", tag, "--build-arg", "COMMIT=abcdef1", "--build-arg", "BOUNDARY_TAG=v3.4.14",
             "--build-arg", f"DATABASE_DECLARATION={json.dumps(declaration, separators=(',', ':'))}", str(ctx))
     return tag
 
