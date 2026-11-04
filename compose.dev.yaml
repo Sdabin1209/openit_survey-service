@@ -4,7 +4,8 @@
 # (여러 영역이 같은 서버에서 동시에 돌려도 충돌하지 않게, 워크스페이스 규칙). 주 버전 16은 운영과 같다(ADR-0002, tests/pg_container.py).
 services:
   postgres:
-    image: postgres:16
+    # 기반 이미지는 태그가 아니라 digest로 고정한다(Docker 공식 권고, 공통 규칙 '빌드 때 고정'). 2026-11-05에 이 PC의 같은 태그 RepoDigest를 읽은 값이다. 올리는 법: `docker pull postgres:16` 뒤 `docker image inspect postgres:16 --format '{{index .RepoDigests 0}}'` 값으로 이 한 곳을 바꾼다.
+    image: postgres:16@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_DB: survey

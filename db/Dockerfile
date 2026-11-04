@@ -1,6 +1,7 @@
 # survey-db: 이 영역의 데이터베이스 컴포넌트 이미지(계약 D126). 공식 postgres 이미지 위에 초기화(계정·권한·pg_hba·TLS·연결 상한)를 넣는다.
 # 입력은 AreaDatabaseEnv(POSTGRES_PASSWORD_FILE, DB_ACCOUNT_SECRETS_DIR, DB_TLS_DIR). 선언은 라벨 io.openit.database(DatabaseDeclaration)다.
-FROM postgres:16
+# 기반 이미지는 태그가 아니라 digest로 고정한다(Docker 공식 권고: 태그는 옮겨 가지만 digest는 내용이 같다. 공통 규칙 '빌드 때 고정'). 이 값은 2026-11-05에 이 PC에 있는 같은 태그의 RepoDigest(이미지 생성 2026-10-28)를 읽은 것이다. 올리는 법: `docker pull postgres:16` 뒤 `docker image inspect postgres:16 --format '{{index .RepoDigests 0}}'`의 값으로 이 줄 하나를 바꾸고 이미지 빌드 시험·스모크를 다시 돌린다.
+FROM postgres:16@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
 ARG COMMIT
 ARG BOUNDARY_TAG
 ARG DATABASE_DECLARATION

@@ -1,7 +1,9 @@
 # survey-service 이미지. 설정은 환경 변수로만 받고 비밀 값은 넣지 않는다. 로그는 표준 출력. 비root로 실행.
 # 이웃 라이브러리(boundary-contracts, model-runtime)는 이름 있는 빌드 컨텍스트(--build-context boundary_contracts=..., model_runtime=...)로 받는다:
 # 영역 빌드 진입점 scripts/build-image.sh가 요청의 dependency_sources(해당 버전 소스 트리)를 준다(계약 2.5.0). 이 Dockerfile은 네트워크로 이웃을 받지 않는다(서드파티는 잠금 파일에서 PyPI).
-FROM python:3.12-slim AS build
+# 기반 이미지는 태그가 아니라 digest로 고정한다(Docker 공식 권고: 태그는 옮겨 가지만 digest는 내용이 같다. 공통 규칙 '빌드 때 고정'). 이 값은 2026-11-05에 이 PC에 있는 같은 태그의 RepoDigest(이미지 생성 2026-10-28)를 읽은 것이다. 올리는 법: `docker pull python:3.12-slim` 뒤 `docker image inspect python:3.12-slim --format '{{index .RepoDigests 0}}'`의 값으로 이 줄 하나를 바꾸고 이미지 빌드 시험·스모크를 다시 돌린다.
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
+FROM ${PYTHON_IMAGE} AS build
 COPY requirements.lock /requirements.lock
 RUN pip install --no-cache-dir --prefix=/install -r /requirements.lock
 COPY --from=boundary_contracts . /src/boundary-contracts
@@ -12,7 +14,7 @@ COPY pyproject.toml /src/app/pyproject.toml
 COPY survey_service /src/app/survey_service
 RUN pip install --no-cache-dir --prefix=/install --no-deps /src/boundary-contracts /src/model-runtime /src/link /src/schema /src/app
 
-FROM python:3.12-slim
+FROM ${PYTHON_IMAGE}
 ARG COMMIT
 ARG BOUNDARY_TAG
 ARG SURVEY_SCHEMA_MAJOR

@@ -8,7 +8,8 @@ import subprocess
 import uuid
 
 RUN_LABEL = "io.openit.survey-service.test-run"     # 정리용. 이 값(실행별 uuid)이 같은 컨테이너만 우리 것이다
-IMAGE = "postgres:16"                               # 운영 PostgreSQL 16과 같은 주 버전(ADR-0002). 없으면 pull하지 않고 SKIP한다
+# 운영 PostgreSQL 16과 같은 주 버전(ADR-0002). 없으면 pull하지 않고 SKIP한다. 기반 이미지는 태그가 아니라 digest로 고정한다(Docker 공식 권고, 공통 규칙 '빌드 때 고정'). 2026-11-05에 이 PC의 같은 태그 RepoDigest를 읽은 값이다. 올리는 법: `docker pull postgres:16` 뒤 `docker image inspect postgres:16 --format '{{index .RepoDigests 0}}'` 값으로 이 한 곳을 바꾼다.
+IMAGE = "postgres:16@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c"
 
 
 def _docker(*args, timeout=HANG_GUARD_SECONDS):
