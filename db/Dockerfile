@@ -15,7 +15,10 @@ LABEL io.openit.service=survey-db \
 COPY db/accounts.tsv /etc/openit/accounts.tsv
 COPY db/initdb.d/ /docker-entrypoint-initdb.d/
 COPY db/entrypoint.sh /usr/local/bin/survey-db-entrypoint.sh
-RUN chmod +x /docker-entrypoint-initdb.d/*.sh /usr/local/bin/survey-db-entrypoint.sh
+COPY db/healthcheck.sh /usr/local/bin/survey-db-healthcheck.sh
+RUN chmod +x /docker-entrypoint-initdb.d/*.sh /usr/local/bin/survey-db-entrypoint.sh /usr/local/bin/survey-db-healthcheck.sh
+# HEALTHCHECK 값(10초 간격, 5초 제한, 시작 유예 90초, 3회): 측정하지 않은 시작 값. 시작 유예는 initdb(계정·권한 생성)가 끝날 시간, ADR-0063
+HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 CMD ["/usr/local/bin/survey-db-healthcheck.sh"]
 ENTRYPOINT ["/usr/local/bin/survey-db-entrypoint.sh"]
 # 공식 이미지의 CMD(postgres)를 비운다: 진입점이 docker-entrypoint.sh postgres 에 서버 설정을 붙여 부른다
 CMD []

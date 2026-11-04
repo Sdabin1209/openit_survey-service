@@ -11,7 +11,7 @@ JOBS = json.loads((ROOT / "deploy-jobs.json").read_text(encoding="utf-8"))
 
 def test_egress_lists_exactly_the_neighbours_this_service_calls():
     """INTERFACES 한눈에 표: survey-service는 I4(release-gate), I6(ops-feedback 수집), I9(model-serving)를 부르고, 바깥으로는 웹 푸시와 백업만 나간다(R6.4)."""
-    assert sorted(EXPOSURE["egress"]) == sorted(["release-gate", "ops-feedback-ingest", "model-serving", "external:web-push", "external:backup"])
+    assert sorted(EXPOSURE["egress"]) == sorted(["release-gate", "ops-feedback", "model-serving", "external:web-push", "external:backup"])
     assert list(validator("Exposure").iter_errors(EXPOSURE)) == []
 
 
@@ -44,7 +44,7 @@ def test_every_neighbour_client_is_built_with_the_egress_proxy_from_the_environm
     from survey_service.components.link_inference import RemoteInference
     proxy = "http://127.0.0.1:3128"
     env = {"OPENIT_EGRESS_PROXY": proxy, "SURVEY_RELEASE_READER_URL": "https://release-gate", "SURVEY_RELEASE_READER_TOKEN": "t-0123456789abcdef",
-           "SURVEY_TRACE_INGEST_URL": "https://ops-feedback-ingest", "SURVEY_TRACE_INGEST_TOKEN": "t-0123456789abcdef"}
+           "SURVEY_TRACE_INGEST_URL": "https://ops-feedback", "SURVEY_TRACE_INGEST_TOKEN": "t-0123456789abcdef"}
     import urllib.request
 
     def tunnel(client):      # 계약 클라이언트의 열린 연결기에서 CONNECT 출구를 읽는다

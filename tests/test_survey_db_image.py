@@ -61,10 +61,18 @@ def _build(tmp_path, tag, declaration, mutate=None):
     (ctx / "db" / "database.json").write_text(json.dumps(declaration), encoding="utf-8")
     subprocess.run([sys.executable, str(ctx / "db" / "gen_accounts.py"), str(ctx / "db" / "database.json"), str(ctx / "db" / "accounts.tsv")], check=True)
     if mutate:
-        mutate(ctx / "db" / "initdb.d" / "10-areadb.sh")
+        rel, fn = mutate if isinstance(mutate, tuple) else ("initdb.d/10-areadb.sh", mutate)
+        fn(ctx / "db" / rel)
     _docker("build", "-q", "-f", str(ctx / "db" / "Dockerfile"), "-t", tag, "--build-arg", "COMMIT=abcdef1", "--build-arg", "BOUNDARY_TAG=v3.4.14",
             "--build-arg", f"DATABASE_DECLARATION={json.dumps(declaration, separators=(',', ':'))}", str(ctx))
     return tag
+
+
+def _swap(old, new, file=None):
+    def mutate(path):
+        s = path.read_text(encoding="utf-8"); assert old in s, old
+        path.write_text(s.replace(old, new), encoding="utf-8")
+    return (file, mutate) if file else mutate
 
 
 DECL = {"engine": "postgresql", "major": 16, "port": 5432, "accounts": [
@@ -147,27 +155,44 @@ def check(db: Db):
 def running(have_docker, tmp_path):
     made = []
 
-    def make(mutate=None):
+    def make(mutate=None, wait_up=True):
         tag = f"survey-service-dbtest:{uuid.uuid4().hex[:8]}"
         _build(tmp_path, tag, DECL, mutate)
         db = Db(tmp_path / f"run{len(made)}" if (tmp_path / f"run{len(made)}").mkdir() is None else tmp_path, tag)
         made.append((db, tag))
-        assert db.up(), _docker("logs", db.name, check=False).stdout[-800:] + _docker("logs", db.name, check=False).stderr[-800:]
+        db.port = _docker("port", db.name, "5432/tcp").stdout.split(":")[-1].strip()
+        assert not wait_up or db.up(), _docker("logs", db.name, check=False).stdout[-800:] + _docker("logs", db.name, check=False).stderr[-800:]
         return db
     yield make
     for db, tag in made:
         db.close(); _docker("rmi", "-f", tag, check=False)
 
 
+def _health(db: Db, want: str, timeout=150):
+    """Docker HEALTHCHECK 상태가 want가 될 때까지 본다(시간 상한은 멈춤 방지용이지 측정값이 아니다)."""
+    state = lambda: _docker("inspect", "-f", "{{.State.Health.Status}}", db.name).stdout.strip()
+    ok = wait_until(lambda: state() == want, timeout=timeout)
+    return ok, state()
+
+
 def test_declared_accounts_privileges_tls_and_access_rules_on_a_real_container(running):
-    check(running())
+    db = running()
+    check(db)
+    ok, st = _health(db, "healthy")
+    assert ok, st                                  # HEALTHCHECK: 선언 계정으로 TLS 접속이 된다
 
 
-def _swap(old, new):
-    def mutate(path):
-        s = path.read_text(encoding="utf-8"); assert old in s, old
-        path.write_text(s.replace(old, new), encoding="utf-8")
-    return mutate
+@pytest.mark.parametrize("mutation", [
+    _swap("ssl=on", "ssl=off", "entrypoint.sh"),                                  # 서버 TLS가 꺼지면 hostssl 줄이 맞지 않아 접속이 안 된다
+    _swap("sslmode=require", "sslmode=disable", "healthcheck.sh"),               # 검사가 TLS를 안 쓰면 pg_hba(hostssl)가 거절한다
+    _swap('"$SECRETS/$name"', '"$SECRETS/$name.nope"', "healthcheck.sh"),         # 선언 계정의 암호를 못 읽으면 접속이 안 된다
+], ids=["tls-off", "check-without-tls", "check-cannot-read-secret"])
+def test_healthcheck_turns_unhealthy_when_the_connection_check_breaks(running, mutation):
+    db = running(mutation, wait_up=False)
+    ok, st = _health(db, "unhealthy", timeout=240)
+    assert ok, st
+
+
 
 
 @pytest.mark.parametrize("mutation", [

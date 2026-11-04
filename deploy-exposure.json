@@ -225,7 +225,7 @@
   ],
   "egress": [
     "release-gate",
-    "ops-feedback-ingest",
+    "ops-feedback",
     "model-serving",
     "external:web-push",
     "external:backup"
