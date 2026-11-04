@@ -1,0 +1,8 @@
+{
+  "engine": "postgresql",
+  "major": 16,
+  "port": 5432,
+  "accounts": [
+    {"name": "survey", "database": "survey", "privilege": "owner", "url_env": ["SURVEY_DATABASE_URL_FILE"]}
+  ]
+}

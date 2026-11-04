@@ -5,3 +5,4 @@ build/
 *.db
 .pytest_cache/
 .venv-tools/
+db/accounts.tsv

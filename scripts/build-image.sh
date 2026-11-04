@@ -24,22 +24,40 @@ req = json.load(open(sys.argv[1], encoding="utf-8"))
 errs = list(validator("BuildImageRequest").iter_errors(req))
 if errs:
     sys.exit("build-image: BuildImageRequest를 어긴 요청: " + errs[0].message[:200])
-if req.get("variant"):
-    sys.exit("build-image: 이 영역은 variant를 모른다: " + req["variant"])
-need = [("versions", "boundary"), ("versions", "model_runtime"), ("dependency_sources", "boundary"), ("dependency_sources", "model_runtime")]
+variant = req.get("variant") or ""
+if variant not in ("", "db"):
+    sys.exit("build-image: 이 영역은 variant를 모른다: " + variant)
+need = [("versions", "boundary")] if variant == "db" else \
+       [("versions", "boundary"), ("versions", "model_runtime"), ("dependency_sources", "boundary"), ("dependency_sources", "model_runtime")]
 missing = [".".join(k) for k in need if not (req.get(k[0]) or {}).get(k[1])]
 if missing:
     sys.exit("build-image: 이 영역이 쓰는 키가 요청에 없다: " + ", ".join(missing))
 out = {"SRC": req["source_dir"], "REVISION": req["revision"], "BOUNDARY_TAG": req["versions"]["boundary"],
-       "MODEL_RUNTIME_TAG": req["versions"]["model_runtime"], "BOUNDARY_SRC": req["dependency_sources"]["boundary"],
-       "MODEL_RUNTIME_SRC": req["dependency_sources"]["model_runtime"], "IMAGE_TAG": req["image_tag"],
-       "SCHEMA_REQ": req["versions"].get("survey_schema", "")}
+       "MODEL_RUNTIME_TAG": req["versions"].get("model_runtime", ""), "BOUNDARY_SRC": (req.get("dependency_sources") or {}).get("boundary", ""),
+       "MODEL_RUNTIME_SRC": (req.get("dependency_sources") or {}).get("model_runtime", ""), "IMAGE_TAG": req["image_tag"],
+       "SCHEMA_REQ": req["versions"].get("survey_schema", ""), "VARIANT": variant}
 for k, v in out.items():
     print(f"{k}={shlex.quote(v)}")
 PY
 ) || exit 1      # 대입의 종료 코드를 보므로 검증이 실패하면 여기서 멈춘다(eval "$(...)"는 실패를 가린다)
 eval "$VARS"
 [ "$(cd "$SRC" && pwd -P)" = "$(pwd -P)" ] || die "source_dir($SRC)이 이 리포 루트가 아니다"
+if [ "$VARIANT" = db ]; then
+  # 데이터베이스 컴포넌트 이미지(계약 D126): 앱 이미지의 이웃 소스·잠금·link는 필요 없다. 선언(db/database.json)을 계약으로 검증해 계정 표를 만들고 라벨 io.openit.database로 단다.
+  # 선언을 검증한 계약이 이 호스트 환경(.venv)에 설치된 boundary-contracts다. 라벨의 계약 버전은 그 설치본의 버전이어야 한다(요청과 다르면 라벨이 거짓이 된다).
+  BVER=$("$PYTHON" -c 'import importlib.metadata as m;print("v"+m.version("boundary-contracts"))') || die "boundary-contracts 설치 버전을 읽지 못했다"
+  [ "$BVER" = "$BOUNDARY_TAG" ] || die "요청 versions.boundary($BOUNDARY_TAG)와 선언을 검증한 설치본의 실제 버전($BVER)이 다르다. 라벨이 거짓이 되므로 이미지를 만들지 않는다"
+  "$PYTHON" db/gen_accounts.py db/database.json db/accounts.tsv || die "db/database.json이 계약 DatabaseDeclaration을 어긴다"
+  DECL=$("$PYTHON" -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1],encoding="utf-8")),ensure_ascii=False,separators=(",",":")))' db/database.json) || die "db/database.json을 읽지 못했다"
+  echo "build-image: $IMAGE_TAG (variant db, revision $REVISION, boundary $BOUNDARY_TAG)" >&2
+  "$DOCKER" build -f db/Dockerfile -t "$IMAGE_TAG" --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" --build-arg DATABASE_DECLARATION="$DECL" . >&2 || die "docker build가 실패했다"
+  "$DOCKER" image inspect "$IMAGE_TAG" | "$PYTHON" -c '
+import json, sys
+img = json.load(sys.stdin)[0]
+labels = {k: v for k, v in (img["Config"].get("Labels") or {}).items() if k.startswith("io.openit.")}
+print(json.dumps({"image": sys.argv[1], "image_id": img["Id"], "labels": labels}, ensure_ascii=False, separators=(",", ":")))' "$IMAGE_TAG"
+  exit 0
+fi
 for d in "$BOUNDARY_SRC" "$MODEL_RUNTIME_SRC"; do [ -d "$d" ] || die "dependency_sources 경로가 디렉터리가 아니다: $d"; done
 
 # 1-1) 라벨 정직성(U50): 라벨은 요청의 versions가 아니라 **실제로 설치할 소스 트리의 버전**(pyproject.toml)에서 찍는다. 요청 버전과 다르면 라벨이 거짓이 되므로 이미지를 만들지 않고 실패한다.

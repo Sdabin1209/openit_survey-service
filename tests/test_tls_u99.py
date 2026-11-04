@@ -102,7 +102,7 @@ def test_https_call_trusts_a_private_root_through_ssl_cert_file_only(tls_server,
     from boundary_contracts import BoundaryError
     from boundary_contracts.clients import HttpModelRuntime
     url, root = tls_server
-    for var in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE"):
+    for var in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
         monkeypatch.delenv(var, raising=False)
     with pytest.raises(BoundaryError) as e:
         HttpModelRuntime(url, "tok", 3).get_release_state("rel-1")
@@ -119,7 +119,7 @@ def test_contract_http_client_trusts_a_private_root_through_ssl_cert_file_only(t
     from boundary_contracts import BoundaryError
     from boundary_contracts.clients import HttpReleaseReader
     url, root = tls_server
-    for var in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE"):
+    for var in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
         monkeypatch.delenv(var, raising=False)
     with pytest.raises(BoundaryError) as e:
         HttpReleaseReader(url, "tok", 3).get_active_pointer()
@@ -143,10 +143,10 @@ def test_plain_http_outside_loopback_is_refused_for_every_call_path():
 
 
 def test_web_push_verifies_with_system_roots_not_the_internal_root(tls_server, monkeypatch, loopback_ok):
-    """R3.18: 푸시는 시스템 루트로 검증한다. 내부 루트를 REQUESTS_CA_BUNDLE·SSL_CERT_FILE로 믿게 해 둔 환경에서도 사설 루트로 서명된 푸시 서버는 거절(FAILED)된다."""
+    """R3.18: 푸시는 시스템 루트로 검증한다. 내부 루트를 SSL_CERT_FILE로 믿게 해 둔 환경에서도 사설 루트로 서명된 푸시 서버는 거절(FAILED)된다."""
     from survey_service.components.link_push import WebPushSender
     from tests.test_staff_alerts import _client_keys, _vapid_key_pem
     url, root = tls_server
-    monkeypatch.setenv("REQUESTS_CA_BUNDLE", str(root)); monkeypatch.setenv("SSL_CERT_FILE", str(root))
+    monkeypatch.setenv("SSL_CERT_FILE", str(root))
     sender = WebPushSender(_vapid_key_pem(), "mailto:ops@example.com", timeout=5.0, sleep=lambda s: None, monotonic=lambda: 0.0)
     assert sender.send({"endpoint": url + "/push", "keys": _client_keys()}, b"{}") == "FAILED"      # 서버는 POST에 201을 준다: 검증이 막아서만 FAILED다

@@ -74,6 +74,8 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 
 영역 빌드 진입점은 `bash scripts/build-image.sh <요청 JSON 파일>`(계약 boundary-contracts 2.5.0, BuildImageRequest/BuildImageResult, ADR-0037)이다. 요청의 `versions`(boundary, model_runtime)와 `dependency_sources`(boundary, model_runtime 소스 트리의 절대 경로)가 필수이고 기본값은 없다. 이웃 폴더나 빌드 중 네트워크(SSH)를 쓰지 않는다. 표준 출력 마지막 줄이 BuildImageResult(image, image_id, 이미지에 실제로 붙은 `io.openit.*` 라벨)다. 개발자가 직접 시험할 때는 `bash scripts/dev-request.sh <작업 폴더> <image_tag>`가 requirements.txt의 태그로 소스를 받아 요청을 만든다(운영은 deploy가 만든다). 환경 변수는 `DOCKER`뿐이다(요청 검증은 이 영역의 `.venv`로 하므로 먼저 `bash scripts/setup-env.sh`). 이전 `scripts/build_wheels.sh`는 없어졌다(wheel은 Dockerfile이 이름 있는 빌드 컨텍스트에서 설치한다). 이미지 라벨은 공통 6개(`io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`(코드 의존이 없어 `n/a`), `io.openit.model-runtime`)에 `io.openit.langgraph`가 더해진다(CR-011). 이미지는 LangSmith 추적을 끈 채 나가야 한다(발화가 외부로 나간다).
 
+데이터베이스 이미지(D126, ADR-0063): 요청에 `"variant": "db"`를 주면 `db/`로 survey-db 이미지를 빌드한다(`versions.boundary`만 필수이고 빌드 호스트에 설치된 계약 버전과 같아야 한다). 실행 입력은 `POSTGRES_PASSWORD_FILE`, `DB_ACCOUNT_SECRETS_DIR`(계정 이름 파일마다 암호), `DB_TLS_DIR`(`tls.crt`·`tls.key`)이고 TLS가 없으면 시작하지 않는다. 라벨 `io.openit.database`가 선언이다.
+
 ## 6-1. 이미지 조합과 릴리스 정책 (D46)
 
 릴리스의 `model_runtime_version`은 MAJOR.MINOR가 이미지에 설치된 것과, `action_rules_version`은 설치된 계약의 `ActionExtractionRules.rules_version`과 같아야 적재된다(model-runtime의 PATCH 차이는 경고, ADR-0043). model-runtime의 MAJOR.MINOR가 바뀌면 **게이트가 평가에 쓴 이미지(릴리스 매니페스트에 기록된 버전)와 같은 라이브러리 조합의 survey-service 이미지**를 배포해야 한다. 조합이 어긋난 릴리스는 `VERSION_MISMATCH`로 거부되고 이전 릴리스가 유지된다. 이미지 라벨은 공통 6개(`io.openit.service`, `io.openit.revision`, `io.openit.contracts.boundary`, `io.openit.contracts.survey-schema`, `io.openit.turn-engine`(이 영역은 코드 의존이 없어 `n/a`), `io.openit.model-runtime`, D50)에 `io.openit.langgraph`가 더해진다(CR-011). 오케스트레이션은 LangGraph이고 버전은 `requirements.lock`에 고정되어 있다. 이미지는 LangSmith 추적을 끈 채(`LANGSMITH_TRACING=false`) 나가야 하며, 환경 변수로 켜지 않는다(발화가 외부로 나간다). 현재 조합은 `requirements.txt`의 태그가 정본이다(서비스는 추론 서버를 HTTP로만 부른다. 프로세스 안 백엔드는 fake뿐이다). 릴리스 매니페스트가 역할별 `system_prompt`를 갖고 model_runtime_version의 MAJOR.MINOR가 설치본과 같아야 적재된다.
@@ -113,5 +115,5 @@ bash scripts/smoke.sh                      # 이미지 빌드 + /healthz /readyz
 ## TLS와 배치 (U99)
 - 이 서비스는 TLS 서버가 되지 않는다. 들어오는 HTTPS는 배치 쪽 사이드카가 끝는다.
 - 다른 서비스를 부르는 주소(`SURVEY_RELEASE_READER_URL`, `SURVEY_TRACE_INGEST_URL`, `SURVEY_INFERENCE_URL`)는 환경 변수로만 들어오고 기본값이 없다. 코드에 고정된 부르는 주소는 없다(`tests/test_tls_u99.py`가 소스를 훑는다).
-- 바깥으로 나가는 HTTPS는 표준 환경 변수 `SSL_CERT_FILE`(또는 `SSL_CERT_DIR`)만으로 사설 루트를 믿는다. 인증서 검증을 끄는 코드는 없다(시험이 임시 루트·서버 인증서·로컬 TLS 서버로 확인한다). 웹 푸시 발송(requests)은 공개 푸시 서비스로 나가며 `REQUESTS_CA_BUNDLE`을 따른다.
+- 바깥으로 나가는 HTTPS는 표준 환경 변수 `SSL_CERT_FILE`(또는 `SSL_CERT_DIR`)만으로 사설 루트를 믿는다. 인증서 검증을 끄는 코드는 없다(시험이 임시 루트·서버 인증서·로컬 TLS 서버로 확인한다). 웹 푸시 발송은 공개 푸시 서비스로 나가며 시스템(공개) 루트로 검증한다(내부 루트 `SSL_CERT_FILE`과 섞지 않는다).
 - 데이터베이스는 접속 문자열(비밀 파일)의 `sslmode`·`sslrootcert` 등을 코드가 덮어쓰지 않고 그대로 넘긴다(psycopg 표준).

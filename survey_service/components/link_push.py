@@ -155,8 +155,8 @@ class WebPushSender:
             return "FAILED", None
         try:
             session = requests.Session()
-            session.verify = _system_ca_bundle()      # R3.18: 공개 푸시 서비스는 시스템(공개) 루트로 검증한다. 내부 루트(SSL_CERT_FILE·REQUESTS_CA_BUNDLE)와 섞지 않는다: 세션에 경로를 명시하면 requests는 환경 변수를 쓰지 않는다
-            session.trust_env = False                  # REQUESTS_CA_BUNDLE·CURL_CA_BUNDLE·HTTPS_PROXY 환경 변수를 읽지 않는다: 나가는 길은 egress_proxy 하나다
+            session.verify = _system_ca_bundle()      # R3.18: 공개 푸시 서비스는 시스템(공개) 루트로 검증한다. 내부 루트(SSL_CERT_FILE)와 섞지 않는다: 세션에 경로를 명시하면 requests는 환경 변수를 쓰지 않는다
+            session.trust_env = False                  # 환경 변수(CA 번들·프록시)를 읽지 않는다: 나가는 길은 egress_proxy 하나다
             session.proxies = {"https": self._egress, "http": self._egress} if self._egress else {}
             session.max_redirects = 0                              # 리다이렉트를 따르지 않는다(다른 내부 주소로 돌려지는 것을 막는다)
             headers = {"Urgency": "high"}
