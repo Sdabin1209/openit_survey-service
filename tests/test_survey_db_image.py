@@ -85,12 +85,13 @@ PW = {"svc_owner": "owner-pw-canary-1", "svc_dml": "dml-pw-canary-2"}
 class Db:
     def __init__(self, tmp_path, image):
         self.certs, self.root = _pki(tmp_path)
-        sec = tmp_path / "secrets"; sec.mkdir()
+        sec = tmp_path / "secrets"; sec.mkdir(); sec.chmod(0o750)
         for n, pw in PW.items():
-            (sec / n).write_text(pw + "\n"); (sec / n).chmod(0o644)
+            (sec / n).write_text(pw + "\n"); (sec / n).chmod(0o640)
         (tmp_path / "pgpw").write_text("superuser-pw-canary-3"); (tmp_path / "pgpw").chmod(0o644)
         self.name = f"survey-service-dbtest-{uuid.uuid4().hex[:8]}"
-        _docker("run", "-d", "--name", self.name, "--read-only", "--tmpfs", "/tmp", "--tmpfs", "/run", "-p", "127.0.0.1::5432",   # deploy 와 같은 실행 조건(읽기 전용 루트, /tmp·/run tmpfs)
+        _docker("run", "-d", "--name", self.name, "--read-only", "--tmpfs", "/tmp", "--tmpfs", "/run", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                *[v for cap in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID") for v in ("--cap-add", cap)], "-p", "127.0.0.1::5432",   # deploy 와 같은 실행 조건(읽기 전용 루트, /tmp·/run tmpfs)
                  "-v", f"{self.certs}:/certs:ro", "-v", f"{sec}:/run/secrets/db:ro", "-v", f"{tmp_path / 'pgpw'}:/run/secrets/pgpw:ro",
                 "-e", "POSTGRES_PASSWORD_FILE=/run/secrets/pgpw", image)
         self.port = None

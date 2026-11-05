@@ -8,6 +8,19 @@ TLS_DST=/run/survey-db-tls   # /run 아래: deploy 는 읽기 전용 루트에 /
 [ -r "$TLS_SRC/tls.crt" ] && [ -r "$TLS_SRC/tls.key" ] || { echo "survey-db: $TLS_SRC 에 tls.crt·tls.key 가 없다(서버 TLS 필수)" >&2; exit 1; }
 copy_tls() { install -d -o postgres -g postgres -m 700 "$TLS_DST"; install -o postgres -g postgres -m 600 "$TLS_SRC/tls.key" "$TLS_DST/tls.key"; install -o postgres -g postgres -m 644 "$TLS_SRC/tls.crt" "$TLS_DST/tls.crt"; }
 copy_tls
+# gosu 는 보조 그룹을 재설정한다. 배치 비밀(0640)을 완화하지 않고 postgres 전용 tmpfs 사본을 준비한다.
+secret_source=${DB_ACCOUNT_SECRETS_DIR:-/run/secrets/db}
+secret_target=/run/survey-db-secrets
+install -d -o postgres -g postgres -m 0700 "$secret_target"
+for account in $(cut -f1 /etc/openit/accounts.tsv); do
+  file="$secret_source/$account"
+  [ -r "$file" ] && [ -s "$file" ] || { echo "survey-service-db: 계정 $account 의 암호 파일을 읽을 수 없거나 비어 있다" >&2; exit 1; }
+  first_line=$(head -n1 "$file") || { echo "survey-service-db: 계정 $account 의 암호 파일 읽기 실패" >&2; exit 1; }
+  [ -n "$first_line" ] || { echo "survey-service-db: 계정 $account 의 암호 첫 줄이 비어 있다" >&2; exit 1; }
+  unset first_line
+  install -o postgres -g postgres -m 0600 "$file" "$secret_target/$account"
+done
+export DB_ACCOUNT_SECRETS_DIR="$secret_target"
 (
   last=$(cksum "$TLS_SRC/tls.crt" "$TLS_SRC/tls.key")
   while sleep 60; do
