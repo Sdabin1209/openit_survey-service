@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# deploy 와 같은 실행 조건으로 띄운다(읽기 전용 루트, /tmp tmpfs, cap_drop ALL, no-new-privileges, 쓸 수 있는 경로는 deploy compose 와 같게): 2026-11-06 E2E 기동에서야 드러난 쓰기 경로 결함을 스모크에서 잡는다
 # 이미지를 빌드하고 컨테이너를 띄워 /healthz, /readyz, 비root, 라벨, 이미지 안의 한 턴(개발 하네스)을 확인한다.
 # 포트는 고정하지 않는다(-p 127.0.0.1::8080 과 docker port). 실패하면 0이 아닌 값으로 끝난다.
 set -euo pipefail
@@ -47,10 +48,10 @@ code=$($DOCKER run --rm "$IMG" python -m survey_service >/dev/null 2>&1; echo $?
 # 비밀은 파일로 받는다(D84): 직원 토큰은 NAME_FILE(읽기 전용 마운트), 키오스크 토큰은 개발용 환경 변수. 이미지 사용자(비root)가 읽을 수 있게 644
 SECRET_DIR=$(mktemp -d)
 printf 'smoke-staff-token\n' > "$SECRET_DIR/staff_token"; chmod 755 "$SECRET_DIR"; chmod 644 "$SECRET_DIR/staff_token"
-trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"' EXIT
+trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" >/dev/null 2>&1 || true; $DOCKER volume rm "$NAME-data" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"' EXIT
 
 # 이웃(I4, I6)은 시험용 대역 팩토리로 꽂는다. 대역은 이미지에 없고 tests/ 를 읽기 전용으로 붙인다.
-$DOCKER run -d --name "$NAME" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
+$DOCKER run -d --name "$NAME" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v "$NAME-data:/data" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
   -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest \
   -e SURVEY_RESULT_DISPATCHER=tests.smoke_fakes:dispatcher -e SURVEY_RISK_SOURCE=tests.smoke_fakes:risk_source \
   -e SURVEY_API_TOKEN=smoke-api-token-0123 -e SURVEY_STAFF_API_TOKEN_FILE=/run/secrets/staff_token -e SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS=0 -e SURVEY_SSE_HEARTBEAT_SECONDS=1 -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null
@@ -81,7 +82,7 @@ for want in "io.openit.service\":\"survey-service" "io.openit.revision\":\"$COMM
             "io.openit.model-runtime\":\"$MODEL_RUNTIME_TAG" "io.openit.contracts.survey-schema\":\"$SURVEY_SCHEMA_MAJOR" "io.openit.langgraph\":\"$LANGGRAPH_VERSION"; do
   echo "$LABELS" | grep -q "$want" || fail "라벨 누락: $want"
 done
-code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{}' "http://127.0.0.1:$PORT/v1/turns")
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" -d '{}' "http://127.0.0.1:$PORT/v1/turns")
 [ "$code" = 404 ] || fail "공개 API 밖의 경로는 404여야 한다: $code"
 
 # 공개 API 한 턴(PUBLIC_API.md): 시작, 발화(같은 turn_id 재시도는 같은 응답), 종료, 인증·404·409
@@ -115,9 +116,9 @@ curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer smoke-api-token
 curl -s -H "Authorization: Bearer smoke-staff-token" "$API/v1/staff/push-config" | grep -q '"vapid_public_key": null' || fail "VAPID 키가 없으면 푸시 설정은 null이어야 한다"
 # 구독 등록은 이름을 해석해 공인 주소인지 본다(R3.18): 스모크는 네트워크 없이도 도는 거절 경로를 본다(공인 이름의 성공 경로는 시험이 가짜 DNS로 본다)
 BADSUB='{"endpoint":"https://169.254.169.254/smoke","keys":{"p256dh":"k","auth":"a"}}'
-[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer smoke-staff-token" -d "$BADSUB" "$API/v1/staff/push-subscriptions")" = 400 ] || fail "특수 주소 푸시 구독이 400이 아니다"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" -H "Authorization: Bearer smoke-staff-token" -d "$BADSUB" "$API/v1/staff/push-subscriptions")" = 400 ] || fail "특수 주소 푸시 구독이 400이 아니다"
 BADSUB2='{"endpoint":"http://push.example.com/smoke","keys":{"p256dh":"k","auth":"a"}}'
-[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer smoke-staff-token" -d "$BADSUB2" "$API/v1/staff/push-subscriptions")" = 400 ] || fail "http 푸시 구독이 400이 아니다"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" -H "Authorization: Bearer smoke-staff-token" -d "$BADSUB2" "$API/v1/staff/push-subscriptions")" = 400 ] || fail "http 푸시 구독이 400이 아니다"
 [ "$(post /v1/sessions '{"session_id":"smoke-2","kind":"SESSION_START"}' smoke-api-token-0123)" = 200 ] || fail "세션 2 시작"
 [ "$(rk smoke-2 "숨이 안 쉬어져요" r-1)" = 200 ] || fail "위험 발화 턴"
 grep -q '"response_text": "' /tmp/smoke-$$.body || fail "위험 안내 문장이 없다"
@@ -176,13 +177,13 @@ start=$(date +%s); $DOCKER stop -t 10 "$NAME" >/dev/null; el=$(( $(date +%s) - s
 if [ "${SMOKE_PG:-0}" = 1 ]; then
   PROJ="openit-survey-service-smokepg-$$"      # 프로젝트 이름에 리포 이름을 넣어 다른 영역과 겹치지 않게 한다
   DC() { $DOCKER compose -p "$PROJ" -f compose.dev.yaml "$@"; }
-  trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" "$NAME-pg" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"; DC down -v >/dev/null 2>&1 || true' EXIT
+  trap 'rc=$?; diag $rc; $DOCKER rm -f "$NAME" "$NAME-pg" >/dev/null 2>&1 || true; $DOCKER volume rm "$NAME-data" "$NAME-pg-data" >/dev/null 2>&1 || true; $DOCKER rmi -f "$IMG" >/dev/null 2>&1 || true; rm -rf "$SECRET_DIR"; DC down -v >/dev/null 2>&1 || true' EXIT
   DC up -d --wait >/dev/null 2>&1 || fail "compose.dev.yaml의 PostgreSQL을 띄우지 못했다"
   # 앱 컨테이너는 compose가 만든 네트워크에 붙어 서비스 이름(postgres)으로 접속한다(호스트 루프백 포트는 컨테이너에서 보이지 않는다)
   PGNET="${PROJ}_default"
   printf 'postgresql://postgres@postgres:5432/survey\n' > "$SECRET_DIR/db_url"; chmod 644 "$SECRET_DIR/db_url"
   PGPORT_APP=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')   # 빈 포트(고정하지 않는다)
-  runpg() { $DOCKER run -d --name "$NAME-pg" --network "$PGNET" -p 127.0.0.1:"$PGPORT_APP":8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
+  runpg() { $DOCKER run -d --name "$NAME-pg" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v "$NAME-pg-data:/data" --network "$PGNET" -p 127.0.0.1:"$PGPORT_APP":8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
     -e SURVEY_DATABASE_URL_FILE=/run/secrets/db_url -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader \
     -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest -e SURVEY_API_TOKEN=smoke-api-token-0123 -e SURVEY_STAFF_API_TOKEN_FILE=/run/secrets/staff_token \
     -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null; }

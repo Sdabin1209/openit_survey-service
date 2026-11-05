@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["langgraph>=1.2,<1.3", "pywebpush>=2.5,<3", "jsonschema>=4.10", "boundary-contracts", "openit-link", "model-runtime", "openit-survey-schema", "psycopg[binary]==3.3.6", "waitress==3.0.2", "yoyo-migrations==9.0.0"]
 
 [tool.setuptools]
-packages = ["survey_service", "survey_service.components", "survey_service.wiring", "survey_service.types"]
+packages = ["survey_service", "survey_service.components", "survey_service.wiring", "survey_service.types", "survey_service.types.contract"]   # 하위 패키지는 하나씩 적는다: types.contract 를 빼먹어 이미지가 시작하자마자 ModuleNotFoundError 로 죽었다(2026-11-06)
 
 [tool.setuptools.package-data]
 survey_service = ["migrations/*/*.sql", "migrations/*/*.py"]

@@ -405,6 +405,7 @@ def http_call(port, method, path, body=None, token="test-staff-token", headers=N
     h["X-Openit-User"] = "staff-1"           # 게이트웨이가 붙이는 직원 계정 ID(E절)
     h.update(headers or {})
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=json.dumps(body).encode() if body is not None else None, headers=h)
+    req.add_header("Content-Type", "application/json")   # 계약은 JSON 본문의 매체를 application/json 으로 정한다(link 가 강제, 3.4.19)
     try:
         with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
             return r.status, json.loads(r.read() or b"null")

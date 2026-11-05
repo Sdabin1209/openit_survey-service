@@ -282,6 +282,8 @@ class PublicApi:
         p, _, qs = path.partition("?")
         environ = {"REQUEST_METHOD": method, "PATH_INFO": p, "REQUEST_URI": path, "QUERY_STRING": qs,
                    "CONTENT_LENGTH": str(len(raw)), "wsgi.input": io.BytesIO(raw)}
+        if raw:
+            environ["CONTENT_TYPE"] = "application/json"   # 실제 클라이언트처럼 JSON 본문의 매체를 밝힌다(계약이 정하고 link 가 강제, 3.4.19)
         for key, val in (("HTTP_AUTHORIZATION", auth), ("HTTP_X_OPENIT_USER", user), ("HTTP_X_OPENIT_DEVICE", device), ("HTTP_X_OPENIT_ROLES", roles)):
             if val:
                 environ[key] = val

@@ -70,7 +70,7 @@ def test_204_over_http_has_no_body(live):  # noqa: F811
     app, port, _ = live
     http_call(port, "POST", "/v1/staff/push-subscriptions", SUB)
     req = urllib.request.Request(f"http://127.0.0.1:{port}{UNSUB}", method="POST", data=b'{"endpoint": "%s"}' % EP.encode(),
-                                 headers={"Authorization": "Bearer test-staff-token", "X-Openit-User": "staff-1"})
+                                 headers={"Authorization": "Bearer test-staff-token", "X-Openit-User": "staff-1", "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
         assert r.status == 204 and r.read() == b"" and r.headers.get("Content-Length") in (None, "0")
     assert app.alert_store.count_subscriptions() == 0

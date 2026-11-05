@@ -36,6 +36,6 @@ def test_a_push_config_that_violates_the_contract_is_not_sent(tmp_path, monkeypa
     try:
         app.alerts.public_key = lambda: 123          # PushConfig.vapid_public_key는 문자열 또는 null이다(래퍼는 속성 설정을 대상에 넘긴다)
         code, body = http_call(port, "GET", "/v1/staff/push-config")
-        assert code == 503 and body["code"] == "UNAVAILABLE" and "PushConfig" in body["message"]
+        assert code == 503 and body["code"] == "UNAVAILABLE" and "contract violation" in body["message"]   # 3.4.19 link: 위반 위치·규칙만 알리고 스키마 이름·값은 싣지 않는다
     finally:
         app.draining.set(); stop_server(httpd); app.stop()
