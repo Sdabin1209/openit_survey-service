@@ -1,5 +1,5 @@
 """D126: survey-db 이미지(db/): 선언(DatabaseDeclaration)대로 계정·권한·접속 규칙·TLS가 이미지 안에서 만들어진다. 실제 postgres:16 위에서 컨테이너를 띄워 verify-full로 접속해 본다.
-docker 또는 postgres:16 이미지가 없으면 건너뛴다(통과로 세지 않는다). 시험이 띄운 컨테이너와 만든 이미지는 이 시험이 지운다."""
+docker 또는 고정 digest의 postgres 이미지(tests/pg_container.py의 IMAGE)가 없으면 건너뛴다(통과로 세지 않는다). 시험이 띄운 컨테이너와 만든 이미지는 이 시험이 지운다."""
 import datetime
 import ipaddress
 import json
@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
+from .pg_container import IMAGE as PG_IMAGE      # 고정 digest 한 곳(db/Dockerfile의 FROM과 같은 값)
 from .timing import HANG_GUARD_SECONDS, wait_until
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,8 +31,8 @@ def _docker(*a, check=True, timeout=300):
 
 @pytest.fixture(scope="module")
 def have_docker():
-    if shutil.which("docker") is None or _docker("image", "inspect", "postgres:16", check=False).returncode != 0:
-        pytest.skip("docker 또는 postgres:16 이미지 없음")
+    if shutil.which("docker") is None or _docker("image", "inspect", PG_IMAGE, check=False).returncode != 0:
+        pytest.skip(f"docker 또는 {PG_IMAGE} 이미지 없음")
 
 
 def _pki(d: Path):

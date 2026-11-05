@@ -8,6 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
+. scripts/docker-env.sh      # 사용자 전역 ~/.docker 설정에 기대지 않는다(DOCKER_CONFIG, DOCKER_HOST)
 PYTHON=.venv/bin/python      # 이 영역의 시험 환경(setup-env.sh). 리포 루트 기준 상대 경로: 위에서 루트로 cd했다
 die() { echo "build-image: $*" >&2; exit 1; }
 [ -x "$PYTHON" ] || die "$PYTHON 이 없다. 먼저 bash scripts/setup-env.sh 로 이 영역의 환경을 만든다"

@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}   # 실행 파일 이름만 바꿀 수 있다(예: podman). 다른 우회는 두지 않는다
+. scripts/docker-env.sh      # 사용자 전역 ~/.docker 설정에 기대지 않는다(DOCKER_CONFIG, DOCKER_HOST)
 if ! "$DOCKER" info >/dev/null 2>&1; then
   echo "오류: 현재 사용자가 docker 데몬에 닿지 않는다. 데몬이 떠 있는지, 사용자에게 docker 권한이 있는지 확인하라." >&2
   exit 1

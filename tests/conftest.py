@@ -1,4 +1,10 @@
+import os
+
 import pytest
+
+from .docker_env import docker_env
+
+os.environ.update(docker_env())      # docker를 부르는 시험 전부가 같은 환경을 쓴다(사용자 ~/.docker에 기대지 않는다, tests/docker_env.py)
 
 
 @pytest.fixture(autouse=True)
