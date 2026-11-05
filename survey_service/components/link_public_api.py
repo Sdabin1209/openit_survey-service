@@ -59,7 +59,7 @@ STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
 # 역할은 kiosk / staff / result-reader / risk-source. 결과·위험 신호 역할은 그 토큰을 설정하지 않으면 경로가 없다(기능 꺼짐).
 _SPEC = (
     ("start", "POST", "/v1/sessions", "kiosk", False, None, False, None),
-    ("question_sets", "GET", "/v1/question-sets", "kiosk", False, None, False, None),      # 활성 릴리스의 문진표 목록(키오스크 첫 화면 선택용, 기기 인증은 /v1/sessions와 같다)
+    ("question_sets", "GET", "/v1/question-sets", "kiosk", False, None, False, "QuestionSetList"),      # 활성 릴리스의 문진표 목록(키오스크 첫 화면 선택용, 기기 인증은 /v1/sessions와 같다)
     ("turn", "POST", "/v1/sessions/{sid}/turns", "kiosk", False, None, False, None),
     ("end", "POST", "/v1/sessions/{sid}/end", "kiosk", False, None, False, None),
     ("state", "GET", "/v1/sessions/{sid}/state", "kiosk", False, None, False, "SessionState"),
@@ -70,13 +70,13 @@ _SPEC = (
     ("stream", "GET", "/v1/staff/alerts/stream", ("staff", "result-reader"), False, None, True, None),
     ("staff_session", "GET", "/v1/staff/sessions/{sid}", "staff", False, None, True, None),
     ("push_config", "GET", "/v1/staff/push-config", ("staff", "result-reader"), False, None, True, "PushConfig"),
-    ("push_add", "POST", "/v1/staff/push-subscriptions", ("staff", "result-reader"), False, None, True, None),
+    ("push_add", "POST", "/v1/staff/push-subscriptions", ("staff", "result-reader"), False, None, True, "PushSubscriptionResult"),
     ("push_unsub", "POST", "/v1/staff/push-subscriptions/unsubscribe", ("staff", "result-reader"), False, None, True, None),
-    ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True, None),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
+    ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True, "PushSubscriptionResult"),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
     ("result", "GET", "/v1/results/{sid}", "result-reader", False, None, True, None),
     ("results", "GET", "/v1/results", "result-reader", False, None, True, None),
     ("ack", "POST", "/v1/results/{sid}/ack", "result-reader", True, None, True, None),      # 확인 표시(U83): 계정(X-Openit-User)이 필요하다
-    ("risk_signal", "POST", "/v1/sessions/{sid}/risk-signals", "risk-source", False, None, True, None),
+    ("risk_signal", "POST", "/v1/sessions/{sid}/risk-signals", "risk-source", False, None, True, "RiskSignalResult"),
 )
 _SPEC_RX = [(name, method, re.compile("^" + re.sub(r"\\\{(\w+)\\\}", r"([^/]+)", re.escape(pat)) + "$"), role) for name, method, pat, role, *_ in _SPEC]
 KIOSK_DEVICE_CHECKED = ("state", "turn", "end", "staff_retry", "staff_report")      # 세션을 만든 기기만 접근하는 경로(ADR-0016)
