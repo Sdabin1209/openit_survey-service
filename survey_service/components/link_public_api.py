@@ -96,6 +96,26 @@ def _check(name: str, value) -> None:
         raise _err("INVALID_RECORD", str(e)[:300]) from None
 
 
+# R7(내는 쪽 검증): 응답이 문진 스키마(계약이 아니라 openit_link.App 이 모르는 이름)인 경로는 여기서 내보내기 전에 검증한다.
+# 어기면 틀린 값을 내보내지 않고 503 UNAVAILABLE(서버 결함)이다(link App 의 response_schema 와 같은 처리). PUBLIC_API.md 의 응답 행이 근거다.
+_SURVEY_RESPONSE = {"start": "FrontendInput", "turn": "FrontendInput", "end": "FrontendInput", "intervention": "FrontendInput",
+                    "result": "SessionResult", "staff_session": "StaffSessionView"}
+_survey_validators: dict = {}
+
+
+def _check_survey_response(name: str, status: int, body) -> None:
+    schema = _SURVEY_RESPONSE.get(name)
+    if schema is None or not (200 <= status < 300) or not isinstance(body, dict):
+        return
+    v = _survey_validators.get(schema)
+    if v is None:
+        import jsonschema
+        import survey_schema
+        v = _survey_validators[schema] = jsonschema.Draft202012Validator(survey_schema.load_schema(schema), format_checker=jsonschema.FormatChecker())
+    if next(v.iter_errors(body), None) is not None:
+        raise _err("UNAVAILABLE", f"응답이 문진 스키마 {schema}를 어긴다(서버 결함)")
+
+
 def _sid(sid: str) -> None:
     if not SESSION_ID.match(sid):
         raise _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
@@ -199,6 +219,7 @@ class PublicApi:
                 status, body, headers = self._call(name, req)
             finally:
                 self._slots.release()
+            _check_survey_response(name, status, body)
             return Response(status, body, headers)
         return handler
 
