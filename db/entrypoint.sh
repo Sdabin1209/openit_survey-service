@@ -4,7 +4,7 @@
 # 인증서는 24시간마다 새로 발급된다(step-ca): 60초마다 원본이 바뀌었는지 보고 바뀌면 복사 뒤 reload한다(재시작 없음).
 set -euo pipefail
 TLS_SRC=${DB_TLS_DIR:-/certs}
-TLS_DST=/var/lib/postgresql/tls
+TLS_DST=/run/survey-db-tls   # /run 아래: deploy 는 읽기 전용 루트에 /tmp·/run(tmpfs)과 데이터 볼륨만 쓸 수 있게 준다
 [ -r "$TLS_SRC/tls.crt" ] && [ -r "$TLS_SRC/tls.key" ] || { echo "survey-db: $TLS_SRC 에 tls.crt·tls.key 가 없다(서버 TLS 필수)" >&2; exit 1; }
 copy_tls() { install -d -o postgres -g postgres -m 700 "$TLS_DST"; install -o postgres -g postgres -m 600 "$TLS_SRC/tls.key" "$TLS_DST/tls.key"; install -o postgres -g postgres -m 644 "$TLS_SRC/tls.crt" "$TLS_DST/tls.crt"; }
 copy_tls

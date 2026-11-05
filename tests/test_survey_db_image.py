@@ -90,7 +90,8 @@ class Db:
             (sec / n).write_text(pw + "\n"); (sec / n).chmod(0o644)
         (tmp_path / "pgpw").write_text("superuser-pw-canary-3"); (tmp_path / "pgpw").chmod(0o644)
         self.name = f"survey-service-dbtest-{uuid.uuid4().hex[:8]}"
-        _docker("run", "-d", "--name", self.name, "-p", "127.0.0.1::5432", "-v", f"{self.certs}:/certs:ro", "-v", f"{sec}:/run/secrets/db:ro", "-v", f"{tmp_path / 'pgpw'}:/run/secrets/pgpw:ro",
+        _docker("run", "-d", "--name", self.name, "--read-only", "--tmpfs", "/tmp", "--tmpfs", "/run", "-p", "127.0.0.1::5432",   # deploy 와 같은 실행 조건(읽기 전용 루트, /tmp·/run tmpfs)
+                 "-v", f"{self.certs}:/certs:ro", "-v", f"{sec}:/run/secrets/db:ro", "-v", f"{tmp_path / 'pgpw'}:/run/secrets/pgpw:ro",
                 "-e", "POSTGRES_PASSWORD_FILE=/run/secrets/pgpw", image)
         self.port = None
 
