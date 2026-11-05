@@ -4,7 +4,7 @@ from __future__ import annotations
 import importlib
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
 
@@ -14,8 +14,8 @@ class ConfigError(Exception):
 
 def _utterance_max() -> int:
     """발화 길이 상한의 정본은 스키마 UtteranceBody.utterance.maxLength 하나다(설정은 이 값을 넘길 수 없고 기본값도 이 값). 둘이 어긋나 스키마가 설정보다 먼저 거절하는 일을 막는다."""
-    from . import types
-    return int(types.schema("UtteranceBody")["properties"]["utterance"]["maxLength"])
+    from boundary_contracts import load_schema
+    return int(load_schema("PublicApiRequests")["$defs"]["UtteranceBody"]["properties"]["utterance"]["maxLength"])
 
 
 def _int(env: Mapping, key: str, default: int, minimum: int = 0) -> int:
@@ -168,7 +168,7 @@ class Settings:
     kiosk_device_tokens_env: str = "SURVEY_KIOSK_DEVICE_TOKENS"   # 기기별 키오스크 토큰 표(`device_id=토큰` 줄). NAME_FILE이 있으면 파일 내용 (D88 U8)
     staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
     api_max_inflight: int = 32  # [근거: ADR-0004, 부하 측정 boundary.md §6-1 (기본 32)]
-    api_max_utterance_chars: int = 1000      # 기본값은 스키마 UtteranceBody의 상한과 같아야 한다(tests/test_settings_utterance_max.py)
+    api_max_utterance_chars: int = field(default_factory=_utterance_max)      # 기본값은 스키마 UtteranceBody의 상한과 같아야 한다(tests/test_settings_utterance_max.py)
     session_idle_seconds: int = 300          # 0이면 유휴 만료를 하지 않는다
     # 모델 런타임을 HTTP 경계 뒤에 둘 때(추론 컨테이너): 비우면 프로세스 안에서 적재한다
     inference_url: str = ""

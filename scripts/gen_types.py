@@ -10,6 +10,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCHEMAS = ROOT / "schemas"
@@ -149,14 +150,27 @@ def main() -> int:
         shutil.rmtree(OUT)
     (OUT / "_schemas").mkdir(parents=True)
     names = []
+    (OUT / "contract").mkdir()
+    (OUT / "contract/__init__.py").write_text("# Generated contract types. Do not edit.\n")
     for f in files:
         name = f.stem
         names.append(name)
         shutil.copyfile(f, OUT / "_schemas" / f.name)
-        r = subprocess.run([sys.executable, "-m", "datamodel_code_generator", "--input", str(f), "--input-file-type", "jsonschema",
-                            "--output", str(OUT / f"{name}.py"), "--output-model-type", "typing.TypedDict", "--target-python-version", "3.10",
-                            "--use-standard-collections", "--use-union-operator", "--disable-timestamp", "--class-name", name,
-                            "--formatters", "black", "isort"], capture_output=True, text=True, cwd=ROOT)
+        source = json.loads(f.read_text())
+        delegated = source.get("x-contract", "").startswith("PublicApiRequests#")
+        output = OUT / "contract" / f"{name}.py" if delegated else OUT / f"{name}.py"
+        with tempfile.TemporaryDirectory() as stage:
+            input_path = f
+            if delegated:
+                materialized = subprocess.run([str(ROOT / ".venv/bin/python"), str(ROOT / "scripts/contract_schema_codegen.py"), source["x-contract"]], capture_output=True, text=True, check=True)
+                input_path = pathlib.Path(stage) / f.name
+                input_path.write_text(materialized.stdout)
+            r = subprocess.run([sys.executable, "-m", "datamodel_code_generator", "--input", str(input_path), "--input-file-type", "jsonschema",
+                                "--output", str(output), "--output-model-type", "typing.TypedDict", "--target-python-version", "3.10",
+                                "--use-standard-collections", "--use-union-operator", "--disable-timestamp", "--class-name", name,
+                                "--formatters", "black", "isort"], capture_output=True, text=True, cwd=ROOT)
+        if delegated and r.returncode == 0:
+            (OUT / f"{name}.py").write_text(f"# Generated alias to the boundary contract.\nfrom .contract.{name} import {name}  # noqa: F401\n")
         if r.returncode != 0:
             print(f"생성 실패 {name}: {r.stderr[-400:]}", file=sys.stderr)
             return 1

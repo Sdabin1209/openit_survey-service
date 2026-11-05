@@ -401,6 +401,7 @@ def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com"
 
 def http_call(port, method, path, body=None, token="test-staff-token", headers=None):
     h = {"Authorization": f"Bearer {token}"} if token else {}
+    h["Content-Type"] = "application/json"
     h["X-Openit-User"] = "staff-1"           # 게이트웨이가 붙이는 직원 계정 ID(E절)
     h.update(headers or {})
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=json.dumps(body).encode() if body is not None else None, headers=h)
@@ -519,7 +520,7 @@ def test_sse_and_list_over_http_need_staff_token(live):
     for token, code in [("test-api-token-0123", 403), ("nope", 401), (None, 401)]:
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/v1/staff/alerts/stream",
-                                                          headers={"Authorization": f"Bearer {token}"} if token else {}), timeout=HANG_GUARD_SECONDS)
+                                                          headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"} if token else {"Content-Type": "application/json"}), timeout=HANG_GUARD_SECONDS)
         assert e.value.code == code
         assert http_call(port, "GET", "/v1/staff/alerts", token=token)[0] == code
 

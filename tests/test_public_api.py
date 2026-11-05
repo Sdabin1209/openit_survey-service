@@ -253,7 +253,7 @@ def test_over_http_with_app(tmp_path):
     def http(method, path, body=None, token="test-api-token-0123"):
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method,
                                      data=json.dumps(body).encode() if body is not None else None,
-                                     headers={"Authorization": f"Bearer {token}"} if token else {})
+                                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"} if token else {"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
                 return r.status, json.loads(r.read())

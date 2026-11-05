@@ -79,3 +79,5 @@ JSON Schema draft 2020-12, 파일 하나 = 타입 하나, 파일 이름 = 타입
 | link_push | 보낼 때 endpoint의 호스트를 해석해 모든 주소가 공개 주소여야 한다(아니면 FAILED) (link_push.py 38) | DNS 해석 결과(네트워크 상태)다 | `netguard.host_is_public` |
 | link_push | 푸시 서비스 응답이 404·410이면 GONE, 접수는 ACCEPTED, 그 밖은 FAILED (link_push.py 49) | 외부 서비스의 응답이다. 결과 값의 집합만 PushOutcome에 썼다 | `WebPushSender.send` |
 | link_push | VAPID 비밀키 형식과 subject(mailto:·https://) (link_push.py 19~27) | 비밀 값은 스키마·설정 파일에 두지 않는다(D84). 생성자 인자라 PushDelivery 입력에 없다 | 시작 때 `Vapid.from_*`와 `ValueError` |
+
+공개 HTTP 요청 DTO(SessionStartBody 등)는 `PublicApiRequests`의 `x-contract` 위임이다. 생성 계약 타입은 `survey_service/types/contract/`에 두며, 원본 정의를 내부 스키마에 복사하지 않는다([ADR-0064](../docs/adr/ADR-0064.md)).

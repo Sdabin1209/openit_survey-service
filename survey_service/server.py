@@ -81,16 +81,14 @@ class _SseBody:
             self.close()
 
 
-_EVENT_SCHEMA = {"alert": "StaffAlert", "resolved": "StaffAlert", "result_ready": "ResultReadyEvent", "heartbeat": "HeartbeatEvent", "resync": "ResyncEvent"}      # data: 의 계약 스키마(PUBLIC_API, 3.4.4)
 _ROLE_EVENTS = {"staff": {"alert", "resolved"}, "clinician": {"result_ready"}}      # 역할이 받는 이벤트(최소 권한). heartbeat·resync는 모두에게
 
 
 def _checked(name: str, data: dict) -> dict:
     """내보내기 전 생산자 검증(CONVENTIONS 3절): 이벤트 data를 계약 스키마로 본다. 어기면 ValueError(스트림을 끝낸다)."""
-    from boundary_contracts import validator
-    errs = list(_validator(_EVENT_SCHEMA[name]).iter_errors(data))
+    errs = list(_validator("StaffStreamEvent").iter_errors({"event": name, "data": data}))
     if errs:
-        raise ValueError(f"SSE {name} 이벤트가 계약 {_EVENT_SCHEMA[name]}를 어긴다")
+        raise ValueError("SSE event violates StaffStreamEvent")
     return data
 
 

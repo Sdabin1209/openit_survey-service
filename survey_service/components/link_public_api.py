@@ -210,7 +210,7 @@ class PublicApi:
 
     def link_app(self, ready: Optional[Callable[[], tuple]] = None, stream: Optional[Callable[[Request], Response]] = None) -> LinkApp:
         """이 API를 담은 WSGI 앱(/healthz, /readyz 포함). 인증·본문 해석·413·오류 본문은 라이브러리가 한다."""
-        return LinkApp(self.routes(stream), self._tokens(), ready=ready, authenticate=None)
+        return LinkApp(self.routes(stream), self._tokens(), ready=ready, authenticate=None, contract_service="survey-service", contract_bindings={"alert_roles": sorted({"staff"} | ({"result-reader"} if self.result_token is not None else set()))})
 
     def _guarded(self, name: str) -> Callable[[Request], Response]:
         def handler(req: Request) -> Response:

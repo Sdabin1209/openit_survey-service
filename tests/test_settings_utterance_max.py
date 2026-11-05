@@ -1,11 +1,11 @@
 """발화 길이 상한은 스키마(UtteranceBody.utterance.maxLength)와 설정(SURVEY_API_MAX_UTTERANCE_CHARS)이 한 곳에서 정해진다."""
 import pytest
 
-from survey_service import types
+from boundary_contracts import load_schema
 from survey_service.settings import ConfigError, Settings
 
 BASE = {"SURVEY_RELEASE_READER": "tests.fakes:release_reader", "SURVEY_TRACE_INGEST": "tests.fakes:trace_ingest", "SURVEY_MODEL_BACKEND": "fake"}
-MAX = types.schema("UtteranceBody")["properties"]["utterance"]["maxLength"]
+MAX = load_schema("PublicApiRequests")["$defs"]["UtteranceBody"]["properties"]["utterance"]["maxLength"]
 
 
 def test_default_equals_the_schema_limit():
