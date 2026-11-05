@@ -99,12 +99,22 @@ def _check(name: str, value) -> None:
 # R7(내는 쪽 검증): 응답이 문진 스키마(계약이 아니라 openit_link.App 이 모르는 이름)인 경로는 여기서 내보내기 전에 검증한다.
 # 어기면 틀린 값을 내보내지 않고 503 UNAVAILABLE(서버 결함)이다(link App 의 response_schema 와 같은 처리). PUBLIC_API.md 의 응답 행이 근거다.
 _SURVEY_RESPONSE = {"start": "FrontendInput", "turn": "FrontendInput", "end": "FrontendInput", "intervention": "FrontendInput",
-                    "result": "SessionResult", "staff_session": "StaffSessionView"}
+                    "result": "SessionResult", "staff_session": "StaffSessionView", "ack": "SessionResult"}
+# 목록 응답: 봉투는 계약 ListEnvelope 모양({"items", "next_cursor"}), 원소는 문진 스키마(PUBLIC_API.md GET /v1/results)
+_SURVEY_LIST_RESPONSE = {"results": "SessionResult"}
 _survey_validators: dict = {}
 
 
 def _check_survey_response(name: str, status: int, body) -> None:
-    schema = _SURVEY_RESPONSE.get(name)
+    if name in _SURVEY_LIST_RESPONSE and 200 <= status < 300:
+        ok = isinstance(body, dict) and set(body) == {"items", "next_cursor"} and isinstance(body["items"], list) \
+            and (body["next_cursor"] is None or (isinstance(body["next_cursor"], str) and body["next_cursor"]))
+        if not ok:
+            raise _err("UNAVAILABLE", "목록 응답이 봉투 모양(items, next_cursor)을 어긴다(서버 결함)")
+        for item in body["items"]:
+            _check_survey_response("_item_" + name, status, item)
+        return
+    schema = _SURVEY_RESPONSE.get(name) or _SURVEY_LIST_RESPONSE.get(name[len("_item_"):] if name.startswith("_item_") else "")
     if schema is None or not (200 <= status < 300) or not isinstance(body, dict):
         return
     v = _survey_validators.get(schema)

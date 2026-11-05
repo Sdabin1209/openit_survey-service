@@ -33,3 +33,12 @@ def test_out_of_schema_body_is_refused(route):
 def test_errors_and_unmapped_routes_are_not_checked():
     m._check_survey_response("turn", 400, {"code": "INVALID_RECORD"})
     m._check_survey_response("push_config", 200, {"anything": 1})
+
+
+def test_results_list_envelope_and_items_are_checked():
+    good = _valid("SessionResult")
+    m._check_survey_response("results", 200, {"items": [good], "next_cursor": None})
+    with pytest.raises(m.HttpError):
+        m._check_survey_response("results", 200, {"items": [{"x": 1}], "next_cursor": None})   # 변이: 원소가 스키마 밖
+    with pytest.raises(m.HttpError):
+        m._check_survey_response("results", 200, {"items": []})                              # 변이: 봉투 칸 빠짐
