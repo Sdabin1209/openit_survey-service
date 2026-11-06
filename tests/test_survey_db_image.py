@@ -64,7 +64,7 @@ def _build(tmp_path, tag, declaration, mutate=None):
     if mutate:
         rel, fn = mutate if isinstance(mutate, tuple) else ("initdb.d/10-areadb.sh", mutate)
         fn(ctx / "db" / rel)
-    _docker("build", "-q", "-f", str(ctx / "db" / "Dockerfile"), "-t", tag, "--build-arg", "COMMIT=abcdef1", "--build-arg", "BOUNDARY_TAG=v3.4.21",
+    _docker("build", "-q", "-f", str(ctx / "db" / "Dockerfile"), "-t", tag, "--build-arg", "COMMIT=abcdef1", "--build-arg", "BOUNDARY_TAG=v3.5.0",
             "--build-arg", f"DATABASE_DECLARATION={json.dumps(declaration, separators=(',', ':'))}", str(ctx))
     return tag
 

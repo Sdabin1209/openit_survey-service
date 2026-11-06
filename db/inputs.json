@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "image": "survey-db",
+  "read_only_root": true,
+  "exec_absolute_argv": true,
+  "role_env": null,
+  "roles": {
+    "default": {
+      "env_schema": "AreaDatabaseEnv",
+      "process": {
+        "uid": 0,
+        "gid": 0
+      },
+      "files": [
+        {
+          "path_env": null,
+          "path": "/certs",
+          "directory": true,
+          "kind": "certificate",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": null,
+          "path": "/run/secrets/db/survey",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "POSTGRES_PASSWORD_FILE",
+          "path": "/run/secrets/pg-superuser-survey",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "DB_ACCOUNT_SECRETS_DIR",
+          "path": "/run/secrets/db",
+          "directory": true,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        }
+      ],
+      "writable": [
+        {
+          "path": "/run",
+          "persist": false,
+          "written_by": {
+            "uid": 0,
+            "gid": 0
+          }
+        },
+        {
+          "path": "/tmp",
+          "persist": false,
+          "written_by": {
+            "uid": 0,
+            "gid": 0
+          }
+        },
+        {
+          "path": "/var/lib/postgresql/data",
+          "persist": true,
+          "written_by": {
+            "uid": 0,
+            "gid": 0
+          }
+        }
+      ],
+      "capabilities": [
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "SETGID",
+        "SETUID"
+      ],
+      "sysctls": {}
+    }
+  },
+  "jobs": {}
+}

@@ -23,6 +23,7 @@ import jsonschema
 from boundary_contracts import BoundaryError, canonical, validator
 
 import survey_schema
+from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
 
 
 log = logging.getLogger("survey_service.release")
@@ -255,7 +256,7 @@ class ReleaseLoader:
         ver = manifest["runtime_contract_version"]
         v = self._bank_validators.get(ver)
         if v is None:      # 정수 버전마다 한 번만 만든다(스키마 파일을 매번 다시 읽지 않는다, ADR-0050)
-            v = self._bank_validators[ver] = jsonschema.Draft202012Validator(survey_schema.load_schema("QuestionBank", ver))
+            v = self._bank_validators[ver] = jsonschema.Draft202012Validator(survey_schema.load_schema("QuestionBank", ver), format_checker=_bc_format_checker(survey_schema.load_schema("QuestionBank", ver)))
         errs = sorted(v.iter_errors(bank), key=lambda e: [str(x) for x in e.path])
         if errs:         # 필수 고정 문장 4개·칸 자료형·option 선택지·id 문자는 스키마가 표현한다(ADR-0045). 위반 위치와 이유(스키마가 적은 설명)를 알린다
             e = errs[0]

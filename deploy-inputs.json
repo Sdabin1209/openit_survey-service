@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "image": "survey-service",
+  "read_only_root": true,
+  "exec_absolute_argv": true,
+  "role_env": null,
+  "roles": {
+    "default": {
+      "env_schema": "SurveyServiceEnv",
+      "process": {
+        "uid": 10001,
+        "gid": 999
+      },
+      "files": [
+        {
+          "path_env": "SURVEY_RISK_RULES_FILE",
+          "path": "/config/risk-rules.json",
+          "directory": false,
+          "kind": "config",
+          "schema": "SurveyRiskRulesFile",
+          "required": false,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SSL_CERT_FILE",
+          "path": "/etc/openit/pki/root_ca.crt",
+          "directory": false,
+          "kind": "ca-bundle",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_DATABASE_URL_FILE",
+          "path": "/run/secrets/db-survey-dsn",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_RELEASE_READER_TOKEN_FILE",
+          "path": "/run/secrets/gate-read-survey-service",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_INFERENCE_TOKEN_FILE",
+          "path": "/run/secrets/inference-survey-service",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_TRACE_INGEST_TOKEN_FILE",
+          "path": "/run/secrets/ops-ingest-survey-service",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_STAFF_API_TOKEN_FILE",
+          "path": "/run/secrets/survey-api-staff",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_KIOSK_DEVICE_TOKENS_FILE",
+          "path": "/run/secrets/survey-kiosk-device-tokens",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_RESULT_READER_TOKEN_FILE",
+          "path": "/run/secrets/survey-result-reader",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_RISK_SOURCE_TOKEN_FILE",
+          "path": "/run/secrets/survey-risk-source",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        }
+      ],
+      "writable": [
+        {
+          "path": "/data",
+          "persist": true,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        },
+        {
+          "path": "/tmp",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        }
+      ],
+      "capabilities": [],
+      "sysctls": {}
+    }
+  },
+  "jobs": {
+    "backup": {
+      "env_schema": "SurveyBackupEnv",
+      "process": {
+        "uid": 10001,
+        "gid": 999
+      },
+      "files": [
+        {
+          "path_env": "SSL_CERT_FILE",
+          "path": "/etc/openit/pki/root_ca.crt",
+          "directory": false,
+          "kind": "ca-bundle",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "OPENIT_BACKUP_CREDENTIALS_FILE",
+          "path": "/run/secrets/backup-survey-credentials",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "OPENIT_BACKUP_REPO_PASSWORD_FILE",
+          "path": "/run/secrets/backup-survey-repo-password",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_DATABASE_URL_FILE",
+          "path": "/run/secrets/db-survey-dsn",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        }
+      ],
+      "writable": [
+        {
+          "path": "/data",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        },
+        {
+          "path": "/tmp",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        }
+      ],
+      "capabilities": [],
+      "sysctls": {}
+    },
+    "restore": {
+      "env_schema": "SurveyBackupEnv",
+      "process": {
+        "uid": 10001,
+        "gid": 999
+      },
+      "files": [
+        {
+          "path_env": "SSL_CERT_FILE",
+          "path": "/etc/openit/pki/root_ca.crt",
+          "directory": false,
+          "kind": "ca-bundle",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "OPENIT_BACKUP_CREDENTIALS_FILE",
+          "path": "/run/secrets/backup-survey-credentials",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "OPENIT_BACKUP_REPO_PASSWORD_FILE",
+          "path": "/run/secrets/backup-survey-repo-password",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_DATABASE_URL_FILE",
+          "path": "/run/secrets/db-survey-dsn",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        }
+      ],
+      "writable": [
+        {
+          "path": "/data",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        },
+        {
+          "path": "/tmp",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        }
+      ],
+      "capabilities": [],
+      "sysctls": {}
+    },
+    "session-purge": {
+      "env_schema": "SurveyServiceEnv",
+      "process": {
+        "uid": 10001,
+        "gid": 999
+      },
+      "files": [
+        {
+          "path_env": "SSL_CERT_FILE",
+          "path": "/etc/openit/pki/root_ca.crt",
+          "directory": false,
+          "kind": "ca-bundle",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_DATABASE_URL_FILE",
+          "path": "/run/secrets/db-survey-dsn",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_RELEASE_READER_TOKEN_FILE",
+          "path": "/run/secrets/gate-read-survey-service",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_INFERENCE_TOKEN_FILE",
+          "path": "/run/secrets/inference-survey-service",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_TRACE_INGEST_TOKEN_FILE",
+          "path": "/run/secrets/ops-ingest-survey-service",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_STAFF_API_TOKEN_FILE",
+          "path": "/run/secrets/survey-api-staff",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_KIOSK_DEVICE_TOKENS_FILE",
+          "path": "/run/secrets/survey-kiosk-device-tokens",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_RESULT_READER_TOKEN_FILE",
+          "path": "/run/secrets/survey-result-reader",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_RISK_SOURCE_TOKEN_FILE",
+          "path": "/run/secrets/survey-risk-source",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        }
+      ],
+      "writable": [
+        {
+          "path": "/data",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        },
+        {
+          "path": "/tmp",
+          "persist": false,
+          "written_by": {
+            "uid": 10001,
+            "gid": 999
+          }
+        }
+      ],
+      "capabilities": [],
+      "sysctls": {}
+    }
+  }
+}

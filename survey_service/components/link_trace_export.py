@@ -16,6 +16,7 @@ import jsonschema
 from boundary_contracts import BoundaryError, validator
 
 import survey_schema
+from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
 
 
 log = logging.getLogger("survey_service.trace")
@@ -60,7 +61,7 @@ class TraceExporter:
         v = self._trace_validators.get(ver)
         if v is None:
             try:
-                v = jsonschema.Draft202012Validator(survey_schema.load_schema("TurnTrace", ver))
+                v = jsonschema.Draft202012Validator(survey_schema.load_schema("TurnTrace", ver), format_checker=_bc_format_checker(survey_schema.load_schema("TurnTrace", ver)))
             except KeyError:
                 return f"이 서비스에 없는 문진 스키마 정수 버전 {ver}"
             self._trace_validators[ver] = v

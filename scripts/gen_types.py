@@ -28,6 +28,7 @@ import pathlib
 from typing import Any
 
 import jsonschema
+from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
 
 _DIR = pathlib.Path(__file__).parent / "_schemas"
 
@@ -39,7 +40,7 @@ def schema(name: str) -> dict:
 
 @functools.lru_cache(maxsize=None)
 def _validator(name: str):
-    return jsonschema.Draft202012Validator(schema(name))
+    return jsonschema.Draft202012Validator(schema(name), format_checker=_bc_format_checker(schema(name)))
 
 
 def _external(node: dict, value: Any):
@@ -49,12 +50,12 @@ def _external(node: dict, value: Any):
         yield from validator(node["x-contract"]).iter_errors(value)
     if "x-survey-schema" in node:
         import survey_schema
-        yield from jsonschema.Draft202012Validator(survey_schema.load_schema(node["x-survey-schema"])).iter_errors(value)
+        yield from jsonschema.Draft202012Validator(survey_schema.load_schema(node["x-survey-schema"]), format_checker=_bc_format_checker(survey_schema.load_schema(node["x-survey-schema"]))).iter_errors(value)
 
 
 def _ok(sub: dict, value: Any, root: Any) -> bool:
     """가지 하나가 값에 구조적으로 맞는가(루트의 $defs를 함께 준다)."""
-    return jsonschema.Draft202012Validator({**sub, "$defs": (root or {}).get("$defs", {})}).is_valid(value)
+    return jsonschema.Draft202012Validator({**sub, "$defs": (root or {}).get("$defs", {})}, format_checker=_bc_format_checker({**sub, "$defs": (root or {}).get("$defs", {})})).is_valid(value)
 
 
 def _walk(node: Any, value: Any, root: Any = None):
@@ -96,7 +97,7 @@ def _relaxed(name: str, static: tuple):
     sch = json.loads(json.dumps(schema(name)))
     for k in static:
         sch["properties"][k] = {}
-    return jsonschema.Draft202012Validator(sch)
+    return jsonschema.Draft202012Validator(sch, format_checker=_bc_format_checker(sch))
 
 
 def _fmt(e) -> str:
@@ -120,7 +121,7 @@ def errors(name: str, value: Any, static: tuple = ()) -> list[str]:
             continue
         sub = sch["properties"][k]
         defs = sch.get("$defs", {})
-        errs = [f"{k}/{_fmt(e)}" for e in jsonschema.Draft202012Validator({**sub, "$defs": defs}).iter_errors(value[k])]
+        errs = [f"{k}/{_fmt(e)}" for e in jsonschema.Draft202012Validator({**sub, "$defs": defs}, format_checker=_bc_format_checker({**sub, "$defs": defs})).iter_errors(value[k])]
         errs += [f"{k}/{_fmt(e)}" for e in _walk(sub, value[k], {**sch, **sub})]
         if errs:
             out += errs

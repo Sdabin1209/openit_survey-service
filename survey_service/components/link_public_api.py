@@ -40,6 +40,7 @@ from boundary_contracts import BoundaryError
 from openit_link import App as LinkApp, HttpError, Request, Response, Route
 
 from .. import types
+from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
 
 log = logging.getLogger("survey_service.api")
 
@@ -121,7 +122,7 @@ def _check_survey_response(name: str, status: int, body) -> None:
     if v is None:
         import jsonschema
         import survey_schema
-        v = _survey_validators[schema] = jsonschema.Draft202012Validator(survey_schema.load_schema(schema), format_checker=jsonschema.FormatChecker())
+        v = _survey_validators[schema] = jsonschema.Draft202012Validator(survey_schema.load_schema(schema), format_checker=_bc_format_checker(survey_schema.load_schema(schema)))
     if next(v.iter_errors(body), None) is not None:
         raise _err("UNAVAILABLE", f"응답이 문진 스키마 {schema}를 어긴다(서버 결함)")
 

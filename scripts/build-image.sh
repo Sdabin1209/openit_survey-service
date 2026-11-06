@@ -11,6 +11,36 @@ DOCKER=${DOCKER:-docker}
 . scripts/docker-env.sh      # 사용자 전역 ~/.docker 설정에 기대지 않는다(DOCKER_CONFIG, DOCKER_HOST)
 PYTHON=.venv/bin/python      # 이 영역의 시험 환경(setup-env.sh). 리포 루트 기준 상대 경로: 위에서 루트로 cd했다
 die() { echo "build-image: $*" >&2; exit 1; }
+# 주입 선언(계약 ContainerInputs 3.5.0, 라벨 io.openit.inputs): 정본은 리포 안 JSON. 라벨로 달기 전에 계약으로 검증하고(R7), 빌드한 이미지의 실행 사용자와 대조한다.
+# 왜 대조하는가: 배치 영역은 선언의 숫자 uid:gid 로 파일·쓰기 권한을 준다. 이미지와 다르면 기동에서야 권한 오류가 난다(2026-11-06 DB 비밀 읽기 실패).
+inputs_label() {   # inputs_label <선언 파일> <이미지 이름> -> 한 줄 JSON(표준 출력)
+  "${PYTHON:-${PY:-python3}}" -c '
+import json, sys
+from boundary_contracts import validator
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+if d.get("image") != sys.argv[2]:
+    sys.exit("%s 의 image(%s)가 이미지 이름 %s 와 다르다" % (sys.argv[1], d.get("image"), sys.argv[2]))
+errs = list(validator("ContainerInputs").iter_errors(d))
+if errs:
+    sys.exit("%s 가 ContainerInputs 를 어긴다: " % sys.argv[1] + ", ".join("/" + "/".join(map(str, e.absolute_path)) + ":" + e.validator for e in errs[:5]))
+print(json.dumps(d, ensure_ascii=False, separators=(",", ":"), sort_keys=True))' "$1" "$2"
+}
+inputs_check() {   # inputs_check <이미지 태그> <inputs_label 출력>: 다르면 이미지를 지우고 실패
+  local u g cu
+  # 실행 사용자: 이미지 안 id 로 읽는다. id 가 없는 이미지(distroless)는 이미지 설정 User 가 숫자 uid:gid 일 때만 그 값을 쓴다(이름이면 판정하지 못해 실패)
+  if u=$("${DOCKER:-docker}" run --rm --network none --entrypoint id "$1" -u 2>/dev/null) && g=$("${DOCKER:-docker}" run --rm --network none --entrypoint id "$1" -g 2>/dev/null); then :
+  else
+    cu=$("${DOCKER:-docker}" image inspect "$1" --format '{{.Config.User}}' 2>/dev/null)
+    if [[ "$cu" =~ ^([0-9]+):([0-9]+)$ ]]; then u=${BASH_REMATCH[1]}; g=${BASH_REMATCH[2]}
+    else "${DOCKER:-docker}" rmi -f "$1" >/dev/null 2>&1; echo "build-image: 이미지 실행 사용자를 읽지 못했다(id 없음, User=$cu): $1" >&2; return 1; fi
+  fi
+  "${PYTHON:-${PY:-python3}}" -c '
+import json, sys
+d = json.loads(sys.argv[1]); u, g = int(sys.argv[2]), int(sys.argv[3])
+bad = sorted(k for s in ("roles", "jobs") for k, st in d[s].items() if (st["process"]["uid"], st["process"]["gid"]) != (u, g))
+sys.exit("주입 선언의 process 가 이미지 실행 사용자 %d:%d 와 다르다: %s" % (u, g, bad) if bad else 0)' "$2" "$u" "$g" \
+    || { "${DOCKER:-docker}" rmi -f "$1" >/dev/null 2>&1; echo "build-image: 주입 선언이 이미지와 다르다. 이미지를 지웠다: $1" >&2; return 1; }
+}
 [ -x "$PYTHON" ] || die "$PYTHON 이 없다. 먼저 bash scripts/setup-env.sh 로 이 영역의 환경을 만든다"
 [ $# -eq 1 ] && [ -f "$1" ] || die "사용: bash scripts/build-image.sh <요청 JSON 파일>"
 
@@ -51,7 +81,9 @@ if [ "$VARIANT" = db ]; then
   "$PYTHON" db/gen_accounts.py db/database.json db/accounts.tsv || die "db/database.json이 계약 DatabaseDeclaration을 어긴다"
   DECL=$("$PYTHON" -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1],encoding="utf-8")),ensure_ascii=False,separators=(",",":")))' db/database.json) || die "db/database.json을 읽지 못했다"
   echo "build-image: $IMAGE_TAG (variant db, revision $REVISION, boundary $BOUNDARY_TAG)" >&2
-  "$DOCKER" build -f db/Dockerfile -t "$IMAGE_TAG" --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" --build-arg DATABASE_DECLARATION="$DECL" . >&2 || die "docker build가 실패했다"
+  INPUTS=$(inputs_label db/inputs.json survey-db) || die "db/inputs.json 이 계약 ContainerInputs 를 어긴다"
+  "$DOCKER" build -f db/Dockerfile -t "$IMAGE_TAG" --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_TAG" --build-arg DATABASE_DECLARATION="$DECL" --label "io.openit.inputs=$INPUTS" . >&2 || die "docker build가 실패했다"
+  inputs_check "$IMAGE_TAG" "$INPUTS" || exit 1
   "$DOCKER" image inspect "$IMAGE_TAG" | "$PYTHON" -c '
 import json, sys
 img = json.load(sys.stdin)[0]
@@ -91,6 +123,8 @@ errs=[e.message[:200] for e in validator("JobsDeclaration").iter_errors(d)]
 if errs: sys.exit("JobsDeclaration 위반: "+"; ".join(errs[:3]))
 print(json.dumps(d,ensure_ascii=False,separators=(",",":")))' deploy-jobs.json) || die "deploy-jobs.json이 계약 JobsDeclaration을 어긴다"
 
+INPUTS=$(inputs_label deploy-inputs.json survey-service) || die "deploy-inputs.json 이 계약 ContainerInputs 를 어긴다"
+
 # 2-1) 통신 기반 라이브러리 link(D118)의 소스: BuildImageRequest(계약 3.1.2)의 dependency_sources에는 link 키가 없다(변경 요청 CR-link-001 말미).
 #      그래서 requirements.txt가 고정한 태그를 빌드 호스트에서 한 번 받아 이름 있는 빌드 컨텍스트로 준다(Dockerfile 안에서는 네트워크를 쓰지 않는다).
 LINK_LINE=$(sed -n 's/^openit-link @ git+\(ssh:\/\/.*\)\.git@\(v[0-9.]*\)$/\1 \2/p' requirements.txt | head -1)
@@ -105,7 +139,10 @@ echo "build-image: $IMAGE_TAG (revision $REVISION, boundary $BOUNDARY_ACTUAL, mo
 "$DOCKER" build -t "$IMAGE_TAG" \
   --build-arg COMMIT="$REVISION" --build-arg BOUNDARY_TAG="$BOUNDARY_ACTUAL" --build-arg SURVEY_SCHEMA_MAJOR="$SURVEY_SCHEMA_MAJOR" \
   --build-arg MODEL_RUNTIME_TAG="$MODEL_RUNTIME_ACTUAL" --build-arg LANGGRAPH_VERSION="$LANGGRAPH_VERSION" \
-  --label "io.openit.exposure=$EXPOSURE" --label "io.openit.jobs=$JOBS" --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" --build-context "openit_link=$LINK_TMP/link" . >&2
+  --label "io.openit.exposure=$EXPOSURE" --label "io.openit.jobs=$JOBS" --label "io.openit.inputs=$INPUTS" --build-context "boundary_contracts=$BOUNDARY_SRC" --build-context "model_runtime=$MODEL_RUNTIME_SRC" --build-context "openit_link=$LINK_TMP/link" . >&2
+
+# 3-0) 주입 선언의 실행 사용자가 이미지와 같은지 확인한다(계약 ContainerInputs 3.5.0). 다르면 이미지를 지우고 실패한다.
+inputs_check "$IMAGE_TAG" "$INPUTS" || exit 1
 
 # 3-1) 이미지에 실제로 설치된 버전이 라벨과 같은지 확인한다(U50). 다르면 이미지를 지우고 실패한다.
 INSTALLED=$("$DOCKER" run --rm --entrypoint python "$IMAGE_TAG" -c "import importlib.metadata as m; print(m.version('boundary-contracts')); print(m.version('model-runtime')); print(m.version('openit-survey-schema'))") || die "이미지에서 설치된 버전을 읽지 못했다"
