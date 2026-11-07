@@ -37,7 +37,7 @@ def test_last_stdout_line_is_a_valid_setup_env_report_and_progress_goes_to_stder
     rep = json.loads(lines[-1])
     assert list(validator("SetupEnvReport").iter_errors(rep)) == []
     assert rep["area"] == "survey-service" and rep["status"] == "ok" and rep["exit_code"] == 0
-    assert rep["environment"] == {"kind": "python-venv", "path": ".venv", "test_command": [".venv/bin/python", "-m", "pytest"]}
+    assert rep["environment"] == {"kind": "python-venv", "path": ".venv", "test_command": ["bash", "scripts/test-all.sh"]}
     assert "[setup-env]" in r.stderr
     assert (mini_repo / rep["environment"]["path"] / "bin/python").exists()          # 선언한 경로가 실제 환경이다
 
@@ -62,6 +62,8 @@ def test_declared_test_command_runs_the_area_tests_from_the_repo_root():
     venv = ROOT / ".venv/bin/python"
     if not venv.exists():
         pytest.skip(".venv가 없다(setup-env.sh를 먼저 실행)")
-    r = subprocess.run([".venv/bin/python", "-m", "pytest", "--collect-only", "-p", "no:cacheprovider", "tests/test_version_pins_and_labels.py"],
-                       cwd=ROOT, capture_output=True, text=True, timeout=HANG_GUARD_SECONDS)
+    # 선언한 명령(PostgreSQL 포함 전체 실행기) 그대로 수집만 한다. TEST_DATABASE_URL 을 주어 PostgreSQL 을 새로 띄우지 않는다(바깥 시험의 DB 를 건드리지 않게)
+    env = {**os.environ, "TEST_DATABASE_URL": os.environ.get("TEST_DATABASE_URL") or "postgresql://unused@127.0.0.1:1/x"}
+    r = subprocess.run(["bash", "scripts/test-all.sh", "--collect-only", "tests/test_version_pins_and_labels.py"],
+                       cwd=ROOT, capture_output=True, text=True, timeout=HANG_GUARD_SECONDS, env=env)
     assert r.returncode == 0, r.stdout[-300:] + r.stderr[-300:]

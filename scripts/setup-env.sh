@@ -12,7 +12,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 report() {   # report <종료 코드>: 종료할 때 한 번만 낸다(성공·실패 모두)
   local rc=$1 status=ok
   [ "$rc" = 0 ] || status=fail
-  printf '{"area":"survey-service","status":"%s","exit_code":%d,"seconds":%d,"environment":{"kind":"python-venv","path":".venv","test_command":[".venv/bin/python","-m","pytest"]}}\n' \
+  printf '{"area":"survey-service","status":"%s","exit_code":%d,"seconds":%d,"environment":{"kind":"python-venv","path":".venv","test_command":["bash","scripts/test-all.sh"]}}\n' \
     "$status" "$rc" "$((SECONDS - START))" >&3
 }
 trap 'report $?' EXIT

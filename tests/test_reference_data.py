@@ -6,7 +6,9 @@ from pathlib import Path
 import pytest
 
 D = os.environ.get("SURVEY_REFERENCE_DATA_DIR", "")
-pytestmark = pytest.mark.skipif(not D or not (Path(D) / "lora_a_val.jsonl").exists(), reason="SURVEY_REFERENCE_DATA_DIR 없음: 학습 데이터 대조 건너뜀")
+# 외부 실제 학습 데이터(SURVEY_REFERENCE_DATA_DIR)가 있어야 도는 선택 대조: 표지 reference_data 를 달아 선언한 전체 시험 명령(scripts/test-all.sh)에서 명시적으로 뺀다.
+# 데이터를 가진 곳에서는 'SURVEY_REFERENCE_DATA_DIR=... .venv/bin/python -m pytest -m reference_data' 로 돌린다(건너뛰기로 숨기지 않는다, 2026-11-07)
+pytestmark = [pytest.mark.reference_data, pytest.mark.skipif(not D or not (Path(D) / "lora_a_val.jsonl").exists(), reason="SURVEY_REFERENCE_DATA_DIR 없음: 학습 데이터 대조 건너뜀")]
 
 
 @pytest.fixture(scope="module")

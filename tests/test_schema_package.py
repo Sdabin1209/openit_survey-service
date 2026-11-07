@@ -116,6 +116,12 @@ def test_package_version_equals_the_tag_when_head_is_tagged():
     import subprocess
     r = subprocess.run(["git", "tag", "--points-at", "HEAD", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
     here = [tuple(int(x) for x in m.groups()) for t in r.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", t))]
-    if r.returncode != 0 or not here:
-        pytest.skip("HEAD에 survey-schema-v* 태그가 없다")
-    assert _pkg_version() == here[0]
+    assert r.returncode == 0, r.stderr[-200:]
+    if here:
+        assert _pkg_version() == here[0]
+        return
+    # HEAD 에 태그가 없으면(다음 판 작업 중) 패키지 버전은 이미 낸 태그들 이상이어야 한다: 건너뛰지 않고 이 상황에서 확인할 수 있는 것을 본다(2026-11-07)
+    t = subprocess.run(["git", "tag", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
+    tags = [tuple(int(x) for x in m.groups()) for x in t.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", x))]
+    assert tags, "survey-schema-v* 태그를 하나도 읽지 못했다(clone 이 태그를 받지 않았다)"
+    assert _pkg_version() >= max(tags)

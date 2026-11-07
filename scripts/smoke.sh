@@ -182,18 +182,20 @@ if [ "${SMOKE_PG:-0}" = 1 ]; then
   # 앱 컨테이너는 compose가 만든 네트워크에 붙어 서비스 이름(postgres)으로 접속한다(호스트 루프백 포트는 컨테이너에서 보이지 않는다)
   PGNET="${PROJ}_default"
   printf 'postgresql://postgres@postgres:5432/survey\n' > "$SECRET_DIR/db_url"; chmod 644 "$SECRET_DIR/db_url"
-  PGPORT_APP=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')   # 빈 포트(고정하지 않는다)
-  runpg() { $DOCKER run -d --name "$NAME-pg" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v "$NAME-pg-data:/data" --network "$PGNET" -p 127.0.0.1:"$PGPORT_APP":8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
+  # 호스트 포트는 Docker 가 배정한다(공통 규칙 '고정 포트 금지': 직접 고른 포트는 Windows 예약 범위와 겹칠 수 있다). 재시작하면 바뀔 수 있어 띄울 때마다 다시 읽는다
+  pgapi() { local p; p=$($DOCKER port "$NAME-pg" 8080/tcp | grep '^127\.0\.0\.1:' | head -1 | cut -d: -f2); [ -n "$p" ] || fail "PostgreSQL 모드 앱의 배정 포트를 읽지 못했다"; PAPI="http://127.0.0.1:$p"; }
+  runpg() { $DOCKER run -d --name "$NAME-pg" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v "$NAME-pg-data:/data" --network "$PGNET" -p 127.0.0.1::8080 -v "$TESTS_DIR:/mnt/tests:ro" -v "$SECRET_DIR:/run/secrets:ro" -e PYTHONPATH=/mnt \
     -e SURVEY_DATABASE_URL_FILE=/run/secrets/db_url -e SURVEY_RELEASE_READER=tests.smoke_fakes:reader \
     -e SURVEY_TRACE_INGEST=tests.smoke_fakes:ingest -e SURVEY_API_TOKEN=smoke-api-token-0123 -e SURVEY_STAFF_API_TOKEN_FILE=/run/secrets/staff_token \
     -e SURVEY_MODEL_BACKEND=fake -e SURVEY_RELEASE_POLL_SECONDS=1 "$IMG" >/dev/null; }
   runpg
-  PAPI="http://127.0.0.1:$PGPORT_APP"
+  pgapi
   for i in $(seq 1 40); do curl -fsS "$PAPI/readyz" >/dev/null 2>&1 && break; sleep 1; done
   PREADY=$(curl -fsS "$PAPI/readyz") || { $DOCKER logs "$NAME-pg" 2>&1 | tail -5; fail "PostgreSQL 모드의 readyz가 준비되지 않았다"; }
   echo "$PREADY" | grep -q '"database": {"kind": "postgresql"}' || fail "/readyz의 database.kind가 postgresql이 아니다"
   [ "$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer smoke-api-token-0123' -d '{"session_id":"pg-1","kind":"SESSION_START"}' "$PAPI/v1/sessions")" = 200 ] || fail "PostgreSQL 모드의 세션 시작"
   $DOCKER restart -t 10 "$NAME-pg" >/dev/null
+  pgapi   # 재시작 뒤 배정 포트가 바뀔 수 있다
   for i in $(seq 1 40); do curl -fsS "$PAPI/readyz" >/dev/null 2>&1 && break; sleep 1; done
   curl -fsS -H 'Authorization: Bearer smoke-api-token-0123' "$PAPI/v1/sessions/pg-1/state" | grep -q '"state": "ACTIVE"' || fail "재시작 뒤 PostgreSQL의 세션이 남아 있지 않다"
   { echo "$PREADY"; $DOCKER logs "$NAME-pg" 2>&1; } | grep -q "postgres@postgres" && fail "접속 문자열이 /readyz나 로그에 나왔다"

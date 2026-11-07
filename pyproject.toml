@@ -19,4 +19,5 @@ survey_service = ["migrations/*/*.sql", "migrations/*/*.py"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["reference_data: 외부 실제 학습 데이터(SURVEY_REFERENCE_DATA_DIR)가 있어야 도는 선택 대조. 전체 시험 명령(scripts/test-all.sh)은 명시적으로 뺀다"]
 filterwarnings = ["ignore:jsonschema.RefResolver is deprecated:DeprecationWarning", "ignore:The default datetime adapter is deprecated:DeprecationWarning:yoyo"]
