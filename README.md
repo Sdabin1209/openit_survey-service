@@ -106,7 +106,7 @@ G07은 닫힘이라 뺐다. 위 요약은 대장의 한 줄을 줄인 것이며 
 
 ## 설계 결정 기록 (ADR)
 
-구조·기본값 선택의 '왜'는 [docs/adr/](docs/adr/README.md)에 있다(SQLite와 PostgreSQL, 연결 풀 없음, ThreadingHTTPServer, LangGraph, 문서 저장, 멱등, 턴 마감 timeout 체인, outbox, SSE, 위험 규칙 엔진 위치, 보존 기본값, 기기별 토큰, 값 검증, HTTP 방어).
+구조·기본값 선택의 '왜'는 [docs/adr/](docs/adr/README.md)에 있다(SQLite와 PostgreSQL, 연결 풀 없음, ThreadingHTTPServer, LangGraph, 문서 저장, 멱등, 턴 마감 timeout 체인, outbox, SSE, 위험 규칙 엔진 위치, 보존 기본값, 게이트웨이 mTLS와 세션 소유 확인, 값 검증, HTTP 방어).
 
 ## 더 자세한 문서
 
