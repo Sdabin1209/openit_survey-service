@@ -187,3 +187,13 @@
 - 관련 검증: SS4.1.4 스키마·사본·공개 API 검사 통과. MR 시험 중 보류했던 실제 이미지 라벨 시험도 아래 최종 전체 실행에서 통과했다.
 - 최종 검증: `bash scripts/test-all.sh --tb=short --maxfail=10 -rs -o addopts="" -q` 전체 1703 pass, skip0, 외부 실제 학습 데이터 대조 4 deselected(1093.38s). 최종 `SMOKE_PG=1 bash scripts/smoke.sh` rc0: 실제 이미지 기동/start/turn/resume/CLI와 PostgreSQL 재시작 뒤 세션 유지 확인.
 - 전체 프로젝트 E2E는 실행하지 않았다. 구현 커밋을 헤드에 보내 교차검토한다.
+
+## 부하 도구의 계약 4 입력 정렬 (2026-11-08)
+
+- `scripts/load_test.py`의 옛 factory 설정을 HTTP 설정과 생성자 대역 주입으로 바꿨다. 시험 기기 헤더를 모든 요청에 넣고, 시작 응답의 서버 ID를 후속 경로와 본문에 사용한다. 모델 지연 래퍼는 extract의 flow/fields 키워드 인자도 전달한다.
+- 실제 PostgreSQL에서 `--steps 1 --turns 1`과 `--model-delay 0.01` 추가 사례 모두 세션 시작 및 발화 200으로 성공했다. 이는 도구의 실행·계약 준수 확인이며 서비스 성능 보장은 아니다. 최종 계약 핀 변경과 함께 후속 커밋한다.
+
+## 최종 계약 조합 검증 (2026-11-08)
+
+- 표준 setup-env로 BC4.0.5/SS4.1.4/link0.5.4/MR0.12.4를 정식 설치했고 pip check 정상이다. PG 포함 표준 전체 시험 1703 pass, skip0, 외부 데이터 대조4 deselected, rc0(982.22s).
+- SMOKE_PG=1 실제 이미지에서 시작/턴/재개/CLI 및 PostgreSQL 재시작 뒤 세션 유지·접속 문자열 비노출 확인, rc0. 부하 도구 수정은 앞서 1명/1턴 정상과 지연0.01 두 실행에서 확인했으며 성능 보장으로 해석하지 않는다. 전체 프로젝트 E2E는 실행하지 않았다.

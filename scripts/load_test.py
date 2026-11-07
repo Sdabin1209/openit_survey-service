@@ -25,7 +25,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 TOKEN, STAFF = "load-api-token-0123", "load-staff-token-0123"       # 토큰 최소 16자(ADR-0024)
-RUN = format(int(time.time()) % 10**8, "x")       # 실행마다 다른 세션 ID(같은 DB를 다시 써도 멱등 재생으로 빨라지지 않게)
 
 
 def rss_mb() -> float:
@@ -51,7 +50,9 @@ def build_app(args, tmp: Path):
     reader = FakeReleaseReader(tmp / "gate")
     reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
-    env = {"SURVEY_WORK_DIR": str(tmp / "w"), "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
+    # 계약에 맞는 HTTP 설정. 생성자 대역을 주입하므로 이 주소로 호출하지 않는다.
+    env = {"SURVEY_WORK_DIR": str(tmp / "w"), "SURVEY_RELEASE_READER": "http", "SURVEY_TRACE_INGEST": "http",
+           "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake",
            "SURVEY_SESSION_IDLE_SECONDS": "0", "SURVEY_API_MAX_INFLIGHT": str(args.max_inflight), "SURVEY_TURN_DEADLINE_SECONDS": str(args.deadline)}
     app = App(Settings.from_env(env), reader=reader, ingest=FakeTraceIngest())
     app.start()
@@ -59,7 +60,7 @@ def build_app(args, tmp: Path):
         sess = app.registry.active().session
         for name in ("extract", "respond"):
             real = getattr(sess, name)
-            setattr(sess, name, (lambda real: lambda req: (time.sleep(args.model_delay), real(req))[1])(real))
+            setattr(sess, name, (lambda real: lambda *a, **kw: (time.sleep(args.model_delay), real(*a, **kw))[1])(real))
     return app
 
 
@@ -67,7 +68,7 @@ def post(port, path, body):
     c = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
     t = time.monotonic()
     try:
-        c.request("POST", path, json.dumps(body).encode(), {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"})
+        c.request("POST", path, json.dumps(body).encode(), {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json", "X-Openit-Device": "load-kiosk"})
         r = c.getresponse()
         data = json.loads(r.read() or b"{}")
         return r.status, data, time.monotonic() - t
@@ -95,11 +96,13 @@ def run_step(app, port, n, turns, tag):
     lock = threading.Lock()
 
     def client(i):
-        sid = f"L{RUN}-{tag}-{n}-{i}"
-        st, _, _ = post(port, "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"})
+        st, started, _ = post(port, "/v1/sessions", {"kind": "SESSION_START"})
+        sid = started.get("session_id")
         with lock:
             start_codes[st] = start_codes.get(st, 0) + 1
         barrier.wait(60)
+        if st != 200 or not isinstance(sid, str) or not sid:
+            return
         for k in range(turns):
             st, body, dt = post(port, f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": "안 피워요", "turn_id": f"u{k}"})
             key = st

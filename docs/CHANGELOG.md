@@ -1,5 +1,7 @@
 # 변경 이력
 
+기기 토큰·호환 경로에 대한 과거 버전 설명은 당시 기록이다. 현행 기기 인증은 ADR-0065와 docs/runbook.md를 따른다.
+
 ## R7 생산자 검증 (U424·U426) [미출시]
 
 - 응답 계약 검증: `Route.response_schema`(state SessionState, staff-call retry/report, 알림 목록 StaffAlertPage, push-config PushConfig). 직원 웹 푸시 본문은 보내기 전에 StaffPushPayload로, `/readyz` 본문은 내보내기 전에 SurveyReadyz로 검증한다(어기면 푸시는 보내지 않고 실패로 세고, `/readyz`는 값 없이 위반 위치만 담아 503 `readyz_contract_violation`).
