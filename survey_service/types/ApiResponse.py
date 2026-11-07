@@ -34,7 +34,6 @@ class ApiResponse(TypedDict, closed=True):
             'SignalsResponse',
             'ResultPage',
             'PushSubscribed',
-            'PushUnsubscribed',
         ]
     ]
     error: NotRequired[dict[str, Any]]

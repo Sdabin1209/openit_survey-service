@@ -1,3 +1,4 @@
+from unittest.mock import patch
 """D85 1단계: subject_ref(A), 결과 조회(B), 직원 세션 조회 보강(C), 외부 위험 신호(D), 직원 식별(E), 세션 보존."""
 import json
 import logging
@@ -43,13 +44,14 @@ class Env:
                              risk_token="xtok" if risk else None, require_subject_ref=require)
 
     def call(self, method, path, body=None, auth=STAFF, user="staff-1"):
-        return self.api.handle(method, path, auth, json.dumps(body).encode() if body is not None else b"", user=user)
+        return self.api.handle(method, path, auth, json.dumps(body).encode() if body is not None else b"", user=user, device="test-kiosk")
 
     def start(self, sid="K1", subject=SUBJ, **extra):
-        body = {"session_id": sid, "kind": "SESSION_START", **extra}
+        body = {"kind": "SESSION_START", **extra}
         if subject is not None:
             body["subject_ref"] = subject
-        return self.call("POST", "/v1/sessions", body, auth=AUTH)
+        with patch("secrets.token_urlsafe", return_value=sid):
+            return self.call("POST", "/v1/sessions", body, auth=AUTH)
 
     def say(self, sid="K1", text="아니요", tid="t-1", out=ANSWER_OUT):
         self.rig.model.queue.append(out)
@@ -191,7 +193,7 @@ def test_result_reads_are_logged_without_subject_value_and_fail_closed(env):
 
 def test_result_dispatcher_stays_no_target():
     from survey_service.wiring.ports import UnattachedDispatcher
-    assert Rig().orch.dispatcher_status() == {"attached": True} or True
+    assert Rig().orch.dispatcher_status() == {"attached": True}
     r = Rig(); r.orch.dispatcher = UnattachedDispatcher()
     assert r.orch.dispatcher_status()["status"] == "NO_TARGET"
 
@@ -232,10 +234,10 @@ def test_risk_signal_errors(env):
 def test_risk_signal_then_staff_resume_records_staff_id(env):
     env.start()
     env.signal()
-    st, body, _ = env.call("POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, user="dr.kim@clinic")
+    st, body, _ = env.call("POST", "/v1/sessions/K1/intervention", {"session_id": "K1", "decision": "RESUME", "turn_id": "i-1"}, user="dr.kim-clinic")
     assert st == 200
     view = env.call("GET", "/v1/staff/sessions/K1")[1]
-    assert view["status"] == "IN_PROGRESS" and [(a["status"], a["resolved_by"]) for a in view["alerts"]] == [("RESOLVED", "dr.kim@clinic")]
+    assert view["status"] == "IN_PROGRESS" and [(a["status"], a["resolved_by"]) for a in view["alerts"]] == [("RESOLVED", "dr.kim-clinic")]
 
 
 def test_risk_signal_disabled_without_token(tmp_path):
@@ -297,7 +299,7 @@ def test_retention_purges_only_old_ended_sessions_and_keeps_access_log(tmp_path)
 
 
 def test_settings_parse_new_options():
-    base = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
+    base = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
     s = Settings.from_env(base)
     assert s.session_retention_days == 90 and s.require_subject_ref is False
     s = Settings.from_env({**base, "SURVEY_SESSION_RETENTION_DAYS": "30", "SURVEY_REQUIRE_SUBJECT_REF": "true"})

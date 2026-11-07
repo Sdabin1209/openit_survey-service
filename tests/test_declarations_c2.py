@@ -69,7 +69,7 @@ def test_app_wiring_passes_the_egress_proxy_to_the_inference_client_and_the_web_
     monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", "inf-token-0123456789")
     monkeypatch.setenv("SURVEY_VAPID_PRIVATE_KEY", _vapid_key_pem())
     monkeypatch.delenv("SURVEY_DATABASE_URL", raising=False)
-    s = Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": "https://model-serving", "SURVEY_WORK_DIR": str(tmp_path / "w"),
+    s = Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_INFERENCE_URL": "https://model-serving", "SURVEY_WORK_DIR": str(tmp_path / "w"),
                            "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_VAPID_SUBJECT": "mailto:ops@example.com"})
     app = App(s, reader=FakeReleaseReader(tmp_path / "g"), ingest=FakeTraceIngest())
     try:

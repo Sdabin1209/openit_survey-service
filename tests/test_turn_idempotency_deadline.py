@@ -1,5 +1,6 @@
 """FAULT_POLICY 2·3: 같은 turn_id의 동시 중복(처리 중이면 409 + Retry-After, 확정 뒤에는 저장된 결과), 서버 턴 총 마감."""
 import threading
+from unittest.mock import patch
 
 from survey_service.components.link_public_api import PublicApi
 
@@ -14,12 +15,13 @@ def _api(rig):
 def _call(api, tid, text="안 피움", sid="K1"):
     import json
     body = {"session_id": sid, "kind": "UTTERANCE", "utterance": text, "turn_id": tid}
-    return api.handle("POST", f"/v1/sessions/{sid}/turns", "Bearer tok", json.dumps(body, ensure_ascii=False).encode())
+    return api.handle("POST", f"/v1/sessions/{sid}/turns", "Bearer tok", json.dumps(body, ensure_ascii=False).encode(), device="test-kiosk")
 
 
 def _start(api):
     import json
-    return api.handle("POST", "/v1/sessions", "Bearer tok", json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
+    with patch("secrets.token_urlsafe", return_value="K1"):
+        return api.handle("POST", "/v1/sessions", "Bearer tok", json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")
 
 
 def _gate_extract(rig):

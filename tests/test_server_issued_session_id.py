@@ -1,7 +1,7 @@
 """단계 B (1): 세션 ID는 서버가 발급한다. `POST /v1/sessions` 본문에서 `session_id`를 생략하면 서버가 CSPRNG로 만든 값을 응답의 `session_id`로 돌려준다.
 
 기대값의 출처: ../boundary-contracts/PUBLIC_API.md 7행(2.2.0, D106): 문자열 1~64자·영문·숫자·`-_`, 예측할 수 없는 값(OWASP 세션 관리 권고, 원문 대조 전),
-프론트가 session_id를 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식(수용하되 로그에 폐기 예정 경고 한 줄).
+4.0.0 공개 HTTP 시작 본문은 session_id를 거부한다. 내부 FrontendMessage와 구분한다.
 CSPRNG 여부는 출력만으로 증명할 수 없다: 시험은 길이(128비트 이상을 base64url로 쓴 22자 이상), 유일성, `secrets` 모듈 사용는 secrets 모듈 호출의 결과와 같음을 본다.
 """
 import logging
@@ -50,12 +50,10 @@ def test_issued_ids_are_unique_and_come_from_the_secrets_module(ar, monkeypatch)
     assert ids == made and len(set(ids)) == 60
 
 
-def test_client_supplied_session_id_still_works_with_one_deprecation_warning(ar, caplog):
-    caplog.set_level(logging.DEBUG)
+def test_client_supplied_session_id_is_rejected_without_creating_session(ar):
     code, body, _ = ar.call("POST", "/v1/sessions", {"session_id": "legacy-sess-1", "kind": "SESSION_START"}, auth=AUTH)
-    assert code == 200 and "session_id" not in body        # 프론트가 정한 ID는 응답에 되돌리지 않는다(2.x 호환 모양 그대로)
-    warns = [r for r in caplog.records if r.levelno == logging.WARNING and "폐기 예정" in r.getMessage()]
-    assert len(warns) == 1 and "legacy-sess-1" not in warns[0].getMessage()
+    assert code == 400 and body["code"] == "INVALID_RECORD"
+    assert ar.call("GET", "/v1/sessions/legacy-sess-1/state", auth=AUTH)[0] == 404
 
 
 def test_issuing_does_not_warn(ar, caplog):
@@ -75,13 +73,13 @@ def test_issued_session_is_bound_to_the_creating_device(tmp_path):
     import json
     r = AlertRig(tmp_path)
     try:
-        api = PublicApi(r.rig.orch, None, device_tokens={"dev-a": "tok-device-a-0123456789", "dev-b": "tok-device-b-0123456789"},
+        api = PublicApi(r.rig.orch, "gateway-token-0123456789",
                         staff_token="stok", alerts=r.service)
-        code, body, _ = api.handle("POST", "/v1/sessions", "Bearer tok-device-a-0123456789", json.dumps({"kind": "SESSION_START"}).encode())
+        code, body, _ = api.handle("POST", "/v1/sessions", "Bearer gateway-token-0123456789", json.dumps({"kind": "SESSION_START"}).encode(), device="dev-a")
         assert code == 200
         sid = body["session_id"]
-        assert api.handle("GET", f"/v1/sessions/{sid}/state", "Bearer tok-device-a-0123456789", b"")[0] == 200
-        assert api.handle("GET", f"/v1/sessions/{sid}/state", "Bearer tok-device-b-0123456789", b"")[0] == 404
+        assert api.handle("GET", f"/v1/sessions/{sid}/state", "Bearer gateway-token-0123456789", b"", device="dev-a")[0] == 200
+        assert api.handle("GET", f"/v1/sessions/{sid}/state", "Bearer gateway-token-0123456789", b"", device="dev-b")[0] == 404
     finally:
         r.store.close()
 
@@ -93,7 +91,11 @@ def test_schemas_describe_the_start_request_and_response():
     msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
     fi = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
     assert not list(msg.iter_errors({"kind": "SESSION_START"}))                                   # 서버 발급: session_id 생략
-    assert not list(msg.iter_errors({"kind": "SESSION_START", "session_id": "legacy-1"}))         # 2.x 호환
+    assert not list(msg.iter_errors({"kind": "SESSION_START", "session_id": "legacy-1"}))  # 내부 메시지
+    from boundary_contracts import validator
+    start = validator("PublicApiRequests#/$defs/SessionStartBody")
+    assert start.is_valid({"kind": "SESSION_START"})
+    assert not start.is_valid({"kind": "SESSION_START", "session_id": "legacy-1"})
     assert list(msg.iter_errors({"kind": "UTTERANCE", "utterance": "x"}))                         # 다른 kind는 session_id 필수
     assert list(msg.iter_errors({"kind": "SESSION_END"}))
     base = {"response_text": "안녕하세요", "turn_failure_signal": None}

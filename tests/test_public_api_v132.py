@@ -1,4 +1,5 @@
 """공개 API 보완(D66): 세션 상태, 푸시 설정, 오류 표, Retry-After, turn_id 봉투, 응답 스키마 검증."""
+from unittest.mock import patch
 from .timing import HANG_GUARD_SECONDS, fake_clock, wait_until
 import json
 import re
@@ -65,7 +66,7 @@ def test_resume_text_survives_restart_and_failed_resume_text(ar):
     ar.start(); ar.hub.subscribe(); ar.risk(); ar.intervene("RESUME", "i-1")
     before = state(ar)[1]
     api2 = PublicApi(ar.rig.orch, "tok", staff_token="stok", alerts=ar.service, state_poll_min_interval=0)   # 새 API 객체 = 메모리 상태 없음
-    assert api2.handle("GET", "/v1/sessions/K1/state", AUTH, b"")[1] == before
+    assert api2.handle("GET", "/v1/sessions/K1/state", AUTH, b"", device="test-kiosk")[1] == before
 
 
 def test_state_is_kiosk_only_and_validates_session_id(ar):
@@ -138,16 +139,17 @@ def test_status_code_to_boundary_error_code_table(ar):
 def test_inflight_overflow_is_429_unavailable_with_retry_after():
     rig = Rig()
     api_ = PublicApi(rig.orch, "tok", max_inflight=1, retry_after_seconds=3)
-    api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
+    with patch("secrets.token_urlsafe", return_value="K1"):
+        assert api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")[0] == 200
     gate, entered = threading.Event(), threading.Event()
     real = rig.release.session.extract
     def slow(inp, **kw):
         entered.set(); gate.wait(HANG_GUARD_SECONDS); return real(inp, **kw)
     rig.release.session.extract = slow
     body = json.dumps({"session_id": "K1", "kind": "UTTERANCE", "utterance": "x", "turn_id": "t1"}).encode()
-    t = threading.Thread(target=lambda: api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body)); t.start()
+    t = threading.Thread(target=lambda: api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body, device="test-kiosk")); t.start()
     assert entered.wait(HANG_GUARD_SECONDS)
-    s, b, h = api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body.replace(b"t1", b"t2"))
+    s, b, h = api_.handle("POST", "/v1/sessions/K1/turns", AUTH, body.replace(b"t1", b"t2"), device="test-kiosk")
     gate.set(); t.join()
     assert (s, b["code"], b["retryable"], h["Retry-After"]) == (429, "UNAVAILABLE", True, "3")
 
@@ -158,7 +160,7 @@ def test_503_without_release_has_retry_after():
     from survey_service.components.session_store import MemorySessionStore
     from .fakes import RecordingConsole
     api_ = PublicApi(Orchestrator(MemorySessionStore(clock=fake_clock()), ReleaseRegistry(), staff_console=RecordingConsole()), "tok")
-    s, b, h = api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
+    s, b, h = api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")
     assert (s, b["code"], h["Retry-After"]) == (503, "UNAVAILABLE", "1")
 
 
@@ -178,14 +180,18 @@ def test_turn_id_is_stripped_before_schema_validation(ar):
     assert ar.intervene("RESUME", "i-1")[0] == 200
 
 
-def test_start_and_end_accept_an_optional_turn_id(ar):
-    s1 = ar.call("POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START", "turn_id": "my-start"}, auth=AUTH)
-    assert s1[0] == 200
-    again = ar.call("POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START", "turn_id": "my-start"}, auth=AUTH)
-    assert again[:2] == s1[:2] and ar.rig.store.get_turn("K1", "my-start") is not None and ar.rig.store.get_turn("K1", "start") is None
-    assert ar.call("POST", "/v1/sessions", {"session_id": "K2", "kind": "SESSION_START", "turn_id": "bad id"}, auth=AUTH)[0] == 400
-    assert ar.call("POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END", "turn_id": "my-end"}, auth=AUTH)[0] == 200
-    assert ar.rig.store.get_turn("K1", "my-end") is not None
+def test_start_records_optional_turn_id_in_distinct_server_issued_sessions(ar):
+    first = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START", "turn_id": "my-start"}, auth=AUTH)
+    second = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START", "turn_id": "my-start"}, auth=AUTH)
+    assert first[0] == second[0] == 200
+    sid, other = first[1]["session_id"], second[1]["session_id"]
+    assert sid != other
+    for session in (sid, other):
+        assert ar.rig.store.get_turn(session, "my-start") is not None
+        assert ar.rig.store.get_turn(session, "start") is None
+    assert ar.call("POST", "/v1/sessions", {"kind": "SESSION_START", "turn_id": "bad id"}, auth=AUTH)[0] == 400
+    assert ar.call("POST", f"/v1/sessions/{sid}/end", {"session_id": sid, "kind": "SESSION_END", "turn_id": "my-end"}, auth=AUTH)[0] == 200
+    assert ar.rig.store.get_turn(sid, "my-end") is not None
 
 
 # ---------------------------------------------------------------- 응답 스키마 검증 (boundary-contracts)
@@ -233,7 +239,7 @@ def test_sse_events_are_alert_and_resolved_with_event_numbers_and_validate(tmp_p
 
 
 def test_new_settings_come_from_environment():
-    base = {"SURVEY_RELEASE_READER": "a:b", "SURVEY_TRACE_INGEST": "c:d", "SURVEY_MODEL_BACKEND": "fake"}
+    base = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
     s = Settings.from_env({**base, "SURVEY_SESSION_IDLE_SECONDS": "120", "SURVEY_STATE_POLL_MIN_INTERVAL_SECONDS": "1.5",
                            "SURVEY_RETRY_AFTER_SECONDS": "4", "SURVEY_SSE_HEARTBEAT_SECONDS": "10"})
     assert (s.session_idle_seconds, s.state_poll_min_interval_seconds, s.retry_after_seconds, s.sse_heartbeat_seconds) == (120, 1.5, 4, 10.0)

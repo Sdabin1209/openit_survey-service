@@ -52,7 +52,7 @@ def test_the_app_passes_the_per_call_limits_from_settings_to_the_inference_clien
     """App이 만든 추론 클라이언트의 호출 종류별 상한이 설정 값이다(시간을 재지 않고 넘긴 값을 본다)."""
     from survey_service.wiring.app import App
     from .fakes import FakeReleaseReader, FakeTraceIngest
-    env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": "http://127.0.0.1:9",
+    env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_INFERENCE_URL": "http://127.0.0.1:9",
            "SURVEY_SESSION_IDLE_SECONDS": "0", "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"),
            "SURVEY_INFERENCE_EXTRACT_TIMEOUT_SECONDS": "1.5", "SURVEY_INFERENCE_RESPOND_TIMEOUT_SECONDS": "2.5"}
     monkeypatch.setenv("SURVEY_INFERENCE_TOKEN", TOKEN)

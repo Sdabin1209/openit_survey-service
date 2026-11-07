@@ -7,7 +7,7 @@
   Orchestrator가 DELIVERY_FAILED로 기록한다. 저장된 알림은 DELIVERY_FAILED여도 목록에서 조회된다.
 - 알림과 푸시 본문에는 세션 ID와 종류만 넣는다(환자 발화·개인 정보 없음).
 - 웹 푸시의 VAPID 비밀키는 환경 변수로만 받는다. 없으면 푸시 없이 SSE만 동작한다.
-- StaffConsole 접점 Protocol의 구현(AlertStaffConsole)이다. SURVEY_STAFF_CONSOLE로 다른 구현을 꽂을 수 있다.
+- StaffConsole 접점 Protocol의 구현(AlertStaffConsole)이다. 시험에서는 생성자로 다른 구현을 주입할 수 있다.
 """
 from __future__ import annotations
 

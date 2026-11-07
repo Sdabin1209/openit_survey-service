@@ -2,11 +2,11 @@
 
 키오스크(토큰 역할 kiosk)
   GET  /v1/question-sets               문진표 목록 {items: [{question_set_id, title, version}]} (활성 릴리스의 문진표)
-  POST /v1/sessions                    세션 시작   본문 {session_id, kind: SESSION_START, question_set_id}
+  POST /v1/sessions                    세션 시작   본문 {kind: SESSION_START, question_set_id?}, 응답의 서버 발급 session_id
   POST /v1/sessions/{id}/turns         환자 발화   본문 {session_id, kind: UTTERANCE, utterance} + 봉투 turn_id (멱등)
   POST /v1/sessions/{id}/end           세션 종료   본문 {session_id, kind: SESSION_END}
   GET  /v1/sessions/{id}/state         세션 상태   SessionState (위험 정지 중 폴링, 재개하면 resume_text, 정지면 pause_reason)
-  POST /v1/sessions/{id}/staff-call/retry   직원 재알림  StaffCallRetryRequest -> StaffCallRetryResult (세션을 만든 기기 토큰만, CR-H001)
+  POST /v1/sessions/{id}/staff-call/retry   직원 재알림  StaffCallRetryRequest -> StaffCallRetryResult (세션을 만든 mTLS 기기만, CR-H001)
   POST /v1/sessions/{id}/staff-call/report  직접 알림 보고  StaffCallReport -> StaffAlert (같은 권한)
 직원 콘솔(토큰 역할 staff)
   POST /v1/sessions/{id}/intervention  개입 결정   본문 {session_id, decision: RESUME|END} + 봉투 turn_id (멈춘 세션만)
@@ -14,7 +14,8 @@
   GET  /v1/staff/sessions/{id}         세션 기록 조회   StaffSessionView (대화 기록, 저장된 값, 알림. 읽을 때마다 접근 기록)
   GET  /v1/staff/alerts/stream         알림 SSE    (처리 함수는 server.py가 건넨다)
   GET  /v1/staff/push-config           푸시 설정   PushConfig (공개키 또는 null)
-  POST/DELETE /v1/staff/push-subscriptions  웹 푸시 구독 등록·해지
+  POST /v1/staff/push-subscriptions         웹 푸시 구독 등록
+  POST /v1/staff/push-subscriptions/unsubscribe  웹 푸시 구독 해지
 `turn_id`는 API 봉투 필드다: 본문에서 떼어 낸 나머지를 문진 스키마(FrontendMessage, InterventionDecision)로 검증한다(D66).
 응답은 FrontendInput(턴), 위 스키마(조회). 오류는 BoundaryError 본문과 상태 코드(401·403 PERMISSION_DENIED, 404 NOT_FOUND,
 409 CONFLICT, 429·503 UNAVAILABLE + Retry-After). 문서가 정하지 않은 점의 해석은 docs/change-requests/CR-009.
@@ -36,21 +37,17 @@ import threading
 from datetime import datetime
 from typing import Callable, Mapping, Optional
 
-from boundary_contracts import BoundaryError
+from boundary_contracts import BoundaryError, validator as _bc_validator
 from openit_link import App as LinkApp, HttpError, Request, Response, Route
 
 from .. import types
 from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
 
 log = logging.getLogger("survey_service.api")
+_SESSION_ID_VALIDATOR = _bc_validator("SessionState#/properties/session_id")
+_SUBJECT_REF_VALIDATOR = _bc_validator("PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref")
 
-SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
-TURN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")      # $가 아니라 \Z: $는 끝의 개행 하나를 허용해 "id\n"이 다른 turn_id로 통과한다
 MAX_BODY = 64 * 1024     # 요청 본문 상한. 넘으면 라이브러리가 413을 낸다(Route.max_body). 측정값이 아니라 기존 값(64 KiB)을 그대로 쓴다
-DEVICE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")      # 계약 PUBLIC_API.md F절(2.3.0)의 X-Openit-Device 형식
-SUBJECT_REF = re.compile(r"^[A-Za-z0-9._:/#=+-]{1,128}\Z")
-STAFF_ID = re.compile(r"^[A-Za-z0-9._:@/#=+-]{1,128}\Z")
-USER_ID = re.compile(r"^[A-Za-z0-9._@:+-]{1,128}\Z")      # X-Openit-User: gateway가 인증한 계정 ID. 형식이 어긋나면 개인 ID 없이 역할만 기록한다
 SESSION_STATUSES = ("IN_PROGRESS", "PAUSED_RISK", "ENDED_COMPLETE", "ENDED_STAFF", "ENDED_LEFT", "ENDED_USER_STOP")
 START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID = "start", "end", "idle-expire"   # turn_id가 없는 동작의 고정 ID(CR-009)
 STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
@@ -73,7 +70,6 @@ _SPEC = (
     ("push_config", "GET", "/v1/staff/push-config", ("staff", "result-reader"), False, None, True, "PushConfig"),
     ("push_add", "POST", "/v1/staff/push-subscriptions", ("staff", "result-reader"), False, None, True, "PushSubscriptionResult"),
     ("push_unsub", "POST", "/v1/staff/push-subscriptions/unsubscribe", ("staff", "result-reader"), False, None, True, None),
-    ("push_del", "DELETE", "/v1/staff/push-subscriptions", "staff", False, None, True, "PushSubscriptionResult"),      # 2.x에서만 허용하는 폐기 예정 방식(계약 PUBLIC_API.md, 3.0.0에서 제거)
     ("result", "GET", "/v1/results/{sid}", "result-reader", False, None, True, None),
     ("results", "GET", "/v1/results", "result-reader", False, None, True, None),
     ("ack", "POST", "/v1/results/{sid}/ack", "result-reader", True, None, True, None),      # 확인 표시(U83): 계정(X-Openit-User)이 필요하다
@@ -128,7 +124,7 @@ def _check_survey_response(name: str, status: int, body) -> None:
 
 
 def _sid(sid: str) -> None:
-    if not SESSION_ID.match(sid):
+    if not _SESSION_ID_VALIDATOR.is_valid(sid):
         raise _err("INVALID_RECORD", "session_id는 영문·숫자·-_ 1~64자여야 한다")
 
 
@@ -144,15 +140,16 @@ class PublicApi:
     def __init__(self, orchestrator, token: str, *, staff_token: Optional[str] = None, max_inflight: int = 32,
                  max_utterance_chars: int = 1000, alerts=None, max_subscriptions: int = 100,
                  retry_after_seconds: int = 1, state_poll_min_interval: float = 0.5, result_token: Optional[str] = None,
-                 risk_token: Optional[str] = None, require_subject_ref: bool = False, device_tokens: Optional[dict] = None) -> None:
+                 risk_token: Optional[str] = None, require_subject_ref: bool = False) -> None:
         from boundary_contracts import validator as _validator
+        self._device_id_validator = _validator("DeviceAllowlist#/properties/devices/items/properties/device_id")
+        self._human_id_validator = _validator("_common#/$defs/HumanUserId")
         self._push_request_validator = _validator("PushSubscriptionRequest")      # 기동 때 한 번(요청마다 스키마 파일을 다시 읽지 않는다, ADR-0050)
         self._now = orchestrator.clock        # 주입한 단조 시계(ADR-0050): 오케스트레이터와 같은 시계로 턴 마감·상태 조회 간격을 센다
-        self.device_tokens = dict(device_tokens or {})        # {device_id: 토큰}. 2.x 호환. 세션을 만든 기기의 토큰으로만 그 세션에 접근한다 (D88 U8, ADR-0016)
-        token = token or None                                  # 키오스크 토큰은 2.x 호환이다. 없어도 된다: 기기 인증은 게이트웨이 mTLS가 넘기는 X-Openit-Device다 (ADR-0031)
+        token = token or None                                  # 게이트웨이→서비스 역할 토큰. 기기 신원은 검증된 X-Openit-Device로 따로 확인한다
         if staff_token is not None and (not staff_token or (token is not None and hmac.compare_digest(staff_token.encode(), token.encode()))):
             raise ValueError("직원 토큰은 비어 있지 않고 키오스크 토큰과 달라야 한다")
-        toks = [t for t in (token, staff_token, result_token, risk_token, *self.device_tokens.values()) if t is not None]
+        toks = [t for t in (token, staff_token, result_token, risk_token) if t is not None]
         if (result_token is not None and not result_token) or (risk_token is not None and not risk_token) or len(set(toks)) != len(toks):
             raise ValueError("토큰은 역할마다 비어 있지 않고 서로 달라야 한다")
         self.result_token, self.risk_token, self.require_subject_ref = result_token, risk_token, require_subject_ref
@@ -175,8 +172,6 @@ class PublicApi:
         for tok, role in ((self.token, "kiosk"), (self.staff_token, "staff"), (self.result_token, "result-reader"), (self.risk_token, "risk-source")):
             if tok is not None:
                 t[tok] = role
-        for dev, tok in self.device_tokens.items():
-            t[tok] = {"role": "kiosk", "actor": dev}      # 기기 토큰: 호출자 ID(Request.actor)가 기기 ID다
         return t
 
     def _gateway_role_of(self, auth: str) -> Optional[str]:
@@ -215,15 +210,17 @@ class PublicApi:
 
     def _guarded(self, name: str) -> Callable[[Request], Response]:
         def handler(req: Request) -> Response:
-            dev = req.actor                                   # 기기 토큰이면 토큰에 묶인 기기 ID
+            dev = None                                        # 기기 인증은 게이트웨이 mTLS의 X-Openit-Device만 사용한다
             if dev is None and req.role == "kiosk":           # 게이트웨이의 키오스크 토큰이면 게이트웨이가 mTLS로 확인해 붙인 X-Openit-Device(ADR-0031, CONVENTIONS 6절)
                 raw = req.headers.get("x-openit-device")
                 if raw is not None:
-                    if not DEVICE_ID.match(raw):
+                    if not self._device_id_validator.is_valid(raw):
                         raise _err("INVALID_RECORD", "X-Openit-Device 형식이 아니다")
                     dev = raw
+            if req.role == "kiosk" and dev is None:
+                raise _err("PERMISSION_DENIED", "기기 인증 헤더가 없다", 403)
             self._tl.device = dev
-            self._tl.user = req.user if isinstance(req.user, str) and USER_ID.match(req.user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
+            self._tl.user = req.user if self._human_id_validator.is_valid(req.user) else None       # 접근 기록의 개인 ID(D88 U7). gateway가 인증해 붙인 헤더만 믿는다
             if not self._slots.acquire(blocking=False):
                 raise _err("UNAVAILABLE", "요청이 너무 많다", 429)
             try:
@@ -241,8 +238,7 @@ class PublicApi:
         if req.role == "kiosk" and name in KIOSK_DEVICE_CHECKED:
             self._device_denied(sid)
         if req.role == "kiosk" and name == "start" and isinstance(req.body, dict):
-            s = req.body.get("session_id")
-            self._device_denied(s if isinstance(s, str) else None, allow_new=True)
+            self._device_denied(None, allow_new=True)
         return getattr(self, "_" + name)(req)      # 이름으로 찾는다(시험이 처리 함수를 바꿔 끼울 수 있다)
 
     # ------------------------------------------------------------------ 진입 (시험·직접 호출용 어댑터와 서버 진입)
@@ -322,10 +318,9 @@ class PublicApi:
         return None
 
     def _device_denied(self, sid: Optional[str], allow_new: bool = False) -> None:
-        """세션을 만든 기기(헤더의 기기 ID, 또는 2.x 호환 기기 토큰)로만 접근한다. 다른 기기(또는 기기 없는 공유 토큰)이면 세션이 없는 것처럼 404.
-        기기를 쓰지 않는 구성(공유 토큰만)은 확인하지 않는다(하위 호환)."""
+        """세션을 만든 기기(게이트웨이가 확인해 넘긴 기기 ID)로만 접근한다. 다른 기기이면 세션이 없는 것처럼 404."""
         dev = getattr(self._tl, "device", None)
-        if self.alerts is None or not sid or (dev is None and not self.device_tokens):
+        if self.alerts is None or not sid:
             return
         try:
             owner = self.alerts.store.device_of(sid)
@@ -409,13 +404,8 @@ class PublicApi:
         _check("SessionStartBody", body)
         rest, tid = self._envelope(body)
         subject = rest.pop("subject_ref", None)             # 환자 참조는 문진 메시지(FrontendMessage)가 아니라 세션 메타다
-        issued = False
-        if "session_id" not in rest:
-            # 왜: 세션 ID는 서버가 CSPRNG로 발급한다(계약 PUBLIC_API.md 2.2.0, D106; OWASP 세션 관리: 예측할 수 없는 값). token_urlsafe(32) = 256비트 -> 43자(영문·숫자·-_)로 1~64자 안
-            rest["session_id"] = secrets.token_urlsafe(32)
-            issued = True
-        else:
-            log.warning("폐기 예정 방식: 프론트가 session_id를 정해 보냈다(서버 발급으로 바꿀 것, 3.0.0에서 제거)")      # 값은 로그에 남기지 않는다
+        # 시작 본문은 계약이 검증하며 session_id를 받지 않는다. 발급은 항상 서버 CSPRNG 몫이다.
+        rest["session_id"] = secrets.token_urlsafe(32)
         sid, tid = rest["session_id"], tid or START_TURN_ID
         if not self._replayed(sid, tid):
             status, _ = self._state_of(sid)
@@ -435,7 +425,7 @@ class PublicApi:
                 except self.orch.errors.StoreError:
                     raise _err("UNAVAILABLE", "세션 메타를 저장할 수 없다") from None
         code, out, hdr = self._run(sid, tid, rest)
-        if issued and code == 200 and isinstance(out, dict):
+        if code == 200 and isinstance(out, dict):
             out = {**out, "session_id": sid}        # 서버가 발급한 ID를 돌려준다. 프론트가 정한 ID는 되돌리지 않는다(2.x 응답 모양 유지)
         return code, out, hdr
 
@@ -476,7 +466,7 @@ class PublicApi:
 
     def _intervention(self, req: Request):
         user = req.user      # 없으면 Route.require_user가 401로 걸렀다
-        if not STAFF_ID.match(user):
+        if not self._human_id_validator.is_valid(user):
             raise _err("INVALID_RECORD", "X-Openit-User 형식이 아니다")
         _check("InterventionBody", req.body)
         rest, tid = self._envelope(req.body)
@@ -728,7 +718,7 @@ class PublicApi:
         if req.body not in ({}, None):
             raise _err("INVALID_RECORD", "본문은 {} 여야 한다")
         user = req.user
-        if not isinstance(user, str) or not USER_ID.match(user):
+        if not self._human_id_validator.is_valid(user):
             raise _err("INVALID_RECORD", "X-Openit-User 형식이 아니다")
         status, r = self._state_of(sid)
         if status == "ERROR":
@@ -751,7 +741,7 @@ class PublicApi:
         role, q = req.role, req.query
         one = lambda k: q.get(k)
         subject, status, after, cursor = one("subject_ref"), one("status"), one("updated_after"), one("cursor")
-        if subject is not None and not SUBJECT_REF.match(subject):
+        if subject is not None and not _SUBJECT_REF_VALIDATOR.is_valid(subject):
             raise _err("INVALID_RECORD", "subject_ref 형식이 아니다")
         if status is not None and status not in SESSION_STATUSES:
             raise _err("INVALID_RECORD", "status 값이 아니다")
@@ -852,17 +842,6 @@ class PublicApi:
         except self.orch.errors.StoreError:
             raise _err("UNAVAILABLE", "알림 저장소에 쓸 수 없다") from None
         return 204, None, {}
-
-    def _push_del(self, req: Request):
-        log.warning("폐기 예정 방식 호출: DELETE /v1/staff/push-subscriptions?endpoint= (POST .../unsubscribe 본문으로 바꿀 것, 3.0.0에서 제거)")    # 엔드포인트 URL은 로그에 남기지 않는다
-        ep = req.query.get("endpoint")
-        if not ep:
-            raise _err("INVALID_RECORD", "endpoint 쿼리가 필요하다")
-        try:
-            deleted = self.alerts.store.remove_subscription(ep)
-        except self.orch.errors.StoreError:
-            raise _err("UNAVAILABLE", "알림 저장소에 쓸 수 없다") from None
-        return 200, {"endpoint": ep, "deleted": deleted}, {}
 
     # ------------------------------------------------------------------ 유휴 만료
     def expire_idle(self, session_ids) -> int:

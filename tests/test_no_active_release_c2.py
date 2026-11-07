@@ -17,6 +17,6 @@ def _api():
 def test_question_sets_and_session_start_without_an_active_release_are_503_no_active_release():
     api = _api()
     for method, path, body in (("GET", "/v1/question-sets", b""), ("POST", "/v1/sessions", json.dumps({"kind": "SESSION_START"}).encode())):
-        code, out, hdr = api.handle(method, path, "Bearer tok", body)
+        code, out, hdr = api.handle(method, path, "Bearer tok", body, device="test-kiosk")
         assert code == 503 and out["code"] == "UNAVAILABLE" and out["details"]["reason"] == "NO_ACTIVE_RELEASE", (path, code, out)
         assert hdr.get("Retry-After") and int(hdr["Retry-After"]) >= 1

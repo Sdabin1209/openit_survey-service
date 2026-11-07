@@ -78,14 +78,14 @@ def test_session_start_with_question_set_id_over_the_real_app_with_trace_envelop
     rd = FakeReleaseReader(tmp_path / "gate")
     rd.add_release("rel-1", [sample_bank(question_set_id="health-screening", title="건강검진"), sample_bank(question_set_id="health-screening-b", title="B", order=["Q3", "Q4"])])
     rd.set_pointer("rel-1")
-    s = Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_WORK_DIR": str(tmp_path / "w"),
+    s = Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_WORK_DIR": str(tmp_path / "w"),
                            "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_API_TOKEN": "tok-0123456789abcdef", "SURVEY_STAFF_API_TOKEN": "stok-0123456789abcdef"})
     app = App(s, reader=rd, ingest=FakeTraceIngest())
     try:
         app.loader.poll_once()
         assert app.orchestrator.atomic_trace()
         for body, want in (({"kind": "SESSION_START", "question_set_id": "health-screening", "subject_ref": "PT-ref#001"}, 200), ({"kind": "SESSION_START"}, 400)):
-            code, out, _ = app.api.handle("POST", "/v1/sessions", "Bearer tok-0123456789abcdef", json.dumps(body).encode())
+            code, out, _ = app.api.handle("POST", "/v1/sessions", "Bearer tok-0123456789abcdef", json.dumps(body).encode(), device="test-kiosk")
             assert code == want, (code, out)
     finally:
         app.stop()

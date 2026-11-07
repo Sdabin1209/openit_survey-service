@@ -4,7 +4,7 @@ import pytest
 from boundary_contracts import load_schema
 from survey_service.settings import ConfigError, Settings
 
-BASE = {"SURVEY_RELEASE_READER": "tests.fakes:release_reader", "SURVEY_TRACE_INGEST": "tests.fakes:trace_ingest", "SURVEY_MODEL_BACKEND": "fake"}
+BASE = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
 MAX = load_schema("PublicApiRequests")["$defs"]["UtteranceBody"]["properties"]["utterance"]["maxLength"]
 
 

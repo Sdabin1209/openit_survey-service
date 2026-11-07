@@ -1,3 +1,4 @@
+from unittest.mock import patch
 """규칙 D87 (SSE heartbeat 간격·이어 받기). 직원 알림(D64): 영속 저장, 목록, SSE(이어 받기), 웹 푸시 구독, 해결 표시, 권한, 전달 판정."""
 from .timing import HANG_GUARD_SECONDS, fake_clock, wait_until
 import base64
@@ -53,10 +54,11 @@ class AlertRig:
 
     def call(self, method, path, body=None, auth=STAFF):
         raw = json.dumps(body).encode() if body is not None else b""
-        return self.api.handle(method, path, auth, raw, user="staff-1")
+        return self.api.handle(method, path, auth, raw, user="staff-1", device="test-kiosk")
 
     def start(self, sid="K1"):
-        return self.call("POST", "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"}, auth=AUTH)
+        with patch("secrets.token_urlsafe", return_value=sid):
+            return self.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
 
     def risk(self, sid="K1", tid="t-risk"):
         self.rig.model.queue.append(RISK_OUT)
@@ -150,10 +152,12 @@ def test_without_push_configured_only_sse_counts(tmp_path):
         r.store.close()
 
 
-def test_alert_store_failure_is_delivery_failed(ar):
+def test_alert_store_failure_is_delivery_failed(ar, monkeypatch):
     ar.start()
     ar.hub.subscribe()
-    ar.store._db.close()                                                     # 저장 실패 = 전달 실패(연결이 있어도)
+    def fail_write(*args, **kwargs):
+        raise StoreError("injected write failure")
+    monkeypatch.setattr(ar.store, "create", fail_write)  # 소유자 조회는 정상, 알림 쓰기만 실패
     code, fi, _ = ar.risk()
     assert fi["turn_failure_signal"]["staff_alert"] == "DELIVERY_FAILED" and fi["turn_failure_signal"]["write_committed"] == "COMMITTED"
 
@@ -270,7 +274,7 @@ def test_list_pagination_newest_first_and_validation(ar):
 def test_staff_routes_need_staff_token(ar):
     for method, path, body in [("GET", "/v1/staff/alerts", None),
                                ("POST", "/v1/staff/push-subscriptions", {"endpoint": "https://p.example/1", "keys": {"p256dh": "a", "auth": "b"}}),
-                               ("DELETE", "/v1/staff/push-subscriptions?endpoint=https://p.example/1", None)]:
+                               ("POST", "/v1/staff/push-subscriptions/unsubscribe", {"endpoint": "https://p.example/1"})]:
         assert ar.call(method, path, body, auth=AUTH)[0] == 403                 # 키오스크 토큰
         assert ar.call(method, path, body, auth="Bearer nope")[0] == 401
         assert ar.call(method, path, body, auth="")[0] == 401
@@ -288,14 +292,16 @@ def test_kiosk_routes_reject_staff_token_and_alert_routes_absent_without_service
 SUB = {"endpoint": "https://push.example/abc", "keys": {"p256dh": "k1", "auth": "a1"}}
 
 
-def test_subscription_register_is_idempotent_and_delete(ar):
+def test_subscription_register_and_post_unsubscribe_are_idempotent(ar):
     assert ar.call("POST", "/v1/staff/push-subscriptions", SUB)[:2] == (201, {"endpoint": SUB["endpoint"]})
     assert ar.call("POST", "/v1/staff/push-subscriptions", {**SUB, "keys": {"p256dh": "k2", "auth": "a2"}})[0] == 201     # 갱신
     subs = ar.store.subscriptions()
     assert len(subs) == 1 and subs[0]["keys"] == {"p256dh": "k2", "auth": "a2"}
-    assert ar.call("DELETE", "/v1/staff/push-subscriptions?endpoint=" + SUB["endpoint"])[:2] == (200, {"endpoint": SUB["endpoint"], "deleted": True})
-    assert ar.call("DELETE", "/v1/staff/push-subscriptions?endpoint=" + SUB["endpoint"])[1]["deleted"] is False       # 멱등
-    assert ar.call("DELETE", "/v1/staff/push-subscriptions")[0] == 400
+    assert ar.call("DELETE", "/v1/staff/push-subscriptions?endpoint=" + SUB["endpoint"])[0] == 405
+    assert ar.store.count_subscriptions() == 1
+    for _ in range(2):
+        assert ar.call("POST", "/v1/staff/push-subscriptions/unsubscribe", {"endpoint": SUB["endpoint"]})[:2] == (204, None)
+        assert ar.store.count_subscriptions() == 0
 
 
 @pytest.mark.parametrize("body", [
@@ -386,7 +392,7 @@ def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com"
                        model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
     env = {"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
-           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0",
+           "SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0",
            "SURVEY_SSE_HEARTBEAT_SECONDS": hb, "SURVEY_VAPID_SUBJECT": subject, **(extra or {})}
     if vapid:
         monkeypatch.setenv("SURVEY_VAPID_PRIVATE_KEY", vapid)
@@ -402,7 +408,8 @@ def make_app(tmp_path, monkeypatch, vapid=None, subject="mailto:ops@example.com"
 def http_call(port, method, path, body=None, token="test-staff-token", headers=None):
     h = {"Authorization": f"Bearer {token}"} if token else {}
     h["Content-Type"] = "application/json"
-    h["X-Openit-User"] = "staff-1"           # 게이트웨이가 붙이는 직원 계정 ID(E절)
+    h["X-Openit-User"] = "staff-1"
+    if token == "test-api-token-0123": h["X-Openit-Device"] = "test-kiosk"           # 게이트웨이가 붙이는 직원 계정 ID(E절)
     h.update(headers or {})
     req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=json.dumps(body).encode() if body is not None else None, headers=h)
     req.add_header("Content-Type", "application/json")   # 계약은 JSON 본문의 매체를 application/json 으로 정한다(link 가 강제, 3.4.19)
@@ -455,7 +462,8 @@ def api(port, method, path, body, token="test-api-token-0123"):
 
 
 def start_and_risk(port, sid, tid):
-    assert api(port, "POST", "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"})[0] == 200
+    with patch("secrets.token_urlsafe", return_value=sid):
+        assert api(port, "POST", "/v1/sessions", {"kind": "SESSION_START"})[0] == 200
     return api(port, "POST", f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": SECRET_TEXT, "turn_id": tid})
 
 
@@ -532,7 +540,9 @@ def test_subscription_endpoints_over_http(live):
     assert http_call(port, "POST", "/v1/staff/push-subscriptions", sub)[0] == 201
     assert http_call(port, "POST", "/v1/staff/push-subscriptions", sub)[0] == 201
     assert app.alert_store.count_subscriptions() == 1
-    assert http_call(port, "DELETE", "/v1/staff/push-subscriptions?endpoint=https://push.example/z")[1]["deleted"] is True
+    assert http_call(port, "DELETE", "/v1/staff/push-subscriptions?endpoint=https://push.example/z")[0] == 405
+    assert app.alert_store.count_subscriptions() == 1
+    assert http_call(port, "POST", "/v1/staff/push-subscriptions/unsubscribe", {"endpoint": sub["endpoint"]})[0] == 204
     assert app.alert_store.count_subscriptions() == 0
 
 
@@ -562,8 +572,8 @@ def test_replaceable_console_still_works(tmp_path, monkeypatch):
     reader = FakeReleaseReader(tmp_path / "gate")
     reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
-    s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"), release_reader="x:y",
-                 trace_ingest="x:y", model_backend="fake", session_idle_seconds=0)
+    s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"), release_reader="http",
+                 trace_ingest="http", model_backend="fake", session_idle_seconds=0)
     app = App(s, reader=reader, ingest=FakeTraceIngest(), staff_console=rec)
     try:
         assert app.orchestrator.staff_console is rec

@@ -3,14 +3,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias
 
 from typing_extensions import NotRequired, TypedDict
 
 Endpoint: TypeAlias = str
 
 
-class Keys(TypedDict):
+class Keys(TypedDict, closed=True):
     p256dh: str
     auth: str
 
@@ -18,5 +18,4 @@ class Keys(TypedDict):
 class PushSubscribeBody(TypedDict, closed=True):
     endpoint: Endpoint
     keys: Keys
-    expirationTime: NotRequired[Any]
     topics: NotRequired[list[Literal['alerts', 'results']]]

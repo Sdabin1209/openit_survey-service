@@ -3,7 +3,7 @@ from .timing import fake_clock
 from survey_service.components.alert_service import AlertHub, AlertService, AlertStaffConsole
 from survey_service.components.alert_book import AlertStore
 from survey_service.wiring.app import App
-from survey_service.settings import Settings, load_factory
+from survey_service.settings import Settings
 
 from .e2e_support import Rig, ext
 
@@ -25,8 +25,8 @@ def fake_source():
 def _app(tmp_path, monkeypatch, **kw):
     monkeypatch.setenv("SURVEY_API_TOKEN", "a-tok-0123456789ab")
     monkeypatch.setenv("SURVEY_STAFF_API_TOKEN", "s-tok-0123456789ab")
+    risk = kw.pop("risk_source", None)
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"), model_backend="fake", **kw)
-    risk = load_factory(s.risk_source)() if s.risk_source else None
     return App(s, reader=object(), ingest=object(), risk_source=risk)
 
 
@@ -36,7 +36,7 @@ def test_default_is_inactive_and_configured_source_is_reported_active(tmp_path, 
     assert default.orchestrator.risk_source is None and body["staff_alert_source"]["active"] is False and "risk_detection_disabled" in body["warnings"]
     d = _app(tmp_path / "a", monkeypatch, risk_default_rules=True).readiness()[1]       # 명시적으로 켜면 임시 기본 목록(D88 U2)
     assert d["staff_alert_source"]["active"] is True and d["staff_alert_source"]["provisional"] is True and d["staff_alert_source"]["source"] == "PROVISIONAL_DEFAULT" and d["warnings"] == []
-    on = _app(tmp_path / "b", monkeypatch, risk_source="tests.test_alert_source_port:fake_source")
+    on = _app(tmp_path / "b", monkeypatch, risk_source=FakeInputSource())
     assert isinstance(on.orchestrator.risk_source, FakeInputSource) and on.readiness()[1]["staff_alert_source"]["active"] is True
 
 

@@ -1,3 +1,4 @@
+from unittest.mock import patch
 """PostgreSQL 저장소: 알림 DB·outbox의 적합성(SQLite와 같은 시험), 끊긴 연결 재접속, 접속 문자열 비노출, 데이터베이스 종류. TEST_DATABASE_URL이 없으면 SKIP."""
 import json
 import logging
@@ -176,7 +177,7 @@ def test_app_with_database_url_reports_kind_and_never_exposes_url(request, tmp_p
     reader = FakeReleaseReader(tmp_path / "gate")
     reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
-    env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
+    env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake",
            "SURVEY_SESSION_IDLE_SECONDS": "0", "SURVEY_SESSION_DB": str(tmp_path / "never.db")}
     app = App(Settings.from_env(env), reader=reader, ingest=FakeTraceIngest())
     try:
@@ -186,10 +187,11 @@ def test_app_with_database_url_reports_kind_and_never_exposes_url(request, tmp_p
         text = json.dumps(body)
         assert url not in text and url.split("@")[0].split(":")[-1] not in text
         assert not (tmp_path / "never.db").exists()
-        st, _, _ = app.api.handle("POST", "/v1/sessions", "Bearer test-api-token-0123", json.dumps({"session_id": "K1", "kind": "SESSION_START"}).encode())
+        with patch("secrets.token_urlsafe", return_value="K1"):
+            st, _, _ = app.api.handle("POST", "/v1/sessions", "Bearer test-api-token-0123", json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")
         assert st == 200
         kill_connection(app.store._db)                               # 서비스 재시작 없이 복구
-        assert app.api.handle("GET", "/v1/sessions/K1/state", "Bearer test-api-token-0123", b"")[0] == 200
+        assert app.api.handle("GET", "/v1/sessions/K1/state", "Bearer test-api-token-0123", b"", device="test-kiosk")[0] == 200
         kill_connection(app.alert_store._db)
         assert app.readiness()[0] is True
     finally:
@@ -201,7 +203,7 @@ def test_app_default_is_sqlite_kind(tmp_path):
     from survey_service.settings import Settings
     from .fakes import FakeReleaseReader, FakeTraceIngest
     env = {"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
-           "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0"}
+           "SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0"}
     app = App(Settings.from_env(env), reader=FakeReleaseReader(tmp_path / "g"), ingest=FakeTraceIngest())
     try:
         assert app.readiness()[1]["database"] == {"kind": "sqlite"}

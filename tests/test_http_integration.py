@@ -13,7 +13,7 @@ from survey_service.components.link_inference import InferenceServer
 from survey_service.wiring.orchestrator import Orchestrator
 from survey_service.components.release_loader import ReleaseLoader
 from survey_service.components.release_registry import ReleaseRegistry
-from survey_service.wiring.app import App, _spec
+from survey_service.wiring.app import App
 from survey_service.settings import ConfigError, Settings
 from survey_service.components.session_store import MemorySessionStore
 from survey_service.components.trace_outbox import Outbox
@@ -177,6 +177,7 @@ def test_factories_read_token_only_from_env_and_fail_clearly(monkeypatch):
         http_trace_ingest({"SURVEY_TRACE_INGEST_TOKEN": "t"})                           # URL이 없다
     c = http_trace_ingest({"SURVEY_TRACE_INGEST_URL": "https://x", "SURVEY_TRACE_INGEST_TOKEN_ENV": "OPS", "OPS": "tok"})
     assert isinstance(c, HttpTraceIngest) and c._token == "tok"
-    assert _spec("http", "release").endswith("http_release_reader") and _spec("a:b", "trace") == "a:b"
+    with pytest.raises(ConfigError):
+        Settings.from_env({"SURVEY_RELEASE_READER": "a:b"})
     with pytest.raises(ConfigError):
         Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_TRACE_INGEST": "http", "SURVEY_MODEL_BACKEND": "fake"})

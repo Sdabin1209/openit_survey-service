@@ -76,15 +76,6 @@
           "opened_by": "start-process"
         },
         {
-          "path_env": "SURVEY_KIOSK_DEVICE_TOKENS_FILE",
-          "path": "/run/secrets/survey-kiosk-device-tokens",
-          "directory": false,
-          "kind": "secret",
-          "schema": null,
-          "required": true,
-          "opened_by": "start-process"
-        },
-        {
           "path_env": "SURVEY_RESULT_READER_TOKEN_FILE",
           "path": "/run/secrets/survey-result-reader",
           "directory": false,
@@ -96,6 +87,15 @@
         {
           "path_env": "SURVEY_RISK_SOURCE_TOKEN_FILE",
           "path": "/run/secrets/survey-risk-source",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_API_TOKEN_FILE",
+          "path": "/run/secrets/survey-api-kiosk",
           "directory": false,
           "kind": "secret",
           "schema": null,
@@ -318,15 +318,6 @@
           "opened_by": "start-process"
         },
         {
-          "path_env": "SURVEY_KIOSK_DEVICE_TOKENS_FILE",
-          "path": "/run/secrets/survey-kiosk-device-tokens",
-          "directory": false,
-          "kind": "secret",
-          "schema": null,
-          "required": true,
-          "opened_by": "start-process"
-        },
-        {
           "path_env": "SURVEY_RESULT_READER_TOKEN_FILE",
           "path": "/run/secrets/survey-result-reader",
           "directory": false,
@@ -338,6 +329,15 @@
         {
           "path_env": "SURVEY_RISK_SOURCE_TOKEN_FILE",
           "path": "/run/secrets/survey-risk-source",
+          "directory": false,
+          "kind": "secret",
+          "schema": null,
+          "required": true,
+          "opened_by": "start-process"
+        },
+        {
+          "path_env": "SURVEY_API_TOKEN_FILE",
+          "path": "/run/secrets/survey-api-kiosk",
           "directory": false,
           "kind": "secret",
           "schema": null,

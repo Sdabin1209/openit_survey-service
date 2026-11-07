@@ -148,10 +148,13 @@ class FakeReleaseReader:
         self.decisions[manifest["gate_decision_id"]] = {
             "pipeline_schema_version": PIPELINE_SCHEMA_VERSION, "decision_id": manifest["gate_decision_id"], "decided_at": "2026-10-15T00:00:00Z",
             "gate_policy_version": "1", "subject": subject, "runtime_contract_version": runtime_contract_version,
-            "result": decision_result, "checks": [{"kind": "CONTRACT_COMPAT", "result": "PASS"}],
-            "approver": {"role": "gate-service"}, "release_id": release_id}
+            "result": decision_result, "checks": [{"kind": kind, "result": "PASS"} for kind in
+                ("CONTRACT_COMPAT", "QUESTION_MODEL_COMPAT", "ACCEPTANCE_EVAL", "CLINICAL_SAFETY", "HUMAN_APPROVAL")],
+            "approver": {"role": "gate-service"}, "release_id": release_id, "approval_id": "approval-test"}
         if decision_result == "REJECT":
             self.decisions[manifest["gate_decision_id"]]["reject_reasons"] = ["시험"]
+            self.decisions[manifest["gate_decision_id"]]["reject_codes"] = ["CHECK_FAILED"]
+            self.decisions[manifest["gate_decision_id"]].pop("release_id", None)
         self.manifests[release_id] = manifest
         served = {b["question_set_id"]: copy.deepcopy(b) for b in banks}
         if tamper_bank:

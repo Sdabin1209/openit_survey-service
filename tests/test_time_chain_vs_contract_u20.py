@@ -13,8 +13,8 @@ def _default(schema: str, name: str) -> float:
 
 
 def _settings() -> Settings:
-    return Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://x", "SURVEY_TRACE_INGEST": "http",
-                              "SURVEY_TRACE_INGEST_URL": "http://x", "SURVEY_MODEL_BACKEND": "m:f"})
+    return Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "https://service.example", "SURVEY_TRACE_INGEST": "http",
+                              "SURVEY_TRACE_INGEST_URL": "https://service.example", "SURVEY_MODEL_BACKEND": "fake"})
 
 
 def test_client_read_timeouts_exceed_the_server_deadlines_of_the_contract():

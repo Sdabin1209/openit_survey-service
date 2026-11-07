@@ -37,7 +37,8 @@ from ..components.flow_table import flow_problems
 from ..components.release_loader import ReleaseLoader
 from ..components.release_registry import ReleaseRegistry
 from ..components.risk_screen import RuleRiskSource
-from ..settings import ConfigError, Settings, load_factory
+from ..settings import ConfigError, Settings
+from ..components.link_boundary_clients import http_release_reader, http_trace_ingest
 from .db import open_stores
 from ..components.trace_envelope import OutboxTraceSink
 from ..components.link_trace_export import TraceExporter
@@ -145,13 +146,6 @@ def configure_logging(level: str = "INFO", stream=None) -> None:
     root.setLevel(level)
 
 
-def _spec(spec: str, which: str) -> str:
-    """'http'는 boundary_contracts의 HTTP 클라이언트 기본 팩토리(survey_service.components.link_boundary_clients)."""
-    if spec == "http":
-        return "survey_service.components.link_boundary_clients:http_release_reader" if which == "release" else "survey_service.components.link_boundary_clients:http_trace_ingest"
-    return spec
-
-
 def _secret(name: str, what: str):
     """비밀 하나를 NAME_FILE 우선, 없으면 NAME 환경 변수에서 읽는다(D84). 오류 메시지에 값은 없다."""
     try:
@@ -197,8 +191,17 @@ class App:
                                          egress_proxy=egress_proxy_from(os.environ))      # 영역 밖 호출은 자기 영역 게이트웨이의 출구로만(R1.8)
         else:
             self.inference = InferenceServer(settings.model_backend)
-        self.reader = reader if reader is not None else load_factory(_spec(settings.release_reader, 'release'))()
-        self.ingest = ingest if ingest is not None else load_factory(_spec(settings.trace_ingest, 'trace'))()
+        if reader is None and settings.release_reader != "http":
+            raise ConfigError("SURVEY_RELEASE_READER는 http여야 한다")
+        if ingest is None and settings.trace_ingest != "http":
+            raise ConfigError("SURVEY_TRACE_INGEST는 http여야 한다")
+        client_env = {**os.environ, "SURVEY_RELEASE_READER_URL": settings.release_reader_url,
+                      "SURVEY_TRACE_INGEST_URL": settings.trace_ingest_url,
+                      "SURVEY_RELEASE_READER_TOKEN_ENV": settings.release_reader_token_env,
+                      "SURVEY_TRACE_INGEST_TOKEN_ENV": settings.trace_ingest_token_env,
+                      "SURVEY_HTTP_TIMEOUT_SECONDS": str(settings.http_timeout_seconds)}
+        self.reader = reader if reader is not None else http_release_reader(client_env)
+        self.ingest = ingest if ingest is not None else http_trace_ingest(client_env)
         self.loader = ReleaseLoader(
             self.reader, self.registry, self.inference, workdir=Path(settings.work_dir), keep_releases=settings.keep_releases,
             installed_versions={"action_rules_version": load_rules()["rules_version"], "model_runtime_version": model_runtime.RUNTIME_VERSION},
@@ -208,18 +211,14 @@ class App:
         self.exporter = TraceExporter(self.outbox, self.ingest, base_delay=settings.export_interval_seconds,
                                       max_delay=settings.export_backoff_max_seconds, stage_grace=settings.outbox_stage_grace_seconds,
                                       clock=REAL_WALL_CLOCK, wait=real_wait)
-        console = staff_console if staff_console is not None else (load_factory(settings.staff_console)() if settings.staff_console else None)
-        disp = dispatcher if dispatcher is not None else (load_factory(settings.result_dispatcher)() if settings.result_dispatcher else None)
-        if console is None:                                   # 기본 직원 접점은 알림 어댑터. SURVEY_STAFF_CONSOLE로 바꿔 꽂을 수 있다
+        console = staff_console
+        disp = dispatcher
+        if console is None:                                   # 기본 직원 접점은 알림 어댑터. 시험 대역은 생성자로 주입한다
             console = AlertStaffConsole(self.alerts)
-        if settings.risk_rules_file and settings.risk_source:
-            raise ConfigError("SURVEY_RISK_RULES_FILE과 SURVEY_RISK_SOURCE는 함께 쓸 수 없다(입력원은 하나)")
         if risk_source is None and settings.risk_rules_file:
             risk_source = RuleRiskSource.from_file(settings.risk_rules_file)        # 오류는 ConfigError: 시작을 거부한다
             d = risk_source.describe()
             log.info("위험 규칙 적재 version=%s rules=%s sha256=%s", d["version"], d["rule_count"], d["sha256"])
-        elif risk_source is None and settings.risk_source:
-            risk_source = load_factory(settings.risk_source)()
         elif risk_source is None and settings.risk_default_rules:
             risk_source = RuleRiskSource.provisional_default()                        # 임상 검토 전 임시 기본 목록. 입력원이 꺼진 채 시작하지 않는다 (D88 U2, ADR-0013)
             log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
@@ -228,7 +227,6 @@ class App:
                                          max_consecutive_reask=settings.max_consecutive_reask, turn_observer=self.metrics.observe_turn, result_observer=self._result_ready,
                                          turn_deadline_seconds=settings.turn_deadline_seconds, request_deadline_seconds=settings.turn_deadline_seconds, extract_input_max_chars=settings.extract_input_max_chars, clock=clock)
         api_token = _secret(settings.api_token_env, "공개 API 토큰")
-        device_tokens = _device_tokens(settings.kiosk_device_tokens_env)
         staff_token = _secret(settings.staff_api_token_env, "직원 개입 토큰")
         if not staff_token:
             raise ConfigError(f"직원 개입 토큰이 {settings.staff_api_token_env}_FILE(파일) 또는 환경 변수 {settings.staff_api_token_env}에 없다")
@@ -241,9 +239,9 @@ class App:
         _check_token_length(result_token, "결과 조회 토큰")
         _check_token_length(risk_token, "위험 신호 토큰")
         if (result_token is not None and result_token in (api_token, staff_token)) or (risk_token is not None and risk_token in (api_token, staff_token)) or (result_token and result_token == risk_token) or \
-                len({staff_token, result_token, risk_token, *device_tokens.values()} - {None}) != len([x for x in (staff_token, result_token, risk_token, *device_tokens.values()) if x is not None]) or (api_token and api_token in device_tokens.values()):
+                len({staff_token, result_token, risk_token} - {None}) != len([x for x in (staff_token, result_token, risk_token) if x is not None]):
             raise ConfigError("토큰은 역할마다 서로 달라야 한다")
-        self.api = PublicApi(self.orchestrator, api_token or None, device_tokens=device_tokens, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
+        self.api = PublicApi(self.orchestrator, api_token or None, staff_token=staff_token, alerts=self.alerts, max_subscriptions=settings.max_push_subscriptions,
                              result_token=result_token, risk_token=risk_token, require_subject_ref=settings.require_subject_ref,
                              retry_after_seconds=settings.retry_after_seconds, state_poll_min_interval=settings.state_poll_min_interval_seconds,
                              max_inflight=settings.api_max_inflight,
@@ -337,7 +335,7 @@ class App:
     def _secret_sources(self) -> dict:
         """비밀 출처만(file|env|unset). 값·파일 경로·변수 이름은 내지 않는다(D84)."""
         st = self.settings
-        names = {"api_token": st.api_token_env, "kiosk_device_tokens": st.kiosk_device_tokens_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env,
+        names = {"api_token": st.api_token_env, "staff_api_token": st.staff_api_token_env, "vapid_private_key": st.vapid_private_key_env,
                  "result_reader_token": st.result_reader_token_env, "risk_source_token": st.risk_source_token_env}
         if st.inference_url:
             names["inference_token"] = st.inference_token_env
@@ -463,12 +461,10 @@ class App:
                                    {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",
                                     "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 입력원이 꺼져 알림이 만들어지지 않는다(SURVEY_RISK_DEFAULT_RULES=off, 병원 규칙 파일·입력원 없음; docs/change-requests/CR-012)."}),
             "validation_violations": self.orchestrator.violation_stats(),
-            "result_dispatcher": self.orchestrator.dispatcher_status(),
             "retention": {"session_days": self.settings.session_retention_days, "access_log_days": self.settings.access_log_retention_days,
                           "alert_days": self.settings.alert_retention_days, "dead_outbox_days": self.settings.dead_outbox_retention_days,
                           "indefinite": False, "provisional_defaults": True, "last_run": self.last_retention or None},
-            "kiosk_tokens": {"shared_kiosk_token": bool(self.api.token), "device_tokens": len(self.api.device_tokens),
-                             "warning": ("공유 키오스크 토큰 사용 중: 기기별 토큰으로 바꾸는 것을 권고(ADR-0016)" if self.api.token else None)},
+            "kiosk_tokens": {"shared_kiosk_token": bool(self.api.token)},
             "api": {**{"idle_expiry_seconds": self.settings.session_idle_seconds}, **self.api.api_stats()},
             "reask_limit": self._reask_limit(),
             "response_tables": {"status": self.orchestrator.tables.status, "counters": dict(self.orchestrator.tables.stats)},
@@ -498,24 +494,3 @@ def _check_token_length(token, what: str) -> None:
 
 
 STATS_GRACE_S = 0.2       # /readyz: DB 확인이 끝난 뒤 보조 수치(주 연결)를 더 기다리는 상한(초). 측정하지 않은 값, ADR-0027
-
-
-def _device_tokens(env_name: str) -> dict:
-    """기기별 키오스크 토큰 표 {device_id: 토큰}. `read_secret(NAME)`(NAME_FILE 우선)의 내용이 줄마다(또는 쉼표로 구분된) `device_id=토큰`. 비밀 값은 어디에도 출력하지 않는다 (D88 U8)."""
-    try:
-        raw = read_secret(env_name) or ""
-    except SecretError as e:
-        raise ConfigError(f"기기별 키오스크 토큰: {e}") from None
-    out: dict = {}
-    for item in raw.replace(",", "\n").splitlines():
-        item = item.strip()
-        if not item or item.startswith("#"):
-            continue
-        dev, sep, tok = item.partition("=")
-        dev, tok = dev.strip(), tok.strip()
-        if not sep or not re.match(r"^[A-Za-z0-9._-]{1,64}$", dev) or len(tok) < MIN_TOKEN_CHARS:
-            raise ConfigError("기기별 키오스크 토큰 표 형식 오류: 줄마다 `device_id=토큰`(토큰 16자 이상)")
-        if dev in out:
-            raise ConfigError("기기별 키오스크 토큰 표에 같은 device_id가 두 번 있다")
-        out[dev] = tok
-    return out

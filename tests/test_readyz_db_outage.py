@@ -23,7 +23,7 @@ def _app(tmp_path, monkeypatch, url=None, extra=None, clock=None):
     reader = FakeReleaseReader(tmp_path / "gate")
     reader.add_release("rel-1", sample_bank(), action_rules_version=INSTALLED["action_rules_version"], model_runtime_version=INSTALLED["model_runtime_version"])
     reader.set_pointer("rel-1")
-    env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
+    env = {"SURVEY_WORK_DIR": str(tmp_path / "w"), "SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake",
            "SURVEY_SESSION_IDLE_SECONDS": "0", "SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db")}
     env.update(extra or {})
     if url:
@@ -152,7 +152,7 @@ def test_readyz_has_hard_cap_when_a_check_hangs(tmp_path, monkeypatch):
 
 
 def test_readyz_db_timeout_setting():
-    base = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
+    base = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
     assert Settings.from_env(base).readyz_db_timeout_seconds == 2.0
     assert Settings.from_env({**base, "SURVEY_READYZ_DB_TIMEOUT_SECONDS": "3"}).readyz_db_timeout_seconds == 3.0
     with pytest.raises(Exception):
@@ -169,7 +169,7 @@ def test_db_timeouts_are_passed_from_settings_to_the_connection(monkeypatch):
     monkeypatch.setattr(db, "PgOutbox", lambda url, **k: type("O", (), {})())
     monkeypatch.setattr(db, "PgAlertStore", lambda url, **k: type("A", (), {})())
     monkeypatch.setattr(db, "PgAlertQueue", lambda url, **k: type("Q", (), {})())
-    s = Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake",
+    s = Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake",
                            "SURVEY_DB_CONNECT_TIMEOUT_SECONDS": "3", "SURVEY_DB_STATEMENT_TIMEOUT_SECONDS": "4", "SURVEY_READYZ_DB_TIMEOUT_SECONDS": "5"})
     db.open_stores(s, url="postgresql://u:p@127.0.0.1:1/d")
     assert seen["connect_timeout"] == 3 and seen["statement_timeout"] == 4 and seen["probe_timeout"] == 5 and seen["reconnect_backoff"] == s.db_reconnect_backoff_seconds

@@ -149,7 +149,16 @@ def test_trace_envelope_carries_the_sessions_question_set_id(env):
     env.start("KB", question_set_id="set-b")
     qid = env.rig.orch._set_id({"session_id": "KB"})
     assert qid == "set-b"                                      # 활성 릴리스의 첫 세트가 아니라 이 세션의 세트
-    trace = {"contract_version": 1, "session_id": "KB", "turn_id": "t1"}
+    trace = json.loads((Path(__file__).parents[1] / "schema/schemas/examples/TurnTrace.valid.json").read_text())
+    def identities(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "session_id": value[key] = "KB"
+                elif key == "turn_id": value[key] = "t1"
+                else: identities(item)
+        elif isinstance(value, list):
+            for item in value: identities(item)
+    identities(trace)
     envl = OutboxTraceSink(None, lambda: 0).envelope("rel-e2e-1", trace, qid)
     assert envl["question_set_id"] == "set-b" and "question_set_id" not in OutboxTraceSink(None, lambda: 0).envelope("rel-e2e-1", trace)
     assert list(validator("TraceEnvelope").iter_errors(envl)) == []

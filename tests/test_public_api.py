@@ -1,3 +1,4 @@
+from unittest.mock import patch
 """공개 API(PUBLIC_API.md): 검증, 인증, 멱등, 상태 코드, 유휴 만료, HTTP 경계 뒤의 추론."""
 import json
 import threading
@@ -31,7 +32,7 @@ FI = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
 
 def call(api, method, path, body=None, auth=AUTH, raw=None):
     data = raw if raw is not None else (json.dumps(body, ensure_ascii=False).encode() if body is not None else b"")
-    return api.handle(method, path, auth, data, user="staff-1")
+    return api.handle(method, path, auth, data, user="staff-1", device="test-kiosk")
 
 
 @pytest.fixture
@@ -41,7 +42,8 @@ def rig_api():
 
 
 def start(api, sid="K1"):
-    return call(api, "POST", "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"})
+    with patch("secrets.token_urlsafe", return_value=sid):
+        return call(api, "POST", "/v1/sessions", {"kind": "SESSION_START"})
 
 
 def say(api, text, tid, sid="K1"):
@@ -243,7 +245,7 @@ def test_over_http_with_app(tmp_path):
     from .fakes import FakeTraceIngest
     ing = FakeTraceIngest()
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"),
-                 release_reader="x:y", trace_ingest="x:y", model_backend="fake", export_interval_seconds=0.05, session_idle_seconds=0)
+                 release_reader="http", trace_ingest="http", model_backend="fake", export_interval_seconds=0.05, session_idle_seconds=0)
     app = App(s, reader=reader, ingest=ing, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     app.start()
     httpd = serve(app, 0)
@@ -253,7 +255,7 @@ def test_over_http_with_app(tmp_path):
     def http(method, path, body=None, token="test-api-token-0123"):
         req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method,
                                      data=json.dumps(body).encode() if body is not None else None,
-                                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"} if token else {"Content-Type": "application/json"})
+                                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "X-Openit-Device": "test-kiosk"} if token else {"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=HANG_GUARD_SECONDS) as r:
                 return r.status, json.loads(r.read())
@@ -261,7 +263,8 @@ def test_over_http_with_app(tmp_path):
             return e.code, json.loads(e.read())
     try:
         assert http("POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, token=None)[0] == 401
-        code, fi = http("POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"})
+        with patch("secrets.token_urlsafe", return_value="K1"):
+            code, fi = http("POST", "/v1/sessions", {"kind": "SESSION_START"})
         assert code == 200 and fi["response_text"] and fi["turn_failure_signal"] is None
         turn = {"session_id": "K1", "kind": "UTTERANCE", "utterance": "안녕하세요", "turn_id": "t-1"}
         c1, b1 = http("POST", "/v1/sessions/K1/turns", turn)
@@ -280,7 +283,7 @@ def test_app_starts_without_kiosk_token_because_device_auth_is_the_gateway_heade
     """ADR-0031: 기기 인증은 gateway mTLS가 넘기는 X-Openit-Device다. 키오스크 토큰은 2.x 호환이라 없어도 시작하고, 직원 토큰은 여전히 필요하다."""
     monkeypatch.delenv("SURVEY_API_TOKEN")
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"),
-                 release_reader="x:y", trace_ingest="x:y", model_backend="fake")
+                 release_reader="http", trace_ingest="http", model_backend="fake")
     app = App(s, reader=FakeReleaseReader(tmp_path / "gate"), ingest=FakeTraceIngest())
     try:
         assert app.api.token is None and app.api.handle("POST", "/v1/sessions", "", b"{}")[0] == 401
@@ -385,7 +388,7 @@ def test_tokens_must_differ():
 def test_app_requires_distinct_staff_token(tmp_path, monkeypatch):
     from survey_service.settings import ConfigError
     s = Settings(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"),
-                 release_reader="x:y", trace_ingest="x:y", model_backend="fake")
+                 release_reader="http", trace_ingest="http", model_backend="fake")
     monkeypatch.delenv("SURVEY_STAFF_API_TOKEN")
     with pytest.raises(ConfigError):
         App(s, reader=object(), ingest=object())

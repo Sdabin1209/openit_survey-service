@@ -1,11 +1,10 @@
 """설정은 환경 변수로만 받는다. 읽는 곳은 서비스 진입점뿐이다(CONVENTIONS 7절)."""
 from __future__ import annotations
 
-import importlib
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Optional
+from typing import Mapping, Optional
 
 
 class ConfigError(Exception):
@@ -118,12 +117,9 @@ class Settings:
     session_db: str = "/data/sessions.db"
     outbox_db: str = "/data/outbox.db"
     work_dir: str = "/data/releases"
-    release_reader: str = ""        # I4 구현 팩토리 "모듈:함수"
-    trace_ingest: str = ""          # I6 구현 팩토리
+    release_reader: str = ""        # I4 전달 방식: 계약이 정한 http
+    trace_ingest: str = ""          # I6 전달 방식: 계약이 정한 http
     model_backend: str = ""         # 예: fake
-    staff_console: str = ""         # 선택 팩토리. 없으면 알림 전달은 실패로 기록된다
-    result_dispatcher: str = ""     # 선택 팩토리. 없으면 결과 전달은 실패로 기록된다
-    risk_source: str = ""           # 선택 팩토리(RiskSource). 없으면 규칙 감지(기본 임시 목록, risk_default_rules)만 쓴다. 둘 다 꺼지면 입력원이 없고 /readyz에 active=false로 드러난다(CR-012)
     result_reader_token_env: str = "SURVEY_RESULT_READER_TOKEN"   # 결과 조회(역할 result-reader) 토큰이 든 변수 이름. 값이 없으면 /v1/results는 꺼진다(404)
     risk_source_token_env: str = "SURVEY_RISK_SOURCE_TOKEN"       # 외부 위험 신호(역할 risk-source) 토큰. 값이 없으면 risk-signals는 꺼진다(404)
     require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
@@ -165,7 +161,6 @@ class Settings:
     retry_after_seconds: int = 1                 # 429·503 응답의 Retry-After(초)
     state_poll_min_interval_seconds: float = 0.5  # 세션 상태 폴링 빈도 상한(세션마다, 0이면 끔)
     max_push_subscriptions: int = 100
-    kiosk_device_tokens_env: str = "SURVEY_KIOSK_DEVICE_TOKENS"   # 기기별 키오스크 토큰 표(`device_id=토큰` 줄). NAME_FILE이 있으면 파일 내용 (D88 U8)
     staff_api_token_env: str = "SURVEY_STAFF_API_TOKEN"    # 직원 개입용 별도 토큰(역할 staff)
     api_max_inflight: int = 32  # [근거: ADR-0004, 부하 측정 boundary.md §6-1 (기본 32)]
     api_max_utterance_chars: int = field(default_factory=_utterance_max)      # 기본값은 스키마 UtteranceBody의 상한과 같아야 한다(tests/test_settings_utterance_max.py)
@@ -201,8 +196,7 @@ class Settings:
             port=_int(env, "SURVEY_PORT", 8080, 1), host=_host(env), session_db=env.get("SURVEY_SESSION_DB", cls.session_db),
             outbox_db=env.get("SURVEY_OUTBOX_DB", cls.outbox_db), work_dir=env.get("SURVEY_WORK_DIR", cls.work_dir),
             release_reader=env.get("SURVEY_RELEASE_READER", ""), trace_ingest=env.get("SURVEY_TRACE_INGEST", ""),
-            model_backend=env.get("SURVEY_MODEL_BACKEND", ""), staff_console=env.get("SURVEY_STAFF_CONSOLE", ""),
-            result_dispatcher=env.get("SURVEY_RESULT_DISPATCHER", ""), risk_source=env.get("SURVEY_RISK_SOURCE", ""),
+            model_backend=env.get("SURVEY_MODEL_BACKEND", ""),
             risk_default_rules=env.get("SURVEY_RISK_DEFAULT_RULES", "off").strip().lower() in ("1", "true", "yes", "on"),
             risk_rules_file=env.get("SURVEY_RISK_RULES_FILE", ""),
             result_reader_token_env=env.get("SURVEY_RESULT_READER_TOKEN_ENV", "SURVEY_RESULT_READER_TOKEN"),
@@ -268,22 +262,6 @@ class Settings:
                                 ("SURVEY_TRACE_INGEST", s.trace_ingest, s.trace_ingest_url)):
             if spec == "http" and not url:
                 missing.append(name + "_URL")
-        if s.risk_rules_file and s.risk_source:
-            raise ConfigError("SURVEY_RISK_RULES_FILE과 SURVEY_RISK_SOURCE는 함께 쓸 수 없다(입력원은 하나)")
         if missing:
             raise ConfigError("필수 환경 변수가 없다: " + ", ".join(missing))
         return s
-
-
-def load_factory(spec: str) -> Callable[[], Any]:
-    """'모듈:함수' 문자열을 함수로. 'http'는 boundary_contracts의 HTTP 클라이언트를 만드는 기본 팩토리를 뜻한다
-    (SURVEY_RELEASE_READER=http 이면 ...:http_release_reader, SURVEY_TRACE_INGEST=http 이면 ...:http_trace_ingest)."""
-    if spec == "http":
-        raise ConfigError("'http'는 읽는 쪽(서비스 조립)이 역할에 맞는 팩토리로 바꿔야 한다")
-    if ":" not in spec:
-        raise ConfigError(f"'모듈:함수' 형식이어야 한다: {spec!r}")
-    mod, _, fn = spec.partition(":")
-    try:
-        return getattr(importlib.import_module(mod), fn)
-    except (ImportError, AttributeError) as e:
-        raise ConfigError(f"팩토리를 불러올 수 없다: {spec} ({type(e).__name__})") from e

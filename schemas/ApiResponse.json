@@ -55,10 +55,9 @@
         "StaffAlert",
         "SignalsResponse",
         "ResultPage",
-        "PushSubscribed",
-        "PushUnsubscribed"
+        "PushSubscribed"
       ],
-      "description": "body가 따르는 계약·문진 스키마 이름(FrontendInput·StaffSessionView·SessionResult는 문진 스키마, 나머지는 계약; ResultPage는 {items: SessionResult[], next_cursor}; PushSubscribed는 {endpoint}; PushUnsubscribed는 {endpoint, deleted})"
+      "description": "body가 따르는 계약·문진 스키마 이름(FrontendInput·StaffSessionView·SessionResult는 문진 스키마, 나머지는 계약; ResultPage는 {items: SessionResult[], next_cursor}; PushSubscribed는 {endpoint}; POST 구독 해지는 204이고 본문이 없다)"
     },
     "error": {
       "type": "object",

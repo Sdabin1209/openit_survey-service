@@ -13,8 +13,7 @@
     "method": {
       "enum": [
         "GET",
-        "POST",
-        "DELETE"
+        "POST"
       ]
     },
     "path": {
@@ -171,20 +170,6 @@
             },
             "path": {
               "pattern": "^/v1/staff/push-subscriptions/unsubscribe$(?![\\s\\S])"
-            }
-          },
-          "required": [
-            "method",
-            "path"
-          ]
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "DELETE"
-            },
-            "path": {
-              "pattern": "^/v1/staff/push-subscriptions$(?![\\s\\S])"
             }
           },
           "required": [
@@ -411,41 +396,6 @@
               },
               "cursor": {
                 "pattern": "^[0-9]{1,18}$(?![\\s\\S])"
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "method": {
-            "const": "DELETE"
-          },
-          "path": {
-            "pattern": "^/v1/staff/push-subscriptions$(?![\\s\\S])"
-          }
-        },
-        "required": [
-          "method",
-          "path"
-        ]
-      },
-      "then": {
-        "required": [
-          "query"
-        ],
-        "properties": {
-          "query": {
-            "type": "object",
-            "required": [
-              "endpoint"
-            ],
-            "properties": {
-              "endpoint": {
-                "type": "string",
-                "minLength": 1
               }
             }
           }

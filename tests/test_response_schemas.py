@@ -9,7 +9,7 @@ from .http_server_support import stop_server
 
 EXPECTED = {"state": "SessionState", "staff_retry": "StaffCallRetryResult", "staff_report": "StaffAlert", "alerts": "StaffAlertPage", "push_config": "PushConfig",
             # 3.4.18: 문서에만 있던 응답 모양을 계약 스키마로 옮김
-            "question_sets": "QuestionSetList", "push_add": "PushSubscriptionResult", "push_del": "PushSubscriptionResult", "risk_signal": "RiskSignalResult"}
+            "question_sets": "QuestionSetList", "push_add": "PushSubscriptionResult", "risk_signal": "RiskSignalResult"}
 
 
 def test_every_response_schema_in_the_table_is_a_contract_schema():

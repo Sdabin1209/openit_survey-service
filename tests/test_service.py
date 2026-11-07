@@ -7,7 +7,7 @@ import urllib.request
 
 import pytest
 
-from survey_service.settings import ConfigError, Settings, load_factory
+from survey_service.settings import ConfigError, Settings
 from survey_service.wiring.app import App
 from survey_service.server import serve
 
@@ -19,7 +19,7 @@ from .sample_bank import sample_bank
 
 def settings(tmp_path, **kw):
     base = dict(session_db=str(tmp_path / "s.db"), outbox_db=str(tmp_path / "o.db"), work_dir=str(tmp_path / "w"),
-                release_reader="x:y", trace_ingest="x:y", model_backend="fake", release_poll_seconds=0.05,
+                release_reader="http", trace_ingest="http", model_backend="fake", release_poll_seconds=0.05,
                 export_interval_seconds=0.05)
     base.update(kw)
     return Settings(**base)
@@ -92,7 +92,7 @@ def test_turn_through_app_reaches_ingest(running):
 
 
 def test_settings_from_env():
-    env = {"SURVEY_RELEASE_READER": "a:b", "SURVEY_TRACE_INGEST": "c:d", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_PORT": "9000",
+    env = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_PORT": "9000",
            "SURVEY_KEEP_RELEASES": "4"}
     s = Settings.from_env(env)
     assert s.port == 9000 and s.keep_releases == 4 and s.session_db == "/data/sessions.db" and s.release_poll_seconds == 5.0
@@ -108,11 +108,11 @@ def test_settings_reject_missing_or_bad(env):
         Settings.from_env(env)
 
 
-def test_load_factory():
-    assert load_factory("tests.smoke_fakes:console")().__class__.__name__ == "RecordingConsole"
-    for bad in ("nocolon", "no.such.module:x", "tests.smoke_fakes:nothing"):
+def test_factory_paths_are_not_deployment_settings():
+    for bad in ("nocolon", "no.such.module:x", "tests.smoke_fakes:console"):
         with pytest.raises(ConfigError):
-            load_factory(bad)
+            Settings.from_env({"SURVEY_RELEASE_READER": bad, "SURVEY_TRACE_INGEST": "http",
+                               "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"})
 
 
 def test_unknown_model_backend_refuses_to_start(tmp_path):
@@ -151,7 +151,8 @@ def test_readyz_says_the_staff_alert_source_is_missing_instead_of_silently_disab
 
 
 def test_risk_source_factory_setting_activates_the_alert_path(tmp_path):
-    app = App(settings(tmp_path, risk_source="tests.smoke_fakes:risk_source"), reader=FakeReleaseReader(tmp_path / "gate"),
+    from .smoke_fakes import risk_source
+    app = App(settings(tmp_path), risk_source=risk_source(), reader=FakeReleaseReader(tmp_path / "gate"),
               ingest=FakeTraceIngest(), staff_console=RecordingConsole(), dispatcher=RecordingDispatcher())
     try:
         assert app.readiness()[1]["staff_alert_source"] == {"active": True}

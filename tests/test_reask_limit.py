@@ -17,7 +17,7 @@ def _kinds(rig):
 
 
 def test_zero_default_is_not_the_service_default_and_cap_off_never_skips():
-    base = {"SURVEY_RELEASE_READER": "tests.fakes:release_reader", "SURVEY_TRACE_INGEST": "tests.fakes:trace_ingest", "SURVEY_MODEL_BACKEND": "fake"}
+    base = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
     assert Settings().max_consecutive_reask == 3 and Settings.from_env(base).max_consecutive_reask == 3         # 기본 3(D88 U10), 끄려면 0을 명시한다
     assert Settings.from_env({**base, "SURVEY_MAX_CONSECUTIVE_REASK": "0"}).max_consecutive_reask == 0
     bank = copy.deepcopy(sample_bank())

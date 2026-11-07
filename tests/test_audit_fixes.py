@@ -70,7 +70,7 @@ from survey_service.settings import ConfigError, Settings
 from survey_service.components.session_store import SqliteSessionStore
 from survey_service.components.trace_outbox import Outbox
 
-BASE_ENV = {"SURVEY_RELEASE_READER": "tests.fakes:release_reader", "SURVEY_TRACE_INGEST": "tests.fakes:trace_ingest", "SURVEY_MODEL_BACKEND": "fake"}
+BASE_ENV = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
 
 
 def test_retention_defaults_are_finite_and_unlimited_is_rejected():
@@ -137,44 +137,35 @@ from survey_service.components.alert_service import AlertHub, AlertService
 from survey_service.components.link_public_api import PublicApi
 
 
-def _device_api(tmp_path, shared=None):
+def _device_api(tmp_path):
     rig = Rig()
     svc = AlertService(AlertStore(str(tmp_path / "a.db"), clock=fake_clock()), AlertHub(), monotonic=fake_clock())
-    api = PublicApi(rig.orch, shared, device_tokens={"dev-a": "tok-device-a-0123456789", "dev-b": "tok-device-b-0123456789"}, staff_token="staff-tok-0123456789", alerts=svc)
+    api = PublicApi(rig.orch, "shared-tok-0123456789", staff_token="staff-tok-0123456789", alerts=svc)
 
-    def call(tok, method, path, body=None):
-        return api.handle(method, path, f"Bearer {tok}", _json.dumps(body).encode() if body is not None else b"")
+    def call(tok, method, path, body=None, device=None):
+        return api.handle(method, path, f"Bearer {tok}", _json.dumps(body).encode() if body is not None else b"", device=device)
     return rig, api, call
 
 
-def test_session_is_accessible_only_with_the_creating_device_token(tmp_path):
-    rig, api, call = _device_api(tmp_path, shared="shared-tok-0123456789")
-    A, B = "tok-device-a-0123456789", "tok-device-b-0123456789"
-    assert call(A, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"})[0] == 200
-    turn = {"session_id": "K1", "kind": "UTTERANCE", "utterance": "안 피움", "turn_id": "t1"}
-    rig.model.queue.append({"action": "NEXT", "next_item": "Q1.D02", "values": []})
-    assert call(B, "GET", "/v1/sessions/K1/state")[0] == 404                      # 다른 기기: 세션이 없는 것처럼
-    assert call(B, "POST", "/v1/sessions/K1/turns", turn)[0] == 404
-    assert call(B, "POST", "/v1/sessions/K1/end", {"session_id": "K1", "kind": "SESSION_END"})[0] == 404
-    assert call("shared-tok-0123456789", "GET", "/v1/sessions/K1/state")[0] == 404          # 공유 토큰도 기기가 만든 세션은 못 본다
-    assert call(B, "POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"})[0] == 404      # 다른 기기가 같은 ID로 시작을 시도해도 막힌다
-    assert call(A, "GET", "/v1/sessions/K1/state")[0] == 200
-    assert call("wrong", "GET", "/v1/sessions/K1/state")[0] == 401
-    assert call("staff-tok-0123456789", "GET", "/v1/sessions/K1/state")[0] == 403         # 직원 토큰은 키오스크 경로를 쓸 수 없다
+def test_session_is_accessible_only_to_the_gateway_verified_creating_device(tmp_path):
+    rig, api, call = _device_api(tmp_path)
+    gateway = "shared-tok-0123456789"
+    code, body, _ = call(gateway, "POST", "/v1/sessions", {"kind": "SESSION_START"}, device="dev-a")
+    assert code == 200
+    sid = body["session_id"]
+    assert call(gateway, "GET", f"/v1/sessions/{sid}/state", device="dev-b")[0] == 404
+    assert call(gateway, "POST", f"/v1/sessions/{sid}/end", {"session_id": sid, "kind": "SESSION_END"}, device="dev-b")[0] == 404
+    assert call(gateway, "GET", f"/v1/sessions/{sid}/state")[0] == 403
+    assert call(gateway, "GET", f"/v1/sessions/{sid}/state", device="dev-a")[0] == 200
+    assert call("wrong", "GET", f"/v1/sessions/{sid}/state", device="dev-a")[0] == 401
+    assert call("staff-tok-0123456789", "GET", f"/v1/sessions/{sid}/state", device="dev-a")[0] == 403
 
 
-def test_shared_token_still_works_for_sessions_it_created_and_device_flag_in_readyz(tmp_path, monkeypatch):
-    rig, api, call = _device_api(tmp_path, shared="shared-tok-0123456789")
-    S = "shared-tok-0123456789"
-    assert call(S, "POST", "/v1/sessions", {"session_id": "L1", "kind": "SESSION_START"})[0] == 200
-    assert call(S, "GET", "/v1/sessions/L1/state")[0] == 200
-    assert call("tok-device-a-0123456789", "GET", "/v1/sessions/L1/state")[0] == 404 or True      # 공유 토큰이 만든 세션(기기 없음)은 막지 않는다
-    from survey_service.wiring.app import _device_tokens
-    monkeypatch.setenv("TOKS", "a=0123456789abcdef\nb=fedcba9876543210")
-    assert set(_device_tokens("TOKS")) == {"a", "b"}
-    monkeypatch.setenv("TOKS", "a=short")
+def test_retired_device_token_setting_is_rejected_and_gateway_token_alone_is_not_a_device(tmp_path):
+    _, _, call = _device_api(tmp_path)
+    assert call("shared-tok-0123456789", "POST", "/v1/sessions", {"kind": "SESSION_START"})[0] == 403
     with pytest.raises(ConfigError):
-        _device_tokens("TOKS")
+        Settings.from_env({**BASE_ENV, "SURVEY_KIOSK_DEVICE_TOKENS": "dev-a=retired"})
 
 
 # ---------------------------------------------------------------- 값 타당성 (TE-1, ADR-0017)
@@ -338,8 +329,7 @@ def test_prescreen_session_check_with_real_stores_not_found_outage_and_slow(tmp_
     assert len([c for c in rig.console.inputs if c.get("staff_alert")]) == 2
 
 
-def test_device_token_cannot_touch_sessions_without_a_recorded_owner(tmp_path):
-    rig, api, call = _device_api(tmp_path, shared="shared-tok-0123456789")
-    assert call("shared-tok-0123456789", "POST", "/v1/sessions", {"session_id": "L9", "kind": "SESSION_START"})[0] == 200
-    assert call("tok-device-a-0123456789", "GET", "/v1/sessions/L9/state")[0] == 404           # 공유 토큰이 만든 세션: 기기 토큰은 접근 불가
-    assert call("shared-tok-0123456789", "GET", "/v1/sessions/L9/state")[0] == 200
+def test_gateway_verified_device_cannot_touch_sessions_without_a_recorded_owner(tmp_path):
+    rig, api, call = _device_api(tmp_path)
+    rig.start(sid="L9")
+    assert call("shared-tok-0123456789", "GET", "/v1/sessions/L9/state", device="dev-a")[0] == 404

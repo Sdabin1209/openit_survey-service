@@ -15,7 +15,7 @@ from .e2e_support import Rig
 from .pg_support import pg_url
 
 REFUSED = "postgresql://u:p-canary-55@127.0.0.1:1/d"        # 닫힌 포트: 연결 거부
-BASE = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
+BASE = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
 
 
 def _rig(request, deadline=None, url=None):
@@ -32,7 +32,7 @@ def _rig(request, deadline=None, url=None):
 
 def _turn(api, tid):
     body = {"session_id": "K1", "kind": "UTTERANCE", "utterance": "안 피움", "turn_id": tid}
-    code, resp, hdr = api.handle("POST", "/v1/sessions/K1/turns", "Bearer tok", json.dumps(body, ensure_ascii=False).encode())
+    code, resp, hdr = api.handle("POST", "/v1/sessions/K1/turns", "Bearer tok", json.dumps(body, ensure_ascii=False).encode(), device="test-kiosk")
     return code, resp
 
 

@@ -29,7 +29,7 @@
         "POST"
       ],
       "auth": {
-        "kind": "device-token"
+        "kind": "device"
       },
       "user_header": "strip",
       "timeouts_ms": {
@@ -48,7 +48,7 @@
         "GET"
       ],
       "auth": {
-        "kind": "device-token"
+        "kind": "device"
       },
       "user_header": "strip",
       "timeouts_ms": {
@@ -106,28 +106,6 @@
         "read": 3600000
       },
       "max_body_bytes": 65536
-    },
-    {
-      "paths": [
-        "/v1/staff/push-subscriptions"
-      ],
-      "methods": [
-        "DELETE"
-      ],
-      "auth": {
-        "kind": "account",
-        "roles": [
-          "staff"
-        ]
-      },
-      "upstream_token": "survey-api-staff",
-      "user_header": "set",
-      "streaming": true,
-      "timeouts_ms": {
-        "dial": 1000,
-        "response_header": 55000,
-        "read": 3600000
-      }
     },
     {
       "paths": [
@@ -220,6 +198,28 @@
       ],
       "auth": {
         "kind": "denied"
+      }
+    },
+    {
+      "paths": [
+        "/v1/staff/alerts/stream"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "auth": {
+        "kind": "account",
+        "roles": [
+          "clinician"
+        ]
+      },
+      "upstream_token": "survey-result-reader",
+      "user_header": "set",
+      "streaming": true,
+      "timeouts_ms": {
+        "dial": 1000,
+        "response_header": 55000,
+        "read": 3600000
       }
     }
   ],

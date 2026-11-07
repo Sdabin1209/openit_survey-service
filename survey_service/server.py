@@ -265,7 +265,7 @@ def run_server(server) -> None:
             raise
 
 
-def main(argv=None) -> int:
+def main(argv=None, *, app_factory=App) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["purge"]:
         from .wiring.purge_job import run_purge
@@ -286,7 +286,7 @@ def main(argv=None) -> int:
         return 2
     configure_logging(settings.log_level)
     try:
-        app = App(settings)
+        app = app_factory(settings)
     except Exception as e:
         log.error("시작 실패 error=%s message=%s", type(e).__name__, e if isinstance(e, (ConfigError, StoreError)) else "")
         return 3

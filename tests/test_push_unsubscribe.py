@@ -1,7 +1,7 @@
 """단계 B (2): 푸시 해지는 `POST /v1/staff/push-subscriptions/unsubscribe` 본문 {"endpoint"} -> 204.
 
 기대값의 출처: ../boundary-contracts/PUBLIC_API.md 45행(2.2.0): 204, 푸시 엔드포인트 URL은 그 자체가 푸시 권한을 주는 값이라 URL에 싣지 않는다,
-기존 `DELETE ...?endpoint=`는 2.x에서만 허용하는 폐기 예정 방식. 지시: 없는 endpoint도 멱등으로 204, 폐기 예정 방식은 유지하고 로그에 경고,
+4.0에서는 기존 DELETE 경로를 제거했다. 없는 endpoint도 POST 해지는 멱등으로 204이며,
 푸시 엔드포인트 URL은 로그에 남기지 않는다. HTTP 204는 본문이 없어야 한다(RFC 9110 15.3.5).
 """
 import logging
@@ -47,13 +47,13 @@ def test_unsubscribe_needs_staff_role(ar):
     assert ar.call("POST", UNSUB, {"endpoint": EP}, auth="")[0] == 401
 
 
-def test_deprecated_delete_still_works_and_logs_a_warning_without_the_url(ar, caplog):
-    ar.call("POST", "/v1/staff/push-subscriptions", SUB)
+def test_removed_delete_does_not_unsubscribe_or_log_the_url(ar, caplog):
+    assert ar.call("POST", "/v1/staff/push-subscriptions", SUB)[0] == 201
     caplog.set_level(logging.DEBUG)
-    code, body, _ = ar.call("DELETE", "/v1/staff/push-subscriptions?endpoint=" + EP)
-    assert code == 200 and body["deleted"] is True
-    warns = [r for r in caplog.records if r.levelno == logging.WARNING and "폐기 예정" in r.getMessage()]
-    assert len(warns) == 1
+    code, _, _ = ar.call("DELETE", "/v1/staff/push-subscriptions?endpoint=" + EP)
+    assert code == 405
+    assert ar.store.count_subscriptions() == 1
+    assert EP not in caplog.text
 
 
 def test_endpoint_url_never_appears_in_logs(ar, caplog):

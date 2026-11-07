@@ -10,7 +10,6 @@ from typing_extensions import NotRequired, TypedDict
 
 class SessionStartBody(TypedDict, closed=True):
     kind: Literal['SESSION_START']
-    session_id: NotRequired[str]
     turn_id: NotRequired[str]
-    subject_ref: NotRequired[str | None]
+    subject_ref: NotRequired[str]
     question_set_id: NotRequired[str]

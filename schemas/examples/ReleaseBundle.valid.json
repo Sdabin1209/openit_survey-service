@@ -1,7 +1,7 @@
 {
   "release_id": "rel-0001",
   "manifest": {
-    "pipeline_schema_version": "3.0",
+    "pipeline_schema_version": "4.0",
     "release_id": "rel-0001",
     "created_at": "2026-10-14T00:00:00Z",
     "gate_decision_id": "gd-0001",
@@ -23,6 +23,23 @@
       "LORA_A": {
         "adapter_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
         "serving_config": {
+          "prompt_template_version": "test-prompt-1",
+          "decoding": {
+            "constraint_mode": "constrained",
+            "temperature": 0,
+            "seed": 1000,
+            "max_tokens": 512
+          },
+          "max_attempts": 3,
+          "constraint": {
+            "backend": "fake",
+            "backend_version": "1",
+            "supported_features": [
+              "type"
+            ],
+            "relax_policy_version": "test-relax-1"
+          },
+          "output_contract": 1,
           "protection_policy_version": "protect-1"
         },
         "serving_config_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -34,6 +51,23 @@
       "LORA_B": {
         "adapter_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
         "serving_config": {
+          "prompt_template_version": "test-prompt-1",
+          "decoding": {
+            "constraint_mode": "constrained",
+            "temperature": 0,
+            "seed": 1000,
+            "max_tokens": 512
+          },
+          "max_attempts": 3,
+          "constraint": {
+            "backend": "fake",
+            "backend_version": "1",
+            "supported_features": [
+              "type"
+            ],
+            "relax_policy_version": "test-relax-1"
+          },
+          "output_contract": 1,
           "protection_policy_version": "protect-1"
         },
         "serving_config_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",

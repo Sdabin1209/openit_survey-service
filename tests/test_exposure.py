@@ -36,12 +36,12 @@ def test_every_route_the_code_serves_is_declared_with_the_right_kind():
     # 구체 경로로 푼 코드 라우트(api.py의 _route + service.py의 /healthz·/readyz·SSE). 새 라우트를 더하면 이 목록과 표를 함께 고쳐야 한다(아래 시험이 소스에서 놓친 것을 잡는다).
     served = {
         ("GET", "/readyz"): "none",
-        ("POST", "/v1/sessions"): "device-token", ("POST", "/v1/sessions/X/turns"): "device-token", ("POST", "/v1/sessions/X/end"): "device-token",
-        ("GET", "/v1/sessions/X/state"): "device-token", ("POST", "/v1/sessions/X/staff-call/retry"): "device-token", ("POST", "/v1/sessions/X/staff-call/report"): "device-token",
+        ("POST", "/v1/sessions"): "device", ("POST", "/v1/sessions/X/turns"): "device", ("POST", "/v1/sessions/X/end"): "device",
+        ("GET", "/v1/sessions/X/state"): "device", ("POST", "/v1/sessions/X/staff-call/retry"): "device", ("POST", "/v1/sessions/X/staff-call/report"): "device",
         ("POST", "/v1/sessions/X/intervention"): "account",
         ("GET", "/v1/staff/alerts"): "account", ("GET", "/v1/staff/alerts/stream"): "account", ("GET", "/v1/staff/sessions/X"): "account",
         ("GET", "/v1/staff/push-config"): "account", ("POST", "/v1/staff/push-subscriptions"): "account",
-        ("POST", "/v1/staff/push-subscriptions/unsubscribe"): "account", ("DELETE", "/v1/staff/push-subscriptions"): "account",
+        ("POST", "/v1/staff/push-subscriptions/unsubscribe"): "account",
         # 위험 신호 경로는 게이트웨이 밖으로 내지 않는다. 결과 읽기·확인 표시는 의사 계정(clinician)에게 연다(계약 3.2.0 PUBLIC_API B절, U83, ADR-0056)
         ("POST", "/v1/sessions/X/risk-signals"): "denied", ("GET", "/v1/results"): "account", ("GET", "/v1/results/X"): "account", ("POST", "/v1/results/X/ack"): "account",
     }
@@ -94,7 +94,7 @@ def test_label_is_added_by_build_image_and_matches_the_file():
 
 def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
     """시간 상한 사슬(ADR-0049): 서버 턴 마감 50 < gateway(dial + response_header = 56) < 키오스크 대기 60. 같은 리포의 두 값을 대조한다(이웃을 읽지 않는다).
-    키오스크 경로(device-token)는 사슬 안이고, 직원 경로(account)는 턴 마감보다 길기만 하면 되며, /readyz는 자기 확인 예산보다 길어야 한다."""
+    키오스크 경로(device)는 사슬 안이고, 직원 경로(account)는 턴 마감보다 길기만 하면 되며, /readyz는 자기 확인 예산보다 길어야 한다."""
     from survey_service.settings import Settings
     s = Settings()
     deadline, kiosk_wait = s.turn_deadline_seconds, 60.0      # 60은 D125 사슬 값(프록시·LB 표준 60초, 사용자 결정 2026-11-02): 키오스크 쪽 상수이므로 여기에 근거만 적는다
@@ -104,7 +104,7 @@ def test_timeouts_in_the_exposure_table_keep_the_time_chain_with_the_settings():
         if not t:
             continue
         gateway = (t.get("dial", 0) + t["response_header"]) / 1000
-        if r["auth"]["kind"] == "device-token":
+        if r["auth"]["kind"] == "device":
             assert deadline + 1.5 <= gateway < kiosk_wait, (r["paths"], gateway, deadline)      # 사슬의 간격: 50 + 1.5 <= 56 (D125, ADR-0052). 턴 마감 직전에 끝난 응답이 게이트웨이 상한 안에 도착해야 한다
         elif r["auth"]["kind"] == "account":
             assert t["response_header"] / 1000 > deadline, (r["paths"], t)
@@ -122,7 +122,7 @@ def test_staff_routes_declare_the_gateway_limit_and_the_server_side_worst_cases_
     """
     from survey_service.settings import Settings
     s = Settings()
-    staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms") and r["auth"]["roles"] == ["staff"]]      # 의사 결과 경로(clinician)는 스트림이 아니라 read 상한이 없다
+    staff = [r for r in TABLE["routes"] if r["auth"]["kind"] == "account" and r.get("timeouts_ms") and r["auth"]["roles"] == ["staff"]]      # 일반 의사 결과 경로와 clinician SSE의 read 상한은 별도로 검사한다
     assert staff, "직원 경로 선언이 없다"
     for r in staff:
         assert r["timeouts_ms"] == {"dial": 1000, "response_header": 55000, "read": 3600000}, r["paths"]
@@ -142,3 +142,15 @@ def test_deploy_jobs_declaration_validates_against_the_contract_and_build_image_
     assert not list(validator("JobsDeclaration").iter_errors(decl))
     script = (root / "scripts/build-image.sh").read_text(encoding="utf-8")
     assert 'validator("JobsDeclaration")' in script and 'io.openit.jobs=$JOBS' in script
+
+
+def test_clinician_result_stream_has_its_own_upstream_identity():
+    routes = [r for r in TABLE["routes"]
+              if "/v1/staff/alerts/stream" in r["paths"]
+              and r["auth"].get("roles") == ["clinician"]]
+    assert len(routes) == 1
+    route = routes[0]
+    assert route["methods"] == ["GET"]
+    assert route["upstream_token"] == "survey-result-reader"
+    assert route["streaming"] is True and route["user_header"] == "set"
+    assert route["timeouts_ms"]["read"] == 3600000

@@ -35,7 +35,7 @@ def test_no_fixed_service_addresses_in_the_source():
 
 def test_service_url_settings_have_no_default_address():
     from survey_service.settings import Settings
-    s = Settings.from_env({"SURVEY_MODEL_BACKEND": "fake", "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y"})
+    s = Settings()
     assert s.release_reader_url == "" and s.trace_ingest_url == "" and s.inference_url == ""
 
 

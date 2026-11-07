@@ -77,7 +77,7 @@ def test_server_binds_only_to_the_configured_host(tmp_path, monkeypatch):
     import survey_service.server as srv
     monkeypatch.setattr(srv, "create_server", lambda *a, **k: seen.update(k) or object())
     monkeypatch.setattr(srv, "make_wsgi", lambda app: None)
-    base = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
+    base = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
     for env, want in (({**base, "SURVEY_HOST": "127.0.0.1"}, "127.0.0.1"), (base, "0.0.0.0")):
         serve(type("A", (), {"settings": Settings.from_env(env)})(), 0)
         assert seen["host"] == want

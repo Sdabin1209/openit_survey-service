@@ -1,5 +1,6 @@
 """직원 세션 조회(StaffSessionView)와 접근 기록, 위험 규칙 엔진, 위반 코드 관측, 타임아웃 분류, 결과 전달 대상 없음."""
 import json
+from unittest.mock import patch
 import logging
 import sqlite3
 
@@ -42,7 +43,7 @@ class ViewRig:
         self.api = PublicApi(self.rig.orch, "tok", staff_token="stok", alerts=self.service)
 
     def call(self, method, path, body=None, auth=STAFF):
-        return self.api.handle(method, path, auth, json.dumps(body).encode() if body is not None else b"")
+        return self.api.handle(method, path, auth, json.dumps(body).encode() if body is not None else b"", device="test-kiosk")
 
     def post(self, path, body):
         return self.call("POST", path, body, auth=AUTH)
@@ -56,7 +57,8 @@ def vr(tmp_path):
 
 
 def converse(vr, sid="K1"):
-    vr.post("/v1/sessions", {"session_id": sid, "kind": "SESSION_START", "turn_id": "start"})
+    with patch("secrets.token_urlsafe", return_value=sid):
+        assert vr.post("/v1/sessions", {"kind": "SESSION_START", "turn_id": "start"})[0] == 200
     vr.rig.model.queue.append(ANSWER_OUT)
     vr.post(f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": "아니요 없어요", "turn_id": "t-1"})
 
@@ -210,7 +212,7 @@ def test_rule_hit_pauses_session_and_noop_otherwise(vr):
 
 def _env(tmp_path, **extra):
     return {"SURVEY_SESSION_DB": str(tmp_path / "s.db"), "SURVEY_OUTBOX_DB": str(tmp_path / "o.db"), "SURVEY_WORK_DIR": str(tmp_path / "w"),
-            "SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0", **extra}
+            "SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake", "SURVEY_SESSION_IDLE_SECONDS": "0", **extra}
 
 
 def _app(tmp_path, **extra):

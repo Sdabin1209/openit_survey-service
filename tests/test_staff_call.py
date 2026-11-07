@@ -1,3 +1,4 @@
+from unittest.mock import patch
 """CR-H001·CR-H002 (설치된 계약 패키지 기준): 직원 호출 재알림·실패 기록·정지 사유. SQLite와 일회용 PostgreSQL(TEST_DATABASE_URL) 모두.
 권한 부정, 경로 우회, 멱등, 간격·상한, 크래시 구간, 계약 스키마 적합성을 본다."""
 import json
@@ -14,7 +15,7 @@ from .timing import HANG_GUARD_SECONDS, fake_clock
 from .e2e_support import RISK_OUT, Rig, ScriptedRisk, ext, val
 from .pg_support import pg_link, pg_url
 
-KIOSK, STAFF, DEV_A, DEV_B = "Bearer kiosk-tok-0123456789", "Bearer staff-tok-0123456789", "Bearer dev-a-tok-0123456789", "Bearer dev-b-tok-0123456789"
+KIOSK, STAFF, DEV_A, DEV_B = "Bearer kiosk-tok-0123456789", "Bearer staff-tok-0123456789", "dev-a", "dev-b"
 RISK_TEXT = "숨이 안 쉬어져요"
 REASK = ext("REASK", "Q1.D01", val("Q1.D01.on_medication", None, "MISSING"), reason="MISSING", targets=["Q1.D01.on_medication"])
 
@@ -32,29 +33,29 @@ class SRig:
         self.hub = AlertHub()
         self.service = AlertService(store, self.hub, None, push_timeout=HANG_GUARD_SECONDS, retry_min_interval_s=interval, retry_max_per_session=cap, monotonic=fake_clock())
         self.rig.orch.staff_console = AlertStaffConsole(self.service)
-        kw = {"device_tokens": {"dev-a": DEV_A[7:], "dev-b": DEV_B[7:]}} if devices else {}
         self.api = PublicApi(self.rig.orch, KIOSK[7:], staff_token=STAFF[7:], alerts=self.service, result_token="res-tok-0123456789",
-                             risk_token="risk-tok-0123456789", state_poll_min_interval=0, **kw)
+                             risk_token="risk-tok-0123456789", state_poll_min_interval=0)
 
-    def call(self, method, path, body=None, auth=KIOSK):
+    def call(self, method, path, body=None, auth=KIOSK, device="test-kiosk"):
         raw = json.dumps(body).encode() if body is not None else b""
-        return self.api.handle(method, path, auth, raw, user="staff-1")
+        return self.api.handle(method, path, auth, raw, user="staff-1", device=device)
 
-    def start(self, sid="K1", auth=KIOSK):
-        return self.call("POST", "/v1/sessions", {"session_id": sid, "kind": "SESSION_START"}, auth=auth)
+    def start(self, sid="K1", auth=KIOSK, device="test-kiosk"):
+        with patch("secrets.token_urlsafe", return_value=sid):
+            return self.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=auth, device=device)
 
-    def risk(self, sid="K1", tid="t-risk", auth=KIOSK):
+    def risk(self, sid="K1", tid="t-risk", auth=KIOSK, device="test-kiosk"):
         self.rig.model.queue.append(RISK_OUT)
-        return self.call("POST", f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": RISK_TEXT, "turn_id": tid}, auth=auth)
+        return self.call("POST", f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": RISK_TEXT, "turn_id": tid}, auth=auth, device=device)
 
-    def retry(self, tid, sid="K1", auth=KIOSK):
-        return self.call("POST", f"/v1/sessions/{sid}/staff-call/retry", {"turn_id": tid}, auth=auth)
+    def retry(self, tid, sid="K1", auth=KIOSK, device="test-kiosk"):
+        return self.call("POST", f"/v1/sessions/{sid}/staff-call/retry", {"turn_id": tid}, auth=auth, device=device)
 
-    def report(self, tid, outcome="STAFF_NOTIFIED_MANUALLY", sid="K1", auth=KIOSK):
-        return self.call("POST", f"/v1/sessions/{sid}/staff-call/report", {"outcome": outcome, "turn_id": tid}, auth=auth)
+    def report(self, tid, outcome="STAFF_NOTIFIED_MANUALLY", sid="K1", auth=KIOSK, device="test-kiosk"):
+        return self.call("POST", f"/v1/sessions/{sid}/staff-call/report", {"outcome": outcome, "turn_id": tid}, auth=auth, device=device)
 
-    def state(self, sid="K1", auth=KIOSK):
-        return self.call("GET", f"/v1/sessions/{sid}/state", auth=auth)
+    def state(self, sid="K1", auth=KIOSK, device="test-kiosk"):
+        return self.call("GET", f"/v1/sessions/{sid}/state", auth=auth, device=device)
 
 
 @pytest.fixture(params=["sqlite", "postgres"])
@@ -248,24 +249,24 @@ def test_report_without_any_alert_is_409(mk):
 # ---------------------------------------------------------------- 권한 부정, 경로 우회, 잘못된 본문
 def test_authorization_and_path_bypass(mk):
     r = mk(devices=True)
-    r.start("K1", auth=DEV_A)
-    r.start("K2", auth=DEV_B)
-    r.risk("K1", auth=DEV_A)
-    r.risk("K2", "t-risk2", auth=DEV_B)
-    assert r.retry("x1", auth=DEV_A)[0] == 200
-    assert r.retry("x2", auth=DEV_B)[0] == 404 and r.retry("x2", auth=DEV_B, sid="K1")[0] == 404      # 다른 기기: 404
-    assert r.report("x2", auth=DEV_B)[0] == 404
+    r.start("K1", device=DEV_A)
+    r.start("K2", device=DEV_B)
+    r.risk("K1", device=DEV_A)
+    r.risk("K2", "t-risk2", device=DEV_B)
+    assert r.retry("x1", device=DEV_A)[0] == 200
+    assert r.retry("x2", device=DEV_B)[0] == 404 and r.retry("x2", device=DEV_B, sid="K1")[0] == 404      # 다른 기기: 404
+    assert r.report("x2", device=DEV_B)[0] == 404
     assert r.retry("x3", auth=KIOSK)[0] == 404 and r.report("x3", auth=KIOSK)[0] == 404              # 공유 토큰도 기기 소유 세션에는 못 닿는다
     for auth, want in ((STAFF, 403), ("Bearer res-tok-0123456789", 403), ("Bearer risk-tok-0123456789", 403), ("Bearer wrong", 401), ("", 401)):
         assert r.retry("y1", auth=auth, sid="K1")[0] == want and r.report("y1", auth=auth, sid="K1")[0] == want, auth
     # 경로 우회: 정규화·인코딩·접미사·메서드로 다른 세션/경로에 닿지 못한다
     for path in ("/v1/sessions/K1/../K2/staff-call/retry", "/v1/sessions/K1/staff-call/retry/", "/v1/sessions/K1/staff-call/retry/extra",
                  "/v1/sessions//staff-call/retry", "/v1/staff/sessions/K1/staff-call/retry", "/v1/sessions/K1/staff-call", "/v1/sessions/K1/STAFF-CALL/retry"):
-        assert r.call("POST", path, {"turn_id": "z"}, auth=DEV_B)[0] in (404, 400), path
+        assert r.call("POST", path, {"turn_id": "z"}, device=DEV_B)[0] in (404, 400), path
     for path in ("/v1/sessions/K1%2FK2/staff-call/retry", "/v1/sessions/K1%00/staff-call/retry", "/v1/sessions/%2e%2e/staff-call/retry"):
-        assert r.call("POST", path, {"turn_id": "z"}, auth=DEV_A)[0] in (400, 404), path      # 형식 위반(기기 확인이 먼저면 404): 어느 쪽이든 아무것도 바꾸지 않는다
-    assert r.call("GET", "/v1/sessions/K1/staff-call/retry", auth=DEV_A)[0] == 405 and r.call("PUT", "/v1/sessions/K1/staff-call/retry", {"turn_id": "z"}, auth=DEV_A)[0] == 405      # 알려진 경로의 다른 메서드는 405(openit_link 규약, 옛 동작은 404)
-    assert r.retry("q1", sid="NOPE", auth=DEV_A)[0] == 404                                    # 없는 세션
+        assert r.call("POST", path, {"turn_id": "z"}, device=DEV_A)[0] in (400, 404), path      # 형식 위반(기기 확인이 먼저면 404): 어느 쪽이든 아무것도 바꾸지 않는다
+    assert r.call("GET", "/v1/sessions/K1/staff-call/retry", device=DEV_A)[0] == 405 and r.call("PUT", "/v1/sessions/K1/staff-call/retry", {"turn_id": "z"}, device=DEV_A)[0] == 405      # 알려진 경로의 다른 메서드는 405(openit_link 규약, 옛 동작은 404)
+    assert r.retry("q1", sid="NOPE", device=DEV_A)[0] == 404                                    # 없는 세션
 
 
 def test_bad_bodies_are_400(mk):

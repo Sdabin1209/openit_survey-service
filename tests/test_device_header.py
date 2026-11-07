@@ -1,6 +1,6 @@
 """(C2: 신원 헤더는 게이트웨이 토큰 요청에서만 쓴다 - 아래 시험은 게이트웨이의 키오스크 토큰과 함께 X-Openit-Device를 보낸다. 토큰 없는 요청은 401.)
 키오스크 기기 인증 = 게이트웨이 mTLS가 확인한 기기 ID를 `X-Openit-Device`로 받는다 (ADR 0012, D113, ADR-0031).
-기대값은 계약 PUBLIC_API.md F절이다: 형식 ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$, 세션을 만든 기기만 접근(다른 기기는 404), 헤더가 토큰보다 우선, 둘 다 없으면 401.
+기대값은 계약 PUBLIC_API.md F절이다: 형식 ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$, 세션을 만든 기기만 접근(다른 기기는 404), 게이트웨이 역할 토큰과 기기 헤더 모두 필수.
 호출은 계약 클라이언트 HttpPublicApi(device_id=...)로 한다."""
 import json
 import pytest
@@ -10,7 +10,7 @@ from boundary_contracts.clients import HttpPublicApi
 from .http_server_support import stop_server
 from .test_staff_alerts import http_call, make_app
 
-KIOSK_TOKEN = "test-api-token-0123"          # conftest가 SURVEY_API_TOKEN으로 주는 2.x 호환 공유 토큰
+KIOSK_TOKEN = "test-api-token-0123"          # conftest가 SURVEY_API_TOKEN으로 주는 게이트웨이→서비스 역할 토큰
 
 
 @pytest.fixture
@@ -37,8 +37,9 @@ def code_of(fn, *a):
 def test_device_header_starts_session_sends_utterance_and_reads_state_without_a_token(svc_mtls_only):
     url, _ = svc_mtls_only
     api = HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-01")
-    sid = "D1"
-    assert api.start_session(sid)["turn_failure_signal"] is None
+    started = api.start_session()
+    sid = started["session_id"]
+    assert started["turn_failure_signal"] is None
     assert api.send_utterance(sid, "안 먹어요", "t-1")["turn_failure_signal"] is None
     assert api.get_state(sid)["state"] in ("ACTIVE", "PAUSED_RISK", "ENDED")
     assert api.end_session(sid)["turn_failure_signal"] is None
@@ -47,37 +48,41 @@ def test_device_header_starts_session_sends_utterance_and_reads_state_without_a_
 def test_other_device_header_gets_404_on_every_session_route(svc_mtls_only):
     url, _ = svc_mtls_only
     a, b = HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-01"), HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-02")
-    a.start_session("D2")
-    assert code_of(b.get_state, "D2") == "NOT_FOUND"
-    assert code_of(b.send_utterance, "D2", "안녕", "t-9") == "NOT_FOUND"
-    assert code_of(b.end_session, "D2") == "NOT_FOUND"
-    assert a.get_state("D2")["state"] == "ACTIVE"                      # 소유 기기는 그대로
+    sid = a.start_session()["session_id"]
+    assert code_of(b.get_state, sid) == "NOT_FOUND"
+    assert code_of(b.send_utterance, sid, "안녕", "t-9") == "NOT_FOUND"
+    assert code_of(b.end_session, sid) == "NOT_FOUND"
+    assert a.get_state(sid)["state"] == "ACTIVE"                      # 소유 기기는 그대로
 
 
-def test_other_device_cannot_start_a_session_with_an_existing_id(svc_mtls_only):
+def test_each_device_gets_a_server_issued_session_id(svc_mtls_only):
     url, _ = svc_mtls_only
-    HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-01").start_session("D3")
-    assert code_of(HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-02").start_session, "D3") == "NOT_FOUND"
+    a = HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-01")
+    b = HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-02")
+    first, second = a.start_session()["session_id"], b.start_session()["session_id"]
+    assert first != second
+    assert code_of(b.get_state, first) == "NOT_FOUND"
+    assert code_of(a.get_state, second) == "NOT_FOUND"
 
 
 @pytest.mark.parametrize("bad", ["bad id!", "-x", ".x", "a" * 129, "caf\u00e9", ""])
 def test_malformed_device_header_is_rejected(svc_mtls_only, bad):
     _, port = svc_mtls_only
-    st, body = http_call(port, "POST", "/v1/sessions", {"session_id": "D4", "kind": "SESSION_START"}, token=KIOSK_TOKEN, headers={"X-Openit-Device": bad})
+    st, body = http_call(port, "POST", "/v1/sessions", {"kind": "SESSION_START"}, token=KIOSK_TOKEN, headers={"X-Openit-Device": bad})
     assert st == 400 and body["code"] == "INVALID_RECORD"
 
 
 def test_no_header_and_no_token_is_401(svc_mtls_only):
     url, _ = svc_mtls_only
-    assert code_of(HttpPublicApi(url, device_id="kiosk-01").start_session, "D5") == "PERMISSION_DENIED"
+    assert code_of(HttpPublicApi(url, device_id="kiosk-01").start_session) == "PERMISSION_DENIED"
 
 
-def test_header_names_the_device_for_the_gateway_kiosk_token_and_the_token_alone_still_works(svc):
+def test_gateway_token_requires_a_verified_device_header(svc):
     url, _ = svc
     with_both = HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-01")
-    with_both.start_session("D6")
-    assert code_of(HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-02").get_state, "D6") == "NOT_FOUND"      # 토큰이 맞아도 헤더의 기기가 기준
-    assert HttpPublicApi(url, token=KIOSK_TOKEN).start_session("D7")["turn_failure_signal"] is None                # 2.x 호환: 토큰만
+    sid = with_both.start_session()["session_id"]
+    assert code_of(HttpPublicApi(url, token=KIOSK_TOKEN, device_id="kiosk-02").get_state, sid) == "NOT_FOUND"      # 토큰이 맞아도 헤더의 기기가 기준
+    assert code_of(HttpPublicApi(url, token=KIOSK_TOKEN).start_session) == "PERMISSION_DENIED"
 
 
 def test_device_header_does_not_grant_staff_routes(svc_mtls_only):
@@ -110,7 +115,7 @@ def test_dispatch_strips_identity_headers_before_any_non_gateway_token_reaches_a
     from .fakes import RecordingConsole
     from .timing import fake_clock
     api = PublicApi(Orchestrator(MemorySessionStore(clock=fake_clock()), ReleaseRegistry(), staff_console=RecordingConsole()), "kiosk-tok-0123456789",
-                    staff_token="staff-tok-0123456789", result_token="result-tok-0123456789", risk_token="risk-tok-0123456789", device_tokens={"dev-1": "dev-tok-0123456789"})
+                    staff_token="staff-tok-0123456789", result_token="result-tok-0123456789", risk_token="risk-tok-0123456789")
     seen = {}
 
     class Link:

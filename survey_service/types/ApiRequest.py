@@ -28,17 +28,7 @@ class ApiRequest7(TypedDict):
     path: Any
 
 
-class ApiRequest9(TypedDict):
-    method: Literal['DELETE']
-    path: Any
-
-
-class ApiRequest10(TypedDict):
-    method: Literal['POST']
-    path: Any
-
-
-class ApiRequest13(TypedDict):
+class ApiRequest12(TypedDict):
     method: Literal['GET']
     path: Any
 
@@ -54,8 +44,8 @@ Headers = TypedDict(
 )
 
 
-class ApiRequest14(TypedDict, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest13(TypedDict, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -63,8 +53,8 @@ class ApiRequest14(TypedDict, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest15(ApiRequest1, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest14(ApiRequest1, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -72,8 +62,8 @@ class ApiRequest15(ApiRequest1, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest16(ApiRequest1, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest15(ApiRequest1, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -81,8 +71,8 @@ class ApiRequest16(ApiRequest1, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest17(ApiRequest1, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest16(ApiRequest1, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -90,8 +80,8 @@ class ApiRequest17(ApiRequest1, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest18(ApiRequest4, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest17(ApiRequest4, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -99,8 +89,8 @@ class ApiRequest18(ApiRequest4, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest19(ApiRequest5, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest18(ApiRequest5, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -108,8 +98,8 @@ class ApiRequest19(ApiRequest5, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest20(ApiRequest5, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest19(ApiRequest5, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -117,8 +107,8 @@ class ApiRequest20(ApiRequest5, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest21(ApiRequest7, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest20(ApiRequest7, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -126,8 +116,8 @@ class ApiRequest21(ApiRequest7, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest22(ApiRequest7, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest21(ApiRequest7, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -135,8 +125,8 @@ class ApiRequest22(ApiRequest7, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest23(ApiRequest9, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest22(ApiRequest7, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -144,8 +134,8 @@ class ApiRequest23(ApiRequest9, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest24(ApiRequest10, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest23(ApiRequest7, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -153,8 +143,8 @@ class ApiRequest24(ApiRequest10, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest25(ApiRequest10, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest24(ApiRequest7, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -162,17 +152,8 @@ class ApiRequest25(ApiRequest10, ApiRequest14, closed=True):
     body_bytes: NotRequired[int]
 
 
-class ApiRequest26(ApiRequest10, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
-    path: str
-    query: NotRequired[dict[str, str]]
-    headers: Headers
-    body: NotRequired[dict[str, Any] | None]
-    body_bytes: NotRequired[int]
-
-
-class ApiRequest27(ApiRequest13, ApiRequest14, closed=True):
-    method: Literal['GET', 'POST', 'DELETE']
+class ApiRequest25(ApiRequest12, ApiRequest13, closed=True):
+    method: Literal['GET', 'POST']
     path: str
     query: NotRequired[dict[str, str]]
     headers: Headers
@@ -181,7 +162,8 @@ class ApiRequest27(ApiRequest13, ApiRequest14, closed=True):
 
 
 ApiRequest: TypeAlias = (
-    ApiRequest15
+    ApiRequest14
+    | ApiRequest15
     | ApiRequest16
     | ApiRequest17
     | ApiRequest18
@@ -192,6 +174,4 @@ ApiRequest: TypeAlias = (
     | ApiRequest23
     | ApiRequest24
     | ApiRequest25
-    | ApiRequest26
-    | ApiRequest27
 )

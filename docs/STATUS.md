@@ -179,3 +179,11 @@
 ## 계약 2.1.0 구현 (2026-10-28)
 
 - CR-H001 재알림·실패 기록, CR-H002 pause_reason 구현(ADR-0021, ADR-0022). 시험 `tests/test_staff_call.py`(SQLite·PostgreSQL). 남은 일: 계약 태그 v2.1.0이 push되면 `requirements.txt`·`scripts/build_wheels.sh`·`scripts/lib` 고정을 올리고 시험 재실행. 계약 쪽 발견: `StaffAlertPage.schema.json`의 items 안에 `StaffAlert` 정의가 복사돼 있어 새 optional 필드가 없다(additionalProperties false라 `GET /v1/staff/alerts` 응답이 페이지 스키마에서 거부됨) — 헤드에 알림.
+
+## 2026-11-08 계약 4 및 기기 인증 전환
+
+- 공개 기기 토큰 표·동적 factory 환경 설정을 제거하고 mTLS 게이트웨이 신원·서버 발급 세션 ID·계약 HTTP 설정으로 전환했다(ADR-0065). 공개 DELETE 푸시 해지는 제거하고 POST만 제공한다. clinician SSE와 상류 토큰 입력을 선언했다.
+- 최종 고정: boundary-contracts 4.0.4, openit-link 0.5.3, model-runtime 0.12.3, 문진 스키마 4.1.4. 최종 태그 설치 및 pip check 정상.
+- 관련 검증: SS4.1.4 스키마·사본·공개 API 검사 통과. MR 시험 중 보류했던 실제 이미지 라벨 시험도 아래 최종 전체 실행에서 통과했다.
+- 최종 검증: `bash scripts/test-all.sh --tb=short --maxfail=10 -rs -o addopts="" -q` 전체 1703 pass, skip0, 외부 실제 학습 데이터 대조 4 deselected(1093.38s). 최종 `SMOKE_PG=1 bash scripts/smoke.sh` rc0: 실제 이미지 기동/start/turn/resume/CLI와 PostgreSQL 재시작 뒤 세션 유지 확인.
+- 전체 프로젝트 E2E는 실행하지 않았다. 구현 커밋을 헤드에 보내 교차검토한다.

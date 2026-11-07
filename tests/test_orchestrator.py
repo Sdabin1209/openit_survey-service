@@ -218,7 +218,8 @@ def test_risk_pauses_alerts_and_resume_and_end_dispatch():
     o = rig.say(decision="RESUME")
     assert o.orchestrator_output["intervention_result"]["result"] == "APPLIED"
     assert rig.doc()["progress_record"]["session_status"] == "IN_PROGRESS" and o.trace["response_outcome"] == "fixed"
-    assert o.frontend_input is None or True
+    assert o.frontend_input is not None
+    jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput")).validate(o.frontend_input)
     assert rig.console.inputs[-1] == {"staff_alert": None, "turn_failure_signal": None,
                                       "intervention_result": {"session_id": "S1", "result": "APPLIED"}}
     o = rig.say(decision="END")
@@ -600,4 +601,4 @@ def test_conversation_on_sqlite_survives_restart(tmp_path):
     assert again.replayed and rig2.doc() == first
     rig2.say("고혈압", out=ext("NEXT", "Q1.D03", val("Q1.D02.diagnosed", True), val("Q1.D02.on_medication", True)), turn_id="T-B")
     assert rec(rig2.doc(), "Q1.D02.on_medication")["current_value"] == {"answer": True}
-    assert rig2.session.extract_requests[0]["current_question"] == "응답입니다." or True
+    assert rig2.session.extract_requests[0]["current_question"] == "응답입니다."

@@ -157,7 +157,9 @@ def test_locally_invalid_trace_is_not_sent(parts):
     clock, ob, ing, ex, sink = parts
     sink.submit("rel-1", {"session_id": "S9", "turn_id": "t9", "contract_version": 1})      # TurnTrace 필수 필드가 없다
     r = ex.flush_once()
-    assert r.dead == 1 and ing.calls == 0 and "TurnTrace" in ob.dead_rows()[0]["error"]
+    assert r.dead == 1 and ing.calls == 0
+    error = ob.dead_rows()[0]["error"]
+    assert error.startswith("LOCAL_INVALID:") and "TraceEnvelope" in error and "trace required" in error
 
 
 def test_integrity_error_is_not_retried_and_is_quarantined(parts):

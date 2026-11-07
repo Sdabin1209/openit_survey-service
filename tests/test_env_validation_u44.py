@@ -9,7 +9,7 @@ import pytest
 from survey_service.server import main
 from survey_service.settings import ConfigError, Settings
 
-BASE = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}
+BASE = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -67,21 +67,21 @@ def test_startup_exits_with_a_configuration_error_for_an_unknown_name(monkeypatc
 
 
 # 계약 3.0.2: 추론 연결은 SURVEY_INFERENCE_URL(원격 추론) 또는 SURVEY_MODEL_BACKEND(서비스 안 가짜 백엔드) 중 하나면 된다. 운영 배포는 원격 추론만 준다 (D62).
-REMOTE_ONLY = {"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_INFERENCE_URL": "http://inference:8081"}
+REMOTE_ONLY = {"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_INFERENCE_URL": "https://model-serving"}
 
 
 def test_remote_inference_alone_is_enough_to_start():
     s = Settings.from_env(REMOTE_ONLY)
-    assert s.inference_url == "http://inference:8081" and s.model_backend == ""
+    assert s.inference_url == "https://model-serving" and s.model_backend == ""
 
 
 def test_model_backend_alone_is_still_enough():
-    assert Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y", "SURVEY_MODEL_BACKEND": "fake"}).model_backend == "fake"
+    assert Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1", "SURVEY_MODEL_BACKEND": "fake"}).model_backend == "fake"
 
 
 def test_neither_inference_url_nor_model_backend_is_rejected_by_name():
     with pytest.raises(ConfigError) as e:
-        Settings.from_env({"SURVEY_RELEASE_READER": "x:y", "SURVEY_TRACE_INGEST": "x:y"})
+        Settings.from_env({"SURVEY_RELEASE_READER": "http", "SURVEY_RELEASE_READER_URL": "http://127.0.0.1:1", "SURVEY_TRACE_INGEST": "http", "SURVEY_TRACE_INGEST_URL": "http://127.0.0.1:1"})
     assert "SURVEY_INFERENCE_URL" in str(e.value) and "SURVEY_MODEL_BACKEND" in str(e.value)
 
 
