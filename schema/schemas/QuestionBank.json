@@ -227,7 +227,7 @@
       "properties": {
         "question_set_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
           "description": "문진표(문항 세트) ID. 계약 Id 규칙과 같다. 릴리스 매니페스트 question_sets[].id와 같아야 한다(같음은 스키마 밖). survey-schema 4.0.0부터 필수."
         },
         "title": {
@@ -358,7 +358,7 @@
     },
     "QuestionId": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9_.]+$",
+      "pattern": "^[A-Za-z0-9_.]+$(?![\\s\\S])",
       "description": "문항 ID. 계약 QuestionFieldSpec.slot(`문항.칸`)의 앞부분 패턴과 같다(영문·숫자·밑줄·점)."
     },
     "RiskResponse": {
@@ -527,7 +527,7 @@
       "properties": {
         "slot_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_]+$",
+          "pattern": "^[A-Za-z0-9_]+$(?![\\s\\S])",
           "description": "칸 ID. 계약 QuestionFieldSpec.slot(`문항.칸`)의 칸 부분 패턴과 같다(영문·숫자·밑줄, 점 없음)."
         },
         "units": {

@@ -27,12 +27,12 @@
             },
             "subject_ref": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$",
+              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])",
               "description": "선택. 병원이 정한 불투명 환자·방문 참조(PUBLIC_API.md A절). 서비스는 세션 메타로만 저장하고 세션 문서·Trace·로그에는 넣지 않는다."
             },
             "question_set_id": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
               "description": "선택(survey-schema 4.0.0): 문진할 문진표 ID. 활성 문진표가 하나면 생략할 수 있고 둘 이상이면 필수다(검사는 서비스). 목록에 없으면 VALIDATION_ERROR."
             }
           },
