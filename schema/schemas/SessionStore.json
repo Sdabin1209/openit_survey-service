@@ -890,7 +890,8 @@
       "type": "object",
       "properties": {
         "session_id": {
-          "$ref": "#/$defs/SessionId"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
         },
         "write_committed": {
           "oneOf": [
