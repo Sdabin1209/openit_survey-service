@@ -324,7 +324,7 @@
           "properties": {
             "session_id": {
               "$ref": "#/$defs/SessionId",
-              "description": "선택(2.2.0): 생략하면 서버가 발급해 응답의 session_id로 돌려준다. 프론트가 정해 보내는 방식은 2.x에서만 허용하는 폐기 예정 방식(3.0.0 제거). PUBLIC_API.md"
+              "description": "공개 시작 본문(SessionStartBody)에는 금지한다. 서버가 세션 ID를 발급한 뒤 내부 메시지와 Trace에 넣는다. PUBLIC_API.md"
             },
             "kind": {
               "const": "SESSION_START"
