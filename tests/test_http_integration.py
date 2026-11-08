@@ -17,7 +17,8 @@ from survey_service.wiring.app import App
 from survey_service.settings import ConfigError, Settings
 from survey_service.components.session_store import MemorySessionStore
 from survey_service.components.trace_outbox import Outbox
-from survey_service.components.trace_envelope import OutboxTraceSink, envelope_id
+from survey_service.components.trace_envelope import OutboxTraceSink
+from boundary_contracts import envelope_id
 from survey_service.components.link_trace_export import TraceExporter
 
 from .timing import FakeWait, fake_clock, wait_until

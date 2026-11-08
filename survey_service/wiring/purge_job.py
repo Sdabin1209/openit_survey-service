@@ -33,7 +33,7 @@ def run_purge(env=None, argv=None) -> int:
         outbox.close()
         alert_store.close()
     out = {"event": "session_purge", **res}
-    errs = [e.message[:200] for e in validator("SurveyPurgeOutput").iter_errors(out)]
+    errs = [f"{'/'.join(map(str, e.absolute_path))} {e.validator}" for e in validator("SurveyPurgeOutput").iter_errors(out)]      # 위치와 키워드만(값 없음)
     if errs:                  # R7: 내보내는 쪽이 계약으로 검증한다. 어기면 표준 출력에 아무것도 내지 않고 표준 오류와 종료 코드로 알린다(값은 싣지 않는다)
         print("보존 정리 출력이 계약 SurveyPurgeOutput을 어긴다: " + "; ".join(errs[:3]), file=sys.stderr)
         return 4

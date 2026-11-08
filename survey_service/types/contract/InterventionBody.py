@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from typing_extensions import NotRequired, TypedDict
 
+SessionId: TypeAlias = str
+
+
+TurnId: TypeAlias = str
+
 
 class InterventionBody(TypedDict, closed=True):
-    session_id: str
+    session_id: SessionId
     decision: Literal['RESUME', 'END']
-    turn_id: str
+    turn_id: TurnId
     staff_id: NotRequired[Any]

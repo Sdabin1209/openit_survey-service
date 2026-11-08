@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from typing_extensions import TypedDict
 
+SessionId: TypeAlias = str
+
+
+TurnId: TypeAlias = str
+
 
 class UtteranceBody(TypedDict, closed=True):
-    session_id: str
+    session_id: SessionId
     kind: Literal['UTTERANCE']
-    turn_id: str
+    turn_id: TurnId
     utterance: str

@@ -19,9 +19,7 @@
         },
         "release_id": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/Id"
         },
         "extract_input": {
           "type": "object",
@@ -60,9 +58,7 @@
         },
         "release_id": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/Id"
         },
         "respond_input": {
           "type": "object",

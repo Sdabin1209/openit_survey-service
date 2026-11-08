@@ -29,8 +29,20 @@ from typing import Any
 
 import jsonschema
 from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
+from boundary_contracts.schemas_api import ContractValidator as _ContractValidator, schema_registry as _schema_registry
 
 _DIR = pathlib.Path(__file__).parent / "_schemas"
+
+
+@functools.lru_cache(maxsize=None)
+def _registry():
+    return _schema_registry()      # 계약 스키마 전체를 읽는 비싼 일이라 한 번만(오프라인, 계약 패키지 안)
+
+
+def draft_validator(sch: dict):
+    """문진 스키마·영역 스키마의 검증기 한 곳. 왜 jsonschema.Draft202012Validator 를 직접 만들지 않나: 계약 검증기(ContractValidator)는 NaN·무한대를 먼저 거부하고(5.0.0, I-JSON) 계약 registry 로 외부 $ref(계약 안정 URI, 문진 스키마)를 푼다.
+    registry 없이 만든 검증기는 그 $ref 를 못 풀어 실패한다(조용히 넓어지지 않는다)."""
+    return _ContractValidator(jsonschema.Draft202012Validator(sch, registry=_registry(), format_checker=_bc_format_checker(sch)))
 
 
 @functools.lru_cache(maxsize=None)
@@ -40,7 +52,7 @@ def schema(name: str) -> dict:
 
 @functools.lru_cache(maxsize=None)
 def _validator(name: str):
-    return jsonschema.Draft202012Validator(schema(name), format_checker=_bc_format_checker(schema(name)))
+    return draft_validator(schema(name))
 
 
 def _external(node: dict, value: Any):
@@ -50,12 +62,12 @@ def _external(node: dict, value: Any):
         yield from validator(node["x-contract"]).iter_errors(value)
     if "x-survey-schema" in node:
         import survey_schema
-        yield from jsonschema.Draft202012Validator(survey_schema.load_schema(node["x-survey-schema"]), format_checker=_bc_format_checker(survey_schema.load_schema(node["x-survey-schema"]))).iter_errors(value)
+        yield from draft_validator(survey_schema.load_schema(node["x-survey-schema"])).iter_errors(value)
 
 
 def _ok(sub: dict, value: Any, root: Any) -> bool:
     """가지 하나가 값에 구조적으로 맞는가(루트의 $defs를 함께 준다)."""
-    return jsonschema.Draft202012Validator({**sub, "$defs": (root or {}).get("$defs", {})}, format_checker=_bc_format_checker({**sub, "$defs": (root or {}).get("$defs", {})})).is_valid(value)
+    return draft_validator({**sub, "$defs": (root or {}).get("$defs", {})}).is_valid(value)
 
 
 def _walk(node: Any, value: Any, root: Any = None):
@@ -97,11 +109,11 @@ def _relaxed(name: str, static: tuple):
     sch = json.loads(json.dumps(schema(name)))
     for k in static:
         sch["properties"][k] = {}
-    return jsonschema.Draft202012Validator(sch, format_checker=_bc_format_checker(sch))
+    return draft_validator(sch)
 
 
 def _fmt(e) -> str:
-    return f"{'/'.join(str(p) for p in e.absolute_path) or '(최상위)'}: {e.message[:200]}"
+    return f"{'/'.join(str(p) for p in e.absolute_path) or '(최상위)'}: {e.validator}"      # 왜 e.message 가 아닌가: jsonschema 메시지는 위반한 값 자체를 담는다(환자 발화일 수 있다). 위치와 키워드(스키마가 정한 이름)만 싣는다(INTERFACES I7)
 
 
 def errors(name: str, value: Any, static: tuple = ()) -> list[str]:
@@ -121,7 +133,7 @@ def errors(name: str, value: Any, static: tuple = ()) -> list[str]:
             continue
         sub = sch["properties"][k]
         defs = sch.get("$defs", {})
-        errs = [f"{k}/{_fmt(e)}" for e in jsonschema.Draft202012Validator({**sub, "$defs": defs}, format_checker=_bc_format_checker({**sub, "$defs": defs})).iter_errors(value[k])]
+        errs = [f"{k}/{_fmt(e)}" for e in draft_validator({**sub, "$defs": defs}).iter_errors(value[k])]
         errs += [f"{k}/{_fmt(e)}" for e in _walk(sub, value[k], {**sch, **sub})]
         if errs:
             out += errs
@@ -176,7 +188,7 @@ def main() -> int:
             print(f"생성 실패 {name}: {r.stderr[-400:]}", file=sys.stderr)
             return 1
     (OUT / "validation.py").write_text(VALIDATION, encoding="utf-8")
-    init = ['"""생성 파일(scripts/gen_types.py). 손으로 고치지 않는다."""', "from .validation import SchemaViolation, errors, schema, validate  # noqa: F401", ""]
+    init = ['"""생성 파일(scripts/gen_types.py). 손으로 고치지 않는다."""', "from .validation import SchemaViolation, draft_validator, errors, schema, validate  # noqa: F401", ""]
     init += [f"from .{n} import {n}  # noqa: F401" for n in names]
     init += ["", f"__all__ = ['SchemaViolation', 'errors', 'schema', 'validate', {', '.join(repr(n) for n in names)}]", ""]
     (OUT / "__init__.py").write_text("\n".join(init), encoding="utf-8")

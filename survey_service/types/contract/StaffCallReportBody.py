@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from typing_extensions import TypedDict
+
+TurnId: TypeAlias = str
 
 
 class StaffCallReportBody(TypedDict, closed=True):
@@ -15,4 +17,4 @@ class StaffCallReportBody(TypedDict, closed=True):
         'STAFF_NOTIFIED_MANUALLY',
         'NOT_NOTIFIED',
     ]
-    turn_id: str
+    turn_id: TurnId

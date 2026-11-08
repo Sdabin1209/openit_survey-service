@@ -1,5 +1,5 @@
 """생성 파일(scripts/gen_types.py). 손으로 고치지 않는다."""
-from .validation import SchemaViolation, errors, schema, validate  # noqa: F401
+from .validation import SchemaViolation, draft_validator, errors, schema, validate  # noqa: F401
 
 from .AlertRaise import AlertRaise  # noqa: F401
 from .AlertRaised import AlertRaised  # noqa: F401

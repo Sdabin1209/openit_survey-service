@@ -280,7 +280,7 @@
           "headers": {
             "properties": {
               "x-openit-device": {
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+                "x-contract": "DeviceAllowlist#/properties/devices/items/properties/device_id"
               }
             }
           }
@@ -310,7 +310,7 @@
             ],
             "properties": {
               "x-openit-user": {
-                "pattern": "^[A-Za-z0-9._:@/#=+-]{1,128}$(?![\\s\\S])"
+                "x-contract": "_common#/$defs/HumanUserId"
               }
             }
           }
@@ -375,7 +375,7 @@
             "type": "object",
             "properties": {
               "subject_ref": {
-                "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])"
+                "x-contract": "PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref"
               },
               "status": {
                 "enum": [

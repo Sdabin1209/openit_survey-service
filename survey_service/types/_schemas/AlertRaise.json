@@ -17,7 +17,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "staff_alert_kind": {
           "type": "string",
@@ -48,7 +48,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/Id"
             },
             {
               "type": "null"
@@ -72,18 +72,18 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
           "not": {
             "enum": [
               "start",
               "end",
               "idle-expire"
             ]
-          }
+          },
+          "x-contract": "_common#/$defs/Id"
         }
       }
     },
@@ -103,18 +103,18 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
           "not": {
             "enum": [
               "start",
               "end",
               "idle-expire"
             ]
-          }
+          },
+          "x-contract": "_common#/$defs/Id"
         },
         "outcome": {
           "enum": [
@@ -153,7 +153,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "decision": {
           "enum": [
@@ -166,7 +166,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._:@/#=+-]{1,128}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/HumanUserId"
             },
             {
               "type": "null"

@@ -12,11 +12,10 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-import jsonschema
 from boundary_contracts import BoundaryError, validator
 
 import survey_schema
-from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
+from ..types.validation import draft_validator
 
 
 log = logging.getLogger("survey_service.trace")
@@ -58,7 +57,7 @@ class TraceExporter:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._env_validator = None
-        self._trace_validators: dict[int, jsonschema.Draft202012Validator] = {}
+        self._trace_validators: dict = {}
 
     # ------------------------------------------------------------------ 검증(전송 전, 턴 경로 밖)
     def _local_errors(self, env: dict) -> Optional[str]:
@@ -71,7 +70,7 @@ class TraceExporter:
         v = self._trace_validators.get(ver)
         if v is None:
             try:
-                v = jsonschema.Draft202012Validator(survey_schema.load_schema("TurnTrace", ver), format_checker=_bc_format_checker(survey_schema.load_schema("TurnTrace", ver)))
+                v = draft_validator(survey_schema.load_schema("TurnTrace", ver))
             except KeyError:
                 return f"이 서비스에 없는 문진 스키마 정수 버전 {ver}"
             self._trace_validators[ver] = v

@@ -273,7 +273,7 @@ def test_bad_bodies_are_400(mk):
     r = mk()
     failed_risk(r)
     p = "/v1/sessions/K1/staff-call/"
-    bad = [("retry", {}), ("retry", {"turn_id": ""}), ("retry", {"turn_id": "x" * 65}), ("retry", {"turn_id": "a", "utterance": "아파요"}),
+    bad = [("retry", {}), ("retry", {"turn_id": ""}), ("retry", {"turn_id": "x" * 129}), ("retry", {"turn_id": "a", "utterance": "아파요"}),      # turn_id 상한은 계약 Id 의 128자(5.0.0, 4.x 는 64자)
            ("retry", {"turn_id": 5}), ("retry", {"turn_id": "start"}), ("retry", {"turn_id": "bad id"}),
            ("report", {"turn_id": "a"}), ("report", {"turn_id": "a", "outcome": "MAYBE"}), ("report", {"turn_id": "a", "outcome": "NOT_NOTIFIED", "note": "자유 문장"})]
     for act, body in bad:

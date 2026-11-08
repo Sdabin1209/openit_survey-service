@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 from typing_extensions import TypedDict
+
+TurnId: TypeAlias = str
 
 
 class StaffCallRetryBody(TypedDict, closed=True):
-    turn_id: str
+    turn_id: TurnId

@@ -12,10 +12,8 @@
   "properties": {
     "release_id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 128,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-      "description": "봉투 release_id(계약 Id 형식)"
+      "description": "봉투 release_id(계약 Id 형식)",
+      "x-contract": "_common#/$defs/Id"
     },
     "trace": {
       "type": "object",

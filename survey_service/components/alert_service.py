@@ -300,7 +300,7 @@ class AlertService:
 
     def _send_push(self, subs: list, body: dict) -> int:
         """구독자들에게 계약 StaffPushPayload 본문을 보내고 접수 수를 돌려준다."""
-        errs = [e.message[:120] for e in self._push_validator.iter_errors(body)]
+        errs = [e.validator for e in self._push_validator.iter_errors(body)]      # 키워드만(e.message 는 값을 담는다)
         if errs:       # R7: 보내는 쪽(만드는 쪽)이 계약으로 검증한다. 어기면 보내지 않고 실패로 센다(값은 로그에 싣지 않는다)
             log.error("푸시 본문이 계약 StaffPushPayload를 어긴다 errors=%d", len(errs))
             self._count("push_failed", len(subs))

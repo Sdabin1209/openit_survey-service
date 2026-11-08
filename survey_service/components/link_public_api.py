@@ -41,10 +41,11 @@ from boundary_contracts import BoundaryError, validator as _bc_validator
 from openit_link import App as LinkApp, HttpError, Request, Response, Route
 
 from .. import types
-from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
 
 log = logging.getLogger("survey_service.api")
 _SESSION_ID_VALIDATOR = _bc_validator("SessionState#/properties/session_id")
+_ALERTS_CURSOR = _bc_validator("HttpQueries#/$defs/Alerts/properties/cursor")
+_RESULTS_CURSOR = _bc_validator("HttpQueries#/$defs/Results/properties/cursor")
 _SUBJECT_REF_VALIDATOR = _bc_validator("PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref")
 
 MAX_BODY = 64 * 1024     # 요청 본문 상한. 넘으면 라이브러리가 413을 낸다(Route.max_body). 측정값이 아니라 기존 값(64 KiB)을 그대로 쓴다
@@ -116,9 +117,8 @@ def _check_survey_response(name: str, status: int, body) -> None:
         return
     v = _survey_validators.get(schema)
     if v is None:
-        import jsonschema
         import survey_schema
-        v = _survey_validators[schema] = jsonschema.Draft202012Validator(survey_schema.load_schema(schema), format_checker=_bc_format_checker(survey_schema.load_schema(schema)))
+        v = _survey_validators[schema] = types.draft_validator(survey_schema.load_schema(schema))      # 계약 검증기(비유한 수 거부, 계약 registry)
     if next(v.iter_errors(body), None) is not None:
         raise _err("UNAVAILABLE", f"응답이 문진 스키마 {schema}를 어긴다(서버 결함)")
 
@@ -604,7 +604,8 @@ class PublicApi:
         try:
             limit = int(q.get("limit") or "50")
             cursor = q.get("cursor") or None
-            if not 1 <= limit <= 200 or (cursor is not None and not cursor.isdigit()):
+            # 왜 계약 검증: isdigit() 는 비ASCII 숫자와 끝없는 자릿수를 받아 alert_book 의 int(cursor) 가 값을 잘못 읽거나 BIGINT 를 넘겼다. 계약 HttpQueries.Alerts.cursor 는 ASCII 숫자 1~18자리다(5.0.0)
+            if not 1 <= limit <= 200 or (cursor is not None and not _ALERTS_CURSOR.is_valid(cursor)):
                 raise ValueError
         except ValueError:
             raise _err("INVALID_RECORD", "limit(1~200) 또는 cursor가 잘못됐다") from None
@@ -756,7 +757,7 @@ class PublicApi:
                 after_ts = datetime.fromisoformat(after.replace("Z", "+00:00")).timestamp()
             cur = None
             if cursor is not None:
-                if not (cursor.isascii() and cursor.isdigit() and len(cursor) <= 18):         # 쓸 때마다 매기는 단조 증가 번호(U26, ADR-0034). 값은 처음 정수 문자열이다
+                if not _RESULTS_CURSOR.is_valid(cursor):         # 계약 HttpQueries.Results.cursor: ASCII 숫자 1~18자리(5.0.0). 쓸 때마다 매기는 단조 증가 번호(U26, ADR-0034)
                     raise ValueError
                 cur = int(cursor)
         except (ValueError, OverflowError):

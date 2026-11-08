@@ -223,7 +223,7 @@ def test_stats(parts):
 import hashlib
 import re
 
-from survey_service.components.trace_envelope import envelope_id
+from boundary_contracts import envelope_id
 
 
 def test_envelope_id_keeps_valid_ids_and_hashes_others():

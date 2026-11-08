@@ -148,8 +148,8 @@ def test_result_ready_event_of_an_issued_id_validates_against_the_contract(ar):
 
 @pytest.mark.parametrize("bad", ["-" + "a" * 42, "_" + "a" * 42])
 def test_an_id_starting_with_dash_or_underscore_breaks_result_ready_event(bad):
-    """계약 사실 확인: token_urlsafe 가 낼 수 있는 이런 ID 는 공개 SessionId 는 통과하지만 Id 와 ResultReadyEvent 는 위반한다(그래서 공개 SessionId 만 보는 시험으로는 되돌림이 잡히지 않는다)."""
-    assert _public_session_ok(bad) and not _contract_id_ok(bad) and _result_ready_errors(bad)
+    """계약 사실 확인: token_urlsafe 가 낼 수 있는 이런 ID 는 5.0.0 부터 공개 SessionId(Id 와의 교집합)와 Id, ResultReadyEvent 모두 위반한다(4.x 에서는 공개 SessionId 만 통과했다)."""
+    assert not _public_session_ok(bad) and not _contract_id_ok(bad) and _result_ready_errors(bad)
 
 
 def test_a_bad_issued_value_fails_the_result_ready_check(ar, monkeypatch):
@@ -169,7 +169,7 @@ def test_a_bad_issued_value_fails_the_result_ready_check(ar, monkeypatch):
 def test_envelope_id_follows_the_contract_id_exactly(raw, keeps):
     """Id 이면 그대로, 아니면 x-+SHA-256 앞 32자. 판정은 계약 Id 검증기와 같아야 한다(끝 줄바꿈·128/129자·비ASCII 경계). 같은 표를 ops-feedback 시험도 쓴다."""
     import hashlib
-    from survey_service.components.trace_envelope import envelope_id
+    from boundary_contracts import envelope_id
     assert _contract_id_ok(raw) is keeps
     out = envelope_id(raw)
     assert (out == raw) if keeps else (out == "x-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32])

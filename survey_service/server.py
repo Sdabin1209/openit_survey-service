@@ -15,7 +15,7 @@ from typing import Optional
 
 from http import HTTPStatus
 
-from boundary_contracts import PIPELINE_SCHEMA_VERSION
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, validator as _contract_validator
 from openit_link import Request, Response
 from waitress import create_server
 from waitress import wasyncore
@@ -127,6 +127,9 @@ def _sse(ev: dict) -> bytes:
     return f"id: {ev['id']}\nevent: {ev['type']}\ndata: {json.dumps(ev['alert'], ensure_ascii=False)}\n\n".encode()
 
 
+_EVENT_ID = _contract_validator("HttpWire#/$defs/EventId")
+
+
 def _stream(app: App, req: Request) -> Response:
     """GET /v1/staff/alerts/stream: SSE. Last-Event-ID가 있으면 그 뒤 이벤트부터 이어 받는다. 인증(staff 역할)은 라이브러리가 이미 했다."""
     hub, store = app.alerts.hub, app.alert_store
@@ -134,13 +137,16 @@ def _stream(app: App, req: Request) -> Response:
     if hub.count() >= app.settings.max_sse_connections:      # 스트림은 연결마다 작업 스레드를 쥔다: 상한을 넘으면 503
         raise _err("UNAVAILABLE", "알림 스트림 연결이 너무 많다", 429, retry, details={"reason": "SSE_CONNECTION_LIMIT"})      # 동시 연결 상한 초과는 429(PUBLIC_API): 클라이언트는 Retry-After 뒤 다시 연결한다
     last = req.headers.get("last-event-id", "").strip()
+    # 왜 int() 앞에 계약 검증: str.isdigit() 는 비ASCII 숫자(예 '١٢٣')와 끝없는 자릿수를 받아 int() 가 값을 잘못 읽거나 BIGINT 를 넘겼다. 계약 HttpWire.EventId 는 ASCII 숫자 18자리 이하다(5.0.0, INTERFACES I7). 어기면 400.
+    if last and not _EVENT_ID.is_valid(last):
+        raise _err("INVALID_RECORD", "Last-Event-ID 형식이 아니다")
     q = hub.subscribe()                               # 먼저 구독하고 나서 저장된 이벤트를 읽는다(빠지는 구간이 없게)
     try:
         latest, oldest = store.latest_event_id(), store.oldest_event_id()
         first = [b"retry: 3000\n\n", _heartbeat()]           # 연결 직후에도 한 번(콘솔이 '연결됨'을 확인할 수 있게)
         sent = -1
-        if last.isdigit():                               # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
-            sent = int(last)
+        if last:                                         # id는 이벤트 순번. 끊긴 동안의 이벤트를 이어서 보낸다
+            sent = int(last)                             # 위에서 계약 EventId(ASCII 숫자 1~18자리) 검증을 지났다
             if sent > latest or (oldest is not None and sent < oldest - 1):      # 이어 받을 수 없다(오래된 이벤트가 지워졌거나 순번이 앞섰다): 목록 API로 다시 맞추게 알린다
                 first.append(b"event: resync\ndata: " + json.dumps(_checked("resync", {"reason": "EVENTS_NOT_RESUMABLE"})).encode() + b"\n\n")
             allowed = _allowed_events(req.headers)

@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from typing_extensions import NotRequired, TypedDict
+
+TurnId: TypeAlias = str
+
+
+QuestionSetId: TypeAlias = str
 
 
 class SessionStartBody(TypedDict, closed=True):
     kind: Literal['SESSION_START']
-    turn_id: NotRequired[str]
+    turn_id: NotRequired[TurnId]
     subject_ref: NotRequired[str]
-    question_set_id: NotRequired[str]
+    question_set_id: NotRequired[QuestionSetId]

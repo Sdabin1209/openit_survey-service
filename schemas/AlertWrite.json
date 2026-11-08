@@ -17,7 +17,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "kind": {
           "type": "string",
@@ -39,7 +39,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/Id"
             },
             {
               "type": "null"
@@ -70,7 +70,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "decision": {
           "enum": [
@@ -83,7 +83,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._:@/#=+-]{1,128}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/HumanUserId"
             },
             {
               "type": "null"
@@ -107,13 +107,13 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "turn_id": {
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/Id"
             },
             {
               "type": "null"
@@ -170,14 +170,14 @@
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
           "not": {
             "enum": [
               "start",
               "end",
               "idle-expire"
             ]
-          }
+          },
+          "x-contract": "_common#/$defs/Id"
         },
         "count_attempt": {
           "type": "boolean"
@@ -201,7 +201,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "n": {
           "type": "integer",
@@ -210,14 +210,14 @@
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
           "not": {
             "enum": [
               "start",
               "end",
               "idle-expire"
             ]
-          }
+          },
+          "x-contract": "_common#/$defs/Id"
         },
         "status": {
           "enum": [
@@ -249,7 +249,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "n": {
           "type": "integer",
@@ -258,14 +258,14 @@
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
           "not": {
             "enum": [
               "start",
               "end",
               "idle-expire"
             ]
-          }
+          },
+          "x-contract": "_common#/$defs/Id"
         },
         "outcome": {
           "enum": [
@@ -304,7 +304,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "turn_index": {
           "type": "integer",
@@ -315,7 +315,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/Id"
             },
             {
               "type": "null"
@@ -348,7 +348,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+                "x-contract": "_common#/$defs/SessionId"
               },
               {
                 "const": "*"
@@ -399,13 +399,13 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "subject_ref": {
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])"
+              "x-contract": "PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref"
             },
             {
               "type": "null"
@@ -416,7 +416,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+              "x-contract": "_common#/$defs/Id"
             },
             {
               "type": "null"
@@ -441,7 +441,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "signal": {
           "type": "object",
@@ -479,7 +479,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+            "x-contract": "_common#/$defs/SessionId"
           }
         }
       }
@@ -641,11 +641,11 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/Id"
         },
         "kind": {
           "type": "string",
@@ -771,7 +771,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         }
       }
     },
@@ -789,7 +789,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "open_only": {
           "type": "boolean"
@@ -811,11 +811,11 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "turn_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/Id"
         },
         "action": {
           "enum": [
@@ -839,7 +839,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "action": {
           "enum": [
@@ -862,7 +862,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         }
       }
     },
@@ -878,7 +878,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "limit": {
           "type": "integer",
@@ -900,7 +900,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         }
       }
     },
@@ -917,7 +917,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         }
       }
     },
@@ -936,7 +936,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+            "x-contract": "_common#/$defs/SessionId"
           }
         }
       }
@@ -954,7 +954,7 @@
         },
         "subject_ref": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])"
+          "x-contract": "PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref"
         }
       }
     },
@@ -972,7 +972,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "signal_id": {
           "type": "string",
@@ -994,11 +994,11 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         },
         "user_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9._@:+-]{1,128}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/HumanUserId"
         }
       }
     },
@@ -1015,7 +1015,7 @@
         },
         "session_id": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "x-contract": "_common#/$defs/SessionId"
         }
       }
     }
