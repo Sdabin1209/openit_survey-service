@@ -83,10 +83,11 @@ PW = {"svc_owner": "owner-pw-canary-1", "svc_dml": "dml-pw-canary-2"}
 
 
 class Db:
-    def __init__(self, tmp_path, image):
+    def __init__(self, tmp_path, image, pw=None):
+        self.pw = dict(pw or PW)
         self.certs, self.root = _pki(tmp_path)
         sec = tmp_path / "secrets"; sec.mkdir(); sec.chmod(0o750)
-        for n, pw in PW.items():
+        for n, pw in self.pw.items():
             (sec / n).write_text(pw + "\n"); (sec / n).chmod(0o640)
         (tmp_path / "pgpw").write_text("superuser-pw-canary-3"); (tmp_path / "pgpw").chmod(0o644)
         self.name = f"survey-service-dbtest-{uuid.uuid4().hex[:8]}"
@@ -101,7 +102,7 @@ class Db:
         return wait_until(lambda: self._try("svc_owner", "svcdb") is not None, timeout=120)
 
     def dsn(self, user, db, **kw):
-        base = dict(host=HOST, hostaddr="127.0.0.1", port=self.port, user=user, password=PW.get(user, "x"), dbname=db, sslmode="verify-full", sslrootcert=str(self.root), connect_timeout=5)
+        base = dict(host=HOST, hostaddr="127.0.0.1", port=self.port, user=user, password=self.pw.get(user, "x"), dbname=db, sslmode="verify-full", sslrootcert=str(self.root), connect_timeout=5)
         base.update(kw)
         return base
 
@@ -158,10 +159,10 @@ def check(db: Db):
 def running(have_docker, tmp_path):
     made = []
 
-    def make(mutate=None, wait_up=True):
+    def make(mutate=None, wait_up=True, pw=None):
         tag = f"survey-service-dbtest:{uuid.uuid4().hex[:8]}"
         _build(tmp_path, tag, DECL, mutate)
-        db = Db(tmp_path / f"run{len(made)}" if (tmp_path / f"run{len(made)}").mkdir() is None else tmp_path, tag)
+        db = Db(tmp_path / f"run{len(made)}" if (tmp_path / f"run{len(made)}").mkdir() is None else tmp_path, tag, pw)
         made.append((db, tag))
         db.port = _docker("port", db.name, "5432/tcp").stdout.split(":")[-1].strip()
         assert not wait_up or db.up(), _docker("logs", db.name, check=False).stdout[-800:] + _docker("logs", db.name, check=False).stderr[-800:]
@@ -242,3 +243,77 @@ def test_declaration_must_have_an_owner_for_every_database():
     with pytest.raises(SystemExit):
         mod.rows(bad)
     assert mod.rows(json.loads((ROOT / "db" / "database.json").read_text(encoding="utf-8"))) == [("survey", "survey", "owner")]
+
+
+# ---- 계정 암호 읽기(10-areadb.sh): 실제 psql(고정 digest 이미지 안)로 확인한다 ----
+# 왜: 암호는 psql 이 백틱(popen)으로 head 를 실행해 읽는다. 바깥 bash 의 set -e 가 닿지 않아, 읽기 실패·빈 첫 줄이면 빈 암호로 CREATE ROLE 까지 가 initdb 가 "성공"할 수 있었다(codex 검토 P2).
+SYNTH_PW = {"svc_owner": "q\"uo'te\\back$HOME`tick sp ace", "svc_dml": " lead$(id)\\x\\n;--"}      # 따옴표·역슬래시·$·백틱·공백
+
+
+def test_synthetic_passwords_log_in_over_tls_and_never_appear_in_logs(running):
+    db = running(pw=SYNTH_PW)
+    for who in SYNTH_PW:
+        with db.connect(who, "svcdb") as c:
+            assert c.execute("SELECT current_user").fetchone()[0] == who
+    with pytest.raises(psycopg.OperationalError):
+        db.connect("svc_owner", "svcdb", password="wrong")
+    logs = _docker("logs", db.name, check=False); text = logs.stdout + logs.stderr
+    assert all(v not in text and v.strip() not in text for v in SYNTH_PW.values())
+
+
+_HOOK_SCRIPT = r'''
+initdb -D /tmp/pg -A trust >/dev/null && pg_ctl -D /tmp/pg -o "-c listen_addresses='' -c unix_socket_directories=/tmp" -w start >/dev/null || exit 90
+export PGDATA=/tmp/pg PGHOST=/tmp POSTGRES_USER=postgres DB_ACCOUNT_SECRETS_DIR=/secrets
+bash /docker-entrypoint-initdb.d/10-areadb.sh; echo "HOOK_RC=$?"
+echo "ROLES=$(psql -At -U postgres -d postgres -c "SELECT count(*) FROM pg_roles WHERE rolname IN ('svc_owner','svc_dml')")"
+'''
+CANARY = "hook-secret-canary-9Xk"
+
+
+def _run_hook(tmp_path, image, kind):
+    """훅 하나를 일회용 postgres(이미지 안, postgres 사용자)에서 돌린다. kind: ok | unreadable | empty-first-line. (rc, 만들어진 계정 수, 출력)."""
+    sec = tmp_path / f"hook-{kind}"; sec.mkdir(); sec.chmod(0o755)
+    for n in ("svc_owner", "svc_dml"):
+        f = sec / n
+        f.write_text({"ok": CANARY + "\n", "unreadable": CANARY + "\n", "empty-first-line": "\n" + CANARY + "\n"}[kind])
+        f.chmod(0o600 if kind == "unreadable" else 0o644)      # 0600 은 호스트 사용자 소유라 컨테이너의 postgres 가 읽지 못한다(파일은 있고 비어 있지 않아 사전 검사는 통과한다)
+    r = _docker("run", "--rm", "--user", "postgres", "--entrypoint", "bash", "-v", f"{sec}:/secrets:ro", image, "-c", _HOOK_SCRIPT, check=False)
+    out = r.stdout + r.stderr
+    rc = int(out.split("HOOK_RC=")[1].split()[0]); roles = int(out.split("ROLES=")[1].split()[0])
+    return rc, roles, out
+
+
+@pytest.fixture
+def hook_image(have_docker, tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("hook"); made = []
+
+    def make(mutate=None):
+        tag = f"survey-service-dbtest:{uuid.uuid4().hex[:8]}"; _build(tmp, tag, DECL, mutate); made.append(tag)
+        return tmp, tag
+    yield make
+    for tag in made:
+        _docker("rmi", "-f", tag, check=False)
+
+
+def test_hook_succeeds_with_a_readable_password_and_prints_nothing_secret(hook_image):
+    tmp, tag = hook_image()
+    rc, roles, out = _run_hook(tmp, tag, "ok")
+    assert (rc, roles) == (0, 2) and CANARY not in out
+
+
+@pytest.mark.parametrize("kind", ["unreadable", "empty-first-line"])
+def test_hook_fails_when_the_password_cannot_be_read_or_is_empty(hook_image, kind):
+    tmp, tag = hook_image()
+    rc, roles, out = _run_hook(tmp, tag, kind)
+    assert rc != 0 and roles == 0, out      # 읽기 실패·빈 첫 줄에서 계정을 만들지 않고 훅이 0 이 아닌 값으로 끝난다
+    assert CANARY not in out
+
+
+@pytest.mark.parametrize("kind,mutation", [
+    ("unreadable", lambda p: [_swap("\\\\if :SHELL_ERROR", "\\\\if false")(p), _swap("\\\\if :pw_empty", "\\\\if false")(p)]),    # 두 검사를 다 빼야 한다: 읽기 실패는 빈 값 검사도 한 번 더 잡는다(이중 방어)
+    ("empty-first-line", _swap("\\\\if :pw_empty", "\\\\if false")),      # 빈 값 검사를 빼면
+], ids=["no-checks", "no-empty-check"])
+def test_removing_the_check_makes_the_failure_tests_fail(hook_image, kind, mutation):
+    tmp, tag = hook_image(mutation)
+    rc, roles, out = _run_hook(tmp, tag, kind)
+    assert rc == 0 and roles == 2      # 변이: 검사를 빼면 실패해야 할 상황이 "성공"으로 끝난다 = 위 시험이 잡는다

@@ -13,8 +13,18 @@ while IFS=$'\t' read -r name db priv; do
   [[ "$name" =~ $NAME_RE && "$db" =~ $NAME_RE && ( "$priv" == owner || "$priv" == dml ) ]] || { echo "survey-db: 잘못된 선언 줄" >&2; exit 1; }
   [ -s "$SECRETS/$name" ] || { echo "survey-db: 계정 $name 의 암호 파일이 없거나 비었다" >&2; exit 1; }
   # 왜 -v pw= 가 아닌가: 명령행 인자는 /proc/<pid>/cmdline(ps)에 보인다. 암호 파일 경로만 표준 입력의 메타명령(\set pw `head ...`)에 두면 psql 이 읽어 넣고, 값은 인자에도 환경에도 나타나지 않는다(경로는 NAME_RE 로 검증됨)
+  # 왜 SHELL_ERROR·빈 값 검사: 백틱의 head 는 psql 이 popen 으로 실행해 바깥 bash 의 set -e 가 닿지 않는다. 읽기 실패나 빈 첫 줄이면 pw 가 빈 값이 되어 로그인 못 하는 계정이 "성공"으로 만들어진다(PostgreSQL 16 psqlscanslash.l evaluate_backtick 은 자식의 비정상 종료를 SHELL_ERROR 에만 기록한다).
+  # 실패는 SQL 오류로 끝낸다: ON_ERROR_STOP=1 이라 psql 이 0 이 아닌 값으로 끝나고 set -e 가 훅을, 공식 entrypoint 가 initdb 를 실패시킨다. 메시지에 암호는 넣지 않는다.
+  # 아래 heredoc 은 따옴표가 없어 bash 가 \$ 와 \` 를 처리한다: SQL 의 달러 인용은 \$\$ 로 쓴다.
   "${PSQL[@]}" --dbname postgres -v who="$name" <<SQL
 \\set pw \`head -n1 "$SECRETS/$name"\`
+\\if :SHELL_ERROR
+DO \$\$ BEGIN RAISE EXCEPTION 'survey-db: password file read failed'; END \$\$;
+\\endif
+SELECT (:'pw' = '') AS pw_empty \\gset
+\\if :pw_empty
+DO \$\$ BEGIN RAISE EXCEPTION 'survey-db: password first line is empty'; END \$\$;
+\\endif
 SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', :'who', :'pw') \\gexec
 SQL
 done < "$ACCOUNTS"
