@@ -1,7 +1,7 @@
 #!/bin/bash
 # survey-db 초기화(계약 D126·AreaDatabaseEnv): 공식 postgres 이미지의 initdb 표준 훅(/docker-entrypoint-initdb.d, 데이터 폴더가 비어 있을 때 한 번만 실행)에서
 # 선언된 계정·데이터베이스·권한·접속 규칙을 만든다. 입력은 /etc/openit/accounts.tsv(이름 TAB 데이터베이스 TAB owner|dml, 빌드가 DatabaseDeclaration에서 만든다)와
-# DB_ACCOUNT_SECRETS_DIR(계정마다 암호 파일 하나). 암호는 psql 변수 + format(%L)로만 넣는다(SQL 문자열에 이어 붙이지 않는다).
+# DB_ACCOUNT_SECRETS_DIR(계정마다 암호 파일 하나). 암호는 표준 입력의 psql 메타명령(\set pw `head`) + format(%L)로만(명령행 인자에 두지 않는다) 넣는다(SQL 문자열에 이어 붙이지 않는다).
 set -euo pipefail
 ACCOUNTS=/etc/openit/accounts.tsv
 SECRETS=${DB_ACCOUNT_SECRETS_DIR:-/run/secrets/db}
@@ -12,9 +12,10 @@ PSQL=(psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --no-psqlrc)
 while IFS=$'\t' read -r name db priv; do
   [[ "$name" =~ $NAME_RE && "$db" =~ $NAME_RE && ( "$priv" == owner || "$priv" == dml ) ]] || { echo "survey-db: 잘못된 선언 줄" >&2; exit 1; }
   [ -s "$SECRETS/$name" ] || { echo "survey-db: 계정 $name 의 암호 파일이 없거나 비었다" >&2; exit 1; }
-  pw=$(head -n1 "$SECRETS/$name")
-  "${PSQL[@]}" --dbname postgres -v pw="$pw" -v who="$name" <<'SQL'
-SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', :'who', :'pw') \gexec
+  # 왜 -v pw= 가 아닌가: 명령행 인자는 /proc/<pid>/cmdline(ps)에 보인다. 암호 파일 경로만 표준 입력의 메타명령(\set pw `head ...`)에 두면 psql 이 읽어 넣고, 값은 인자에도 환경에도 나타나지 않는다(경로는 NAME_RE 로 검증됨)
+  "${PSQL[@]}" --dbname postgres -v who="$name" <<SQL
+\\set pw \`head -n1 "$SECRETS/$name"\`
+SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD %L', :'who', :'pw') \\gexec
 SQL
 done < "$ACCOUNTS"
 

@@ -221,7 +221,7 @@ class App:
             log.info("위험 규칙 적재 version=%s rules=%s sha256=%s", d["version"], d["rule_count"], d["sha256"])
         elif risk_source is None and settings.risk_default_rules:
             risk_source = RuleRiskSource.provisional_default()                        # 임상 검토 전 임시 기본 목록. 입력원이 꺼진 채 시작하지 않는다 (D88 U2, ADR-0013)
-            log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 병원 목록을 준다)", risk_source.version)
+            log.warning("위험 감지: 임상 검토 전 임시 기본 목록을 쓴다 version=%s (SURVEY_RISK_RULES_FILE로 설치처 목록을 준다)", risk_source.version)
         self.orchestrator = Orchestrator(self.store, checked.wrap_registry(self.registry), risk_source=risk_source, staff_console=console, dispatcher=disp,
                                          trace_sink=OutboxTraceSink(self.outbox, REAL_WALL_CLOCK), timeline=self.alert_store,
                                          max_consecutive_reask=settings.max_consecutive_reask, turn_observer=self.metrics.observe_turn, result_observer=self._result_ready,
@@ -282,7 +282,7 @@ class App:
         self._threads.append(t)
         first_done.wait(self.settings.startup_wait_seconds)
         st = self.settings
-        log.info("보존 기간(일) session=%s access_log=%s alerts=%s dead_outbox=%s (잠정 기본값, 병원 규정에 맞게 설정)",
+        log.info("보존 기간(일) session=%s access_log=%s alerts=%s dead_outbox=%s (잠정 기본값, 설치처 규정에 맞게 설정)",
                  st.session_retention_days, st.access_log_retention_days, st.alert_retention_days, st.dead_outbox_retention_days)
         if st.retention_interval_seconds > 0:
             def retention_loop():
@@ -459,7 +459,7 @@ class App:
             "staff_alert_source": ((self.orchestrator.risk_source.describe() if hasattr(self.orchestrator.risk_source, "describe")
                                     else {"active": True}) if self.orchestrator.risk_source is not None else
                                    {"active": False, "reason": "NO_INPUT_SOURCE_IN_V2_EXTRACTION",
-                                    "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 입력원이 꺼져 알림이 만들어지지 않는다(SURVEY_RISK_DEFAULT_RULES=off, 병원 규칙 파일·입력원 없음; docs/change-requests/CR-012)."}),
+                                    "detail": "ActionExtraction에는 위험 신호·직원 호출 필드가 없다. 알림 저장·전달 경로는 살아 있으나 입력원이 꺼져 알림이 만들어지지 않는다(SURVEY_RISK_DEFAULT_RULES=off, 설치처 규칙 파일·입력원 없음; docs/change-requests/CR-012)."}),
             "validation_violations": self.orchestrator.violation_stats(),
             "retention": {"session_days": self.settings.session_retention_days, "access_log_days": self.settings.access_log_retention_days,
                           "alert_days": self.settings.alert_retention_days, "dead_outbox_days": self.settings.dead_outbox_retention_days,

@@ -123,7 +123,7 @@ class Settings:
     result_reader_token_env: str = "SURVEY_RESULT_READER_TOKEN"   # 결과 조회(역할 result-reader) 토큰이 든 변수 이름. 값이 없으면 /v1/results는 꺼진다(404)
     risk_source_token_env: str = "SURVEY_RISK_SOURCE_TOKEN"       # 외부 위험 신호(역할 risk-source) 토큰. 값이 없으면 risk-signals는 꺼진다(404)
     require_subject_ref: bool = False                              # 켜면 세션 시작에 subject_ref가 필요하다(기본 꺼짐, 데모용)
-    session_retention_days: int = 90                               # 끝난 세션 보존(일). D88 U4 잠정값, 병원 규정이 다르면 설정만 바꾼다. 끌 수 없다(null·0 거부) (ADR-0015)
+    session_retention_days: int = 90                               # 끝난 세션 보존(일). D88 U4 잠정값, 설치처 규정이 다르면 설정만 바꾼다. 끌 수 없다(null·0 거부) (ADR-0015)
     access_log_retention_days: int = 365                           # staff_access_log 보존(일)
     alert_retention_days: int = 365                                # 해결된 알림 보존(일, 해결 시각 기준). 열린 알림은 지우지 않는다
     dead_outbox_retention_days: int = 30                           # DEAD로 끝난 Trace 행 보존(일)

@@ -154,7 +154,7 @@ def parse_rules(raw: bytes) -> tuple[str, list[Rule]]:
 #  - 같은 절 앞에 가족·제3자 표지가 있고 본인 표지가 없으면 정지하지 않는다(`third_party_hits`). 영어 구절은 앞쪽 부정(no/not/without)을 본다.
 #  - 숫자 문맥: "119"는 단독으로 쓰지 않고 "119 불러", "119에 전화"처럼 행동 구절로만 둔다("혈압이 119에 80" 제외).
 # 구조 유지(deploy E2E 5k·5m이 ast로 읽는다): `_PROVISIONAL`은 {규칙 키: 구절 문자열 튜플}의 리터럴이고 "chest-pain"의 첫 구절은 부정 처리 없이 그대로 적중한다.
-# 병원이 `SURVEY_RISK_RULES_FILE`로 자기 목록을 주면 이 목록은 쓰이지 않는다. 임상 검토와 확정은 OPEN_GAPS(검토 전까지 /readyz의 staff_alert_source.provisional=true).
+# 설치처가 `SURVEY_RISK_RULES_FILE`로 자기 목록을 주면 이 목록은 쓰이지 않는다. 임상 검토와 확정은 OPEN_GAPS(검토 전까지 /readyz의 staff_alert_source.provisional=true).
 PROVISIONAL_VERSION = "provisional-2026-10-28.2"
 _PROVISIONAL = {
     "self-harm": ("자살", "죽고 싶", "죽을 것 같", "죽을 거 같", "죽을래", "죽어버리", "자해", "손목을 긋", "손목을 그었", "손목을 그어", "목숨을 끊", "스스로 목숨",
