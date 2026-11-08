@@ -29,20 +29,15 @@ from typing import Any
 
 import jsonschema
 from boundary_contracts import format_checker as _bc_format_checker  # 형식(format) 검증기가 없으면 조용히 넘기지 않고 실패한다(계약 3.5.0)
-from boundary_contracts.schemas_api import ContractValidator as _ContractValidator, schema_registry as _schema_registry
+from boundary_contracts import schema_validator as _schema_validator
 
 _DIR = pathlib.Path(__file__).parent / "_schemas"
 
 
-@functools.lru_cache(maxsize=None)
-def _registry():
-    return _schema_registry()      # 계약 스키마 전체를 읽는 비싼 일이라 한 번만(오프라인, 계약 패키지 안)
-
-
 def draft_validator(sch: dict):
-    """문진 스키마·영역 스키마의 검증기 한 곳. 왜 jsonschema.Draft202012Validator 를 직접 만들지 않나: 계약 검증기(ContractValidator)는 NaN·무한대를 먼저 거부하고(5.0.0, I-JSON) 계약 registry 로 외부 $ref(계약 안정 URI, 문진 스키마)를 푼다.
+    """문진 스키마·영역 스키마의 검증기 한 곳. 왜 jsonschema.Draft202012Validator 를 직접 만들지 않나: `boundary_contracts.schema_validator` 는 NaN·무한대를 먼저 거부하고(5.0.0, I-JSON) 계약 registry 로 외부 $ref(계약 안정 URI, 문진 스키마)를 풀고 format_checker 를 강제한다.
     registry 없이 만든 검증기는 그 $ref 를 못 풀어 실패한다(조용히 넓어지지 않는다)."""
-    return _ContractValidator(jsonschema.Draft202012Validator(sch, registry=_registry(), format_checker=_bc_format_checker(sch)))
+    return _schema_validator(sch)      # 계약 5.0.1: 계약 registry(안정 URI)·format_checker 강제·비유한 수 거부를 한 번에
 
 
 @functools.lru_cache(maxsize=None)

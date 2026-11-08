@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from boundary_contracts import BoundaryError, read_secret, validator
+from boundary_contracts import BoundaryError, read_secret, secret_format_problems, validator
 from boundary_contracts.clients import egress_proxy_from, require_tls_url
 
 EX_TEMPFAIL = 75      # 재시도 가능(BackupJobResult: 백업 저장소·DB에 닿지 못함)
@@ -86,6 +86,10 @@ def run(environ, *, runner: Optional[Callable] = None, now: Callable[[], str] = 
         pw_file = environ.get("OPENIT_BACKUP_REPO_PASSWORD_FILE")
         if not creds or not pw_file:
             raise BoundaryError("INVALID_RECORD", "OPENIT_BACKUP_CREDENTIALS_FILE과 OPENIT_BACKUP_REPO_PASSWORD_FILE이 필요하다")
+        # 왜: 비밀 파일 내용 형식의 정본은 계약 secret_format_problems 다(5.0.1, D117). 어기면 값은 싣지 않고 사유 코드만 낸다. 형식이 틀린 자격 증명으로 restic 을 부르지 않는다
+        bad = secret_format_problems("credentials_line", creds)
+        if bad:
+            raise BoundaryError("INVALID_RECORD", "OPENIT_BACKUP_CREDENTIALS 형식이 아니다(user:password 한 줄)", {"reason": bad[0]})
         db_url = read_secret("SURVEY_DATABASE_URL", environ=environ)
         session_db = environ.get("SURVEY_SESSION_DB") or "/data/sessions.db"
         proxy = egress_proxy_from(environ)

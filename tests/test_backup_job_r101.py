@@ -129,3 +129,11 @@ def test_main_prints_the_result_as_the_last_stdout_line(env, monkeypatch, capsys
     last = capsys.readouterr().out.strip().splitlines()[-1]
     validator("BackupJobResult").validate(json.loads(last))
     assert rc == 0
+
+
+def test_malformed_credentials_are_rejected_by_the_contract_secret_format_without_running_restic(env, tmp_path):
+    """비밀 파일 내용 형식의 정본은 계약 secret_format_problems("credentials_line")다(5.0.1). 콜론이 없는 값이면 restic 을 부르지 않고 값은 싣지 않는다."""
+    (tmp_path / "cred").write_text("no-colon-secret-canary")
+    fake = FakeRestic()
+    out, rc = backup_job.run(env, runner=fake)
+    assert rc != 0 and not fake.calls and "no-colon-secret-canary" not in repr(out)
