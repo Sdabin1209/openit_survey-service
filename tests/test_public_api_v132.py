@@ -139,7 +139,7 @@ def test_status_code_to_boundary_error_code_table(ar):
 def test_inflight_overflow_is_429_unavailable_with_retry_after():
     rig = Rig()
     api_ = PublicApi(rig.orch, "tok", max_inflight=1, retry_after_seconds=3)
-    with patch("secrets.token_urlsafe", return_value="K1"):
+    with patch("secrets.token_hex", return_value="K1"):
         assert api_.handle("POST", "/v1/sessions", AUTH, json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")[0] == 200
     gate, entered = threading.Event(), threading.Event()
     real = rig.release.session.extract

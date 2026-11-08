@@ -20,7 +20,7 @@ def _call(api, tid, text="안 피움", sid="K1"):
 
 def _start(api):
     import json
-    with patch("secrets.token_urlsafe", return_value="K1"):
+    with patch("secrets.token_hex", return_value="K1"):
         return api.handle("POST", "/v1/sessions", "Bearer tok", json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")
 
 

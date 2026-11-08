@@ -42,7 +42,7 @@ def rig_api():
 
 
 def start(api, sid="K1"):
-    with patch("secrets.token_urlsafe", return_value=sid):
+    with patch("secrets.token_hex", return_value=sid):
         return call(api, "POST", "/v1/sessions", {"kind": "SESSION_START"})
 
 
@@ -263,7 +263,7 @@ def test_over_http_with_app(tmp_path):
             return e.code, json.loads(e.read())
     try:
         assert http("POST", "/v1/sessions", {"session_id": "K1", "kind": "SESSION_START"}, token=None)[0] == 401
-        with patch("secrets.token_urlsafe", return_value="K1"):
+        with patch("secrets.token_hex", return_value="K1"):
             code, fi = http("POST", "/v1/sessions", {"kind": "SESSION_START"})
         assert code == 200 and fi["response_text"] and fi["turn_failure_signal"] is None
         turn = {"session_id": "K1", "kind": "UTTERANCE", "utterance": "안녕하세요", "turn_id": "t-1"}

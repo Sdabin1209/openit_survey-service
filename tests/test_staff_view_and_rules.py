@@ -57,7 +57,7 @@ def vr(tmp_path):
 
 
 def converse(vr, sid="K1"):
-    with patch("secrets.token_urlsafe", return_value=sid):
+    with patch("secrets.token_hex", return_value=sid):
         assert vr.post("/v1/sessions", {"kind": "SESSION_START", "turn_id": "start"})[0] == 200
     vr.rig.model.queue.append(ANSWER_OUT)
     vr.post(f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": "아니요 없어요", "turn_id": "t-1"})

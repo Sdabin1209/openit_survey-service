@@ -405,7 +405,9 @@ class PublicApi:
         rest, tid = self._envelope(body)
         subject = rest.pop("subject_ref", None)             # 환자 참조는 문진 메시지(FrontendMessage)가 아니라 세션 메타다
         # 시작 본문은 계약이 검증하며 session_id를 받지 않는다. 발급은 항상 서버 CSPRNG 몫이다.
-        rest["session_id"] = secrets.token_urlsafe(32)
+        # 왜 token_hex 인가: token_urlsafe 는 '_'·'-' 로 시작할 수 있어(2/64) 계약 Id([A-Za-z0-9][A-Za-z0-9._:-]*)를 어긴다. ResultReadyEvent.session_id(Id)에는 원본 ID 가 그대로 실리고,
+        # Trace 봉투는 x- 변환을 해야 해서 수집 쪽이 거부한 일이 있었다(데모 DEAD 7건, CONVENTIONS 116행). 64자 소문자 16진은 공개 SessionId(^[A-Za-z0-9_-]{1,64}$)와 Id 의 교집합이고 엔트로피는 32바이트 그대로다(ADR-0066).
+        rest["session_id"] = secrets.token_hex(32)
         sid, tid = rest["session_id"], tid or START_TURN_ID
         if not self._replayed(sid, tid):
             status, _ = self._state_of(sid)

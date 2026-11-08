@@ -50,7 +50,7 @@ class Env:
         body = {"kind": "SESSION_START", **extra}
         if subject is not None:
             body["subject_ref"] = subject
-        with patch("secrets.token_urlsafe", return_value=sid):
+        with patch("secrets.token_hex", return_value=sid):
             return self.call("POST", "/v1/sessions", body, auth=AUTH)
 
     def say(self, sid="K1", text="아니요", tid="t-1", out=ANSWER_OUT):

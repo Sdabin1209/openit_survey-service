@@ -2,7 +2,7 @@
 
 기대값의 출처: ../boundary-contracts/PUBLIC_API.md 7행(2.2.0, D106): 문자열 1~64자·영문·숫자·`-_`, 예측할 수 없는 값(OWASP 세션 관리 권고, 원문 대조 전),
 4.0.0 공개 HTTP 시작 본문은 session_id를 거부한다. 내부 FrontendMessage와 구분한다.
-CSPRNG 여부는 출력만으로 증명할 수 없다: 시험은 길이(128비트 이상을 base64url로 쓴 22자 이상), 유일성, `secrets` 모듈 사용는 secrets 모듈 호출의 결과와 같음을 본다.
+CSPRNG 여부는 출력만으로 증명할 수 없다: 시험은 길이(256비트를 16진으로 쓴 64자), 유일성, `secrets` 모듈 사용는 secrets 모듈 호출의 결과와 같음을 본다.
 """
 import logging
 import re
@@ -25,7 +25,7 @@ def test_omitted_session_id_is_issued_by_the_server(ar):
     code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
     assert code == 200
     sid = body["session_id"]
-    assert ID.match(sid) and len(sid) >= 22
+    assert ID.match(sid) and len(sid) == 64
     # 발급된 ID로 이어서 말할 수 있다
     ar.rig.model.queue.append(__import__("tests.e2e_support", fromlist=["ANSWER_OUT"]).ANSWER_OUT)
     code, body, _ = ar.call("POST", f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": "아니요", "turn_id": "t-1"}, auth=AUTH)
@@ -35,13 +35,13 @@ def test_omitted_session_id_is_issued_by_the_server(ar):
 
 def test_issued_ids_are_unique_and_come_from_the_secrets_module(ar, monkeypatch):
     import secrets
-    real, made = secrets.token_urlsafe, []
+    real, made = secrets.token_hex, []
 
     def spy(n=None):
         v = real(n)
         made.append(v)
         return v
-    monkeypatch.setattr(secrets, "token_urlsafe", spy)      # CSPRNG(secrets)에서 왔는지: 발급된 값이 이 호출의 결과와 같다
+    monkeypatch.setattr(secrets, "token_hex", spy)      # CSPRNG(secrets)에서 왔는지: 발급된 값이 이 호출의 결과와 같다
     ids = []
     for _ in range(60):
         code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
@@ -111,3 +111,51 @@ def test_issued_start_response_validates_against_the_frontend_input_schema(ar):
     fi = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
     code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
     assert code == 200 and not list(fi.iter_errors(body))
+
+
+# ---- ADR-0066: 발급 ID 는 공개 SessionId 와 계약 Id 를 동시에 통과한다 ----
+def _public_session_ok(sid):
+    from boundary_contracts import validator
+    return validator("PublicApiRequests#/$defs/UtteranceBody").is_valid({"session_id": sid, "kind": "UTTERANCE", "utterance": "x", "turn_id": "t-1"})
+
+
+def _contract_id_ok(sid):
+    from boundary_contracts import validator
+    return validator("_common#/$defs/Id").is_valid(sid)
+
+
+def _result_ready_errors(sid):
+    from boundary_contracts import validator
+    return list(validator("ResultReadyEvent").iter_errors({"session_id": sid, "status": "ENDED_COMPLETED", "ended_at": "2026-11-08T00:00:00Z"}))
+
+
+def test_many_issued_ids_pass_both_the_public_session_id_and_the_contract_id(ar):
+    """표본 400개: token_urlsafe 였다면 약 3%가 첫 글자 '_'·'-' 라 Id 를 어긴다(확률 2/64). 16진은 어긴 적이 없다."""
+    ids = []
+    for _ in range(400):
+        code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
+        assert code == 200
+        ids.append(body["session_id"])
+    assert all(_public_session_ok(s) and _contract_id_ok(s) for s in ids)
+    assert all(len(s) == 64 and re.fullmatch(r"[0-9a-f]{64}", s) for s in ids) and len(set(ids)) == 400
+
+
+def test_result_ready_event_of_an_issued_id_validates_against_the_contract(ar):
+    """발급값으로 만든 ResultReadyEvent(app._result_ready 가 session_id 를 그대로 싣는다)가 계약 스키마를 통과한다."""
+    code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
+    assert code == 200 and _result_ready_errors(body["session_id"]) == []
+
+
+@pytest.mark.parametrize("bad", ["-" + "a" * 42, "_" + "a" * 42])
+def test_an_id_starting_with_dash_or_underscore_breaks_result_ready_event(bad):
+    """변이 확인(결정적): token_urlsafe 로 되돌리면 이런 ID 가 나온다. 이 ID 로는 ResultReadyEvent 검증이 실패한다 = 위 시험이 되돌림을 잡는다.
+    (공개 SessionId 는 이런 ID 를 허용하므로 그쪽만 보는 시험으로는 잡히지 않는다.)"""
+    assert _public_session_ok(bad) and not _contract_id_ok(bad) and _result_ready_errors(bad)
+
+
+def test_reverting_to_token_urlsafe_is_caught(ar, monkeypatch):
+    """발급 함수를 token_urlsafe 로 되돌리고 '-' 로 시작하는 값이 나오게 하면 발급값 검증이 실패한다(되돌림을 시험이 잡는지 직접 확인)."""
+    import secrets
+    monkeypatch.setattr(secrets, "token_hex", lambda n=None: "-" + "a" * 42)       # 되돌린 구현이 낼 수 있는 값
+    code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
+    assert code == 200 and _result_ready_errors(body["session_id"])

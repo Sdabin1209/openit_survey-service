@@ -41,7 +41,7 @@ class SRig:
         return self.api.handle(method, path, auth, raw, user="staff-1", device=device)
 
     def start(self, sid="K1", auth=KIOSK, device="test-kiosk"):
-        with patch("secrets.token_urlsafe", return_value=sid):
+        with patch("secrets.token_hex", return_value=sid):
             return self.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=auth, device=device)
 
     def risk(self, sid="K1", tid="t-risk", auth=KIOSK, device="test-kiosk"):

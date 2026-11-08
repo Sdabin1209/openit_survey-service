@@ -57,7 +57,7 @@ class AlertRig:
         return self.api.handle(method, path, auth, raw, user="staff-1", device="test-kiosk")
 
     def start(self, sid="K1"):
-        with patch("secrets.token_urlsafe", return_value=sid):
+        with patch("secrets.token_hex", return_value=sid):
             return self.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
 
     def risk(self, sid="K1", tid="t-risk"):
@@ -462,7 +462,7 @@ def api(port, method, path, body, token="test-api-token-0123"):
 
 
 def start_and_risk(port, sid, tid):
-    with patch("secrets.token_urlsafe", return_value=sid):
+    with patch("secrets.token_hex", return_value=sid):
         assert api(port, "POST", "/v1/sessions", {"kind": "SESSION_START"})[0] == 200
     return api(port, "POST", f"/v1/sessions/{sid}/turns", {"session_id": sid, "kind": "UTTERANCE", "utterance": SECRET_TEXT, "turn_id": tid})
 

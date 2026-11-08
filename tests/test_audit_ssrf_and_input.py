@@ -130,7 +130,7 @@ def test_bad_content_length_and_surrogate_utterance_are_400_not_dropped_connecti
         for cl, want in ((b"abc", b" 400 "), (b"-5", b" 400 "), (b"99999999", b" 413 ")):        # 본문 상한(1,000,000) 초과는 waitress가 413 (ADR-0029, 이전에는 400)
             r = _raw(port, b"POST /v1/sessions HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + cl + b"\r\n\r\n")
             assert want in r.split(b"\r\n", 1)[0], (cl, r[:60])
-        with patch("secrets.token_urlsafe", return_value="K1"):
+        with patch("secrets.token_hex", return_value="K1"):
             assert http_call(port, "POST", "/v1/sessions", {"kind": "SESSION_START"}, token="test-api-token-0123")[0] == 200
         body = b'{"session_id":"K1","kind":"UTTERANCE","utterance":"\\ud800","turn_id":"t1"}'
         r = _raw(port, b"POST /v1/sessions/K1/turns HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer test-api-token-0123\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)

@@ -187,7 +187,7 @@ def test_app_with_database_url_reports_kind_and_never_exposes_url(request, tmp_p
         text = json.dumps(body)
         assert url not in text and url.split("@")[0].split(":")[-1] not in text
         assert not (tmp_path / "never.db").exists()
-        with patch("secrets.token_urlsafe", return_value="K1"):
+        with patch("secrets.token_hex", return_value="K1"):
             st, _, _ = app.api.handle("POST", "/v1/sessions", "Bearer test-api-token-0123", json.dumps({"kind": "SESSION_START"}).encode(), device="test-kiosk")
         assert st == 200
         kill_connection(app.store._db)                               # 서비스 재시작 없이 복구
