@@ -130,7 +130,7 @@
 ## 후속 구간 10 (D85 1단계)
 
 - 한 일: subject_ref(A), 결과 조회(B), StaffSessionView 보강(C), 외부 위험 신호(D), 직원 식별 헤더(E), 세션 보존 잡. 자세한 내용과 표준 이유는 CHANGELOG.
-- 시험: `pytest -o addopts=""` 466 통과, `scripts/smoke.sh` SMOKE OK(이 PC 한 환경). 확인하지 못한 것: 실제 게이트웨이를 거친 `X-Openit-User` 전달, 프런트·병원 시스템과의 실제 호출.
+- 시험: `pytest -o addopts=""` 466 통과, `scripts/smoke.sh` SMOKE OK(이 PC 한 환경). 확인하지 못한 것: 실제 게이트웨이를 거친 `X-Openit-User` 전달, 프런트·설치처 시스템과의 실제 호출.
 - 다음: 2단계(PostgreSQL).
 
 ## 후속 구간 11 (D85 2단계: PostgreSQL)

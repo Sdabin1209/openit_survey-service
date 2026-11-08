@@ -83,7 +83,7 @@ class TraceExporter:
                 bad = self._local_errors(row.envelope)
                 if bad:
                     self.outbox.mark_dead(row.id, now, "LOCAL_INVALID: " + bad)
-                    log.error("전송하지 않을 Trace(스키마 위반) session=%s turn=%s", row.session_id, row.turn_id)
+                    log.error("전송하지 않을 Trace(스키마 위반) reason=%s session=%s turn=%s", bad, row.session_id, row.turn_id)      # bad 는 위반한 칸 경로와 검사 이름뿐이다(값 없음)
                     res.dead += 1
                     continue
             try:
@@ -101,7 +101,8 @@ class TraceExporter:
                 # 왜: 재시도하지 않는 실패(INTEGRITY_ERROR 포함)는 지우지 않고 DEAD(격리)로 남긴다. dead_rows/dead_by_code(/readyz)로 사람이 보고, 보존 기간(retention)이 지나야 지워진다
                 self.outbox.mark_dead(row.id, now, f"{e.code}: {e.message}")
                 self.last_error = e.code
-                log.error("재시도하지 않는 전송 실패 code=%s session=%s turn=%s", e.code, row.session_id, row.turn_id)
+                # 왜 거부 사유까지 남기나: 수집 쪽 로그에 사유가 없을 수 있어(데모 INVALID_RECORD 사건) 보내는 쪽 로그가 유일한 단서다. 발화·비밀은 넣지 않는다: 계약 BoundaryError 의 code·details.reason 과 message(최대 200자)만
+                log.error("재시도하지 않는 전송 실패 code=%s reason=%s message=%s session=%s turn=%s", e.code, (e.details or {}).get("reason"), e.message[:200], row.session_id, row.turn_id)
                 res.dead += 1
                 continue
             except Exception as e:                    # 왜: 네트워크 실패는 클라이언트가 UNAVAILABLE로 바꾼다(_http.py). 날것의 예외는 UNAVAILABLE이 아니므로 재시도하지 않고 버그 신호로 격리한다

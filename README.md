@@ -87,13 +87,13 @@ bash scripts/gen-types.sh                       # types/ 를 다시 생성한다
 - 확인하지 못한 것(STATUS, OPEN_GAPS): 실제 model-runtime 서버 이미지와의 E2E, 다른 머신에서의 재현, 실제 브라우저·푸시 서비스, 실제 모델로 한 턴을 통과시키는 일(U07), 부하·동시성, 세션 문서 암호화·보존 기간.
 - 표 찾기는 데이터셋 담당의 규칙(학습 서버 labels.py, 2026-10-14)을 옮긴 것이고 확인 대기다(`schema/data/response_tables.json`의 `table_status: DATASET_RULES_UNCONFIRMED`, 승인 기록 미확인).
 - `/readyz`는 PostgreSQL이 죽거나 응답이 없어도 `SURVEY_READYZ_DB_TIMEOUT_SECONDS`(기본값은 `survey_service/settings.py`)가 정하는 총 마감 안에 503(db unavailable)으로 답하고 복구 뒤 200이 된다(CR-D23, docs/boundary.md §5·§6). 이 PC에서 로컬 PostgreSQL 컨테이너로 확인했고, 실제 compose 환경의 재측정은 deploy E2E 5p에서 헤드가 한다.
-- 위험 감지는 기본으로 꺼져 있다(사용자 결정 L11, ADR-0053): `/readyz`의 `staff_alert_source.active=false`이고 `warnings`에 `risk_detection_disabled`가 나온다. 규칙 엔진·병원 규칙 파일·외부 입력원 API·스키마는 그대로이며 `SURVEY_RISK_DEFAULT_RULES=on`(임시 기본 목록, 임상 검토 전)이나 `SURVEY_RISK_RULES_FILE`로 켠다(docs/boundary.md §5).
+- 위험 감지는 기본으로 꺼져 있다(사용자 결정 L11, ADR-0053): `/readyz`의 `staff_alert_source.active=false`이고 `warnings`에 `risk_detection_disabled`가 나온다. 규칙 엔진·설치처 규칙 파일·외부 입력원 API·스키마는 그대로이며 `SURVEY_RISK_DEFAULT_RULES=on`(임시 기본 목록, 임상 검토 전)이나 `SURVEY_RISK_RULES_FILE`로 켠다(docs/boundary.md §5).
 
 ## 이 영역의 열린 항목 (head/docs/OPEN_GAPS.md, 읽기 전용으로 확인)
 
 | ID | 요약 | 막는 것 |
 |---|---|---|
-| G01 | 직원 알림의 임상 입력원이 확정되지 않았다. 지금은 임상 검토 전 임시 기본 규칙 목록이 켜져 있고(`provisional`), 병원 규칙 파일로 바꾼다. 환자 안전과 닿는다 | 사용자 결정(임상 검토) |
+| G01 | 직원 알림의 임상 입력원이 확정되지 않았다. 지금은 임상 검토 전 임시 기본 규칙 목록이 켜져 있고(`provisional`), 설치처 규칙 파일로 바꾼다. 환자 안전과 닿는다 | 사용자 결정(임상 검토) |
 | G12 | 재질문 상한: 기본 3(`SURVEY_MAX_CONSECUTIVE_REASK`, 0이면 끔, ADR-0020)이고, 한도 뒤에는 직원을 부르지 않고 그 문항을 빈칸(`REASK_LIMIT`)으로 두고 다음 문항으로 간다(사용자 결정, ADR-0054). 값 3은 측정하지 않은 헤드 결정 | 사용자 결정 반영됨, 대장 갱신은 헤드 |
 | G03 | 표 찾기는 데이터셋 담당의 labels.py 규칙을 옮김, 표 승인 기록 미확인(IO_SPEC 7장 2번 미정) | 다른 영역(데이터셋 담당 확인) |
 | G13 | 표 `DATASET_RULES_UNCONFIRMED`, 57행 문제용 `next.text`를 B 모델이 어떻게 다루는지 미확인, A 입력 state 묶음 순서 13/549행 불일치 | 다른 영역(데이터셋)·GPU(모델 확인) |

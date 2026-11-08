@@ -6,7 +6,7 @@
     "SubjectRef": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])",
-      "description": "병원이 정한 불투명 환자·방문 참조."
+      "description": "설치처가 정한 불투명 환자·방문 참조."
     },
     "SessionStatus": {
       "oneOf": [
@@ -37,7 +37,7 @@
     },
     "SessionResult": {
       "type": "object",
-      "description": "GET /v1/results의 한 세션 결과(병원·의사 시스템용 읽기 전용). 끝나지 않았거나 직원·이탈로 끝난 세션의 부분 결과도 status와 함께 나온다. 환자 발화 원문과 대화 로그는 없다.",
+      "description": "GET /v1/results의 한 세션 결과(설치처·의사 시스템용 읽기 전용). 끝나지 않았거나 직원·이탈로 끝난 세션의 부분 결과도 status와 함께 나온다. 환자 발화 원문과 대화 로그는 없다.",
       "properties": {
         "session_id": {
           "type": "string",

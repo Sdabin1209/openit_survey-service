@@ -366,7 +366,7 @@
     "SubjectRef": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])",
-      "description": "병원이 정한 불투명 환자·방문 참조."
+      "description": "설치처가 정한 불투명 환자·방문 참조."
     }
   }
 }

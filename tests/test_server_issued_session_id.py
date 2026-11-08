@@ -141,21 +141,36 @@ def test_many_issued_ids_pass_both_the_public_session_id_and_the_contract_id(ar)
 
 
 def test_result_ready_event_of_an_issued_id_validates_against_the_contract(ar):
-    """발급값으로 만든 ResultReadyEvent(app._result_ready 가 session_id 를 그대로 싣는다)가 계약 스키마를 통과한다."""
+    """DTO 검증이다(실제 SSE 경로가 아니다): 발급값으로 ResultReadyEvent 본문을 직접 만들어 계약 스키마로 본다. 실제 SSE 경로는 tests/test_sse_c2.py 의 발급 ID 시험이 본다."""
     code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
     assert code == 200 and _result_ready_errors(body["session_id"]) == []
 
 
 @pytest.mark.parametrize("bad", ["-" + "a" * 42, "_" + "a" * 42])
 def test_an_id_starting_with_dash_or_underscore_breaks_result_ready_event(bad):
-    """변이 확인(결정적): token_urlsafe 로 되돌리면 이런 ID 가 나온다. 이 ID 로는 ResultReadyEvent 검증이 실패한다 = 위 시험이 되돌림을 잡는다.
-    (공개 SessionId 는 이런 ID 를 허용하므로 그쪽만 보는 시험으로는 잡히지 않는다.)"""
+    """계약 사실 확인: token_urlsafe 가 낼 수 있는 이런 ID 는 공개 SessionId 는 통과하지만 Id 와 ResultReadyEvent 는 위반한다(그래서 공개 SessionId 만 보는 시험으로는 되돌림이 잡히지 않는다)."""
     assert _public_session_ok(bad) and not _contract_id_ok(bad) and _result_ready_errors(bad)
 
 
-def test_reverting_to_token_urlsafe_is_caught(ar, monkeypatch):
-    """발급 함수를 token_urlsafe 로 되돌리고 '-' 로 시작하는 값이 나오게 하면 발급값 검증이 실패한다(되돌림을 시험이 잡는지 직접 확인)."""
+def test_a_bad_issued_value_fails_the_result_ready_check(ar, monkeypatch):
+    """검사 민감도 시험(token_urlsafe 되돌림 변이가 아니다): token_hex 가 '-' 로 시작하는 값을 내도록 주입하면 발급값에 대한 ResultReadyEvent 검증이 실패한다.
+    되돌림 변이 자체는 표본 시험(16진 64자 단언)이 잡는다."""
     import secrets
-    monkeypatch.setattr(secrets, "token_hex", lambda n=None: "-" + "a" * 42)       # 되돌린 구현이 낼 수 있는 값
+    monkeypatch.setattr(secrets, "token_hex", lambda n=None: "-" + "a" * 42)       # token_urlsafe 가 낼 수 있는 값의 예
     code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
     assert code == 200 and _result_ready_errors(body["session_id"])
+
+
+# ---- envelope_id: 계약 Id 와 같은 판정(ops-feedback 과 같은 입력 표) ----
+@pytest.mark.parametrize("raw,keeps", [
+    ("abc", True), ("abc\n", False), ("abc\r\n", False), ("a" * 128, True), ("a" * 129, False), ("", False),
+    ("_abc", False), ("-abc", False), ("a_b-c.d:e", True), ("가나다", False), ("abc가", False), ("ａｂｃ", False), (" abc", False), ("abc ", False), ("0abc", True),
+])
+def test_envelope_id_follows_the_contract_id_exactly(raw, keeps):
+    """Id 이면 그대로, 아니면 x-+SHA-256 앞 32자. 판정은 계약 Id 검증기와 같아야 한다(끝 줄바꿈·128/129자·비ASCII 경계). 같은 표를 ops-feedback 시험도 쓴다."""
+    import hashlib
+    from survey_service.components.trace_envelope import envelope_id
+    assert _contract_id_ok(raw) is keeps
+    out = envelope_id(raw)
+    assert (out == raw) if keeps else (out == "x-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32])
+    assert _contract_id_ok(out)

@@ -7,15 +7,18 @@ import re
 from datetime import datetime, timezone
 from typing import Callable
 
-from boundary_contracts import PIPELINE_SCHEMA_VERSION
+from boundary_contracts import PIPELINE_SCHEMA_VERSION, load_schema
 
-_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+# 왜 계약에서 읽나: Id 의 pattern 은 끝 줄바꿈을 막는 (?![\s\S]) 까지 계약의 것이다. 코드에 사본을 두면 빠뜨려 "abc\n" 같은 원본에서 수집 쪽(ops-feedback)과 결과가 갈린다(구조 규칙: 계약은 패키지에서 읽는다, CONVENTIONS 116행).
+_ID_DEF = load_schema("_common")["$defs"]["Id"]
+_ID = re.compile(_ID_DEF["pattern"])
+_ID_MIN, _ID_MAX = _ID_DEF.get("minLength", 1), _ID_DEF["maxLength"]
 
 
 def envelope_id(raw: str) -> str:
     """바깥(Frontend)이 정한 세션 ID·턴 ID를 봉투의 Id 형식으로. 형식에 맞으면 그대로, 아니면 'x-' + 원본 UTF-8 SHA-256 앞 32자
     (소문자 16진). 결정적이라 멱등이다. 원본은 trace 본문에 있다(CONVENTIONS 10절)."""
-    if len(raw) <= 128 and _ID.match(raw):
+    if _ID_MIN <= len(raw) <= _ID_MAX and _ID.match(raw):
         return raw
     return "x-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 

@@ -19,6 +19,8 @@ COPY db/entrypoint.sh /usr/local/bin/survey-db-entrypoint.sh
 COPY db/healthcheck.sh /usr/local/bin/survey-db-healthcheck.sh
 RUN chmod +x /docker-entrypoint-initdb.d/*.sh /usr/local/bin/survey-db-entrypoint.sh /usr/local/bin/survey-db-healthcheck.sh
 # HEALTHCHECK 값(10초 간격, 5초 제한, 시작 유예 90초, 3회): 측정하지 않은 시작 값. 시작 유예는 initdb(계정·권한 생성)가 끝날 시간, ADR-0063
+# 왜 USER postgres: 공통 규칙 'root가 아닌 사용자'. 공식 이미지의 postgres 사용자(uid 999)다. 주입 선언 db/inputs.json 의 process 와 같아야 하고 build-image.sh 가 대조한다. 공식 entrypoint 는 root 가 아니면 gosu·chown 없이 그대로 initdb 한다.
+USER postgres
 HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 CMD ["/usr/local/bin/survey-db-healthcheck.sh"]
 ENTRYPOINT ["/usr/local/bin/survey-db-entrypoint.sh"]
 # 공식 이미지의 CMD(postgres)를 비운다: 진입점이 docker-entrypoint.sh postgres 에 서버 설정을 붙여 부른다

@@ -39,6 +39,7 @@
 
 | 날짜 | 변경 | 읽는 쪽 영향 |
 | --- | --- | --- |
+| 2026-11-08 | 설명 문구만 바꿈(구조·필드·제약 변경 없음): `subject_ref`·`SessionResult` 설명의 "병원"을 "설치처"로(`FrontendMessage`·`OrchestratorInput`·`StaffSessionView`·`TurnTrace`·`SessionResult`) | 읽는 쪽 영향 없음. 아래 과거 행은 당시 기록이라 "병원" 표현을 그대로 둔다 |
 | 2026-11-03 | 패키지 4.1.1(PATCH, 정본은 그대로): `TurnTrace.json`·`OrchestratorInput.json` 안의 `$defs/FrontendMessage`(와 TurnTrace의 `FrontendInput`) 사본이 4.0.0 변경(SESSION_START의 `question_set_id`·`subject_ref`)을 따르지 않아 세션 시작 Trace 봉투 검증이 SchemaViolation(503)이었다. 사본을 정본(`FrontendMessage.json`, `FrontendInput.json`)과 같게 고쳤고, 사본이 어긋나면 실패하는 정적 시험을 더했다 | 정본 변경 없음. 사본이 넓어졌을 뿐이라 영향 없음(SESSION_START에 선택 필드가 허용된다) |
 | 2026-11-03 | `SessionResult`에 선택 필드 `pause_reason`(RISK·REASK_LIMIT·OTHER, 상태가 PAUSED_RISK인 결과에만, 패키지 4.1.0, L28) | 선택 필드 추가라 영향 없음. 의사는 부분 결과의 정지 사유를 본다 |
 | 2026-11-03 | `SessionResult.skipped_details[].reason`에 `REASK_LIMIT` 추가(되묻기 한도로 빈칸). `SessionStore`·`TurnTrace`·`DispatchInput`의 `SkipReason`에 `REASK_LIMIT` 추가(진행 기록의 건너뛴 문항 사유) | enum 값 추가. 닫힌 enum으로 검증하는 읽는 쪽(ops-feedback의 TurnTrace 읽기, 병원 시스템의 결과 읽기)은 새 값을 받아들여야 한다. 헤드가 해당 영역에 알린다. 근거 docs/adr/ADR-0054.md |

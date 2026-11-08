@@ -102,3 +102,19 @@ def test_events_are_filtered_by_roles_and_data_match_contract_schemas(live):
         for name, data in v:
             assert list(validator(schema[name]).iter_errors(data)) == [], (name, data)
     assert SECRET_TEXT not in json.dumps(got, ensure_ascii=False)
+
+
+def test_result_ready_for_a_server_issued_id_travels_the_real_sse_path_and_matches_the_contract(live):
+    """실제 경로: 서버가 발급한 session_id(patch 없음)로 세션을 시작하고 POST /end 로 끝내면 /v1/staff/alerts/stream 에 result_ready 가 오고, 그 data 가 계약 ResultReadyEvent 를 통과한다(ADR-0066)."""
+    app, port = live()
+    clin = Stream(port, roles="clinician")
+    assert wait_until(lambda: app.alerts.hub.count() >= 1)
+    code, fi = api(port, "POST", "/v1/sessions", {"kind": "SESSION_START"})
+    assert code == 200
+    sid = fi["session_id"]
+    code = api(port, "POST", f"/v1/sessions/{sid}/end", {"session_id": sid, "kind": "SESSION_END"})[0]
+    assert code == 200
+    got = []
+    assert wait_until(lambda: (got.extend(clin.names()) or any(n == "result_ready" for n, _ in got)))
+    data = next(d for n, d in got if n == "result_ready")
+    assert data["session_id"] == sid and list(validator("ResultReadyEvent").iter_errors(data)) == []

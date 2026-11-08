@@ -71,3 +71,4 @@
 - [ADR-0065](ADR-0065.md) 계약 4: 게이트웨이 mTLS·상류 토큰·서버 발급 세션 ID, ADR-0016·0031의 기기 토큰 호환을 대체
 
 - [ADR-0066](ADR-0066.md) 서버가 발급하는 세션 ID는 secrets.token_hex(32): 계약 Id·공개 SessionId를 동시에 만족
+- [ADR-0067](ADR-0067.md) survey-db 이미지는 postgres 사용자(uid 999)로 실행한다(ADR-0063의 root 시작을 바꾼다)

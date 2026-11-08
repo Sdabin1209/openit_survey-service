@@ -8,8 +8,8 @@
     "default": {
       "env_schema": "AreaDatabaseEnv",
       "process": {
-        "uid": 0,
-        "gid": 0
+        "uid": 999,
+        "gid": 999
       },
       "files": [
         {
@@ -54,34 +54,28 @@
           "path": "/run",
           "persist": false,
           "written_by": {
-            "uid": 0,
-            "gid": 0
+            "uid": 999,
+            "gid": 999
           }
         },
         {
           "path": "/tmp",
           "persist": false,
           "written_by": {
-            "uid": 0,
-            "gid": 0
+            "uid": 999,
+            "gid": 999
           }
         },
         {
           "path": "/var/lib/postgresql/data",
           "persist": true,
           "written_by": {
-            "uid": 0,
-            "gid": 0
+            "uid": 999,
+            "gid": 999
           }
         }
       ],
-      "capabilities": [
-        "CHOWN",
-        "DAC_OVERRIDE",
-        "FOWNER",
-        "SETGID",
-        "SETUID"
-      ],
+      "capabilities": [],
       "sysctls": {}
     }
   },
