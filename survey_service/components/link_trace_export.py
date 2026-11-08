@@ -22,6 +22,16 @@ from boundary_contracts import format_checker as _bc_format_checker  # 형식(fo
 log = logging.getLogger("survey_service.trace")
 
 
+# 계약 CONVENTIONS(3.4.4 검토 A-28·B-28-4, "이 목록이 정본") 가 정의한 BoundaryError.details.reason 코드. 기계가 읽는 목록이 패키지에 없어 이름만 옮겼다(스키마 설명에 같은 이름이 있고 시험이 대조한다).
+DEFINED_REASONS = frozenset({"STALE_REPORT", "ALREADY_DECIDED", "OUTPUT_INVALID", "TURN_IN_PROGRESS", "QUESTION_SET_REQUIRED", "UNKNOWN_QUESTION_SET", "NO_OPEN_ALERT",
+                             "INTERVAL", "RETRY_LIMIT", "ACCOUNT_PENDING_APPROVAL", "NO_ACTIVE_RELEASE", "EGRESS_DENIED"})
+
+
+def _logged_reason(e: BoundaryError) -> str:
+    r = (e.details or {}).get("reason")
+    return r if isinstance(r, str) and r in DEFINED_REASONS else ("OTHER" if r else "-")
+
+
 @dataclass
 class FlushResult:
     sent: int = 0
@@ -101,8 +111,9 @@ class TraceExporter:
                 # 왜: 재시도하지 않는 실패(INTEGRITY_ERROR 포함)는 지우지 않고 DEAD(격리)로 남긴다. dead_rows/dead_by_code(/readyz)로 사람이 보고, 보존 기간(retention)이 지나야 지워진다
                 self.outbox.mark_dead(row.id, now, f"{e.code}: {e.message}")
                 self.last_error = e.code
-                # 왜 거부 사유까지 남기나: 수집 쪽 로그에 사유가 없을 수 있어(데모 INVALID_RECORD 사건) 보내는 쪽 로그가 유일한 단서다. 발화·비밀은 넣지 않는다: 계약 BoundaryError 의 code·details.reason 과 message(최대 200자)만
-                log.error("재시도하지 않는 전송 실패 code=%s reason=%s message=%s session=%s turn=%s", e.code, (e.details or {}).get("reason"), e.message[:200], row.session_id, row.turn_id)
+                # 왜 거부 사유 코드만 남기나: 수집 쪽 로그에 사유가 없을 수 있어(데모 INVALID_RECORD 사건) 보내는 쪽 로그가 유일한 단서다. 그러나 BoundaryError.message·details.reason 은 계약상 임의 문자열이라
+                # 받는 쪽 검증 오류가 잘못된 값·본문 일부(환자 발화, 비밀)를 담을 수 있다. 자르기는 비식별이 아니므로 원문은 로그에 넣지 않고, 정의된 대문자 사유 코드 목록에 있는 reason 만 남긴다(없으면 OTHER).
+                log.error("재시도하지 않는 전송 실패 code=%s reason=%s session=%s turn=%s", e.code, _logged_reason(e), row.session_id, row.turn_id)
                 res.dead += 1
                 continue
             except Exception as e:                    # 왜: 네트워크 실패는 클라이언트가 UNAVAILABLE로 바꾼다(_http.py). 날것의 예외는 UNAVAILABLE이 아니므로 재시도하지 않고 버그 신호로 격리한다
