@@ -2,7 +2,6 @@
 실제 .venv를 건드리지 않으려고(시험이 도는 환경을 지우고 다시 깔면 안 된다) 최소 리포 사본(핀 없음, 패키지 하나)에서 스크립트를 돌린다."""
 from .subproc_env import min_env
 import json
-import os
 import shutil
 from .timing import HANG_GUARD_SECONDS
 import subprocess
@@ -27,7 +26,7 @@ def mini_repo(tmp_path_factory):
 
 def run(repo):
     return subprocess.run(["bash", "scripts/setup-env.sh"], cwd=repo, capture_output=True, text=True, timeout=HANG_GUARD_SECONDS,
-                          env={k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"})
+                          env=min_env())   # 왜: 제외 목록 대신 허용 목록 최소 환경(RUNTIME R9.1, codex C2 검토 2026-11-09)
 
 
 def test_last_stdout_line_is_a_valid_setup_env_report_and_progress_goes_to_stderr(mini_repo):

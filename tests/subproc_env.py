@@ -2,7 +2,8 @@
 시험이 실제로 넘겨야 하는 이름은 min_env(NAME=값) 으로 이름을 밝혀 더한다."""
 import os
 
-ALLOWED = ("PATH", "HOME", "LANG", "TMPDIR", "DOCKER_CONFIG", "DOCKER_HOST")
+# 왜: docker 를 부르는 시험이 연결 정보를 잃지 않게 Docker 연결 이름을 명시 허용한다(출처: codex C2 검토, 2026-11-09)
+ALLOWED = ("PATH", "HOME", "LANG", "TMPDIR", "DOCKER_CONFIG", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "SSH_AUTH_SOCK")
 
 
 def min_env(**extra: str) -> dict:
