@@ -118,8 +118,8 @@ def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
     ex = TraceExporter(ob, HttpTraceIngest(srv.url, "w-tok", 5), base_delay=2, max_delay=8, clock=clock, wait=FakeWait())
     orch = Orchestrator(MemorySessionStore(clock=fake_clock()), reg, staff_console=RecordingConsole(), dispatcher=RecordingDispatcher(),
                         trace_sink=OutboxTraceSink(ob, clock))
-    sid = "세션 하나"                                       # Id 형식이 아니어서 봉투에서는 x- 해시로 바뀐다
-    orch.handle_turn(turn_id="턴 1", frontend_message={"session_id": sid, "kind": "SESSION_START"})
+    sid = "S-session-1"                                     # 계약 5.0.0: 세션 ID 는 SessionId 형식이고 봉투 ID 는 그대로다(4.x 의 x- 변환 없음)
+    orch.handle_turn(turn_id="turn-1", frontend_message={"session_id": sid, "kind": "SESSION_START"})
     orch.handle_turn(turn_id="t2", frontend_message={"session_id": sid, "kind": "SESSION_END"})
     unavailable = (503, "application/json", json.dumps({"pipeline_schema_version": "1.2", "code": "UNAVAILABLE", "message": "x", "retryable": True}).encode())
     srv.overrides["/v1/traces"] = unavailable
@@ -130,7 +130,7 @@ def test_traces_flow_over_http_with_retry_only_on_unavailable(srv, tmp_path):
     r = ex.flush_once()
     assert r.sent == 2 and ob.counts() == {"PENDING": 0, "SENT": 2, "DEAD": 0}
     keys = set(srv.traces)
-    assert (envelope_id(sid), envelope_id("턴 1")) in keys and (envelope_id(sid), "t2") in keys
+    assert (envelope_id(sid), envelope_id("turn-1")) in keys and (envelope_id(sid), "t2") in keys
     env = srv.traces[(envelope_id(sid), "t2")]
     assert env["release_id"] == "rel-1" and env["runtime_contract_version"] == 1 and env["trace"]["session_id"] == sid
     # 같은 봉투를 다시 보내면 DUPLICATE이고 전달 완료로 본다

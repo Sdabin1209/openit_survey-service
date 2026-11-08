@@ -235,18 +235,18 @@ def test_envelope_id_keeps_valid_ids_and_hashes_others():
         assert re.fullmatch(r"x-[0-9a-f]{32}", out) and out == envelope_id(bad)
 
 
-def test_non_id_session_and_turn_ids_are_delivered_not_lost(parts):
+def test_valid_session_and_turn_ids_are_delivered_unchanged(parts):
+    """계약 5.0.0: 세션·턴 ID 는 문진 스키마 단계에서 계약 SessionId·Id 로 검증된다(4.x 의 임의 문자열과 x- 변환은 없다). 봉투 ID 는 trace 의 것과 같다.
+    Id 가 아닌 원본이 들어오면 세션 문서 검증(SessionDocument)이 먼저 거부한다: 서버가 발급한 16진 ID 만 쓰이기 때문이다(ADR-0066)."""
     clock, ob, ing, ex, sink = parts
     rig = Rig(trace_sink=sink)
-    rig.say(kind="SESSION_START", sid="세션 하나", turn_id="턴 1")
-    rig.say(kind="SESSION_END", sid="세션 하나", turn_id="turn-2")
+    rig.say(kind="SESSION_START", sid="S-session-1", turn_id="turn.1")
+    rig.say(kind="SESSION_END", sid="S-session-1", turn_id="turn-2")
     r = ex.flush_once()
     assert r.sent == 2 and r.dead == 0 and ob.counts() == {"PENDING": 0, "SENT": 2, "DEAD": 0}
-    sid = envelope_id("세션 하나")
-    env = ing.received[(sid, envelope_id("턴 1"))]
-    assert env["session_id"] == sid and sid.startswith("x-")
-    assert env["trace"]["session_id"] == "세션 하나" and env["trace"]["turn_id"] == "턴 1"   # 원본은 본문에 남는다
-    assert (sid, "turn-2") in ing.received                                                  # 맞는 ID는 그대로
+    env = ing.received[("S-session-1", "turn.1")]
+    assert env["session_id"] == env["trace"]["session_id"] == "S-session-1" and env["turn_id"] == env["trace"]["turn_id"] == "turn.1"
+    assert ("S-session-1", "turn-2") in ing.received
 
 
 def test_converted_ids_keep_idempotency(parts):

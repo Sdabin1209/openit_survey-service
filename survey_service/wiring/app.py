@@ -378,7 +378,9 @@ class App:
             except Exception:
                 out[name] = ("error", None)
         fns = {"session_db": self.store.ping, "outbox_db": self.outbox.ping, "alert_db": self.alert_store.ping,
-               "stats": lambda: {"trace_outbox": self.exporter.stats(), "staff_alerts": self.alerts.status()}}
+               "stats": lambda: {"trace_outbox": self.exporter.stats(), "staff_alerts": self.alerts.status()},
+               # 계약 5.0.0 '새 환경 전제': outbox 에 다른 주 버전(4.x) 봉투가 남아 있으면 조용히 섞지 않고 준비 안 됨으로 드러낸다. 마감 안에 못 읽으면 알 수 없는 것이라 문제로 세지 않는다(저장소 장애는 위 세 확인이 이미 드러낸다)
+               "stored_major": lambda: self.outbox.foreign_pipeline_rows(PIPELINE_SCHEMA_VERSION.split(".")[0])}
         end = self.clock() + self.settings.readyz_db_timeout_seconds          # 마감은 스레드를 시작하기 전에 정한다
         ts = {n: threading.Thread(target=run, args=(n, f), name="readyz-" + n, daemon=True) for n, f in fns.items()}
         for th in ts.values():
@@ -388,8 +390,11 @@ class App:
         # 왜: 확인이 끝난 뒤 보조 수치를 마감까지 기다리면, 분리 직후(새 연결은 통과, 주 연결은 매달림) 200 응답이 2초를 다 쓰고 다음 요청의 503이 그만큼 늦는다.
         #     확인 뒤에는 STATS_GRACE_S만 더 기다린다(총 마감 안). 값은 측정하지 않았다(ADR-0027): 정상 보조 수치는 로컬 질의 몇 ms라 넉넉하다는 판단이다.
         join_until(ts["stats"], min(end, self.clock() + STATS_GRACE_S), self.clock)
+        join_until(ts["stored_major"], min(end, self.clock() + STATS_GRACE_S), self.clock)
         res = dict(out)
         problems = [n for n in ("session_db", "outbox_db", "alert_db") if res.get(n, ("error",))[0] != "ok"]
+        if res.get("stored_major", ("error", None))[0] == "ok" and res["stored_major"][1] > 0:
+            problems.append("stored_pipeline_major_mismatch")
         if not problems and res.get("stats", ("error",))[0] == "ok":
             self._db_stats_cache = res["stats"][1]
             return problems, dict(self._db_stats_cache, stale=False)
@@ -441,13 +446,6 @@ class App:
         problems, dbs = self._db_check()
         if self.draining.is_set():
             problems.append("shutting_down")
-        # 계약 5.0.0 '새 환경 전제': outbox 에 다른 주 버전(4.x)의 봉투가 남아 있으면 조용히 섞지 않고 준비 안 됨으로 드러낸다. 값 검사는 기동 때 한 번이 아니라 요청마다 하되 outbox 주 연결의 COUNT 하나다
-        if "outbox_db" not in problems:
-            try:
-                if self.outbox.foreign_pipeline_rows(PIPELINE_SCHEMA_VERSION.split(".")[0]) > 0:
-                    problems.append("stored_pipeline_major_mismatch")
-            except Exception:
-                problems.append("outbox_db")
         active = self.registry.active_id()
         retrying = self.loader.retry_info()
         if active is None:
