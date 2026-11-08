@@ -46,7 +46,12 @@
 - [ADR-0042](ADR-0042.md) 위험 규칙 파일 형식은 계약 SurveyRiskRulesFile로 검증한다 (U48)
 - [ADR-0043](ADR-0043.md) extract는 항상 flow·fields와 부르고 칸 규격 없는 문항 은행은 적재를 거부한다 (계약 3.0.0)
 - [ADR-0044](ADR-0044.md) 문진 스키마 2.0.0: SessionResult.skipped 폐지 (정수 CONTRACT_VERSION은 그대로)
+- [ADR-0045](ADR-0045.md) 문항 은행의 적재 거부 조건을 문진 스키마로 옮기고, 칸 규격은 적재에서 계약으로 검증한다
+- [ADR-0046](ADR-0046.md) /readyz가 되묻기 실효 한도를 낸다
+- [ADR-0047](ADR-0047.md) 영역 구조 개편(D117): components / wiring / types / schemas
+- [ADR-0048](ADR-0048.md) 공개 API 받는 쪽을 openit_link.App 위로, 컴포넌트가 wiring을 import하지 않는다, 입력 검사는 wiring이
 - [ADR-0049](ADR-0049.md) 시간 상한 사슬 extract 3.0 / respond 5.0 / 턴 마감 9.0 (ADR-0008·0026의 값을 대체)
+- [ADR-0050](ADR-0050.md) 시계 주입(턴 마감, /readyz 마감, 추론 재시도 예산)
 - [ADR-0051](ADR-0051.md) 직원 경로 요청 전체 마감 9.0초(주입 시계, 문장마다 남은 시간이 상한)
 - [ADR-0052](ADR-0052.md) 시간 상한은 실패 판정 기준: extract 21 / respond 26 / 턴 마감 50 (ADR-0049를 대체)
 - [ADR-0053](ADR-0053.md) 위험 감지는 기본으로 끈다 (사용자 결정 L11)

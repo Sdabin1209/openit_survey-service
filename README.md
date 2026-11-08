@@ -53,11 +53,11 @@ flowchart LR
 ```bash
 # 1) 설치
 bash scripts/setup-env.sh
-# 2) 시험
-.venv/bin/python -m pytest
+# 2) 시험 (일회용 PostgreSQL을 띄워 PostgreSQL 시험까지 돌리는 정식 명령. 종료 코드는 pytest의 것)
+bash scripts/test-all.sh
 # 3) 이미지 스모크 (빌드 + /healthz /readyz + 비root + 라벨 + 한 턴)
 bash scripts/smoke.sh
-# 5) 실행: 필수 환경 변수 3개(없으면 종료 코드 2)
+# 4) 실행: 필수 환경 변수 3개(없으면 종료 코드 2)
 SURVEY_RELEASE_READER=http SURVEY_TRACE_INGEST=http SURVEY_MODEL_BACKEND=fake python -m survey_service
 ```
 
