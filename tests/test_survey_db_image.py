@@ -334,8 +334,8 @@ def test_container_runs_as_the_non_root_user_declared_in_inputs_json(running):
     assert (int(uid), int(gid)) == (decl["process"]["uid"], decl["process"]["gid"]) and int(uid) != 0
     assert decl["capabilities"] == []                                           # root 가 아니면 chown·gosu 용 능력이 필요 없다
     assert all(w["written_by"] == decl["process"] for w in decl["writable"])
-    pid1 = _docker("exec", db.name, "sh", "-c", "ps -o user= -p 1 || cat /proc/1/status | grep -E '^Uid'", check=False).stdout
-    assert "root" not in pid1.split()                                           # 서버 프로세스도 root 가 아니다
+    pid1 = _docker("exec", db.name, "stat", "-c", "%u", "/proc/1").stdout.strip()      # 왜 stat: ps 가 없는 이미지에서도 숫자 uid 를 직접 읽는다(낱말 "root" 검색은 root 여도 통과해 공허했다)
+    assert pid1.isdigit() and int(pid1) == decl["process"]["uid"] != 0           # PID 1(진입점이 exec 한 서버 프로세스)도 선언의 uid
     check(db)                                                                   # 계정·권한·TLS 규칙은 non-root 에서도 그대로
 
 
@@ -358,3 +358,20 @@ def test_build_image_rejects_an_image_that_runs_as_root_while_the_declaration_sa
         assert _docker("image", "inspect", tag, check=False).returncode != 0      # 이미지를 지웠다
     finally:
         _docker("rmi", "-f", tag, check=False)
+
+
+def test_pid1_uid_assertion_catches_a_root_image(have_docker, tmp_path):
+    """변이 확인: Dockerfile 의 USER 줄을 뺀 이미지(root 실행)에서는 위 시험의 PID 1 uid 단언(stat -c %u /proc/1 == 선언 uid)이 실패한다.
+    root 이미지는 능력 없이 서버를 못 띄우므로(공식 entrypoint 의 chown·gosu) PID 1 만 sleep 으로 바꿔 같은 읽기 방식으로 uid 를 본다."""
+    def drop_user(path):
+        t = path.read_text(encoding="utf-8"); assert "\nUSER postgres\n" in t
+        path.write_text(t.replace("\nUSER postgres\n", "\n"), encoding="utf-8")
+    tag = f"survey-service-dbtest:{uuid.uuid4().hex[:8]}"
+    name = f"survey-service-dbtest-{uuid.uuid4().hex[:8]}"
+    _build(tmp_path, tag, DECL, ("Dockerfile", drop_user))
+    try:
+        _docker("run", "-d", "--name", name, "--entrypoint", "sleep", tag, "120")
+        uid = int(_docker("exec", name, "stat", "-c", "%u", "/proc/1").stdout.strip())
+        assert uid == 0 and uid != _DECL_PROC["uid"]                  # root 라 선언 uid 와 다르다 = 단언 `int(pid1) == decl uid != 0` 이 실패한다
+    finally:
+        _docker("rm", "-f", name, check=False); _docker("rmi", "-f", tag, check=False)
