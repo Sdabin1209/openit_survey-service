@@ -1,5 +1,6 @@
 from unittest.mock import patch
 """공개 API(PUBLIC_API.md): 검증, 인증, 멱등, 상태 코드, 유휴 만료, HTTP 경계 뒤의 추론."""
+from boundary_contracts import schema_validator
 import json
 import threading
 import time
@@ -27,7 +28,7 @@ from .sample_bank import sample_bank
 from .test_release_loader import INSTALLED
 
 AUTH = "Bearer tok"
-FI = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
+FI = schema_validator(survey_schema.load_schema("FrontendInput"))
 
 
 def call(api, method, path, body=None, auth=AUTH, raw=None):

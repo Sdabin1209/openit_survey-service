@@ -156,8 +156,7 @@
       "description": "LoRA-A 입력(ActionExtractionInput)의 기록 사본.",
       "properties": {
         "question_id": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId"
         },
         "current_question": {
           "type": "string"
@@ -306,8 +305,7 @@
           ]
         },
         "session_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])",
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId",
           "description": "세션 시작(POST /v1/sessions) 성공 응답에서 서버가 발급한 session_id이다. 이후 요청 경로의 {session_id}에 쓴다. 시작 이외의 응답에는 없다. PUBLIC_API.md"
         }
       },
@@ -330,13 +328,11 @@
               "const": "SESSION_START"
             },
             "subject_ref": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])",
+              "$ref": "https://openit.example/contracts/v5/PublicApiRequests.schema.json#/$defs/SessionStartBody/properties/subject_ref",
               "description": "선택. 설치처가 정한 불투명 환자·방문 참조(PUBLIC_API.md A절). 서비스는 세션 메타로만 저장하고 세션 문서·Trace·로그에는 넣지 않는다."
             },
             "question_set_id": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id",
               "description": "선택(survey-schema 4.0.0): 문진할 문진표 ID. 활성 문진표가 하나면 생략할 수 있고 둘 이상이면 필수다(검사는 서비스). 목록에 없으면 VALIDATION_ERROR."
             }
           },
@@ -628,8 +624,7 @@
           ]
         },
         "staff_id": {
-          "type": "string",
-          "minLength": 1,
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/HumanUserId",
           "description": "직원 개입 항목에서 게이트웨이가 인증한 계정 ID(X-Openit-User). 개입이 아닌 항목에는 없다."
         }
       },
@@ -979,8 +974,17 @@
       "description": "current_question_id는 다음 발화를 해석할 문항(A 입력의 question_id)이다. 문진이 끝나면 END.",
       "properties": {
         "current_question_id": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "const": "END"
+            },
+            {
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId",
+              "not": {
+                "const": "END"
+              }
+            }
+          ]
         },
         "open_slots": {
           "type": "array",
@@ -1017,8 +1021,17 @@
       "type": "object",
       "properties": {
         "current_question_id": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "const": "END"
+            },
+            {
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId",
+              "not": {
+                "const": "END"
+              }
+            }
+          ]
         },
         "open_slots": {
           "type": "array",
@@ -1075,8 +1088,7 @@
       }
     },
     "QuestionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId"
     },
     "ResponseRequestRecord": {
       "type": "object",
@@ -1260,8 +1272,7 @@
       ]
     },
     "SessionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
     },
     "SessionInfo": {
       "type": "object",
@@ -1513,7 +1524,7 @@
         },
         "slot_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[A-Za-z0-9_]+$(?![\\s\\S])"
         }
       },
       "required": [
@@ -1686,8 +1697,7 @@
       "type": "object",
       "properties": {
         "session_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
         },
         "write_committed": {
           "oneOf": [
@@ -1761,8 +1771,7 @@
           "$ref": "#/$defs/SessionId"
         },
         "turn_id": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id"
         },
         "contract_version": {
           "type": "integer",

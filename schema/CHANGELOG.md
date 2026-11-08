@@ -1,3 +1,15 @@
+# 5.0.0
+
+패키지 MAJOR(계약 5.0.0 반영, 헤드 지시 2026-11-08). 정수 계약 버전은 1 그대로다(모델 입출력 모양이 바뀌지 않는다).
+
+- 계약 ID 타입의 사본과 같은 이름 다른 정의를 계약 `$ref`로 바꿨다(D117). 위임 대상은 계약 안정 URI `https://openit.example/contracts/v5/<이름>.schema.json`이다.
+  - `SessionId`(`$defs`와 session_id·session_ids 칸 모두): `_common#/$defs/SessionId`. 4.x의 서로 다른 정의(64자 패턴, `minLength 1`)가 하나가 됐다. 첫 글자 `_`·`-`와 65자 이상은 거부한다.
+  - turn_id·question_set_id·release_id·alert_id·rule_id: `_common#/$defs/Id`(128자, 4.x의 `minLength 1`보다 좁다).
+  - QuestionId(`$defs`와 question_id): `_common#/$defs/QuestionId`(Q 문법, 4.x QuestionBank의 `[A-Za-z0-9_.]+`·나머지의 `minLength 1`보다 좁다). 운영 문진표 2종의 문항 ID는 모두 Q 문법이다. `current_question_id`는 `END` 또는 QuestionId다.
+  - staff_id: `_common#/$defs/HumanUserId`. subject_ref·SubjectRef: `PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref`.
+  - slot_id는 한 정의로 맞췄다(`^[A-Za-z0-9_]+$`, 4.x QuestionBank 정의).
+- **읽는 쪽 영향**: 이 스키마는 외부 `$ref`를 가지므로 표준 검증기를 그대로 만들면 풀지 못해 실패한다(조용히 넓어지지 않는다). 계약 `boundary_contracts.schema_validator(schema)`(계약 5.0.1)나 `schema_registry()`로 만든 검증기로 검증한다.
+
 # 4.1.4
 
 - FrontendMessage의 SESSION_START.session_id 설명과 모든 내장 사본을 바로잡는다. 공개 시작 본문에는 금지하고, 서버 발급 뒤 내부 메시지와 Trace에 넣는다. 스키마 모양·정수 계약 버전은 바뀌지 않는다.
@@ -25,6 +37,8 @@
 - 주의: enum 값 추가는 "추가"이지만 읽는 쪽이 enum을 닫힌 집합으로 검증하면 새 값을 거부한다. 같은 정수 안의 추가라도 읽는 쪽 영역에 알린다.
 
 ## 정수 버전 1 안의 비호환 변경 이력 (G11)
+
+- 5.0.0(패키지): 위 ID 칸이 계약 정의로 좁아졌다(세션 ID 첫 글자 `_`·`-` 거부, turn_id 등 128자, 문항 ID Q 문법). 정수 버전은 올리지 않았다: 모델 입출력(ActionExtraction 등)의 모양은 같고 운영 데이터가 없다(헤드 결정).
 
 정수 버전을 올리지 않고 들어간 변경 중 읽는 쪽에 영향을 줄 수 있는 것. 이 목록은 이 영역이 알고 있는 것이며, 읽는 쪽이 실제로 깨졌는지는 확인하지 못했다.
 

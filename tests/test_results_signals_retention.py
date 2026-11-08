@@ -1,5 +1,6 @@
 from unittest.mock import patch
 """D85 1단계: subject_ref(A), 결과 조회(B), 직원 세션 조회 보강(C), 외부 위험 신호(D), 직원 식별(E), 세션 보존."""
+from boundary_contracts import schema_validator
 import json
 import logging
 import time
@@ -19,7 +20,7 @@ from survey_service.settings import ConfigError, Settings
 from .e2e_support import ANSWER_OUT, Rig, ext
 
 AUTH, STAFF, RESULT, RISK = "Bearer tok", "Bearer stok", "Bearer rtok", "Bearer xtok"
-V = lambda n: jsonschema.Draft202012Validator(survey_schema.load_schema(n))
+V = lambda n: schema_validator(survey_schema.load_schema(n))
 RESULT_V, VIEW_V, SIGNAL_V = V("SessionResult"), V("StaffSessionView"), V("RiskSignal")
 SUBJ = "PT-ref#001"
 OFF = ext("REDIRECT", "Q1.D02", reason="OFF_TOPIC")
@@ -261,7 +262,7 @@ def test_intervention_requires_header_and_ignores_body_staff_id(env):
     assert env.call("POST", "/v1/sessions/K1/intervention", body, user="staff-7")[0] == 200
     entry = env.rig.doc("K1")["dialogue_log"][-1]
     assert entry["staff_id"] == "staff-7" and entry["input"]["intervention_decision"] == "RESUME"
-    jsonschema.validate(env.rig.doc("K1"), survey_schema.load_schema("SessionStore"))
+    schema_validator(survey_schema.load_schema("SessionStore")).validate(env.rig.doc("K1"))
     assert [a["resolved_by"] for a in env.store.alerts_of_session("K1")] == ["staff-7"]
     # 같은 turn_id의 재전송은 다른 직원이어도 같은 결과(기록은 처음 값)
     assert env.call("POST", "/v1/sessions/K1/intervention", body, user="staff-9")[0] == 200

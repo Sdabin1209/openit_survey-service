@@ -2,6 +2,7 @@
 
 예시는 schema/schemas/examples/에 있다. 통과 예시는 시험이 만드는 실제 값(세션 문서, Trace, 문항 은행, 데이터 표)이고
 거부 예시는 필수·열거·형식 중 하나를 의도적으로 어긴 것이다. examples/는 wheel에 들어가지 않는다(setup.py는 schemas/*.json만 복사)."""
+from boundary_contracts import schema_validator
 import json
 from pathlib import Path
 
@@ -16,7 +17,7 @@ NAMES = sorted(p.stem for p in SCHEMAS.glob("*.json"))
 
 
 def _validator(name):
-    return jsonschema.Draft202012Validator(survey_schema.load_schema(name))
+    return schema_validator(survey_schema.load_schema(name))
 
 
 def test_there_are_schemas():

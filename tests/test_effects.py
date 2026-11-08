@@ -1,4 +1,5 @@
 """저장소 반영 효과(survey_service/store/effects.py): 판단 없이 효과만 적용하는 순수 함수."""
+from boundary_contracts import schema_validator
 import copy
 
 import jsonschema
@@ -11,7 +12,7 @@ from survey_service.components import session_store as effects
 
 from .sample_bank import sample_bank
 
-SS = jsonschema.Draft202012Validator(survey_schema.load_schema("SessionStore"))
+SS = schema_validator(survey_schema.load_schema("SessionStore"))
 
 
 def doc():

@@ -226,8 +226,7 @@
       "type": "object",
       "properties": {
         "question_set_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$(?![\\s\\S])",
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id",
           "description": "문진표(문항 세트) ID. 계약 Id 규칙과 같다. 릴리스 매니페스트 question_sets[].id와 같아야 한다(같음은 스키마 밖). survey-schema 4.0.0부터 필수."
         },
         "title": {
@@ -357,8 +356,7 @@
       "additionalProperties": false
     },
     "QuestionId": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9_.]+$(?![\\s\\S])",
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId",
       "description": "문항 ID. 계약 QuestionFieldSpec.slot(`문항.칸`)의 앞부분 패턴과 같다(영문·숫자·밑줄·점)."
     },
     "RiskResponse": {
@@ -690,7 +688,7 @@
         },
         "slot_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[A-Za-z0-9_]+$(?![\\s\\S])"
         }
       },
       "required": [

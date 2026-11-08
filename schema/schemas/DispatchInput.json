@@ -195,8 +195,7 @@
       ]
     },
     "QuestionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId"
     },
     "RiskResponse": {
       "oneOf": [
@@ -209,8 +208,7 @@
       ]
     },
     "SessionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
     },
     "SessionInfo": {
       "type": "object",
@@ -332,7 +330,7 @@
         },
         "slot_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[A-Za-z0-9_]+$(?![\\s\\S])"
         }
       },
       "required": [

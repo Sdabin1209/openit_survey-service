@@ -28,8 +28,7 @@
           ]
         },
         "session_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])",
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId",
           "description": "세션 시작(POST /v1/sessions) 성공 응답에서 서버가 발급한 session_id이다. 이후 요청 경로의 {session_id}에 쓴다. 시작 이외의 응답에는 없다. PUBLIC_API.md"
         }
       },
@@ -40,15 +39,13 @@
       "additionalProperties": false
     },
     "SessionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
     },
     "TurnFailureSignal": {
       "type": "object",
       "properties": {
         "session_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
         },
         "write_committed": {
           "oneOf": [

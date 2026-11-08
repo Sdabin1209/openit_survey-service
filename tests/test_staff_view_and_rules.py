@@ -1,4 +1,5 @@
 """직원 세션 조회(StaffSessionView)와 접근 기록, 위험 규칙 엔진, 위반 코드 관측, 타임아웃 분류, 결과 전달 대상 없음."""
+from boundary_contracts import schema_validator
 import json
 from unittest.mock import patch
 import logging
@@ -28,7 +29,7 @@ TEST_PHRASE = "시험위험문구"
 RULES = {"version": "t-1", "rules": [
     {"id": "t-phrase", "description": "시험용", "match": {"any_of": [{"contains": TEST_PHRASE}, {"regex": "시험정규식[0-9]+"}]}}]}
 RISK_OUT = ext("REDIRECT", "Q1.D02", reason="OFF_TOPIC")       # converse() 뒤의 현재 문항은 Q1.D02
-VIEW = jsonschema.Draft202012Validator(survey_schema.load_schema("StaffSessionView"))
+VIEW = schema_validator(survey_schema.load_schema("StaffSessionView"))
 
 
 class ViewRig:

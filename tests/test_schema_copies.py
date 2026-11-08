@@ -1,5 +1,6 @@
 """문진 스키마의 사본 규칙: 어느 스키마 파일의 `$defs/<이름>`이든, `schemas/<이름>.json`(정본)이 있으면 정본의 `$defs/<이름>`과 같아야 한다(안쪽 $ref까지 풀어서 견준다).
 사본이 낡아 세션 시작 Trace 봉투 검증이 503이던 결함(4.0.0의 FrontendMessage 변경이 TurnTrace·OrchestratorInput 사본에 안 갔다, 4.1.1)의 재발 방지."""
+from boundary_contracts import schema_validator
 import copy
 import glob
 import json
@@ -57,7 +58,7 @@ def test_a_deliberately_stale_copy_is_detected():
 def test_session_start_with_question_set_id_passes_the_trace_envelope_source_check():
     """E2E 5단계의 503: SESSION_START + question_set_id를 담은 Trace가 TraceEnvelopeSource 검증을 통과한다."""
     import survey_schema
-    from jsonschema import Draft202012Validator
+    from boundary_contracts import schema_validator as Draft202012Validator
     msg = {"kind": "SESSION_START", "question_set_id": "health-screening", "subject_ref": "PT-ref#001"}
     assert list(Draft202012Validator(survey_schema.load_schema("FrontendMessage")).iter_errors(msg)) == []
     ex = json.loads((ROOT / "schema/schemas/examples/TurnTrace.valid.json").read_text(encoding="utf-8"))

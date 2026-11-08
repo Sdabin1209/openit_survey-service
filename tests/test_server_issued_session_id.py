@@ -4,6 +4,7 @@
 4.0.0 공개 HTTP 시작 본문은 session_id를 거부한다. 내부 FrontendMessage와 구분한다.
 CSPRNG 여부는 출력만으로 증명할 수 없다: 시험은 길이(256비트를 16진으로 쓴 64자), 유일성, `secrets` 모듈 사용는 secrets 모듈 호출의 결과와 같음을 본다.
 """
+from boundary_contracts import schema_validator
 import logging
 import re
 
@@ -88,8 +89,8 @@ def test_schemas_describe_the_start_request_and_response():
     """스키마가 선택적 session_id(요청)와 시작 응답의 최상위 session_id를 기술한다(PUBLIC_API.md 7행). 위치: schema/schemas/FrontendMessage.json(요청), FrontendInput.json(응답)."""
     import jsonschema
     import survey_schema
-    msg = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendMessage"))
-    fi = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
+    msg = schema_validator(survey_schema.load_schema("FrontendMessage"))
+    fi = schema_validator(survey_schema.load_schema("FrontendInput"))
     assert not list(msg.iter_errors({"kind": "SESSION_START"}))                                   # 서버 발급: session_id 생략
     assert not list(msg.iter_errors({"kind": "SESSION_START", "session_id": "legacy-1"}))  # 내부 메시지
     from boundary_contracts import validator
@@ -108,7 +109,7 @@ def test_schemas_describe_the_start_request_and_response():
 def test_issued_start_response_validates_against_the_frontend_input_schema(ar):
     import jsonschema
     import survey_schema
-    fi = jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput"))
+    fi = schema_validator(survey_schema.load_schema("FrontendInput"))
     code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
     assert code == 200 and not list(fi.iter_errors(body))
 
@@ -152,13 +153,13 @@ def test_an_id_starting_with_dash_or_underscore_breaks_result_ready_event(bad):
     assert not _public_session_ok(bad) and not _contract_id_ok(bad) and _result_ready_errors(bad)
 
 
-def test_a_bad_issued_value_fails_the_result_ready_check(ar, monkeypatch):
-    """검사 민감도 시험(token_urlsafe 되돌림 변이가 아니다): token_hex 가 '-' 로 시작하는 값을 내도록 주입하면 발급값에 대한 ResultReadyEvent 검증이 실패한다.
-    되돌림 변이 자체는 표본 시험(16진 64자 단언)이 잡는다."""
+def test_a_bad_issued_value_is_not_handed_out(ar, monkeypatch):
+    """검사 민감도 시험(token_urlsafe 되돌림 변이가 아니다): token_hex 가 '-' 로 시작하는 값을 내도록 주입하면 서비스는 계약을 어기는 ID 를 내보내지 않는다
+    (응답 FrontendInput 의 session_id 가 계약 SessionId 를 $ref 하므로 R7 내는 쪽 검증이 막는다). 되돌림 변이 자체는 표본 시험(16진 64자 단언)이 잡는다."""
     import secrets
     monkeypatch.setattr(secrets, "token_hex", lambda n=None: "-" + "a" * 42)       # token_urlsafe 가 낼 수 있는 값의 예
     code, body, _ = ar.call("POST", "/v1/sessions", {"kind": "SESSION_START"}, auth=AUTH)
-    assert code == 200 and _result_ready_errors(body["session_id"])
+    assert code != 200 and _result_ready_errors("-" + "a" * 42)
 
 
 # ---- envelope_id: 계약 Id 와 같은 판정(ops-feedback 과 같은 입력 표) ----

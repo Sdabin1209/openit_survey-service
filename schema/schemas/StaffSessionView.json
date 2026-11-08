@@ -18,8 +18,7 @@
       "description": "공개 알림 종류 이름. 목록 StaffAlert와 세션 보기가 같은 이름을 쓴다(PUBLIC_API.md 2.2.0). 내부 위험 알림 종류 RISK는 공개할 때 RISK_STOP이다."
     },
     "SessionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
     },
     "SessionStatus": {
       "oneOf": [
@@ -61,8 +60,7 @@
         "release_id": {
           "anyOf": [
             {
-              "type": "string",
-              "minLength": 1
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id"
             },
             {
               "type": "null"
@@ -72,8 +70,7 @@
         "question_set_id": {
           "anyOf": [
             {
-              "type": "string",
-              "minLength": 1
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id"
             },
             {
               "type": "null"
@@ -174,8 +171,7 @@
         "turn_id": {
           "anyOf": [
             {
-              "type": "string",
-              "minLength": 1
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id"
             },
             {
               "type": "null"
@@ -269,8 +265,7 @@
       "description": "직원 알림. rule_id는 위험 규칙 엔진이 낸 알림에만 있고 나머지는 null(발화 원문이 아니다).",
       "properties": {
         "alert_id": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id"
         },
         "kind": {
           "$ref": "#/$defs/AlertKind"
@@ -287,8 +282,7 @@
         "rule_id": {
           "anyOf": [
             {
-              "type": "string",
-              "minLength": 1
+              "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/Id"
             },
             {
               "type": "null"
@@ -364,8 +358,7 @@
       "additionalProperties": false
     },
     "SubjectRef": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9._:/#=+-]{1,128}$(?![\\s\\S])",
+      "$ref": "https://openit.example/contracts/v5/PublicApiRequests.schema.json#/$defs/SessionStartBody/properties/subject_ref",
       "description": "설치처가 정한 불투명 환자·방문 참조."
     }
   }

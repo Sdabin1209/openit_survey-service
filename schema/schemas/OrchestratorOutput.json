@@ -352,8 +352,7 @@
           ]
         },
         "staff_id": {
-          "type": "string",
-          "minLength": 1,
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/HumanUserId",
           "description": "직원 개입 항목에서 게이트웨이가 인증한 계정 ID(X-Openit-User). 개입이 아닌 항목에는 없다."
         }
       },
@@ -440,12 +439,10 @@
       "additionalProperties": false
     },
     "QuestionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/QuestionId"
     },
     "SessionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
     },
     "SessionInfo": {
       "type": "object",
@@ -475,7 +472,7 @@
         },
         "slot_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[A-Za-z0-9_]+$(?![\\s\\S])"
         }
       },
       "required": [
@@ -594,8 +591,7 @@
       "type": "object",
       "properties": {
         "session_id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+          "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
         },
         "write_committed": {
           "oneOf": [

@@ -1,4 +1,5 @@
 """Orchestrator를 model-runtime의 FakeModelSession으로 돌린다(D74 구조, 문항 세트는 tests/sample_bank.py)."""
+from boundary_contracts import schema_validator
 import copy
 import threading
 
@@ -219,7 +220,7 @@ def test_risk_pauses_alerts_and_resume_and_end_dispatch():
     assert o.orchestrator_output["intervention_result"]["result"] == "APPLIED"
     assert rig.doc()["progress_record"]["session_status"] == "IN_PROGRESS" and o.trace["response_outcome"] == "fixed"
     assert o.frontend_input is not None
-    jsonschema.Draft202012Validator(survey_schema.load_schema("FrontendInput")).validate(o.frontend_input)
+    schema_validator(survey_schema.load_schema("FrontendInput")).validate(o.frontend_input)
     assert rig.console.inputs[-1] == {"staff_alert": None, "turn_failure_signal": None,
                                       "intervention_result": {"session_id": "S1", "result": "APPLIED"}}
     o = rig.say(decision="END")
@@ -542,7 +543,7 @@ def test_trace_is_schema_valid_and_complete():
         def submit(self, release_id, trace):
             got.append((release_id, copy.deepcopy(trace)))
     rig = risk_rig(trace_sink=Sink())
-    v = jsonschema.Draft202012Validator(survey_schema.load_schema("TurnTrace"))
+    v = schema_validator(survey_schema.load_schema("TurnTrace"))
     rig.start()
     rig.say("안 먹어요", out=HEALTH)
     rig.say("숨이 안 쉬어져요", out=ext("REDIRECT", "Q1.D02", reason="OFF_TOPIC"))

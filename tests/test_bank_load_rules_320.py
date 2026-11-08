@@ -1,4 +1,5 @@
 """wo-320: 문항 은행의 칸 규격 규칙이 (1) choice_catalog 칸을 받고 (2) 문진 스키마가 적재 거부 조건을 미리 표현하고 (3) 적재가 계약 QuestionFieldSpec으로 칸 규격을 검증한다 (ADR-0045)."""
+from boundary_contracts import schema_validator
 import copy
 
 import jsonschema
@@ -31,7 +32,7 @@ def _catalog_bank():
 
 
 def _errors(bank):
-    return list(jsonschema.Draft202012Validator(survey_schema.load_schema("QuestionBank")).iter_errors(bank))
+    return list(schema_validator(survey_schema.load_schema("QuestionBank")).iter_errors(bank))
 
 
 def _poll(tmp_path, bank):

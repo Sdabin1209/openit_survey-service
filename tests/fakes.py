@@ -1,6 +1,7 @@
 """시험용 대역. 이웃 영역(release-gate, ops-feedback)의 실제 구현이 없어 boundary_contracts.sdk의 Protocol을 따라 직접 만든다."""
 from __future__ import annotations
 
+from boundary_contracts import schema_validator
 import survey_schema
 import copy
 import shutil
@@ -250,7 +251,7 @@ class FakeTraceIngest:
             if self.validate:
                 if list(validator("TraceEnvelope").iter_errors(envelope)):
                     raise BoundaryError("INVALID_RECORD", "봉투 위반")
-                tv = jsonschema.Draft202012Validator(survey_schema.load_schema("TurnTrace", envelope["runtime_contract_version"]))
+                tv = schema_validator(survey_schema.load_schema("TurnTrace", envelope["runtime_contract_version"]))
                 if list(tv.iter_errors(envelope["trace"])):
                     raise BoundaryError("INVALID_RECORD", "TurnTrace 위반")
             key = (envelope["session_id"], envelope["turn_id"])

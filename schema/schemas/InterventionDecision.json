@@ -30,8 +30,7 @@
       "additionalProperties": false
     },
     "SessionId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://openit.example/contracts/v5/_common.schema.json#/$defs/SessionId"
     }
   }
 }

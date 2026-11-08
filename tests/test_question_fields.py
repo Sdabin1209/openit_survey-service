@@ -1,5 +1,6 @@
 """U32: 문항 은행 칸 정의(SlotDef)에서 계약 QuestionFieldSpec을 만들어 I9 extract 요청 fields로 싣는다 (ADR-0033, 계약 2.4.0).
 기대값 tests/fixtures_question_fields.json은 학습 데이터셋 question_fields·field_options(docs/SQL.md 5.2~5.3)의 52칸(boolean 31)이다."""
+from boundary_contracts import schema_validator
 import copy
 import json
 from types import SimpleNamespace
@@ -23,14 +24,14 @@ EXPECTED = json.loads((Path(__file__).parent / "fixtures_question_fields.json").
 
 
 def test_the_bank_with_typed_slots_still_validates_against_the_survey_schema():
-    jsonschema.Draft202012Validator(survey_schema.load_schema("QuestionBank")).validate(sample_bank())
+    schema_validator(survey_schema.load_schema("QuestionBank")).validate(sample_bank())
 
 
 def test_slot_type_properties_are_checked_by_the_schema():
     bad = sample_bank()
     bad["questions"][0]["slots"][0]["data_type"] = "text"
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.Draft202012Validator(survey_schema.load_schema("QuestionBank")).validate(bad)
+        schema_validator(survey_schema.load_schema("QuestionBank")).validate(bad)
 
 
 def test_field_specs_from_the_bank_equal_the_dataset_table_and_pass_the_contract_schema():

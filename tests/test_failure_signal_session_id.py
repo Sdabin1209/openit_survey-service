@@ -1,4 +1,5 @@
 """Failure signals use the public session identifier format in every embedded copy."""
+from boundary_contracts import schema_validator
 import json
 from pathlib import Path
 
@@ -19,7 +20,7 @@ COPIES = [p for p in sorted(SCHEMAS.glob("*.json"))
 def test_failure_signal_session_id_format(path, value, valid):
     doc = json.loads(path.read_text())
     schema = {**doc, "$ref": "#/$defs/TurnFailureSignal/properties/session_id"}
-    assert jsonschema.Draft202012Validator(schema).is_valid(value) is valid
+    assert schema_validator(schema).is_valid(value) is valid
 
 
 def test_all_failure_signal_copies_are_covered():
