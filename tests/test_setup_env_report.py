@@ -1,5 +1,6 @@
 """scripts/setup-env.sh의 마지막 출력 줄 = 계약 SetupEnvReport(boundary-contracts 2.6.0, ADR-0039).
 실제 .venv를 건드리지 않으려고(시험이 도는 환경을 지우고 다시 깔면 안 된다) 최소 리포 사본(핀 없음, 패키지 하나)에서 스크립트를 돌린다."""
+from .subproc_env import min_env
 import json
 import os
 import shutil
@@ -63,7 +64,7 @@ def test_declared_test_command_runs_the_area_tests_from_the_repo_root():
     if not venv.exists():
         pytest.skip(".venv가 없다(setup-env.sh를 먼저 실행)")
     # 선언한 명령(PostgreSQL 포함 전체 실행기) 그대로 수집만 한다. TEST_DATABASE_URL 을 주어 PostgreSQL 을 새로 띄우지 않는다(바깥 시험의 DB 를 건드리지 않게)
-    env = {**os.environ, "TEST_DATABASE_URL": os.environ.get("TEST_DATABASE_URL") or "postgresql://unused@127.0.0.1:1/x"}
+    env = min_env(TEST_DATABASE_URL=os.environ.get("TEST_DATABASE_URL") or "postgresql://unused@127.0.0.1:1/x")      # 상속 환경을 통째로 넘기지 않는다(R9.1): 필요한 이름만
     r = subprocess.run(["bash", "scripts/test-all.sh", "--collect-only", "tests/test_version_pins_and_labels.py"],
                        cwd=ROOT, capture_output=True, text=True, timeout=HANG_GUARD_SECONDS, env=env)
     assert r.returncode == 0, r.stdout[-300:] + r.stderr[-300:]

@@ -2,6 +2,7 @@
 
 1 디렉터리  2 컴포넌트끼리 import 금지  3 HTTP는 link_* 만  4 스키마 예시  5 types 재생성 일치  6 코드 파일의 자리
 """
+from .subproc_env import min_env
 import ast
 import json
 import pathlib
@@ -75,7 +76,7 @@ def test_3_http_only_in_link_components_and_entry():
 
 
 def test_4_every_schema_has_valid_and_invalid_examples_with_right_results():
-    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_schemas.py")], capture_output=True, text=True, cwd=ROOT)
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_schemas.py")], capture_output=True, text=True, cwd=ROOT, env=min_env())
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-500:]
     assert list((ROOT / "schemas").glob("*.json")), "schemas/ 가 비어 있다"
 
@@ -84,7 +85,7 @@ def test_5_types_equal_regenerated_output(tmp_path):
     tools = ROOT / ".venv-tools" / "bin" / "python"
     assert tools.exists(), "도구 환경이 없다: bash scripts/gen-types.sh 를 먼저 실행한다(README 4절)"
     out = tmp_path / "types"
-    r = subprocess.run([str(tools), str(ROOT / "scripts" / "gen_types.py"), "--out", str(out)], capture_output=True, text=True, cwd=ROOT)
+    r = subprocess.run([str(tools), str(ROOT / "scripts" / "gen_types.py"), "--out", str(out)], capture_output=True, text=True, cwd=ROOT, env=min_env())
     assert r.returncode == 0, r.stderr[-800:]
     have = {p.relative_to(PKG / "types"): p.read_bytes() for p in (PKG / "types").rglob("*") if p.is_file() and "__pycache__" not in p.parts}
     want = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file() and "__pycache__" not in p.parts}

@@ -1,4 +1,5 @@
 """L18: scripts/check_dataset_values.py가 위반을 실제로 잡는다(합성 정답으로). 실제 데이터셋 결과는 docs/L18-dataset-values.md."""
+from .subproc_env import min_env
 import json
 import subprocess
 import sys
@@ -18,7 +19,7 @@ def rec(key, value, qid="Q8_1", state=None):
 def run(tmp_path, *recs):
     (tmp_path / "bank.json").write_text(json.dumps(sample_bank(question_set_id="health-screening")), encoding="utf-8")
     (tmp_path / "a.jsonl").write_text("\n".join(json.dumps(r) for r in recs), encoding="utf-8")
-    r = subprocess.run([sys.executable, str(ROOT / "scripts/check_dataset_values.py"), str(tmp_path / "bank.json"), str(tmp_path / "a.jsonl")], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, str(ROOT / "scripts/check_dataset_values.py"), str(tmp_path / "bank.json"), str(tmp_path / "a.jsonl")], capture_output=True, text=True, env=min_env())
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
 

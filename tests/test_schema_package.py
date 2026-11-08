@@ -1,4 +1,5 @@
 """문진 스키마 패키지(schema/)가 wheel로 빌드되고, 설치본에서 버전별로 스키마를 얻을 수 있는지 확인한다."""
+from .subproc_env import min_env
 import json
 import shutil
 import subprocess
@@ -15,13 +16,13 @@ SCHEMA = ROOT / "schema"
 def _build(src: Path, out: Path) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, "-m", "pip", "wheel", "-q", "--no-deps", "--no-build-isolation", "-w", str(out), str(src)],
-                   check=True, capture_output=True)
+                   check=True, capture_output=True, env=min_env())
     return next(out.glob("*.whl"))
 
 
 def _run_isolated(extracted: Path, code: str) -> str:
     pre = f"import sys; sys.path.insert(0, {str(extracted)!r})\n"
-    r = subprocess.run([sys.executable, "-I", "-c", pre + code], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-I", "-c", pre + code], capture_output=True, text=True, env=min_env())
     assert r.returncode == 0, r.stderr
     return r.stdout.strip()
 
@@ -103,7 +104,7 @@ def test_package_version_is_not_older_than_the_latest_schema_tag():
     """스키마를 바꾸고 패키지 버전을 올리지 않으면 설치본 표기가 태그보다 낡다(1.0.0 표기로 1.1.0 내용이 나갔던 일). git 태그가 없으면 건너뛴다."""
     import re
     import subprocess
-    r = subprocess.run(["git", "tag", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(["git", "tag", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True, env=min_env())
     tags = [tuple(int(x) for x in m.groups()) for t in r.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", t))]
     if r.returncode != 0 or not tags:
         pytest.skip("survey-schema-v* 태그를 읽을 수 없다")
@@ -114,14 +115,14 @@ def test_package_version_equals_the_tag_when_head_is_tagged():
     """HEAD에 survey-schema-vX.Y.Z 태그가 붙어 있으면 패키지 버전은 그 X.Y.Z와 같다(설치본 표기와 태그가 어긋나지 않게, D110). 태그 전에는 건너뛴다."""
     import re
     import subprocess
-    r = subprocess.run(["git", "tag", "--points-at", "HEAD", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run(["git", "tag", "--points-at", "HEAD", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True, env=min_env())
     here = [tuple(int(x) for x in m.groups()) for t in r.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", t))]
     assert r.returncode == 0, r.stderr[-200:]
     if here:
         assert _pkg_version() == here[0]
         return
     # HEAD 에 태그가 없으면(다음 판 작업 중) 패키지 버전은 이미 낸 태그들 이상이어야 한다: 건너뛰지 않고 이 상황에서 확인할 수 있는 것을 본다(2026-11-07)
-    t = subprocess.run(["git", "tag", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True)
+    t = subprocess.run(["git", "tag", "--list", "survey-schema-v*"], cwd=ROOT, capture_output=True, text=True, env=min_env())
     tags = [tuple(int(x) for x in m.groups()) for x in t.stdout.split() if (m := re.fullmatch(r"survey-schema-v(\d+)\.(\d+)\.(\d+)", x))]
     assert tags, "survey-schema-v* 태그를 하나도 읽지 못했다(clone 이 태그를 받지 않았다)"
     assert _pkg_version() >= max(tags)

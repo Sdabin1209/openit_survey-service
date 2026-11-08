@@ -1,5 +1,6 @@
 """D126: survey-db 이미지(db/): 선언(DatabaseDeclaration)대로 계정·권한·접속 규칙·TLS가 이미지 안에서 만들어진다. 실제 postgres:16 위에서 컨테이너를 띄워 verify-full로 접속해 본다.
 docker 또는 고정 digest의 postgres 이미지(tests/pg_container.py의 IMAGE)가 없으면 건너뛴다(통과로 세지 않는다). 시험이 띄운 컨테이너와 만든 이미지는 이 시험이 지운다."""
+from .subproc_env import min_env
 import datetime
 import ipaddress
 import json
@@ -26,7 +27,7 @@ HOST = "survey-db"          # 서버 인증서의 이름(SAN). 접속은 이 이
 
 
 def _docker(*a, check=True, timeout=300):
-    return subprocess.run(["docker", *a], capture_output=True, text=True, check=check, timeout=timeout)
+    return subprocess.run(["docker", *a], capture_output=True, text=True, check=check, timeout=timeout, env=min_env())
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +61,7 @@ def _build(tmp_path, tag, declaration, mutate=None):
     ctx = tmp_path / f"ctx-{tag}"
     shutil.copytree(ROOT / "db", ctx / "db", ignore=shutil.ignore_patterns("accounts.tsv"))
     (ctx / "db" / "database.json").write_text(json.dumps(declaration), encoding="utf-8")
-    subprocess.run([sys.executable, str(ctx / "db" / "gen_accounts.py"), str(ctx / "db" / "database.json"), str(ctx / "db" / "accounts.tsv")], check=True)
+    subprocess.run([sys.executable, str(ctx / "db" / "gen_accounts.py"), str(ctx / "db" / "database.json"), str(ctx / "db" / "accounts.tsv")], check=True, env=min_env())
     if mutate:
         rel, fn = mutate if isinstance(mutate, tuple) else ("initdb.d/10-areadb.sh", mutate)
         fn(ctx / "db" / rel)
@@ -221,7 +222,7 @@ def test_build_image_variant_db_labels_and_declaration(have_docker, tmp_path):
     req = {"source_dir": str(ROOT), "revision": "abcdef1", "versions": {"boundary": "v" + m.version("boundary-contracts")}, "variant": "db", "image_tag": tag}
     (tmp_path / "req.json").write_text(json.dumps(req))
     try:
-        r = subprocess.run(["bash", str(ROOT / "scripts/build-image.sh"), str(tmp_path / "req.json")], capture_output=True, text=True, cwd=ROOT, timeout=600)
+        r = subprocess.run(["bash", str(ROOT / "scripts/build-image.sh"), str(tmp_path / "req.json")], capture_output=True, text=True, cwd=ROOT, timeout=600, env=min_env())
         assert r.returncode == 0, r.stderr[-800:]
         out = json.loads(r.stdout.strip().splitlines()[-1])
         assert list(validator("BuildImageResult").iter_errors(out)) == []
@@ -231,7 +232,7 @@ def test_build_image_variant_db_labels_and_declaration(have_docker, tmp_path):
         assert list(validator("DatabaseDeclaration").iter_errors(decl)) == [] and decl["accounts"][0]["privilege"] == "owner" and decl["accounts"][0]["url_env"] == ["SURVEY_DATABASE_URL_FILE"]
         assert list(validator("ImageLabels").iter_errors(labels)) == []
         bad = subprocess.run(["bash", str(ROOT / "scripts/build-image.sh"), str(tmp_path / "req.json")], capture_output=True, text=True, cwd=ROOT, timeout=60,
-                             env={**os.environ, "DOCKER": "false"})
+                             env=min_env(DOCKER="false"))
         assert bad.returncode != 0
     finally:
         _docker("rmi", "-f", tag, check=False)
@@ -353,7 +354,7 @@ def test_build_image_rejects_an_image_that_runs_as_root_while_the_declaration_sa
     req = {"source_dir": str(ctx), "revision": "abcdef1", "versions": {"boundary": "v" + m.version("boundary-contracts")}, "variant": "db", "image_tag": tag}
     (tmp_path / "req.json").write_text(json.dumps(req))
     try:
-        r = subprocess.run(["bash", str(ctx / "scripts/build-image.sh"), str(tmp_path / "req.json")], capture_output=True, text=True, cwd=ctx, timeout=600)
+        r = subprocess.run(["bash", str(ctx / "scripts/build-image.sh"), str(tmp_path / "req.json")], capture_output=True, text=True, cwd=ctx, timeout=600, env=min_env())
         assert r.returncode != 0 and "주입 선언" in r.stderr, r.stderr[-600:]
         assert _docker("image", "inspect", tag, check=False).returncode != 0      # 이미지를 지웠다
     finally:

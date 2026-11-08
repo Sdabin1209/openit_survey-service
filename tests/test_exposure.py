@@ -1,5 +1,6 @@
 """U47(1): 노출 선언 라벨 io.openit.exposure (계약 Exposure, ADR-0041). 정본은 리포 안 deploy-exposure.json이고 시험이 코드의 라우트와 일치를 본다.
 deploy/config/Caddyfile의 survey-service 블록과 어긋나면 코드가 정본이다(어긋남은 ADR-0041에 적었다)."""
+from .subproc_env import min_env
 import json
 import re
 import subprocess
@@ -78,17 +79,17 @@ def test_label_is_added_by_build_image_and_matches_the_file():
     work = Path(tempfile.mkdtemp(prefix="exposure-"))
     tag = f"openit-survey-service-test:exposure-{os.getpid()}"
     try:
-        req = subprocess.run(["bash", str(ROOT / "scripts/dev-request.sh"), str(work), tag], capture_output=True, text=True, cwd=ROOT)
+        req = subprocess.run(["bash", str(ROOT / "scripts/dev-request.sh"), str(work), tag], capture_output=True, text=True, cwd=ROOT, env=min_env())
         if req.returncode != 0:
             pytest.skip("이웃 소스를 받지 못했다: " + req.stderr[-200:])
-        r = subprocess.run(["bash", str(ROOT / "scripts/build-image.sh"), req.stdout.strip()], capture_output=True, text=True, cwd=ROOT)
+        r = subprocess.run(["bash", str(ROOT / "scripts/build-image.sh"), req.stdout.strip()], capture_output=True, text=True, cwd=ROOT, env=min_env())
         assert r.returncode == 0, r.stderr[-600:]
         result = json.loads(r.stdout.strip().splitlines()[-1])
         assert list(validator("BuildImageResult").iter_errors(result)) == []
         label = result["labels"]["io.openit.exposure"]
         assert json.loads(label) == TABLE and list(validator("Exposure").iter_errors(json.loads(label))) == []
     finally:
-        subprocess.run(["docker", "rmi", "-f", tag], capture_output=True)
+        subprocess.run(["docker", "rmi", "-f", tag], capture_output=True, env=min_env())
         shutil.rmtree(work, ignore_errors=True)
 
 

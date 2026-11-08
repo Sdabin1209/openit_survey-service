@@ -2,6 +2,7 @@
 
 select를 가짜로 바꿔 EBADF를 항상 일으킨다(타이밍에 기대지 않는다). 안쪽 시험은 별도 pytest 프로세스에서 `-W error::pytest.PytestUnhandledThreadExceptionWarning`로 돌려
 경고가 나는지(옛 경로: waitress의 run을 그대로 스레드로) 안 나는지(run_server)를 종료 코드로 본다."""
+from .subproc_env import min_env
 import subprocess
 import sys
 import textwrap
@@ -31,7 +32,7 @@ def run_inner(tmp_path, variant):
     f = tmp_path / f"test_inner_{variant}.py"
     f.write_text(INNER.replace("{variant}", variant), encoding="utf-8")
     return subprocess.run([sys.executable, "-m", "pytest", str(f), "-q", "-p", "no:cacheprovider", "-W", "error::pytest.PytestUnhandledThreadExceptionWarning"],
-                          capture_output=True, text=True, cwd=str(tmp_path))
+                          capture_output=True, text=True, cwd=str(tmp_path), env=min_env())
 
 
 def test_old_loop_path_raises_the_thread_exception_warning(tmp_path):

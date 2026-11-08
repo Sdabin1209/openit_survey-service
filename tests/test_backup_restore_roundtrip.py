@@ -1,6 +1,7 @@
 """RUNTIME R10.1 + 계약 DATA_OWNERSHIP 백업 행: 실제 restic + 표준 restic rest-server(컨테이너)로 백업 -> 스냅숏 -> 복구 잡 -> 복구한 DB에서 행 확인.
 이 시험이 띄우는 것: rest-server 컨테이너 하나(이름 survey-service-restsrv-<무작위>)와 restic 바이너리를 꺼내려고 잠깐 만드는 컨테이너 하나. 둘 다 이 시험이 지운다.
 PostgreSQL(TEST_DATABASE_URL)과 docker가 없으면 건너뛴다(통과로 세지 않는다)."""
+from .subproc_env import min_env
 import base64
 import hashlib
 import json
@@ -28,7 +29,7 @@ REST_SERVER_IMAGE = "restic/rest-server@sha256:d2aff06f47eb38637dff580c3e6bce4af
 
 
 def _docker(*a, check=True):
-    return subprocess.run(["docker", *a], capture_output=True, text=True, check=check, timeout=HANG_GUARD_SECONDS)
+    return subprocess.run(["docker", *a], capture_output=True, text=True, check=check, timeout=HANG_GUARD_SECONDS, env=min_env())
 
 
 @pytest.fixture(scope="module")

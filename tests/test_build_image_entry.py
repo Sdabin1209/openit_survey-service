@@ -1,5 +1,6 @@
 """영역 빌드 진입점 scripts/build-image.sh (계약 boundary-contracts 2.5.0, BuildImageRequest/BuildImageResult, ADR-0037).
 요청 검증(모르는 키·필요한 키 없음은 실패)은 docker 없이 시험하고, 실제 빌드는 도커가 있을 때 한 번 한다(이미지 이름에 리포 이름, 끝나면 지운다)."""
+from .subproc_env import min_env
 import json
 import os
 import re
@@ -28,7 +29,7 @@ def request(tmp_path, **override):
 
 def run(f, **env):
     return subprocess.run(["bash", str(SCRIPT), str(f)], capture_output=True, text=True, cwd=ROOT,
-                          env={**{k: v for k, v in os.environ.items() if k != "PYTHON"}, "DOCKER": "false", **env})
+                          env=min_env(DOCKER="false", **env))
 
 
 def test_request_with_an_unknown_key_is_rejected(tmp_path):
@@ -99,10 +100,10 @@ def test_real_build_prints_a_valid_result_as_the_last_line_with_the_requested_la
     tag = TAG.format(os.getpid())
     try:
         req = subprocess.run(["bash", str(ROOT / "scripts/dev-request.sh"), str(work), tag], capture_output=True, text=True, cwd=ROOT,
-                             env={**os.environ, "REPO_BASE": os.environ.get("REPO_BASE", "git@github.com:Sdabin1209")})
+                             env=min_env(REPO_BASE=os.environ.get("REPO_BASE", "git@github.com:Sdabin1209"), **({"SSH_AUTH_SOCK": os.environ["SSH_AUTH_SOCK"]} if "SSH_AUTH_SOCK" in os.environ else {})))
         if req.returncode != 0:
             pytest.skip("이웃 소스를 받지 못했다(REPO_BASE 또는 네트워크): " + req.stderr[-200:])
-        r = subprocess.run(["bash", str(SCRIPT), req.stdout.strip()], capture_output=True, text=True, cwd=ROOT, env={k: v for k, v in os.environ.items() if k != "PYTHON"})       # PYTHON 없이: 진입점이 영역의 .venv를 스스로 고른다
+        r = subprocess.run(["bash", str(SCRIPT), req.stdout.strip()], capture_output=True, text=True, cwd=ROOT, env=min_env())       # PYTHON 없이: 진입점이 영역의 .venv를 스스로 고른다
         assert r.returncode == 0, r.stderr[-800:]
         last = r.stdout.strip().splitlines()[-1]
         result = json.loads(last)
@@ -112,7 +113,7 @@ def test_real_build_prints_a_valid_result_as_the_last_line_with_the_requested_la
         labels = result["labels"]
         assert list(validator("ImageLabels").iter_errors(labels)) == []
         inst = subprocess.run(["docker", "run", "--rm", "--entrypoint", "python", tag, "-c", "import importlib.metadata as m; print(m.version('boundary-contracts'), m.version('model-runtime'))"],
-                              capture_output=True, text=True).stdout.split()
+                              capture_output=True, text=True, env=min_env()).stdout.split()
         assert labels["io.openit.contracts.boundary"] == "v" + inst[0] and labels["io.openit.model-runtime"] == "v" + inst[1]         # 라벨 = 실제 설치 버전(U50)
         assert labels["io.openit.service"] == "survey-service" and labels["io.openit.revision"] == want["revision"]
         assert labels["io.openit.contracts.boundary"] == want["versions"]["boundary"] and labels["io.openit.model-runtime"] == want["versions"]["model_runtime"]
@@ -121,4 +122,4 @@ def test_real_build_prints_a_valid_result_as_the_last_line_with_the_requested_la
         assert want["versions"]["survey_schema"] == "v" + (ROOT / "schema/pyproject.toml").read_text().split('version = "')[1].split('"')[0]
         assert "io.openit.turn-engine" not in labels
     finally:
-        subprocess.run(["docker", "rmi", "-f", tag], capture_output=True)
+        subprocess.run(["docker", "rmi", "-f", tag], capture_output=True, env=min_env())

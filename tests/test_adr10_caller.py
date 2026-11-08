@@ -1,5 +1,6 @@
 """ADR 0010(호출자 쪽): 서버가 보증한 LoRA-A 출력의 의미 규칙은 서비스가 다시 검사하지 않고(R7), turn-engine은 코드 의존이 아니다(D109).
 기대값은 계약 문서·스키마(boundary-contracts ExtractRequest, QuestionFlowTable)와 문진 스키마(question_flow.json)에서 온다."""
+from .subproc_env import min_env
 import subprocess
 import sys
 from pathlib import Path
@@ -66,7 +67,7 @@ def test_service_imports_without_turn_engine():
             "        if name.split('.')[0] == 'turn_engine': raise ImportError('turn_engine 금지')\n"
             "sys.meta_path.insert(0, B())\n"
             "import survey_service.server, survey_service.wiring.turn_graph, survey_service.components.flow_table, survey_service.components.release_loader\n")
-    r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, env=min_env())
     assert r.returncode == 0, r.stderr[-500:]
 
 

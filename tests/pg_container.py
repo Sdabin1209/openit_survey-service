@@ -3,6 +3,7 @@
 왜 이름(실행마다 고유 uuid)인가: 라벨 `io.openit.dev-postgres=1`이나 포트로 '찾으면' 같은 서버의 다른 영역·세션 컨테이너까지
 pause할 수 있다(포트는 부분 문자열 일치도 있었다). 직접 띄우고 그 이름으로만 pause/unpause하면 남의 컨테이너에 닿을 길이 없다.
 """
+from .subproc_env import min_env
 from .timing import HANG_GUARD_SECONDS
 import subprocess
 import uuid
@@ -13,7 +14,7 @@ IMAGE = "postgres:16@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f8101791
 
 
 def _docker(*args, timeout=HANG_GUARD_SECONDS):
-    return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(["docker", *args], capture_output=True, text=True, timeout=timeout, env=min_env())
 
 
 def docker_ready() -> bool:
