@@ -44,12 +44,10 @@ from .. import types
 
 log = logging.getLogger("survey_service.api")
 _SESSION_ID_VALIDATOR = _bc_validator("SessionState#/properties/session_id")
-_ALERTS_CURSOR = _bc_validator("HttpQueries#/$defs/Alerts/properties/cursor")
-_RESULTS_CURSOR = _bc_validator("HttpQueries#/$defs/Results/properties/cursor")
-_SUBJECT_REF_VALIDATOR = _bc_validator("PublicApiRequests#/$defs/SessionStartBody/properties/subject_ref")
+_ALERTS_QUERY = _bc_validator("HttpQueries#/$defs/Alerts")
+_RESULTS_QUERY = _bc_validator("HttpQueries#/$defs/Results")
 
 MAX_BODY = 64 * 1024     # 요청 본문 상한. 넘으면 라이브러리가 413을 낸다(Route.max_body). 측정값이 아니라 기존 값(64 KiB)을 그대로 쓴다
-SESSION_STATUSES = ("IN_PROGRESS", "PAUSED_RISK", "ENDED_COMPLETE", "ENDED_STAFF", "ENDED_LEFT", "ENDED_USER_STOP")
 START_TURN_ID, END_TURN_ID, EXPIRE_TURN_ID = "start", "end", "idle-expire"   # turn_id가 없는 동작의 고정 ID(CR-009)
 STATE_NAME = {"IN_PROGRESS": "ACTIVE", "PAUSED_RISK": "PAUSED_RISK"}
 
@@ -598,17 +596,10 @@ class PublicApi:
     # ------------------------------------------------------------------ 직원 알림 (staff)
     def _alerts(self, req: Request):
         q = req.query
-        status = q.get("status")
-        if status not in (None, "OPEN", "RESOLVED"):
-            raise _err("INVALID_RECORD", "status는 OPEN 또는 RESOLVED여야 한다")
-        try:
-            limit = int(q.get("limit") or "50")
-            cursor = q.get("cursor") or None
-            # 왜 계약 검증: isdigit() 는 비ASCII 숫자와 끝없는 자릿수를 받아 alert_book 의 int(cursor) 가 값을 잘못 읽거나 BIGINT 를 넘겼다. 계약 HttpQueries.Alerts.cursor 는 ASCII 숫자 1~18자리다(5.0.0)
-            if not 1 <= limit <= 200 or (cursor is not None and not _ALERTS_CURSOR.is_valid(cursor)):
-                raise ValueError
-        except ValueError:
-            raise _err("INVALID_RECORD", "limit(1~200) 또는 cursor가 잘못됐다") from None
+        # 쿼리 전체를 계약 HttpQueries.Alerts 로 본다(status 열거, limit 1~200, cursor ASCII 숫자 18자리 이하, 모르는 키 거부). 5.0.0, D117: 같은 규칙의 손 검사 사본을 두지 않는다.
+        if not _ALERTS_QUERY.is_valid(dict(q)):
+            raise _err("INVALID_RECORD", "쿼리가 계약 HttpQueries.Alerts 를 어긴다")
+        status, limit, cursor = q.get("status"), int(q.get("limit") or "50"), q.get("cursor") or None
         try:
             items, nxt = self.orch.bounded(lambda: self.alerts.store.list(status, limit, cursor), self.orch.request_until())
         except self.orch.errors.StoreError:
@@ -744,24 +735,14 @@ class PublicApi:
         role, q = req.role, req.query
         one = lambda k: q.get(k)
         subject, status, after, cursor = one("subject_ref"), one("status"), one("updated_after"), one("cursor")
-        if subject is not None and not _SUBJECT_REF_VALIDATOR.is_valid(subject):
-            raise _err("INVALID_RECORD", "subject_ref 형식이 아니다")
-        if status is not None and status not in SESSION_STATUSES:
-            raise _err("INVALID_RECORD", "status 값이 아니다")
+        if not _RESULTS_QUERY.is_valid(dict(q)):         # 계약 HttpQueries.Results: subject_ref 형식, status 열거, updated_after 시각, limit 1~200, cursor ASCII 숫자 18자리 이하(5.0.0, D117)
+            raise _err("INVALID_RECORD", "쿼리가 계약 HttpQueries.Results 를 어긴다")
+        limit = int(one("limit") or "50")
         try:
-            limit = int(one("limit") or "50")
-            if not 1 <= limit <= 200:
-                raise ValueError
-            after_ts = None
-            if after is not None:
-                after_ts = datetime.fromisoformat(after.replace("Z", "+00:00")).timestamp()
-            cur = None
-            if cursor is not None:
-                if not _RESULTS_CURSOR.is_valid(cursor):         # 계약 HttpQueries.Results.cursor: ASCII 숫자 1~18자리(5.0.0). 쓸 때마다 매기는 단조 증가 번호(U26, ADR-0034)
-                    raise ValueError
-                cur = int(cursor)
-        except (ValueError, OverflowError):
-            raise _err("INVALID_RECORD", "limit(1~200), updated_after(ISO 8601), cursor가 잘못됐다") from None
+            after_ts = None if after is None else datetime.fromisoformat(after.replace("Z", "+00:00")).timestamp()      # 계약이 형식을 본 뒤의 변환일 뿐이다
+        except ValueError:
+            raise _err("INVALID_RECORD", "updated_after 를 시각으로 읽을 수 없다") from None
+        cur = None if cursor is None else int(cursor)      # 계약이 ASCII 숫자 1~18자리로 막은 값이다
         try:
             ids = self.alerts.store.sessions_of_subject(subject) if subject is not None else None
             rows = self.orch.store.list_sessions(status=status, updated_after=after_ts, session_ids=ids, limit=limit + 1, after=cur)

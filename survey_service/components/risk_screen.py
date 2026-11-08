@@ -24,7 +24,6 @@ from boundary_contracts import validator
 
 from ..settings import ConfigError
 
-RULE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 EVIDENCE_PREFIX = "signal:"      # evidence = "signal:<source>:<code>"; 알림의 rule_id는 "<source>:<code>"
 INTERNAL_SOURCE = "internal"
 MAX_PATTERN = 500

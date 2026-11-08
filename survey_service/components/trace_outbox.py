@@ -189,6 +189,13 @@ class Outbox:
                                     (limit,)).fetchall()
         return [{"session_id": r[0], "turn_id": r[1], "error": r[2]} for r in rows]
 
+    def foreign_pipeline_rows(self, major: str) -> int:
+        """보낼 차례이거나 DEAD 로 남은 행 중 pipeline_schema_version 주 버전이 major 가 아닌 것의 수(계약 5.0.0 '새 환경 전제': 4.x 저장 데이터는 조용히 섞이지 않고 드러나야 한다).
+        왜 LIKE 인가: 봉투는 이 클래스가 압축 JSON 으로만 쓰므로(`"pipeline_schema_version":"5.0"`) 모양이 고정이다. 행마다 JSON 을 읽지 않는다. SENT 는 이미 끝난 기록이라 세지 않는다."""
+        with self._lock:
+            return self._db.execute("SELECT COUNT(*) FROM outbox WHERE state IN ('PENDING','DEAD') AND envelope NOT LIKE ?",
+                                    (f'%"pipeline_schema_version":"{major}.%',)).fetchone()[0]
+
     def purge_dead(self, older_than: float) -> int:
         """DEAD로 끝난 지 older_than보다 오래된 행을 지운다(D88 U4: DEAD도 무기한 남기지 않는다)."""
         with self._lock:

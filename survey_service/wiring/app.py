@@ -441,6 +441,13 @@ class App:
         problems, dbs = self._db_check()
         if self.draining.is_set():
             problems.append("shutting_down")
+        # 계약 5.0.0 '새 환경 전제': outbox 에 다른 주 버전(4.x)의 봉투가 남아 있으면 조용히 섞지 않고 준비 안 됨으로 드러낸다. 값 검사는 기동 때 한 번이 아니라 요청마다 하되 outbox 주 연결의 COUNT 하나다
+        if "outbox_db" not in problems:
+            try:
+                if self.outbox.foreign_pipeline_rows(PIPELINE_SCHEMA_VERSION.split(".")[0]) > 0:
+                    problems.append("stored_pipeline_major_mismatch")
+            except Exception:
+                problems.append("outbox_db")
         active = self.registry.active_id()
         retrying = self.loader.retry_info()
         if active is None:

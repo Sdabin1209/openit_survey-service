@@ -85,7 +85,7 @@
               "const": "GET"
             },
             "path": {
-              "pattern": "^/v1/results/[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+              "pattern": "^/v1/results/[^/]+$(?![\\s\\S])"
             }
           },
           "required": [
@@ -113,7 +113,7 @@
               "const": "POST"
             },
             "path": {
-              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/risk-signals$(?![\\s\\S])"
+              "pattern": "^/v1/sessions/[^/]+/risk-signals$(?![\\s\\S])"
             }
           },
           "required": [
@@ -127,7 +127,7 @@
               "const": "GET"
             },
             "path": {
-              "pattern": "^/v1/staff/sessions/[A-Za-z0-9_-]{1,64}$(?![\\s\\S])"
+              "pattern": "^/v1/staff/sessions/[^/]+$(?![\\s\\S])"
             }
           },
           "required": [
@@ -197,7 +197,7 @@
               "const": "POST"
             },
             "path": {
-              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/staff-call/(retry|report)$(?![\\s\\S])"
+              "pattern": "^/v1/sessions/[^/]+/staff-call/(retry|report)$(?![\\s\\S])"
             }
           },
           "required": [
@@ -211,7 +211,7 @@
               "const": "POST"
             },
             "path": {
-              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/(turns|end|intervention)$(?![\\s\\S])"
+              "pattern": "^/v1/sessions/[^/]+/(turns|end|intervention)$(?![\\s\\S])"
             }
           },
           "required": [
@@ -225,7 +225,7 @@
               "const": "GET"
             },
             "path": {
-              "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/state$(?![\\s\\S])"
+              "pattern": "^/v1/sessions/[^/]+/state$(?![\\s\\S])"
             }
           },
           "required": [
@@ -268,7 +268,7 @@
       "if": {
         "properties": {
           "path": {
-            "pattern": "^/v1/sessions(/[A-Za-z0-9_-]{1,64}/(turns|end|state|staff-call/(retry|report)))?$(?![\\s\\S])"
+            "pattern": "^/v1/sessions(/[^/]+/(turns|end|state|staff-call/(retry|report)))?$(?![\\s\\S])"
           }
         },
         "required": [
@@ -294,7 +294,7 @@
             "const": "POST"
           },
           "path": {
-            "pattern": "^/v1/sessions/[A-Za-z0-9_-]{1,64}/intervention$(?![\\s\\S])"
+            "pattern": "^/v1/sessions/[^/]+/intervention$(?![\\s\\S])"
           }
         },
         "required": [

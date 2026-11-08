@@ -8,7 +8,7 @@ JSON Schema draft 2020-12, 파일 하나 = 타입 하나, 파일 이름 = 타입
 
 ## 스키마 밖 조건
 
-현재 64건(목표 0건에는 못 미쳤다). 대부분 두 문서 사이의 관계(입력과 출력의 변환 관계, 두 입력의 소속)나 저장소·시간 같은 상태가 필요한 조건이라 단일 문서의 JSON Schema로 쓸 수 없다. 이 부류의 조건은 컴포넌트 시험과 호출하는 wiring이 보증한다(표의 마지막 칸). 주의: 이 표에 있는 코드 검사 중 일부는 컴포넌트 안에 아직 손 검사로 남아 있다(스키마 검증으로 바꾸지 못했다). 그 목록과 이유는 표의 각 행이다.
+현재 66건(목표 0건에는 못 미쳤다). 대부분 두 문서 사이의 관계(입력과 출력의 변환 관계, 두 입력의 소속)나 저장소·시간 같은 상태가 필요한 조건이라 단일 문서의 JSON Schema로 쓸 수 없다. 이 부류의 조건은 컴포넌트 시험과 호출하는 wiring이 보증한다(표의 마지막 칸). 주의: 이 표에 있는 코드 검사 중 일부는 컴포넌트 안에 아직 손 검사로 남아 있다(스키마 검증으로 바꾸지 못했다). 그 목록과 이유는 표의 각 행이다.
 
 한계 하나: `types/validation.py`가 `x-contract`·`x-survey-schema`를 따라가는 자리는 properties, items, allOf, 구조가 맞는 anyOf·oneOf 가지, 성립한 if의 then, 같은 파일 안 $ref다. 그 밖의 자리에 단 주석은 문서 역할만 한다.
 
@@ -67,7 +67,9 @@ JSON Schema draft 2020-12, 파일 하나 = 타입 하나, 파일 이름 = 타입
 | link_public_api | GET /v1/results의 updated_after가 실제 달력의 날짜여야 한다(예: 2026-13-45 거절) (link_public_api.py 695) | 정규식은 모양만 보고 월·일 범위와 윤년을 판정하지 못한다 | `datetime.fromisoformat` |
 | link_public_api | 접근 기록을 남기지 못하면 환자 데이터를 주지 않고 503(fail-closed) (link_public_api.py `_audit`) | 저장소 쓰기 성공 여부다 | `_audit`가 StoreError를 잡아 503 |
 | link_public_api | ApiResponse의 성공 본문(body)이 body_type이 가리키는 계약·문진 스키마를 따라야 한다 | `x-contract`·`x-survey-schema`를 쓰는 현 검증기(`validation._walk`)는 `properties`·`items`만 내려가고 `oneOf`·`allOf`·`$ref` 안은 보지 않아, body_type마다 다른 스키마를 고르는 위임을 쓸 수 없다 | 내는 쪽이 내기 전에 그 계약·문진 스키마로 검증한다(R7). 검증기가 `if/then`을 내려가게 되면 스키마에 옮긴다 |
-| link_public_api | GET /v1/staff/alerts·/v1/results의 쿼리 값 범위(limit 1~200, cursor 숫자, status 값)와 X-Openit-User 헤더 형식은 처리 함수에서 본다 | ApiRequest가 쓰지만 요청 전체(Authorization 헤더 포함)를 만들어야 해서 쿼리·헤더 단독 검증에 쓰기 어렵다(라이브러리의 query_schema는 계약 스키마만 받는다) | `_alerts`, `_results`, `_intervention`의 형식 검사 |
+| link_public_api | GET /v1/staff/alerts·/v1/results의 쿼리 전체와 X-Openit-User 헤더 형식은 처리 함수가 계약 검증기(`HttpQueries#/$defs/Alerts`·`Results`, `_common#/$defs/HumanUserId`)로 본다 | 5.0.0부터 값 범위(limit 1~200, cursor ASCII 숫자 18자리 이하, status 열거, subject_ref, updated_after 시각 형식)는 계약이 정한다. 손 검사 사본은 없다(D117). 처리 함수가 다시 보는 이유는 라이브러리(link)를 거치지 않는 직접 호출(시험·내부)에서도 `int()` 앞에서 막기 위해서다 | `_alerts`, `_results`, `_intervention`, tests/test_cursor_contract.py |
+| wiring/app | 요청 상관 ID(`X-Request-Id`)가 `[A-Za-z0-9._-]{8,64}` 이어야 로그에 쓰고, 아니면 새로 만든다 (`_REQ_ID`) | 계약에 없는 영역 내부 로그 상관 값이다(계약 ID 가 아니다). 거부가 아니라 대체이고 값은 응답 계약에 나가지 않는다 | tests/test_audit_ssrf_and_input.py |
+| wiring/app, trace_outbox | outbox 에 pipeline_schema_version 주 버전이 현재(5)와 다른 봉투가 보낼 차례이거나 DEAD 로 남아 있으면 `/readyz` 가 `stored_pipeline_major_mismatch` 로 준비 안 됨 (`App.readiness`, `Outbox.foreign_pipeline_rows`) | 계약 5.0.0 '새 환경 전제': 4.x 저장 데이터는 이전하지 않고 조용히 섞이지 않게 드러낸다. 저장소 상태(행)에 대한 조건이라 한 문서의 스키마가 아니다 | tests/test_stored_4x_data.py |
 | alert_book, alert_service, release_registry, link_inference | AlertRead·AlertRaised·ReleaseEntry·ReleaseLookup·AlertWrite·InferenceResult의 `oneOf` 가지 안에 단 `x-contract`(StaffAlert, StaffCallRetryResult, ReleaseManifest, ActionExtraction 등)·`x-survey-schema`(QuestionBank, RiskSignal) | 위 행과 같은 이유로 현 검증기는 가지 안의 주석을 위임하지 않는다(주석은 문서로만 작동한다). 최상위 속성에 단 위임(ReleaseBundle, ApiResponse.error, InferenceCall, PushDelivery, OutboxEnvelope)은 동작한다 | 내는 쪽의 계약 검증. 검증기 확장 때 자동으로 켜진다 |
 | link_boundary_clients | 토큰 환경 변수 이름이 `*_TOKEN_ENV`로 바뀌면 그 이름의 `_FILE`·값이 있어야 한다 (link_boundary_clients.py 24) | 필요한 키의 이름이 다른 키의 값으로 정해져서 JSON Schema로 못 쓴다. 기본 이름일 때의 존재 조건은 썼다 | `read_secret`이 SecretError를 내고 `_make`가 ConfigError로 바꾼다 |
 | link_boundary_clients | 토큰 파일이 읽히고 비어 있지 않아야 한다 (boundary_contracts/secrets.py) | 파일 시스템 상태다. 값은 스키마·로그에 둘 수 없다(D84) | `read_secret` |

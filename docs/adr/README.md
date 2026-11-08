@@ -72,3 +72,4 @@
 
 - [ADR-0066](ADR-0066.md) 서버가 발급하는 세션 ID는 secrets.token_hex(32): 계약 Id·공개 SessionId를 동시에 만족
 - [ADR-0067](ADR-0067.md) survey-db 이미지는 postgres 사용자(uid 999)로 실행한다(ADR-0063의 root 시작을 바꾼다)
+- [ADR-0068](ADR-0068.md) 계약 5.0.0 반영: ID 타입 위임, 검증기 한 곳, 4.x 저장 데이터는 드러낸다

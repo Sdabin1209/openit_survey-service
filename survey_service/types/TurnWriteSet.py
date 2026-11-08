@@ -35,7 +35,7 @@ SkippedRemoveItem: TypeAlias = str
 
 
 class ProgressRecordUpdate(TypedDict, closed=True):
-    current_question_id: str
+    current_question_id: Literal['END'] | str
     open_slots: list[OpenSlot]
     skipped_add: list[SkippedAddItem]
     skipped_remove: list[SkippedRemoveItem]
