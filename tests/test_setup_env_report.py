@@ -2,6 +2,7 @@
 실제 .venv를 건드리지 않으려고(시험이 도는 환경을 지우고 다시 깔면 안 된다) 최소 리포 사본(핀 없음, 패키지 하나)에서 스크립트를 돌린다."""
 from .subproc_env import min_env
 import json
+import os
 import shutil
 from .timing import HANG_GUARD_SECONDS
 import subprocess

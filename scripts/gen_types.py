@@ -60,9 +60,21 @@ def _external(node: dict, value: Any):
         yield from draft_validator(survey_schema.load_schema(node["x-survey-schema"])).iter_errors(value)
 
 
+_OK_CACHE: dict = {}      # (id(가지), id($defs)) -> (가지, $defs, 검증기). 가지·$defs 를 함께 쥐어 id 재사용을 막는다
+_NO_DEFS: dict = {}
+
+
 def _ok(sub: dict, value: Any, root: Any) -> bool:
-    """가지 하나가 값에 구조적으로 맞는가(루트의 $defs를 함께 준다)."""
-    return draft_validator({**sub, "$defs": (root or {}).get("$defs", {})}).is_valid(value)
+    """가지 하나가 값에 구조적으로 맞는가(루트의 $defs를 함께 준다).
+    왜 검증기를 캐시하나: 호출마다 만들면 가지당 약 30ms(측정, 문진 AlertWrite 한 번 검증에 0.5초)라 /readyz 보조 수치가 STATS_GRACE_S(0.2초)를 넘겨 항상 stale 이 된다(codex C2 검토, 2026-11-09)."""
+    defs = (root or {}).get("$defs", _NO_DEFS)
+    hit = _OK_CACHE.get((id(sub), id(defs)))
+    if hit is None or hit[0] is not sub or hit[1] is not defs:
+        if len(_OK_CACHE) >= 4096:
+            _OK_CACHE.clear()
+        hit = (sub, defs, draft_validator({**sub, "$defs": defs}))
+        _OK_CACHE[(id(sub), id(defs))] = hit
+    return hit[2].is_valid(value)
 
 
 def _walk(node: Any, value: Any, root: Any = None):
